@@ -6,7 +6,6 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getCurrentUser, authFetch } from "@/lib/auth";
 import Link from "next/link";
 
 interface Order {
@@ -35,266 +34,216 @@ export default function OrdersPage() {
     gsm: "",
   });
 
-  // Check authentication
+  // Check authentication and fetch orders
   useEffect(() => {
-    const checkAuth = async () => {
-      const user = getCurrentUser();
-      if (!user) {
+    const checkAuthAndFetch = () => {
+      const username = localStorage.getItem('username');
+      if (!username) {
         router.push("/auth/login?redirect=/orders");
-      } else {
-        fetchOrders();
+        return;
       }
+      fetchOrders();
     };
 
-    checkAuth();
+    checkAuthAndFetch();
   }, [router]);
 
-  // Fetch orders from API
   const fetchOrders = async () => {
-    setLoading(true);
-    setError("");
-
     try {
-      // Build query string from filters
-      const queryParams = new URLSearchParams();
-      if (filters.customer_name) queryParams.append("customer_name", filters.customer_name);
-      if (filters.status) queryParams.append("status", filters.status);
-      if (filters.width_inches) queryParams.append("width_inches", filters.width_inches);
-      if (filters.gsm) queryParams.append("gsm", filters.gsm);
-
-      const response = await authFetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/orders/?${queryParams.toString()}`
-      );
-
+      setLoading(true);
+      const response = await fetch('http://localhost:8000/api/orders');
+      
       if (!response.ok) {
-        throw new Error(`Failed to fetch orders: ${response.status}`);
+        throw new Error('Failed to fetch orders');
       }
-
+      
       const data = await response.json();
       setOrders(data);
     } catch (err) {
-      console.error("Error fetching orders:", err);
-      setError(err instanceof Error ? err.message : "Failed to fetch orders");
+      setError(err instanceof Error ? err.message : 'Failed to load orders');
+      console.error('Error fetching orders:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle filter changes
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFilters({
-      ...filters,
-      [name]: value,
-    });
+    setFilters(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
-  // Apply filters
-  const applyFilters = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchOrders();
-  };
+  const filteredOrders = orders.filter(order => {
+    return (
+      (filters.customer_name === '' || 
+        order.customer_name.toLowerCase().includes(filters.customer_name.toLowerCase())) &&
+      (filters.status === '' || order.status === filters.status) &&
+      (filters.width_inches === '' || order.width_inches.toString() === filters.width_inches) &&
+      (filters.gsm === '' || order.gsm.toString() === filters.gsm)
+    );
+  });
 
-  // Reset filters
-  const resetFilters = () => {
-    setFilters({
-      customer_name: "",
-      status: "",
-      width_inches: "",
-      gsm: "",
-    });
-    // Fetch orders without filters
-    fetchOrders();
-  };
+  if (loading) {
+    return <div className="p-4">Loading orders...</div>;
+  }
 
-  // Format date
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString() + " " + date.toLocaleTimeString();
-  };
-
-  // Get status badge color
-  const getStatusBadgeColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "pending":
-        return "bg-yellow-100 text-yellow-800";
-      case "processing":
-        return "bg-blue-100 text-blue-800";
-      case "completed":
-        return "bg-green-100 text-green-800";
-      case "cancelled":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
+  if (error) {
+    return <div className="p-4 text-red-500">Error: {error}</div>;
+  }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Orders</h1>
-        <div className="space-x-2">
-          <Link
-            href="/orders/new"
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            New Order
-          </Link>
-          <Link
-            href="/orders/parse"
-            className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-          >
-            Parse Message
-          </Link>
+        <Link 
+          href="/orders/new"
+          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+        >
+          Create New Order
+        </Link>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white p-4 rounded shadow mb-6">
+        <h2 className="text-lg font-semibold mb-3">Filters</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Customer Name</label>
+            <input
+              type="text"
+              name="customer_name"
+              value={filters.customer_name}
+              onChange={handleFilterChange}
+              className="w-full p-2 border rounded"
+              placeholder="Filter by customer"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <select
+              name="status"
+              value={filters.status}
+              onChange={handleFilterChange}
+              className="w-full p-2 border rounded"
+            >
+              <option value="">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="processing">Processing</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Width (inches)</label>
+            <input
+              type="number"
+              name="width_inches"
+              value={filters.width_inches}
+              onChange={handleFilterChange}
+              className="w-full p-2 border rounded"
+              placeholder="Filter by width"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">GSM</label>
+            <input
+              type="number"
+              name="gsm"
+              value={filters.gsm}
+              onChange={handleFilterChange}
+              className="w-full p-2 border rounded"
+              placeholder="Filter by GSM"
+            />
+          </div>
         </div>
       </div>
 
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
-        </div>
-      )}
-
-      <div className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
-        <h2 className="text-xl font-semibold mb-4">Filters</h2>
-        <form onSubmit={applyFilters} className="mb-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="customer_name">
-                Customer Name
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                id="customer_name"
-                name="customer_name"
-                type="text"
-                placeholder="Filter by customer"
-                value={filters.customer_name}
-                onChange={handleFilterChange}
-              />
-            </div>
-            <div>
-              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="status">
-                Status
-              </label>
-              <select
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                id="status"
-                name="status"
-                value={filters.status}
-                onChange={handleFilterChange}
-              >
-                <option value="">All Statuses</option>
-                <option value="pending">Pending</option>
-                <option value="processing">Processing</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="width_inches">
-                Width (inches)
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                id="width_inches"
-                name="width_inches"
-                type="number"
-                placeholder="Filter by width"
-                value={filters.width_inches}
-                onChange={handleFilterChange}
-              />
-            </div>
-            <div>
-              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="gsm">
-                GSM
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                id="gsm"
-                name="gsm"
-                type="number"
-                placeholder="Filter by GSM"
-                value={filters.gsm}
-                onChange={handleFilterChange}
-              />
-            </div>
-          </div>
-          <div className="flex justify-end mt-4 space-x-2">
-            <button
-              type="button"
-              className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
-              onClick={resetFilters}
-            >
-              Reset
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-            >
-              Apply Filters
-            </button>
-          </div>
-        </form>
-      </div>
-
-      <div className="bg-white shadow-md rounded overflow-hidden">
-        {loading ? (
-          <div className="p-4 text-center">Loading orders...</div>
-        ) : orders.length === 0 ? (
-          <div className="p-4 text-center">
-            No orders found. 
-            <Link href="/orders/new" className="text-blue-500 hover:underline ml-1">
-              Create a new order
-            </Link>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full bg-white">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="py-3 px-4 text-left">Customer</th>
-                  <th className="py-3 px-4 text-left">Specifications</th>
-                  <th className="py-3 px-4 text-left">Quantity</th>
-                  <th className="py-3 px-4 text-left">Status</th>
-                  <th className="py-3 px-4 text-left">Created</th>
-                  <th className="py-3 px-4 text-left">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {orders.map((order) => (
+      {/* Orders Table */}
+      <div className="bg-white rounded shadow overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Order ID
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Customer
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Width (in)
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  GSM
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Rolls
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredOrders.length > 0 ? (
+                filteredOrders.map((order) => (
                   <tr key={order.id} className="hover:bg-gray-50">
-                    <td className="py-3 px-4">{order.customer_name}</td>
-                    <td className="py-3 px-4">
-                      <div>{order.width_inches}" × {order.gsm} GSM</div>
-                      <div className="text-xs text-gray-500">BF: {order.bf} | Shade: {order.shade}</div>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {order.id.substring(0, 8)}...
                     </td>
-                    <td className="py-3 px-4">
-                      <div>{order.quantity_rolls} rolls</div>
-                      {order.quantity_tons && (
-                        <div className="text-xs text-gray-500">{order.quantity_tons} tons</div>
-                      )}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {order.customer_name}
                     </td>
-                    <td className="py-3 px-4">
-                      <span className={`px-2 py-1 rounded text-xs ${getStatusBadgeColor(order.status)}`}>
-                        {order.status}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {order.width_inches}"
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {order.gsm}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {order.quantity_rolls}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        order.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        order.status === 'processing' ? 'bg-blue-100 text-blue-800' :
+                        order.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                        'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-sm">{formatDate(order.created_at)}</td>
-                    <td className="py-3 px-4">
-                      <Link
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <Link 
                         href={`/orders/${order.id}`}
-                        className="text-blue-500 hover:underline"
+                        className="text-blue-600 hover:text-blue-900 mr-3"
                       >
                         View
                       </Link>
+                      <Link 
+                        href={`/orders/${order.id}?edit=true`}
+                        className="text-indigo-600 hover:text-indigo-900"
+                      >
+                        Edit
+                      </Link>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500">
+                    No orders found matching your filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

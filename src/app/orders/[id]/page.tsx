@@ -6,7 +6,6 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { getCurrentUser, authFetch } from "@/lib/auth";
 import Link from "next/link";
 
 interface Order {
@@ -37,127 +36,129 @@ export default function OrderDetailsPage() {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [updateLoading, setUpdateLoading] = useState(false);
-  const [statusUpdateSuccess, setStatusUpdateSuccess] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState({
+    status: "",
+    notes: ""
+  });
 
-  // Check authentication
+  // Check authentication and fetch order details
   useEffect(() => {
-    const checkAuth = async () => {
-      const user = getCurrentUser();
-      if (!user) {
+    const checkAuthAndFetch = () => {
+      const username = localStorage.getItem('username');
+      if (!username) {
         router.push(`/auth/login?redirect=/orders/${orderId}`);
-      } else {
-        fetchOrderDetails();
+        return;
       }
+      fetchOrderDetails();
     };
 
-    checkAuth();
-  }, [router, orderId]);
+    checkAuthAndFetch();
+  }, [orderId, router]);
 
-  // Fetch order details
   const fetchOrderDetails = async () => {
-    setLoading(true);
-    setError("");
-
     try {
-      const response = await authFetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/orders/${orderId}/details`
-      );
-
+      setLoading(true);
+      const response = await fetch(`/api/orders/${orderId}`);
+      
       if (!response.ok) {
-        throw new Error(`Failed to fetch order details: ${response.status}`);
+        throw new Error('Failed to fetch order details');
       }
-
+      
       const data = await response.json();
       setOrder(data);
+      setFormData({
+        status: data.status,
+        notes: data.notes || ''
+      });
     } catch (err) {
-      console.error("Error fetching order details:", err);
-      setError(err instanceof Error ? err.message : "Failed to fetch order details");
+      setError(err instanceof Error ? err.message : 'Failed to load order details');
+      console.error('Error fetching order details:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Update order status
-  const updateOrderStatus = async (newStatus: string) => {
-    setUpdateLoading(true);
-    setStatusUpdateSuccess(false);
-    setError("");
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
     try {
-      const response = await authFetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/orders/${orderId}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            status: newStatus,
-          }),
-        }
-      );
+      setLoading(true);
+      const response = await fetch(`/api/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
 
       if (!response.ok) {
-        throw new Error(`Failed to update order status: ${response.status}`);
+        throw new Error('Failed to update order');
       }
 
       const updatedOrder = await response.json();
       setOrder(updatedOrder);
-      setStatusUpdateSuccess(true);
+      setIsEditing(false);
       
-      // Clear success message after 3 seconds
-      setTimeout(() => {
-        setStatusUpdateSuccess(false);
-      }, 3000);
+      // Show success message
+      alert('Order updated successfully');
     } catch (err) {
-      console.error("Error updating order status:", err);
-      setError(err instanceof Error ? err.message : "Failed to update order status");
+      setError(err instanceof Error ? err.message : 'Failed to update order');
+      console.error('Error updating order:', err);
     } finally {
-      setUpdateLoading(false);
+      setLoading(false);
     }
   };
 
-  // Format date
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString() + " " + date.toLocaleTimeString();
-  };
+  const getStatusBadge = (status: string) => {
+    const statusClasses = {
+      pending: 'bg-yellow-100 text-yellow-800',
+      processing: 'bg-blue-100 text-blue-800',
+      completed: 'bg-green-100 text-green-800',
+      cancelled: 'bg-red-100 text-red-800',
+    };
 
-  // Get status badge color
-  const getStatusBadgeColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "pending":
-        return "bg-yellow-100 text-yellow-800";
-      case "processing":
-        return "bg-blue-100 text-blue-800";
-      case "completed":
-        return "bg-green-100 text-green-800";
-      case "cancelled":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
+    return (
+      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClasses[status as keyof typeof statusClasses] || 'bg-gray-100 text-gray-800'}`}>
+        {status.charAt(0).toUpperCase() + status.slice(1)}
+      </span>
+    );
   };
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center">Loading order details...</div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-2">Loading order details...</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
-        </div>
-        <div className="text-center">
-          <Link href="/orders" className="text-blue-500 hover:underline">
-            Back to Orders
-          </Link>
+      <div className="container mx-auto p-4">
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+          <strong className="font-bold">Error: </strong>
+          <span className="block sm:inline">{error}</span>
+          <button 
+            onClick={() => window.location.reload()}
+            className="absolute top-0 bottom-0 right-0 px-4 py-3"
+          >
+            <span className="sr-only">Reload</span>
+            <svg className="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
         </div>
       </div>
     );
@@ -165,10 +166,14 @@ export default function OrderDetailsPage() {
 
   if (!order) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center">Order not found</div>
-        <div className="text-center mt-4">
-          <Link href="/orders" className="text-blue-500 hover:underline">
+      <div className="container mx-auto p-4">
+        <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded relative">
+          <strong className="font-bold">Not Found: </strong>
+          <span className="block sm:inline">Order not found.</span>
+          <Link 
+            href="/orders" 
+            className="ml-2 text-blue-600 hover:underline"
+          >
             Back to Orders
           </Link>
         </div>
@@ -177,182 +182,167 @@ export default function OrderDetailsPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Order Details</h1>
-        <Link
-          href="/orders"
-          className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+    <div className="container mx-auto p-4">
+      <div className="mb-6">
+        <Link 
+          href="/orders" 
+          className="text-blue-600 hover:underline flex items-center"
         >
+          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
           Back to Orders
         </Link>
+        
+        <div className="flex justify-between items-center mt-2">
+          <h1 className="text-2xl font-bold">Order #{order.id.substring(0, 8)}</h1>
+          <div className="flex space-x-2">
+            {!isEditing && (
+              <button
+                onClick={() => setIsEditing(true)}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              >
+                Edit Order
+              </button>
+            )}
+            <Link
+              href={`/orders/parse?orderId=${order.id}`}
+              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+            >
+              Parse Message
+            </Link>
+          </div>
+        </div>
       </div>
 
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
-        </div>
-      )}
-
-      {statusUpdateSuccess && (
-        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-          Order status updated successfully
-        </div>
-      )}
-
-      <div className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
-        <div className="flex justify-between items-start mb-6">
-          <div>
-            <h2 className="text-xl font-semibold">Order #{order.id.substring(0, 8)}</h2>
-            <p className="text-gray-600">Created: {formatDate(order.created_at)}</p>
-            <p className="text-gray-600">Last Updated: {formatDate(order.updated_at)}</p>
+      {isEditing ? (
+        <form onSubmit={handleSubmit} className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
+          <div className="mb-4">
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="status">
+              Status
+            </label>
+            <select
+              id="status"
+              name="status"
+              value={formData.status}
+              onChange={handleInputChange}
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              required
+            >
+              <option value="pending">Pending</option>
+              <option value="processing">Processing</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
           </div>
-          <div className="flex flex-col items-end">
-            <span className={`px-3 py-1 rounded text-sm mb-2 ${getStatusBadgeColor(order.status)}`}>
-              {order.status}
-            </span>
-            <div className="flex space-x-2">
-              {order.status === "pending" && (
-                <>
-                  <button
-                    className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
-                    onClick={() => updateOrderStatus("processing")}
-                    disabled={updateLoading}
-                  >
-                    Start Processing
-                  </button>
-                  <button
-                    className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
-                    onClick={() => updateOrderStatus("cancelled")}
-                    disabled={updateLoading}
-                  >
-                    Cancel
-                  </button>
-                </>
-              )}
-              {order.status === "processing" && (
-                <button
-                  className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
-                  onClick={() => updateOrderStatus("completed")}
-                  disabled={updateLoading}
-                >
-                  Mark Completed
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <h3 className="text-lg font-medium mb-2">Customer Information</h3>
-            <div className="bg-gray-50 p-4 rounded">
-              <p className="font-semibold">{order.customer_name}</p>
-            </div>
+          
+          <div className="mb-6">
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="notes">
+              Notes
+            </label>
+            <textarea
+              id="notes"
+              name="notes"
+              value={formData.notes}
+              onChange={handleInputChange}
+              rows={4}
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              placeholder="Add any notes about this order..."
+            />
           </div>
 
-          <div>
-            <h3 className="text-lg font-medium mb-2">Order Specifications</h3>
-            <div className="bg-gray-50 p-4 rounded">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <p className="text-sm text-gray-600">Width:</p>
-                  <p className="font-semibold">{order.width_inches} inches</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">GSM:</p>
-                  <p className="font-semibold">{order.gsm}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">BF:</p>
-                  <p className="font-semibold">{order.bf}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Shade:</p>
-                  <p className="font-semibold">{order.shade}</p>
-                </div>
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setIsEditing(false)}
+              className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+              disabled={loading}
+            >
+              {loading ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h2 className="text-xl font-semibold mb-4">Order Information</h2>
+              <div className="space-y-2">
+                <p><span className="font-semibold">Order ID:</span> {order.id}</p>
+                <p><span className="font-semibold">Customer:</span> {order.customer_name}</p>
+                <p><span className="font-semibold">Status:</span> {getStatusBadge(order.status)}</p>
+                <p><span className="font-semibold">Created:</span> {new Date(order.created_at).toLocaleString()}</p>
+                <p><span className="font-semibold">Last Updated:</span> {new Date(order.updated_at).toLocaleString()}</p>
               </div>
             </div>
-          </div>
-
-          <div>
-            <h3 className="text-lg font-medium mb-2">Quantity</h3>
-            <div className="bg-gray-50 p-4 rounded">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <p className="text-sm text-gray-600">Number of Rolls:</p>
-                  <p className="font-semibold">{order.quantity_rolls}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Weight in Tons:</p>
-                  <p className="font-semibold">{order.quantity_tons || "N/A"}</p>
-                </div>
+            
+            <div>
+              <h2 className="text-xl font-semibold mb-4">Specifications</h2>
+              <div className="space-y-2">
+                <p><span className="font-semibold">Width:</span> {order.width_inches} inches</p>
+                <p><span className="font-semibold">GSM:</span> {order.gsm}</p>
+                <p><span className="font-semibold">BF:</span> {order.bf}</p>
+                <p><span className="font-semibold">Shade:</span> {order.shade}</p>
+                <p><span className="font-semibold">Quantity:</span> {order.quantity_rolls} rolls</p>
+                {order.quantity_tons && (
+                  <p><span className="font-semibold">Weight:</span> {order.quantity_tons} tons</p>
+                )}
               </div>
             </div>
           </div>
 
           {order.source_message && (
-            <div>
-              <h3 className="text-lg font-medium mb-2">Source Message</h3>
-              <div className="bg-gray-50 p-4 rounded">
-                <p className="text-sm text-gray-600 mb-1">Original Message:</p>
-                <div className="bg-white p-2 border rounded text-sm font-mono whitespace-pre-wrap">
-                  {order.source_message.raw_message}
-                </div>
+            <div className="mt-6">
+              <h2 className="text-xl font-semibold mb-2">Source Message</h2>
+              <div className="bg-gray-100 p-4 rounded whitespace-pre-wrap font-mono text-sm">
+                {order.source_message.raw_message}
+              </div>
+            </div>
+          )}
+
+          {order.cut_rolls && order.cut_rolls.length > 0 && (
+            <div className="mt-6">
+              <h2 className="text-xl font-semibold mb-4">Cut Rolls</h2>
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="py-2 px-4 text-left">Roll ID</th>
+                      <th className="py-2 px-4 text-left">Length</th>
+                      <th className="py-2 px-4 text-left">Status</th>
+                      <th className="py-2 px-4 text-left">Cut At</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {order.cut_rolls.map((roll) => (
+                      <tr key={roll.id} className="border-t">
+                        <td className="py-2 px-4">{roll.id.substring(0, 8)}...</td>
+                        <td className="py-2 px-4">{roll.length_meters}m</td>
+                        <td className="py-2 px-4">
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            roll.status === 'in_stock' ? 'bg-green-100 text-green-800' :
+                            roll.status === 'used' ? 'bg-blue-100 text-blue-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {roll.status.replace('_', ' ')}
+                          </span>
+                        </td>
+                        <td className="py-2 px-4">{new Date(roll.cut_at).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
         </div>
-
-        {order.cut_rolls && order.cut_rolls.length > 0 && (
-          <div className="mt-8">
-            <h3 className="text-lg font-medium mb-2">Cut Rolls</h3>
-            <div className="overflow-x-auto">
-              <table className="min-w-full bg-white border">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="py-2 px-4 border text-left">ID</th>
-                    <th className="py-2 px-4 border text-left">Width</th>
-                    <th className="py-2 px-4 border text-left">Weight</th>
-                    <th className="py-2 px-4 border text-left">QR Code</th>
-                    <th className="py-2 px-4 border text-left">Status</th>
-                    <th className="py-2 px-4 border text-left">Cut Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {order.cut_rolls.map((roll) => (
-                    <tr key={roll.id} className="hover:bg-gray-50">
-                      <td className="py-2 px-4 border">{roll.id.substring(0, 8)}</td>
-                      <td className="py-2 px-4 border">{roll.width_inches}"</td>
-                      <td className="py-2 px-4 border">{roll.weight_kg || "N/A"} kg</td>
-                      <td className="py-2 px-4 border">{roll.qr_code}</td>
-                      <td className="py-2 px-4 border">{roll.status}</td>
-                      <td className="py-2 px-4 border">{formatDate(roll.cut_date)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        <div className="mt-8 flex justify-end space-x-2">
-          <Link
-            href={`/orders/${order.id}/edit`}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Edit Order
-          </Link>
-          {order.status !== "completed" && order.status !== "cancelled" && (
-            <Link
-              href={`/cutting-plans/new?order=${order.id}`}
-              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-            >
-              Create Cutting Plan
-            </Link>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
 }

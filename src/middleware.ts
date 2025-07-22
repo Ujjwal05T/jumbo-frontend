@@ -12,9 +12,26 @@ const protectedRoutes = [
   '/cutting-plans',
 ];
 
+// Define public routes that don't require authentication
+const publicRoutes = [
+  '/auth/login',
+  '/auth/register',
+  '/',
+];
+
 export function middleware(request: NextRequest) {
   // Get the path of the request
   const path = request.nextUrl.pathname;
+  
+  // Check if the path is a public route
+  const isPublicRoute = publicRoutes.some(route => 
+    path === route || path.startsWith(`${route}/`)
+  );
+  
+  // If it's a public route, allow the request
+  if (isPublicRoute) {
+    return NextResponse.next();
+  }
   
   // Check if the path is a protected route
   const isProtectedRoute = protectedRoutes.some(route => 
@@ -26,26 +43,14 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
   
-  // Get the session token from cookies or headers
-  const sessionToken = request.cookies.get('sessionToken')?.value;
-  
-  // If there's no session token, redirect to login
-  if (!sessionToken) {
-    const loginUrl = new URL('/auth/login', request.url);
-    loginUrl.searchParams.set('from', path);
-    return NextResponse.redirect(loginUrl);
-  }
-  
-  // Allow the request to continue
+  // For protected routes, we'll handle the redirection in the client-side
+  // since we can't access localStorage in middleware
   return NextResponse.next();
 }
 
-// Configure the middleware to run on specific paths
+// Configure the middleware to run on all routes
 export const config = {
   matcher: [
-    '/dashboard/:path*',
-    '/orders/:path*',
-    '/inventory/:path*',
-    '/cutting-plans/:path*',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };

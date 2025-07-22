@@ -1,193 +1,81 @@
-/**
- * Parse Message Page
- * Allows users to paste a message to be parsed into an order
- */
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { getCurrentUser, authFetch } from "@/lib/auth";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-interface ParsedData {
+interface ParsedOrder {
   customer_name: string;
-  width_inches: number;
-  gsm: number;
-  bf: number;
+  width_inches: number | string;
+  gsm: number | string;
+  bf: number | string;
   shade: string;
-  quantity_rolls: number;
-  quantity_tons?: number;
+  quantity_rolls: number | string;
+  quantity_tons?: number | string;
+  notes?: string;
 }
 
-export default function ParseMessagePage() {
+export default function ParseOrderPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const orderId = searchParams?.get('orderId');
+  
+  const [message, setMessage] = useState("");
+  const [parsedOrder, setParsedOrder] = useState<ParsedOrder | null>(null);
   const [loading, setLoading] = useState(false);
-  const [parseLoading, setParseLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [message, setMessage] = useState("");
-  const [parsedMessage, setParsedMessage] = useState<any>(null);
-  const [parsedData, setParsedData] = useState<ParsedData>({
-    customer_name: "",
-    width_inches: 0,
-    gsm: 0,
-    bf: 0,
-    shade: "",
-    quantity_rolls: 0,
-    quantity_tons: undefined,
-  });
-  const [messageId, setMessageId] = useState<string | null>(null);
 
-  // Check authentication
+  // Check authentication on component mount
   useEffect(() => {
-    const checkAuth = async () => {
-      const user = getCurrentUser();
-      if (!user) {
-        router.push("/auth/login?redirect=/orders/parse");
-      }
-    };
-
-    checkAuth();
-  }, [router]);
-
-  // Handle message input change
-  const handleMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setMessage(e.target.value);
-  };
-
-  // Handle form input changes for parsed data
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type } = e.target;
-    
-    // Convert numeric inputs to numbers
-    if (type === "number") {
-      setParsedData({
-        ...parsedData,
-        [name]: value === "" ? "" : Number(value),
-      });
-    } else {
-      setParsedData({
-        ...parsedData,
-        [name]: value,
-      });
+    const username = localStorage.getItem('username');
+    if (!username) {
+      router.push(`/auth/login?redirect=/orders/parse${orderId ? `?orderId=${orderId}` : ''}`);
     }
-  };
+  }, [router, orderId]);
 
-  // Parse the message
-  const handleParse = async () => {
+  // Load existing order data if orderId is provided
+  useEffect(() => {
+    if (orderId) {
+      const fetchOrder = async () => {
+        try {
+          setLoading(true);
+          const response = await fetch(`http://localhost:8000/api/orders/${orderId}`);
+          
+          if (!response.ok) {
+            throw new Error('Failed to fetch order');
+          }
+          
+          const order = await response.json();
+          setParsedOrder({
+            customer_name: order.customer_name || "",
+            width_inches: order.width_inches || "",
+            gsm: order.gsm || "",
+            bf: order.bf || "",
+            shade: order.shade || "",
+            quantity_rolls: order.quantity_rolls || "",
+            quantity_tons: order.quantity_tons || "",
+            notes: order.notes || ""
+          });
+          
+          if (order.source_message?.raw_message) {
+            setMessage(order.source_message.raw_message);
+          }
+        } catch (err) {
+          console.error('Error fetching order:', err);
+          setError('Failed to load order details');
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      fetchOrder();
+    }
+  }, [orderId]);
+
+  const parseMessage = async () => {
     if (!message.trim()) {
-      setError("Please enter a message to parse");
-      return;
-    }
-
-    setParseLoading(true);
-    setError("");
-
-    try {
-      // First, create a parsed message record
-      const createResponse = await authFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/messages/`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          raw_message: message,
-        }),
-      });
-
-      if (!createResponse.ok) {
-        const errorData = await createResponse.json();
-        throw new Error(errorData.detail || "Failed to create message");
-      }
-
-      const messageData = await createResponse.json();
-      setMessageId(messageData.id);
-
-      // Then, parse the message
-      // Note: In a real implementation, this would call the GPT parsing endpoint
-      // For now, we'll just simulate parsing with some placeholder logic
-      
-      // This is a placeholder for the actual GPT parsing
-      // In the future, this will be replaced with a call to the parsing API
-      const parseResponse = await authFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/messages/parse`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          raw_message: message,
-        }),
-      });
-
-      if (!parseResponse.ok) {
-        const errorData = await parseResponse.json();
-        throw new Error(errorData.detail || "Failed to parse message");
-      }
-
-      // For now, let's simulate some basic parsing
-      // This will be replaced with the actual parsed data from the API
-      const sampleParsedData = simulateParsing(message);
-      
-      setParsedMessage(messageData);
-      setParsedData(sampleParsedData);
-      
-    } catch (err) {
-      console.error("Error parsing message:", err);
-      setError(err instanceof Error ? err.message : "Failed to parse message");
-    } finally {
-      setParseLoading(false);
-    }
-  };
-
-  // Simulate parsing (this will be replaced with actual GPT parsing)
-  const simulateParsing = (text: string): ParsedData => {
-    // Very simple parsing logic - just for demonstration
-    // In reality, this would be done by the GPT API
-    const lowerText = text.toLowerCase();
-    
-    // Try to extract width
-    const widthMatch = lowerText.match(/(\d+)\s*inch/);
-    const width = widthMatch ? parseInt(widthMatch[1]) : 0;
-    
-    // Try to extract GSM
-    const gsmMatch = lowerText.match(/(\d+)\s*gsm/);
-    const gsm = gsmMatch ? parseInt(gsmMatch[1]) : 0;
-    
-    // Try to extract quantity
-    const quantityMatch = lowerText.match(/(\d+)\s*roll/);
-    const quantity = quantityMatch ? parseInt(quantityMatch[1]) : 0;
-    
-    // Try to extract customer name
-    const customerMatch = lowerText.match(/for\s+([a-z\s]+)/) || lowerText.match(/customer[:\s]+([a-z\s]+)/);
-    const customer = customerMatch ? customerMatch[1].trim() : "Unknown Customer";
-    
-    return {
-      customer_name: customer,
-      width_inches: width,
-      gsm: gsm,
-      bf: 80, // Default value
-      shade: "White", // Default value
-      quantity_rolls: quantity,
-      quantity_tons: undefined,
-    };
-  };
-
-  // Calculate tonnage from rolls (1 inch roll = 13 kg)
-  const calculateTonnage = () => {
-    if (parsedData.width_inches && parsedData.quantity_rolls) {
-      // Formula: width_inches * quantity_rolls * 13 kg / 1000 (to convert to tons)
-      const tons = (parsedData.width_inches * parsedData.quantity_rolls * 13) / 1000;
-      setParsedData({
-        ...parsedData,
-        quantity_tons: parseFloat(tons.toFixed(2)),
-      });
-    }
-  };
-
-  // Create order from parsed data
-  const handleCreateOrder = async () => {
-    if (!messageId) {
-      setError("No message ID available");
+      setError('Please enter a message to parse');
       return;
     }
 
@@ -196,68 +84,128 @@ export default function ParseMessagePage() {
     setSuccess("");
 
     try {
-      // Validate form data
-      if (!parsedData.customer_name) {
-        throw new Error("Customer name is required");
-      }
-      if (!parsedData.width_inches || parsedData.width_inches <= 0) {
-        throw new Error("Width must be greater than 0");
-      }
-      if (!parsedData.gsm || parsedData.gsm <= 0) {
-        throw new Error("GSM must be greater than 0");
-      }
-      if (!parsedData.bf || parsedData.bf <= 0) {
-        throw new Error("BF must be greater than 0");
-      }
-      if (!parsedData.shade) {
-        throw new Error("Shade is required");
-      }
-      if (!parsedData.quantity_rolls || parsedData.quantity_rolls <= 0) {
-        throw new Error("Quantity of rolls must be greater than 0");
+      const response = await fetch('http://localhost:8000/api/parse-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to parse message');
       }
 
-      // Create order from parsed message
-      const response = await authFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/orders/from-message`, {
-        method: "POST",
+      const data = await response.json();
+      setParsedOrder({
+        customer_name: data.customer_name || "",
+        width_inches: data.width_inches || "",
+        gsm: data.gsm || "",
+        bf: data.bf || "",
+        shade: data.shade || "",
+        quantity_rolls: data.quantity_rolls || "",
+        quantity_tons: data.quantity_tons || "",
+        notes: data.notes || ""
+      });
+      
+      setSuccess('Order details parsed successfully!');
+    } catch (err) {
+      console.error('Error parsing message:', err);
+      setError(err instanceof Error ? err.message : 'Failed to parse message');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    if (!parsedOrder) return;
+    
+    setParsedOrder({
+      ...parsedOrder,
+      [name]: name === 'customer_name' || name === 'shade' || name === 'notes' 
+        ? value 
+        : value === '' 
+          ? '' 
+          : Number(value)
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!parsedOrder) return;
+    
+    setLoading(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      // Basic validation
+      if (!parsedOrder.customer_name || !parsedOrder.width_inches || !parsedOrder.gsm || 
+          !parsedOrder.bf || !parsedOrder.shade || !parsedOrder.quantity_rolls) {
+        throw new Error("Please fill in all required fields");
+      }
+
+      const url = orderId 
+        ? `http://localhost:8000/api/orders/${orderId}`
+        : 'http://localhost:8000/api/orders';
+
+      const method = orderId ? 'PATCH' : 'POST';
+      
+      const response = await fetch(url, {
+        method,
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message_id: messageId,
-          order_data: parsedData,
+          customer_name: parsedOrder.customer_name,
+          width_inches: Number(parsedOrder.width_inches),
+          gsm: Number(parsedOrder.gsm),
+          bf: Number(parsedOrder.bf),
+          shade: parsedOrder.shade,
+          quantity_rolls: Number(parsedOrder.quantity_rolls),
+          quantity_tons: parsedOrder.quantity_tons ? Number(parsedOrder.quantity_tons) : undefined,
+          notes: parsedOrder.notes || undefined,
+          source_message: message
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.detail || "Failed to create order");
+        throw new Error(errorData.detail || `Failed to ${orderId ? 'update' : 'create'} order`);
       }
 
-      const data = await response.json();
-      setSuccess("Order created successfully!");
+      const order = await response.json();
+      setSuccess(`Order ${orderId ? 'updated' : 'created'} successfully!`);
       
-      // Reset form after a short delay
+      // Redirect to order details after a short delay
       setTimeout(() => {
-        router.push(`/orders/${data.id}`);
+        router.push(`/orders/${order.id}`);
       }, 1500);
     } catch (err) {
-      console.error("Error creating order:", err);
-      setError(err instanceof Error ? err.message : "Failed to create order");
+      console.error(`Error ${orderId ? 'updating' : 'creating'} order:`, err);
+      setError(err instanceof Error ? err.message : `Failed to ${orderId ? 'update' : 'create'} order`);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Create Order from Message</h1>
-        <Link
-          href="/orders"
-          className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+    <div className="container mx-auto p-4">
+      <div className="mb-6">
+        <Link 
+          href={orderId ? `/orders/${orderId}` : "/orders"} 
+          className="text-blue-600 hover:underline flex items-center"
         >
-          Back to Orders
+          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Back to {orderId ? 'Order' : 'Orders'}
         </Link>
+        <h1 className="text-2xl font-bold mt-2">
+          {orderId ? 'Update Order from Message' : 'Parse New Order'}
+        </h1>
       </div>
 
       {error && (
@@ -272,203 +220,202 @@ export default function ParseMessagePage() {
         </div>
       )}
 
-      <div className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-4">Paste Message</h2>
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="message">
-              Message Text
-            </label>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div>
+          <div className="bg-white shadow-md rounded px-6 py-4 mb-6">
+            <h2 className="text-xl font-semibold mb-4">Paste Message</h2>
             <textarea
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              id="message"
-              name="message"
-              rows={6}
-              placeholder="Paste the message text here..."
+              className="w-full h-64 p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Paste the order message here..."
               value={message}
-              onChange={handleMessageChange}
-              disabled={parseLoading || parsedMessage !== null}
-            ></textarea>
+              onChange={(e) => setMessage(e.target.value)}
+              disabled={loading}
+            />
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={parseMessage}
+                className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+                disabled={loading || !message.trim()}
+              >
+                {loading ? 'Parsing...' : 'Parse Message'}
+              </button>
+            </div>
           </div>
-          <div className="flex justify-end">
-            <button
-              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-              type="button"
-              onClick={handleParse}
-              disabled={parseLoading || parsedMessage !== null}
-            >
-              {parseLoading ? "Parsing..." : "Parse Message"}
-            </button>
-          </div>
-        </div>
 
-        {parsedMessage && (
-          <>
-            <div className="mb-6">
-              <h2 className="text-xl font-semibold mb-4">Parsed Order Details</h2>
-              <p className="text-sm text-gray-600 mb-4">
-                Review and edit the parsed information below before creating the order.
-              </p>
-
-              <div className="mb-6">
-                <h3 className="text-lg font-medium mb-2">Customer Information</h3>
-                <div className="mb-4">
-                  <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="customer_name">
-                    Customer Name *
-                  </label>
-                  <input
-                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                    id="customer_name"
-                    name="customer_name"
-                    type="text"
-                    value={parsedData.customer_name}
-                    onChange={handleInputChange}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="mb-6">
-                <h3 className="text-lg font-medium mb-2">Roll Specifications</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="mb-4">
-                    <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="width_inches">
-                      Width (inches) *
-                    </label>
-                    <input
-                      className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                      id="width_inches"
-                      name="width_inches"
-                      type="number"
-                      min="1"
-                      max="200"
-                      value={parsedData.width_inches || ""}
-                      onChange={handleInputChange}
-                      required
-                    />
-                  </div>
-                  <div className="mb-4">
-                    <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="gsm">
-                      GSM (Grams per Square Meter) *
-                    </label>
-                    <input
-                      className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                      id="gsm"
-                      name="gsm"
-                      type="number"
-                      min="1"
-                      max="1000"
-                      value={parsedData.gsm || ""}
-                      onChange={handleInputChange}
-                      required
-                    />
-                  </div>
-                  <div className="mb-4">
-                    <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="bf">
-                      BF (Brightness Factor) *
-                    </label>
-                    <input
-                      className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                      id="bf"
-                      name="bf"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="100"
-                      value={parsedData.bf || ""}
-                      onChange={handleInputChange}
-                      required
-                    />
-                  </div>
-                  <div className="mb-4">
-                    <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="shade">
-                      Shade *
-                    </label>
-                    <input
-                      className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                      id="shade"
-                      name="shade"
-                      type="text"
-                      value={parsedData.shade}
-                      onChange={handleInputChange}
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="mb-6">
-                <h3 className="text-lg font-medium mb-2">Quantity</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="mb-4">
-                    <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="quantity_rolls">
-                      Number of Rolls *
-                    </label>
-                    <input
-                      className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                      id="quantity_rolls"
-                      name="quantity_rolls"
-                      type="number"
-                      min="1"
-                      value={parsedData.quantity_rolls || ""}
-                      onChange={handleInputChange}
-                      required
-                    />
-                  </div>
-                  <div className="mb-4">
-                    <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="quantity_tons">
-                      Weight in Tons (Optional)
-                    </label>
-                    <div className="flex">
-                      <input
-                        className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                        id="quantity_tons"
-                        name="quantity_tons"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={parsedData.quantity_tons || ""}
-                        onChange={handleInputChange}
-                      />
-                      <button
-                        type="button"
-                        className="ml-2 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-                        onClick={calculateTonnage}
-                      >
-                        Calculate
-                      </button>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Click Calculate to estimate tonnage based on roll dimensions (1 inch roll = 13 kg)
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <button
-                  className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-                  type="button"
-                  onClick={handleCreateOrder}
-                  disabled={loading}
-                >
-                  {loading ? "Creating..." : "Create Order"}
-                </button>
-                <button
-                  className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-                  type="button"
-                  onClick={() => {
-                    setParsedMessage(null);
-                    setMessageId(null);
-                    setMessage("");
-                  }}
-                >
-                  Reset
-                </button>
+          {message && (
+            <div className="bg-white shadow-md rounded px-6 py-4">
+              <h2 className="text-xl font-semibold mb-4">Raw Message</h2>
+              <div className="bg-gray-100 p-4 rounded whitespace-pre-wrap font-mono text-sm">
+                {message}
               </div>
             </div>
-          </>
-        )}
+          )}
+        </div>
+
+        <div>
+          <div className="bg-white shadow-md rounded px-6 py-4">
+            <h2 className="text-xl font-semibold mb-4">Parsed Order Details</h2>
+            
+            {parsedOrder ? (
+              <form onSubmit={handleSubmit}>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="customer_name">
+                      Customer Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="customer_name"
+                      name="customer_name"
+                      value={parsedOrder.customer_name}
+                      onChange={handleInputChange}
+                      className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="width_inches">
+                        Width (in) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        id="width_inches"
+                        name="width_inches"
+                        value={parsedOrder.width_inches}
+                        onChange={handleInputChange}
+                        className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        step="0.01"
+                        min="0"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="gsm">
+                        GSM <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        id="gsm"
+                        name="gsm"
+                        value={parsedOrder.gsm}
+                        onChange={handleInputChange}
+                        className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        step="0.1"
+                        min="0"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="bf">
+                        BF <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        id="bf"
+                        name="bf"
+                        value={parsedOrder.bf}
+                        onChange={handleInputChange}
+                        className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        step="0.1"
+                        min="0"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="shade">
+                        Shade <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        id="shade"
+                        name="shade"
+                        value={parsedOrder.shade}
+                        onChange={handleInputChange}
+                        className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="quantity_rolls">
+                        Rolls <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        id="quantity_rolls"
+                        name="quantity_rolls"
+                        value={parsedOrder.quantity_rolls}
+                        onChange={handleInputChange}
+                        className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        min="1"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="quantity_tons">
+                        Weight (Tons)
+                      </label>
+                      <input
+                        type="number"
+                        id="quantity_tons"
+                        name="quantity_tons"
+                        value={parsedOrder.quantity_tons || ''}
+                        onChange={handleInputChange}
+                        className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        step="0.01"
+                        min="0"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="notes">
+                      Notes
+                    </label>
+                    <textarea
+                      id="notes"
+                      name="notes"
+                      value={parsedOrder.notes || ''}
+                      onChange={handleInputChange}
+                      rows={3}
+                      className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Additional notes about this order..."
+                    />
+                  </div>
+
+                  <div className="pt-2 flex justify-end space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setParsedOrder(null)}
+                      className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      disabled={loading}
+                    >
+                      Clear
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      disabled={loading}
+                    >
+                      {loading ? 'Saving...' : orderId ? 'Update Order' : 'Create Order'}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <p>Paste a message and click "Parse Message" to extract order details.</p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
