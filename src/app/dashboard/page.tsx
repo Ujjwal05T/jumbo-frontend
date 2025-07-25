@@ -1,14 +1,29 @@
 /**
- * Dashboard page component
+ * Dashboard page component - Modern overview with statistics
  */
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getCurrentUser, logout, isAuthenticated } from "@/lib/auth";
+import { isAuthenticated } from "@/lib/auth";
+import DashboardLayout from "@/components/DashboardLayout";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { 
+  Users, 
+  ShoppingCart, 
+  Clock, 
+  FileText, 
+  TrendingUp, 
+  TrendingDown,
+  Package,
+  AlertCircle,
+  CheckCircle,
+  ArrowRight
+} from "lucide-react";
 
 export default function DashboardPage() {
-  const [user, setUser] = useState(getCurrentUser());
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -25,11 +40,6 @@ export default function DashboardPage() {
     checkAuth();
   }, [router]);
 
-  const handleLogout = async () => {
-    await logout();
-    router.push("/auth/login");
-  };
-
   if (loading) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-24">
@@ -40,87 +50,250 @@ export default function DashboardPage() {
     );
   }
 
+  // Dummy data for dashboard
+  const stats = [
+    {
+      title: "Total Orders",
+      value: "1,234",
+      change: "+12%",
+      trend: "up",
+      icon: ShoppingCart,
+      description: "From last month"
+    },
+    {
+      title: "Pending Orders",
+      value: "23",
+      change: "-8%",
+      trend: "down",
+      icon: Clock,
+      description: "Awaiting processing"
+    },
+    {
+      title: "Active Clients",
+      value: "89",
+      change: "+5%",
+      trend: "up",
+      icon: Users,
+      description: "This month"
+    },
+    {
+      title: "Paper Rolls",
+      value: "456",
+      change: "+18%",
+      trend: "up",
+      icon: Package,
+      description: "In inventory"
+    }
+  ];
+
+  const recentOrders = [
+    {
+      id: "ORD-001",
+      client: "ABC Manufacturing",
+      status: "completed",
+      amount: "$2,450",
+      date: "2024-01-20"
+    },
+    {
+      id: "ORD-002",
+      client: "XYZ Industries",
+      status: "pending",
+      amount: "$1,890",
+      date: "2024-01-19"
+    },
+    {
+      id: "ORD-003",
+      client: "Tech Solutions Ltd",
+      status: "processing",
+      amount: "$3,200",
+      date: "2024-01-18"
+    },
+    {
+      id: "ORD-004",
+      client: "Global Corp",
+      status: "completed",
+      amount: "$1,650",
+      date: "2024-01-17"
+    }
+  ];
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "completed":
+        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Completed</Badge>;
+      case "pending":
+        return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">Pending</Badge>;
+      case "processing":
+        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Processing</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
+
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center p-24">
-      <div className="w-full max-w-4xl p-8 space-y-8 bg-white rounded-lg shadow-md">
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold">Dashboard</h1>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-          >
-            Logout
-          </button>
-        </div>
-
-        <div className="mt-6">
-          <h2 className="text-xl font-semibold">Welcome, {user?.username}!</h2>
-          <p className="mt-2 text-gray-600">Role: {user?.role}</p>
-        </div>
-
-        <div className="mt-8 border-t pt-6">
-          <h3 className="text-lg font-medium">Paper Roll Management System</h3>
-          <p className="mt-2 text-gray-600">
-            You are now logged in to the system. Use the navigation to access different features.
+    <DashboardLayout>
+      <div className="space-y-8">
+        {/* Header */}
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">
+            Welcome back! Here's an overview of your paper roll management system.
           </p>
-          
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div 
-              className="p-4 border rounded-lg cursor-pointer hover:bg-gray-50"
-              onClick={() => router.push("/orders")}
-            >
-              <h4 className="font-medium">Orders</h4>
-              <p className="text-sm text-gray-600">Manage customer orders</p>
-              <div className="mt-2 flex space-x-2">
-                <button 
-                  className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    router.push("/orders/new");
-                  }}
-                >
-                  New Order
-                </button>
-                <button 
-                  className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    router.push("/orders/parse");
-                  }}
-                >
-                  Parse Message
-                </button>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          {stats.map((stat, index) => (
+            <Card key={index} className="hover-lift transition-all duration-300">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+                <stat.icon className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stat.value}</div>
+                <div className="flex items-center space-x-2 text-xs text-muted-foreground">
+                  <span className={`flex items-center ${
+                    stat.trend === 'up' ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {stat.trend === 'up' ? (
+                      <TrendingUp className="w-3 h-3 mr-1" />
+                    ) : (
+                      <TrendingDown className="w-3 h-3 mr-1" />
+                    )}
+                    {stat.change}
+                  </span>
+                  <span>{stat.description}</span>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Main Content Grid */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Recent Orders */}
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Recent Orders</CardTitle>
+                  <CardDescription>Latest customer orders and their status</CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => router.push('/dashboard/masters/orders')}>
+                  View All
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
               </div>
-            </div>
-            
-            <div 
-              className="p-4 border rounded-lg cursor-pointer hover:bg-gray-50"
-              onClick={() => router.push("/inventory")}
-            >
-              <h4 className="font-medium">Inventory</h4>
-              <p className="text-sm text-gray-600">Track paper roll inventory</p>
-            </div>
-            
-            <div 
-              className="p-4 border rounded-lg cursor-pointer hover:bg-gray-50"
-              onClick={() => router.push("/cutting-plans")}
-            >
-              <h4 className="font-medium">Cutting Plans</h4>
-              <p className="text-sm text-gray-600">Optimize cutting operations</p>
-            </div>
-            
-            {user?.role === "admin" && (
-              <div 
-                className="p-4 border rounded-lg cursor-pointer hover:bg-gray-50 bg-blue-50"
-                onClick={() => router.push("/admin/users")}
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {recentOrders.map((order) => (
+                  <div key={order.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{order.id}</span>
+                        {getStatusBadge(order.status)}
+                      </div>
+                      <p className="text-sm text-muted-foreground">{order.client}</p>
+                      <p className="text-xs text-muted-foreground">{order.date}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium">{order.amount}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Quick Actions */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Quick Actions</CardTitle>
+              <CardDescription>Common tasks and shortcuts</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Button 
+                className="w-full justify-start" 
+                variant="outline"
+                onClick={() => router.push('/dashboard/masters/orders')}
               >
-                <h4 className="font-medium">User Management</h4>
-                <p className="text-sm text-gray-600">Manage system users</p>
+                <ShoppingCart className="w-4 h-4 mr-2" />
+                New Order
+              </Button>
+              <Button 
+                className="w-full justify-start" 
+                variant="outline"
+                onClick={() => router.push('/dashboard/masters/clients')}
+              >
+                <Users className="w-4 h-4 mr-2" />
+                Add Client
+              </Button>
+              <Button 
+                className="w-full justify-start" 
+                variant="outline"
+                onClick={() => router.push('/dashboard/planning')}
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                Create Plan
+              </Button>
+              <Button 
+                className="w-full justify-start" 
+                variant="outline"
+                onClick={() => router.push('/dashboard/masters/papers')}
+              >
+                <Package className="w-4 h-4 mr-2" />
+                Manage Inventory
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* System Status */}
+        <div className="grid gap-6 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                System Status
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Database Connection</span>
+                <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Online</Badge>
               </div>
-            )}
-          </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">API Services</span>
+                <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Running</Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Backup Status</span>
+                <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Up to date</Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-yellow-600" />
+                Alerts & Notifications
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm font-medium text-yellow-800">Low Inventory Alert</p>
+                <p className="text-xs text-yellow-600">Paper roll type A is running low</p>
+              </div>
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm font-medium text-blue-800">Pending Approvals</p>
+                <p className="text-xs text-blue-600">3 orders waiting for approval</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
-    </div>
+    </DashboardLayout>
   );
 }
