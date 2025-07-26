@@ -40,32 +40,6 @@ import {
 import { fetchOrders, updateOrderStatus, Order } from "@/lib/orders";
 import { useRouter } from "next/navigation";
 
-interface Order {
-  id: string;
-  client: {
-    company_name: string;
-    contact_person: string;
-    email: string;
-    phone: string;
-    address: string;
-    status: string;
-  };
-  created_at: string;
-  deliveryDate: string;
-  status: "pending" | "in_progress" | "completed" | "cancelled";
-  items: number;
-  totalAmount: number;
-  paper: {
-    name: string;
-    gsm: string;
-    bf: string;
-    shade: string;
-  };
-  width_inches: number;
-  quantity_rolls: number;
-  priority: "low" | "normal" | "high" | "urgent";
-}
-
 export default function OrderMasterPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,8 +67,10 @@ export default function OrderMasterPage() {
     switch (status) {
       case 'pending':
         return <Badge variant="secondary"><Clock className="w-3 h-3 mr-1" /> Pending</Badge>;
-      case 'in_progress':
-        return <Badge className="bg-blue-100 text-blue-800"><Truck className="w-3 h-3 mr-1" /> In Progress</Badge>;
+      case 'processing':
+        return <Badge className="bg-blue-100 text-blue-800"><Truck className="w-3 h-3 mr-1" /> Processing</Badge>;
+      case 'partially_fulfilled':
+        return <Badge className="bg-orange-100 text-orange-800"><AlertCircle className="w-3 h-3 mr-1" /> Partially Fulfilled</Badge>;
       case 'completed':
         return <Badge className="bg-green-100 text-green-800"><CheckCircle className="w-3 h-3 mr-1" /> Completed</Badge>;
       case 'cancelled':
@@ -128,15 +104,43 @@ export default function OrderMasterPage() {
     }
   };
 
-  const filteredOrders = orders.filter((order: Order) => 
-    order.client?.contact_person?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.client?.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.paper?.name?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredOrders = orders.filter((order: Order) => {
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      order.client?.contact_person?.toLowerCase().includes(searchLower) ||
+      order.client?.company_name?.toLowerCase().includes(searchLower) ||
+      order.order_items?.some(item => 
+        item.paper?.name?.toLowerCase().includes(searchLower)
+      )
+    );
+  });
 
   const pendingOrders = orders.filter((o: Order) => o.status === 'pending').length;
-  const inProgressOrders = orders.filter((o: Order) => o.status === 'in_progress').length;
+  const processingOrders = orders.filter((o: Order) => o.status === 'processing').length;
+  const partiallyFulfilledOrders = orders.filter((o: Order) => o.status === 'partially_fulfilled').length;
   const completedOrders = orders.filter((o: Order) => o.status === 'completed').length;
+
+  // Helper functions for order item calculations
+  const getTotalQuantity = (order: Order) => {
+    return order.order_items?.reduce((sum, item) => sum + item.quantity_rolls, 0) || 0;
+  };
+
+  const getFulfilledQuantity = (order: Order) => {
+    return order.order_items?.reduce((sum, item) => sum + item.quantity_fulfilled, 0) || 0;
+  };
+
+  const getOrderWidths = (order: Order) => {
+    return order.order_items?.map(item => `${item.width_inches}"`).join(", ") || "N/A";
+  };
+
+  const getOrderPapers = (order: Order) => {
+    const papers = order.order_items?.map(item => item.paper?.name).filter(Boolean) || [];
+    return papers.length > 0 ? papers.join(", ") : "N/A";
+  };
+
+  const getTotalAmount = (order: Order) => {
+    return order.order_items?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0;
+  };
 
   return (
     <DashboardLayout>
@@ -184,11 +188,11 @@ export default function OrderMasterPage() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">In Progress</CardTitle>
+              <CardTitle className="text-sm font-medium">Processing</CardTitle>
               <Truck className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{loading ? "..." : inProgressOrders}</div>
+              <div className="text-2xl font-bold">{loading ? "..." : processingOrders}</div>
               <p className="text-xs text-muted-foreground">
                 Currently being processed
               </p>
@@ -248,9 +252,12 @@ export default function OrderMasterPage() {
                     <TableRow>
                       <TableHead>Order ID</TableHead>
                       <TableHead>Client</TableHead>
-                      <TableHead>Paper</TableHead>
-                      <TableHead>Width</TableHead>
-                      <TableHead>Quantity</TableHead>
+                      <TableHead>Papers</TableHead>
+                      <TableHead>Widths</TableHead>
+                      <TableHead>Items</TableHead>
+                      <TableHead>Total Amount</TableHead>
+                      <TableHead>Payment</TableHead>
+                      <TableHead>Progress</TableHead>
                       <TableHead>Priority</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -258,33 +265,78 @@ export default function OrderMasterPage() {
                   </TableHeader>
                   <TableBody>
                     {filteredOrders.length > 0 ? (
-                      filteredOrders.map((order) => (
-                        <TableRow key={order.id}>
-                          <TableCell className="font-medium">
-                            <div className="text-sm">
-                              {order.id.substring(0, 8)}...
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {new Date(order.created_at).toLocaleDateString()}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-medium">{order.client?.contact_person || 'N/A'}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {order.client?.company_name || 'N/A'}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-medium">{order.paper?.name || 'N/A'}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {order.paper?.gsm}gsm • {order.paper?.bf}bf • {order.paper?.shade}
-                            </div>
-                          </TableCell>
-                          <TableCell>{order.width_inches}"</TableCell>
-                          <TableCell>{order.quantity_rolls} rolls</TableCell>
-                          <TableCell>{getPriorityBadge(order.priority)}</TableCell>
-                          <TableCell>{getStatusBadge(order.status)}</TableCell>
-                          <TableCell className="text-right">
+                      filteredOrders.map((order) => {
+                        const totalQuantity = getTotalQuantity(order);
+                        const fulfilledQuantity = getFulfilledQuantity(order);
+                        const progressPercentage = totalQuantity > 0 ? (fulfilledQuantity / totalQuantity) * 100 : 0;
+                        
+                        return (
+                          <TableRow key={order.id}>
+                            <TableCell className="font-medium">
+                              <div className="text-sm">
+                                {order.id.substring(0, 8)}...
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {new Date(order.created_at).toLocaleDateString()}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-medium">{order.client?.company_name || 'N/A'}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {order.client?.contact_person || 'N/A'}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-medium text-xs">{getOrderPapers(order)}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {order.order_items?.length || 0} different papers
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-sm">{getOrderWidths(order)}</div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-center">
+                                <div className="font-medium">{order.order_items?.length || 0}</div>
+                                <div className="text-xs text-muted-foreground">items</div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-medium">₹{getTotalAmount(order).toFixed(2)}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {getTotalQuantity(order)} rolls total
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-sm capitalize">{order.payment_type}</div>
+                              {order.delivery_date && (
+                                <div className="text-xs text-muted-foreground">
+                                  Due: {new Date(order.delivery_date).toLocaleDateString()}
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                <div className="flex items-center space-x-2">
+                                  <div className="w-12 bg-gray-200 rounded-full h-1.5">
+                                    <div 
+                                      className={`h-1.5 rounded-full ${
+                                        progressPercentage === 100 ? 'bg-green-600' : 
+                                        progressPercentage > 0 ? 'bg-blue-600' : 'bg-gray-400'
+                                      }`}
+                                      style={{ width: `${progressPercentage}%` }}
+                                    ></div>
+                                  </div>
+                                  <span className="text-xs">{progressPercentage.toFixed(0)}%</span>
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {fulfilledQuantity}/{totalQuantity} rolls
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>{getPriorityBadge(order.priority)}</TableCell>
+                            <TableCell>{getStatusBadge(order.status)}</TableCell>
+                            <TableCell className="text-right">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" className="h-8 w-8 p-0">
@@ -308,10 +360,16 @@ export default function OrderMasterPage() {
                                     Set as Pending
                                   </DropdownMenuItem>
                                 )}
-                                {order.status !== 'in_progress' && (
-                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'in_progress')}>
+                                {order.status !== 'processing' && (
+                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'processing')}>
                                     <Truck className="mr-2 h-4 w-4" />
-                                    Mark as In Progress
+                                    Mark as Processing
+                                  </DropdownMenuItem>
+                                )}
+                                {order.status !== 'partially_fulfilled' && (
+                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'partially_fulfilled')}>
+                                    <AlertCircle className="mr-2 h-4 w-4" />
+                                    Mark as Partially Fulfilled
                                   </DropdownMenuItem>
                                 )}
                                 {order.status !== 'completed' && (
@@ -333,10 +391,11 @@ export default function OrderMasterPage() {
                             </DropdownMenu>
                           </TableCell>
                         </TableRow>
-                      ))
+                        );
+                      })
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={8} className="h-24 text-center">
+                        <TableCell colSpan={11} className="h-24 text-center">
                           No orders found.
                         </TableCell>
                       </TableRow>

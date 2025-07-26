@@ -171,7 +171,7 @@ export default function LoginPage() {
             {/* Register Link */}
             <div className="text-center space-y-4">
               <p className="text-sm text-muted-foreground">
-                Don't have an account yet?
+                Don&apos;t have an account yet?
               </p>
               <Button asChild variant="outline" className="w-full h-12 text-base rounded-xl hover-lift transition-all duration-300 hover:scale-105">
                 <Link href="/auth/register">
