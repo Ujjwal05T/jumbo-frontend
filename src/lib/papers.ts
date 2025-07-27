@@ -19,10 +19,17 @@ export interface CreatePaperData {
   created_by_id: string;
 }
 
-const API_URL = 'http://localhost:8000/api';
+const API_URL = 'https://c997dd342fc6.ngrok-free.app/api';
 
 export const fetchPapers = async (): Promise<Paper[]> => {
-  const response = await fetch(`${API_URL}/papers`);
+  const response = await fetch(`${API_URL}/papers`,{
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
+    },
+  }
+  );
   if (!response.ok) {
     throw new Error('Failed to fetch papers');
   }
@@ -40,6 +47,7 @@ export const createPaper = async (paperData: Omit<CreatePaperData, 'created_by_i
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
     },
     body: JSON.stringify({
       ...paperData,
@@ -58,6 +66,10 @@ export const createPaper = async (paperData: Omit<CreatePaperData, 'created_by_i
 export const deletePaper = async (id: string): Promise<void> => {
   const response = await fetch(`${API_URL}/papers/${id}`, {
     method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
+    },
   });
 
   if (!response.ok) {

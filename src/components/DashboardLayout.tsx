@@ -7,7 +7,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { 
   DropdownMenu, 
@@ -18,9 +17,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   LayoutDashboard,
-  Users,
-  ShoppingCart,
-  Clock,
   FileText,
   Scissors,
   User,
@@ -30,7 +26,8 @@ import {
   X,
   Star,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  QrCode
 } from "lucide-react";
 import { getCurrentUser, logout } from "@/lib/auth";
 
@@ -51,6 +48,7 @@ const navigation = [
       { name: "Client Master", href: "/masters/clients" },
       { name: "Order Master", href: "/masters/orders" },
       { name: "Pending Orders", href: "/masters/pending-orders" },
+      { name: "Plan Master", href: "/masters/plans" },
       { name: "User Master", href: "/masters/users" },
       { name: "Paper Master", href: "/masters/papers" },
     ],
@@ -59,6 +57,11 @@ const navigation = [
     name: "Planning",
     href: "/planning",
     icon: Scissors,
+  },
+  {
+    name: "QR Scanner",
+    href: "/qr-scanner",
+    icon: QrCode,
   },
 ];
 

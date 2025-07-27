@@ -2,7 +2,7 @@
  * Client API utilities
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://c997dd342fc6.ngrok-free.app';
 
 export interface Client {
   id: string;
@@ -42,6 +42,7 @@ export async function fetchClients(skip: number = 0, status: string = 'active'):
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
     },
   });
 
@@ -85,6 +86,7 @@ export async function createClient(clientData: CreateClientFormData): Promise<Cl
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
     },
     body: JSON.stringify(clientDataWithUserId),
   });
@@ -101,14 +103,14 @@ export async function createClient(clientData: CreateClientFormData): Promise<Cl
       if (errorJson.detail) {
         if (Array.isArray(errorJson.detail)) {
           // Handle validation errors
-          errorMessage = errorJson.detail.map((err: any) => `${err.loc?.join('.')}: ${err.msg}`).join(', ');
+          errorMessage = errorJson.detail.map((err: { loc?: string[]; msg: string }) => `${err.loc?.join('.')}: ${err.msg}`).join(', ');
         } else {
           errorMessage = errorJson.detail;
         }
       } else if (errorJson.message) {
         errorMessage = errorJson.message;
       }
-    } catch (e) {
+    } catch {
       errorMessage = errorText || errorMessage;
     }
     
@@ -126,6 +128,7 @@ export async function updateClient(id: string, clientData: Partial<CreateClientF
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
     },
     body: JSON.stringify(clientData),
   });
@@ -146,6 +149,7 @@ export async function deleteClient(id: string): Promise<void> {
     method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
     },
   });
 

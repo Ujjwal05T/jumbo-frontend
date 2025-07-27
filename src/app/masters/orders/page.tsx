@@ -117,7 +117,6 @@ export default function OrderMasterPage() {
 
   const pendingOrders = orders.filter((o: Order) => o.status === 'pending').length;
   const processingOrders = orders.filter((o: Order) => o.status === 'processing').length;
-  const partiallyFulfilledOrders = orders.filter((o: Order) => o.status === 'partially_fulfilled').length;
   const completedOrders = orders.filter((o: Order) => o.status === 'completed').length;
 
   // Helper functions for order item calculations

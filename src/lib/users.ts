@@ -2,7 +2,7 @@
  * Users API utilities
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://c997dd342fc6.ngrok-free.app';
 
 export interface User {
   id: string;
@@ -35,6 +35,16 @@ export interface CreateUserFormData {
   department?: string;
 }
 
+export interface UpdateUserData {
+  name?: string;
+  username?: string;
+  password?: string;
+  role?: string;
+  contact?: string;
+  department?: string;
+  status?: 'active' | 'inactive';
+}
+
 /**
  * Fetch all users from the API
  */
@@ -43,6 +53,7 @@ export async function fetchUsers(): Promise<User[]> {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
     },
   });
 
@@ -68,6 +79,7 @@ export async function createUser(userData: CreateUserFormData): Promise<User> {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
     },
     body: JSON.stringify(userDataWithDefaults),
   });
@@ -84,14 +96,14 @@ export async function createUser(userData: CreateUserFormData): Promise<User> {
       if (errorJson.detail) {
         if (Array.isArray(errorJson.detail)) {
           // Handle validation errors
-          errorMessage = errorJson.detail.map((err: any) => `${err.loc?.join('.')}: ${err.msg}`).join(', ');
+          errorMessage = errorJson.detail.map((err: { loc?: string[]; msg: string }) => `${err.loc?.join('.')}: ${err.msg}`).join(', ');
         } else {
           errorMessage = errorJson.detail;
         }
       } else if (errorJson.message) {
         errorMessage = errorJson.message;
       }
-    } catch (e) {
+    } catch {
       errorMessage = errorText || errorMessage;
     }
     
@@ -104,7 +116,7 @@ export async function createUser(userData: CreateUserFormData): Promise<User> {
 /**
  * Update a user
  */
-export async function updateUser(id: string, userData: Partial<CreateUserFormData>): Promise<User> {
+export async function updateUser(id: string, userData: UpdateUserData): Promise<User> {
   const response = await fetch(`${API_URL}/api/users/${id}`, {
     method: 'PUT',
     headers: {
@@ -142,5 +154,5 @@ export async function deleteUser(id: string): Promise<void> {
  * Update user status
  */
 export async function updateUserStatus(id: string, status: 'active' | 'inactive'): Promise<User> {
-  return updateUser(id, { status } as any);
+  return updateUser(id, { status });
 }

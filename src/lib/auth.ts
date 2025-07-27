@@ -4,7 +4,7 @@
  */
 
 const USER_KEY = 'username';
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://c997dd342fc6.ngrok-free.app';
 
 /**
  * Get the current authenticated user
@@ -31,6 +31,7 @@ export async function login(username: string, password: string): Promise<{ usern
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
     },
     body: JSON.stringify({ username, password }),
   });
@@ -53,6 +54,7 @@ export async function register(username: string, password: string): Promise<{ us
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
     },
     body: JSON.stringify({ username, password }),
   });

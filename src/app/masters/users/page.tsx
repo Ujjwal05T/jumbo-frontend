@@ -70,7 +70,7 @@ export default function UserMasterPage() {
     }
   };
 
-  const handleUserCreated = async (newUser: ApiUser) => {
+  const handleUserCreated = async () => {
     setShowUserForm(false);
     // Refresh the users list
     await loadUsers();

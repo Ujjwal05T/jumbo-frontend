@@ -13,8 +13,8 @@ import { Loader2, ArrowLeft, AlertCircle, CheckCircle2, Plus, X } from "lucide-r
 
 export default function NewOrderPage() {
   const router = useRouter();
-  const [clients, setClients] = useState<any[]>([]);
-  const [papers, setPapers] = useState<any[]>([]);
+  const [clients, setClients] = useState<{ id: string; company_name: string }[]>([]);
+  const [papers, setPapers] = useState<{ id: string; name: string; gsm: number; bf: number; shade: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState<{ type: 'success' | 'error' | null; message: string }>({ type: null, message: '' });
   const [formData, setFormData] = useState({
@@ -122,7 +122,7 @@ export default function NewOrderPage() {
 
       // Clean up order items - remove empty strings and ensure proper types
       const cleanOrderItems = orderItems.map(item => {
-        const cleanItem: any = {
+        const cleanItem: CreateOrderItemData = {
           paper_id: item.paper_id,
           width_inches: parseFloat(item.width_inches as string),
           rate: parseFloat(item.rate as string)

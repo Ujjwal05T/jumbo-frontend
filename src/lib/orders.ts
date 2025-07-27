@@ -59,7 +59,7 @@ export interface CreateOrderData {
   delivery_date?: string;
   notes?: string;
   created_by_id: string;
-  order_items: any[]; // Allow flexible typing for order items
+  order_items: CreateOrderItemData[]; // Properly typed order items
 }
 
 // Helper functions for calculations
@@ -76,10 +76,14 @@ export const calculateAmount = (quantityKg: number, rate: number): number => {
   return quantityKg * rate;
 };
 
-const API_URL = 'http://localhost:8000/api';
+const API_URL = 'https://c997dd342fc6.ngrok-free.app/api';
 
 export const fetchOrders = async (): Promise<Order[]> => {
-  const response = await fetch(`${API_URL}/orders`);
+  const response = await fetch(`${API_URL}/orders`, {
+    headers: {
+      'ngrok-skip-browser-warning': 'true',
+    },
+  });
   if (!response.ok) {
     throw new Error('Failed to fetch orders');
   }
@@ -101,6 +105,7 @@ export const createOrder = async (orderData: Omit<CreateOrderData, 'created_by_i
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
     },
     body: JSON.stringify({
       ...orderData,
@@ -121,6 +126,7 @@ export const updateOrderStatus = async (id: string, status: Order['status']): Pr
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
     },
     body: JSON.stringify({ status }),
   });
@@ -133,13 +139,21 @@ export const updateOrderStatus = async (id: string, status: Order['status']): Pr
 
 // Fetch clients and papers for dropdowns
 export const fetchClients = async () => {
-  const response = await fetch(`${API_URL}/clients`);
+  const response = await fetch(`${API_URL}/clients`, {
+    headers: {
+      'ngrok-skip-browser-warning': 'true',
+    },
+  });
   if (!response.ok) throw new Error('Failed to fetch clients');
   return response.json();
 };
 
 export const fetchPapers = async () => {
-  const response = await fetch(`${API_URL}/papers`);
+  const response = await fetch(`${API_URL}/papers`, {
+    headers: {
+      'ngrok-skip-browser-warning': 'true',
+    },
+  });
   if (!response.ok) throw new Error('Failed to fetch papers');
   return response.json();
 };
@@ -150,6 +164,7 @@ export const addOrderItem = async (orderId: string, itemData: CreateOrderItemDat
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
     },
     body: JSON.stringify(itemData),
   });
@@ -167,6 +182,7 @@ export const updateOrderItem = async (itemId: string, updates: Partial<CreateOrd
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
     },
     body: JSON.stringify(updates),
   });
@@ -182,6 +198,9 @@ export const updateOrderItem = async (itemId: string, updates: Partial<CreateOrd
 export const deleteOrderItem = async (itemId: string): Promise<void> => {
   const response = await fetch(`${API_URL}/order-items/${itemId}`, {
     method: 'DELETE',
+    headers: {
+      'ngrok-skip-browser-warning': 'true',
+    },
   });
 
   if (!response.ok) {
@@ -195,6 +214,7 @@ export const fulfillOrderItem = async (itemId: string, quantityFulfilled: number
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
     },
     body: JSON.stringify({ quantity_fulfilled: quantityFulfilled }),
   });

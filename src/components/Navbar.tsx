@@ -14,10 +14,22 @@ export default function Navbar() {
         <Link href="/" className="text-xl font-bold">
           Paper Roll System
         </Link>
-        <div className="space-x-4">
+        <div className="flex items-center space-x-4">
           {user ? (
             <>
-              <span>Welcome, {user}</span>
+              <Link 
+                href="/planning" 
+                className="px-3 py-2 rounded hover:bg-gray-700 transition-colors"
+              >
+                Planning
+              </Link>
+              <Link 
+                href="/qr-scanner" 
+                className="px-3 py-2 rounded hover:bg-gray-700 transition-colors"
+              >
+                QR Scanner
+              </Link>
+              <span className="text-gray-300">Welcome, {user}</span>
               <LogoutButton />
             </>
           ) : (

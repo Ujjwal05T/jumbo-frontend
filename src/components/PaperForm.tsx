@@ -17,7 +17,6 @@ import {
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -25,7 +24,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Plus } from "lucide-react";
-import { createPaper, Paper } from "@/lib/papers";
+import { createPaper } from "@/lib/papers";
 
 const paperFormSchema = z.object({
   name: z.string().min(2, {
@@ -34,10 +33,10 @@ const paperFormSchema = z.object({
   type: z.string().min(1, {
     message: "Type is required.",
   }),
-  gsm: z.coerce.number().int().positive({
+  gsm: z.number().int().positive({
     message: "GSM must be a positive number.",
   }),
-  bf: z.coerce.number().positive({
+  bf: z.number().positive({
     message: "BF must be a positive number.",
   }),
   shade: z.string().min(1, {
@@ -61,8 +60,8 @@ export function PaperForm({ onSuccess, children }: PaperFormProps) {
     defaultValues: {
       name: "",
       type: "standard",
-      gsm: 0,
-      bf: 0,
+      gsm: 1,
+      bf: 1,
       shade: "",
     },
   });
@@ -96,7 +95,7 @@ export function PaperForm({ onSuccess, children }: PaperFormProps) {
         <DialogHeader>
           <DialogTitle>Add New Paper Type</DialogTitle>
           <DialogDescription>
-            Add a new paper type to your inventory. Click save when you're done.
+            Add a new paper type to your inventory. Click save when you&apos;re done.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -135,7 +134,13 @@ export function PaperForm({ onSuccess, children }: PaperFormProps) {
                   <FormItem>
                     <FormLabel>GSM</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 90" {...field} />
+                      <Input 
+                        type="number" 
+                        placeholder="e.g., 90" 
+                        {...field}
+                        value={field.value}
+                        onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -148,7 +153,14 @@ export function PaperForm({ onSuccess, children }: PaperFormProps) {
                   <FormItem>
                     <FormLabel>BF</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.1" placeholder="e.g., 18.5" {...field} />
+                      <Input 
+                        type="number" 
+                        step="0.1" 
+                        placeholder="e.g., 18.5" 
+                        {...field}
+                        value={field.value}
+                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 1)}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

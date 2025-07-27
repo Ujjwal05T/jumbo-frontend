@@ -20,7 +20,7 @@ import { CreateUserFormData, createUser } from "@/lib/users";
 import { User, Plus, Loader2 } from "lucide-react";
 
 interface UserFormProps {
-  onSuccess?: (user: any) => void;
+  onSuccess?: () => void;
   onCancel?: () => void;
   isOpen?: boolean;
 }
@@ -70,7 +70,7 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true }: UserFor
       });
 
       if (onSuccess) {
-        onSuccess(newUser);
+        onSuccess();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create user");
