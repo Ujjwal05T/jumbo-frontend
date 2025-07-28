@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, AlertCircle, Factory, QrCode, X } from "lucide-react";
 import QRCodeDisplay from "@/components/QRCodeDisplay";
 import { fetchOrders, Order } from "@/lib/orders";
+import { PRODUCTION_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
 
 
 // NEW FLOW: Cut roll interfaces
@@ -283,16 +284,11 @@ export default function PlanningPage() {
         throw new Error("User not authenticated");
       }
 
-      const response = await fetch('https://c997dd342fc6.ngrok-free.app/api/plans/generate-with-selection', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          order_ids: selectedOrders,
-          created_by_id: user_id
-        })
-      });
+      const response = await fetch(PRODUCTION_ENDPOINTS.GENERATE_PLAN, createRequestOptions('POST', {
+        order_ids: selectedOrders,
+        created_by_id: user_id
+      })
+      );
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -368,18 +364,12 @@ export default function PlanningPage() {
       // Generate a temporary UUID for the plan
       const tempPlanId = crypto.randomUUID();
       
-      const response = await fetch('https://c997dd342fc6.ngrok-free.app/api/cut-rolls/select-for-production', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
-        },
-        body: JSON.stringify({
-          plan_id: tempPlanId,
-          cut_roll_selections: cutRollSelections,
-          created_by_id: user_id
-        })
-      });
+      const response = await fetch(PRODUCTION_ENDPOINTS.SELECT_FOR_PRODUCTION, createRequestOptions('POST', {
+        plan_id: tempPlanId,
+        cut_roll_selections: cutRollSelections,
+        created_by_id: user_id
+      })
+      );
 
       if (!response.ok) {
         const errorText = await response.text();

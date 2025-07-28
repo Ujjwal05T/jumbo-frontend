@@ -1,10 +1,11 @@
 /**
- * Pending Order Master page - Manage pending orders
+ * Pending Order Items page - Manage pending order items
  */
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
+import { MASTER_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,135 +38,200 @@ import {
   Play
 } from "lucide-react";
 
-interface PendingOrder {
+interface PendingOrderItem {
   id: string;
-  clientName: string;
-  clientCompany: string;
-  orderDate: string;
-  requestedDelivery: string;
-  daysWaiting: number;
-  totalAmount: number;
-  paperType: string;
-  quantity: number;
-  priority: "low" | "medium" | "high" | "urgent";
+  original_order_id: string;
+  width_inches: number;
+  gsm: number;
+  bf: number;
+  shade: string;
+  quantity_pending: number;
   reason: string;
-  estimatedProcessingTime: string;
+  status: "pending" | "in_production" | "resolved" | "cancelled";
+  production_order_id?: string;
+  created_at: string;
+  resolved_at?: string;
+  // Related data
+  original_order?: {
+    id: string;
+    client?: {
+      company_name: string;
+    };
+  };
+  created_by?: {
+    name: string;
+  };
 }
 
-export default function PendingOrderMasterPage() {
+export default function PendingOrderItemsPage() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [pendingItems, setPendingItems] = useState<PendingOrderItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Dummy pending order data
-  const pendingOrders: PendingOrder[] = [
+  // Fetch pending order items from API
+  useEffect(() => {
+    const fetchPendingItems = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Call backend API directly
+        let response = await fetch(`${MASTER_ENDPOINTS.PENDING_ORDERS}?status=pending`, createRequestOptions('GET'));
+        if (!response.ok) {
+          response = await fetch(`${MASTER_ENDPOINTS.PENDING_ORDERS.replace('pending-order-items', 'pending-orders')}?status=pending`, createRequestOptions('GET'));
+        }
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch pending order items: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        setPendingItems(Array.isArray(data) ? data : []);
+        
+        console.log('Fetched pending order items:', {
+          count: Array.isArray(data) ? data.length : 0,
+          data: data,
+          isArray: Array.isArray(data)
+        });
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        setError(errorMessage);
+        console.error('Error fetching pending items:', err);
+        
+        // Use sample data as fallback for development
+        setPendingItems(samplePendingItems);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPendingItems();
+  }, []);
+
+  // Sample data for demo (remove when API is working)
+  const samplePendingItems: PendingOrderItem[] = [
     {
-      id: "ORD-003",
-      clientName: "Michael Brown",
-      clientCompany: "Tech Solutions Corp",
-      orderDate: "2024-01-18",
-      requestedDelivery: "2024-01-23",
-      daysWaiting: 5,
-      totalAmount: 3200.00,
-      paperType: "Custom Size",
-      quantity: 2500,
-      priority: "high",
-      reason: "Awaiting material availability",
-      estimatedProcessingTime: "2-3 days"
+      id: "pend-001",
+      original_order_id: "ord-123",
+      width_inches: 34,
+      gsm: 80,
+      bf: 18.0,
+      shade: "Natural",
+      quantity_pending: 5,
+      reason: "no_suitable_jumbo",
+      status: "pending",
+      created_at: "2024-01-18T10:00:00Z",
+      original_order: {
+        id: "ord-123",
+        client: {
+          company_name: "Tech Solutions Corp"
+        }
+      },
+      created_by: {
+        name: "John Doe"
+      }
     },
     {
-      id: "ORD-007",
-      clientName: "Robert Johnson",
-      clientCompany: "Print Masters Inc",
-      orderDate: "2024-01-19",
-      requestedDelivery: "2024-01-26",
-      daysWaiting: 4,
-      totalAmount: 1750.00,
-      paperType: "A4 Premium",
-      quantity: 3500,
-      priority: "medium",
-      reason: "Quality check in progress",
-      estimatedProcessingTime: "1-2 days"
-    },
-    {
-      id: "ORD-008",
-      clientName: "Jennifer Davis",
-      clientCompany: "Creative Agency",
-      orderDate: "2024-01-20",
-      requestedDelivery: "2024-01-27",
-      daysWaiting: 3,
-      totalAmount: 2900.00,
-      paperType: "A3 Glossy",
-      quantity: 1800,
-      priority: "urgent",
-      reason: "Awaiting client approval",
-      estimatedProcessingTime: "1 day"
-    },
-    {
-      id: "ORD-009",
-      clientName: "Mark Wilson",
-      clientCompany: "Business Solutions",
-      orderDate: "2024-01-21",
-      requestedDelivery: "2024-01-28",
-      daysWaiting: 2,
-      totalAmount: 1450.00,
-      paperType: "A5 Standard",
-      quantity: 4200,
-      priority: "low",
-      reason: "Production queue",
-      estimatedProcessingTime: "3-4 days"
-    },
-    {
-      id: "ORD-010",
-      clientName: "Amanda Taylor",
-      clientCompany: "Design Studio Pro",
-      orderDate: "2024-01-22",
-      requestedDelivery: "2024-01-29",
-      daysWaiting: 1,
-      totalAmount: 3800.00,
-      paperType: "Custom Premium",
-      quantity: 1200,
-      priority: "high",
-      reason: "Special coating required",
-      estimatedProcessingTime: "2-3 days"
+      id: "pend-002", 
+      original_order_id: "ord-124",
+      width_inches: 28,
+      gsm: 90,
+      bf: 20.0,
+      shade: "White",
+      quantity_pending: 3,
+      reason: "waste_too_high",
+      status: "pending",
+      created_at: "2024-01-19T14:30:00Z",
+      original_order: {
+        id: "ord-124",
+        client: {
+          company_name: "Print Masters Inc"
+        }
+      },
+      created_by: {
+        name: "Jane Smith"
+      }
     }
   ];
 
-  const filteredOrders = pendingOrders.filter(order =>
-    order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.clientCompany.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.paperType.toLowerCase().includes(searchTerm.toLowerCase())
+  // Use real data or sample data as fallback
+  const displayItems = pendingItems.length > 0 ? pendingItems : (loading ? [] : samplePendingItems);
+
+  const filteredItems = displayItems.filter(item =>
+    item.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.original_order?.client?.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.shade.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.reason.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const getPriorityBadge = (priority: string) => {
-    switch (priority) {
-      case "urgent":
-        return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Urgent</Badge>;
-      case "high":
-        return <Badge variant="destructive">High</Badge>;
-      case "medium":
-        return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">Medium</Badge>;
-      case "low":
-        return <Badge variant="secondary">Low</Badge>;
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "pending":
+        return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">Pending</Badge>;
+      case "in_production":
+        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">In Production</Badge>;
+      case "resolved":
+        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Resolved</Badge>;
+      case "cancelled":
+        return <Badge variant="destructive">Cancelled</Badge>;
       default:
-        return <Badge variant="secondary">{priority}</Badge>;
+        return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
-  const getWaitingBadge = (days: number) => {
-    if (days >= 5) {
-      return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">{days} days</Badge>;
-    } else if (days >= 3) {
-      return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">{days} days</Badge>;
-    } else {
-      return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">{days} days</Badge>;
+  const getReasonBadge = (reason: string) => {
+    switch (reason) {
+      case "no_suitable_jumbo":
+        return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">No Suitable Jumbo</Badge>;
+      case "waste_too_high":
+        return <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">Waste Too High</Badge>;
+      case "inventory_shortage":
+        return <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100">Inventory Shortage</Badge>;
+      default:
+        return <Badge variant="secondary">{reason.replace(/_/g, ' ')}</Badge>;
     }
   };
 
-  const totalPendingValue = pendingOrders.reduce((sum, order) => sum + order.totalAmount, 0);
-  const urgentOrders = pendingOrders.filter(order => order.priority === "urgent").length;
-  const averageWaitTime = Math.round(
-    pendingOrders.reduce((sum, order) => sum + order.daysWaiting, 0) / pendingOrders.length
-  );
+  const getDaysWaiting = (createdAt: string) => {
+    const created = new Date(createdAt);
+    const now = new Date();
+    return Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
+  };
+
+  const totalPendingQuantity = displayItems.reduce((sum, item) => sum + item.quantity_pending, 0);
+  const highPriorityItems = displayItems.filter(item => {
+    const daysWaiting = getDaysWaiting(item.created_at);
+    return daysWaiting >= 3; // Consider items waiting 3+ days as high priority
+  }).length;
+  const averageWaitTime = displayItems.length > 0 ? Math.round(
+    displayItems.reduce((sum, item) => sum + getDaysWaiting(item.created_at), 0) / displayItems.length
+  ) : 0;
+
+  // Action handlers
+  const handleUpdateStatus = async (itemId: string, newStatus: string) => {
+    try {
+      const response = await fetch(`${MASTER_ENDPOINTS.PENDING_ORDERS}/${itemId}`, createRequestOptions('PUT', { status: newStatus }));
+
+      if (response.ok) {
+        // Refresh the data
+        const updatedItems = pendingItems.map(item => 
+          item.id === itemId ? { ...item, status: newStatus as "pending" | "in_production" | "resolved" | "cancelled" } : item
+        );
+        setPendingItems(updatedItems);
+      }
+    } catch (error) {
+      console.error('Failed to update status:', error);
+    }
+  };
+
+  const handleMoveToProduction = (itemId: string) => {
+    handleUpdateStatus(itemId, 'in_production');
+  };
+
+  const handleCancelItem = (itemId: string) => {
+    handleUpdateStatus(itemId, 'cancelled');
+  };
 
   return (
     <DashboardLayout>
@@ -175,10 +241,10 @@ export default function PendingOrderMasterPage() {
           <div className="space-y-1">
             <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
               <Clock className="w-8 h-8 text-primary" />
-              Pending Orders
+              Pending Order Items
             </h1>
             <p className="text-muted-foreground">
-              Manage and prioritize orders awaiting processing
+              Manage order items that couldn&apos;t be fulfilled immediately
             </p>
           </div>
           <div className="flex gap-2">
@@ -197,25 +263,25 @@ export default function PendingOrderMasterPage() {
         <div className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending Orders</CardTitle>
+              <CardTitle className="text-sm font-medium">Pending Items</CardTitle>
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{pendingOrders.length}</div>
+              <div className="text-2xl font-bold">{displayItems.length}</div>
               <p className="text-xs text-muted-foreground">
-                Awaiting processing
+                Items awaiting fulfillment
               </p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Urgent Orders</CardTitle>
+              <CardTitle className="text-sm font-medium">High Priority</CardTitle>
               <AlertTriangle className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-600">{urgentOrders}</div>
+              <div className="text-2xl font-bold text-red-600">{highPriorityItems}</div>
               <p className="text-xs text-muted-foreground">
-                Require immediate attention
+                Items waiting 3+ days
               </p>
             </CardContent>
           </Card>
@@ -233,13 +299,13 @@ export default function PendingOrderMasterPage() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending Value</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Total Quantity</CardTitle>
+              <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${totalPendingValue.toLocaleString()}</div>
+              <div className="text-2xl font-bold">{totalPendingQuantity.toLocaleString()}</div>
               <p className="text-xs text-muted-foreground">
-                Total order value
+                Rolls pending fulfillment
               </p>
             </CardContent>
           </Card>
@@ -248,9 +314,11 @@ export default function PendingOrderMasterPage() {
         {/* Search and Filters */}
         <Card>
           <CardHeader>
-            <CardTitle>Pending Order Queue</CardTitle>
+            <CardTitle>Pending Order Items Queue</CardTitle>
             <CardDescription>
-              Review and process orders waiting for approval or production
+              Review and process order items that couldn&apos;t be fulfilled immediately
+              {loading && " (Loading...)"}
+              {error && ` (Error: ${error} - showing sample data)`}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -258,7 +326,7 @@ export default function PendingOrderMasterPage() {
               <div className="relative flex-1">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search pending orders..."
+                  placeholder="Search pending items..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-8"
@@ -273,61 +341,61 @@ export default function PendingOrderMasterPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Order Details</TableHead>
+                    <TableHead>Item Details</TableHead>
+                    <TableHead>Paper Specification</TableHead>
                     <TableHead>Client</TableHead>
-                    <TableHead>Product</TableHead>
-                    <TableHead>Priority</TableHead>
-                    <TableHead>Wait Time</TableHead>
+                    <TableHead>Quantity</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Reason</TableHead>
-                    <TableHead>Est. Processing</TableHead>
-                    <TableHead>Amount</TableHead>
+                    <TableHead>Wait Time</TableHead>
                     <TableHead className="w-[70px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredOrders.map((order) => (
-                    <TableRow key={order.id} className="hover:bg-muted/50">
+                  {filteredItems.map((item) => {
+                    const daysWaiting = getDaysWaiting(item.created_at);
+                    return (
+                    <TableRow key={item.id} className="hover:bg-muted/50">
                       <TableCell>
                         <div className="space-y-1">
-                          <div className="font-medium">{order.id}</div>
+                          <div className="font-medium">{item.id}</div>
                           <div className="text-sm text-muted-foreground">
-                            Ordered: {order.orderDate}
+                            Order: {item.original_order_id}
                           </div>
                           <div className="text-sm text-muted-foreground">
-                            Due: {order.requestedDelivery}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="font-medium">{order.clientName}</div>
-                          <div className="text-sm text-muted-foreground">{order.clientCompany}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="font-medium">{order.paperType}</div>
-                          <div className="text-sm text-muted-foreground">
-                            Qty: {order.quantity.toLocaleString()}
+                            Created: {new Date(item.created_at).toLocaleDateString()}
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        {getPriorityBadge(order.priority)}
-                      </TableCell>
-                      <TableCell>
-                        {getWaitingBadge(order.daysWaiting)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm max-w-[150px] truncate" title={order.reason}>
-                          {order.reason}
+                        <div className="space-y-1">
+                          <div className="font-medium">{item.width_inches}&quot; x {item.shade}</div>
+                          <div className="text-sm text-muted-foreground">
+                            GSM: {item.gsm}, BF: {item.bf}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm">{order.estimatedProcessingTime}</div>
+                        <div className="space-y-1">
+                          <div className="font-medium">{item.original_order?.client?.company_name || 'N/A'}</div>
+                          <div className="text-sm text-muted-foreground">
+                            Created by: {item.created_by?.name || 'N/A'}
+                          </div>
+                        </div>
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium">${order.totalAmount.toLocaleString()}</div>
+                        <div className="font-medium">{item.quantity_pending} rolls</div>
+                      </TableCell>
+                      <TableCell>
+                        {getStatusBadge(item.status)}
+                      </TableCell>
+                      <TableCell>
+                        {getReasonBadge(item.reason)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={daysWaiting >= 5 ? "bg-red-100 text-red-800" : daysWaiting >= 3 ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-800"}>
+                          {daysWaiting} days
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
@@ -341,33 +409,40 @@ export default function PendingOrderMasterPage() {
                               <Eye className="mr-2 h-4 w-4" />
                               View Details
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="text-green-600">
+                            <DropdownMenuItem 
+                              className="text-green-600"
+                              onClick={() => handleMoveToProduction(item.id)}
+                            >
                               <CheckCircle className="mr-2 h-4 w-4" />
-                              Approve & Process
+                              Move to Production
                             </DropdownMenuItem>
                             <DropdownMenuItem>
                               <Package className="mr-2 h-4 w-4" />
                               Update Status
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="text-red-600">
+                            <DropdownMenuItem 
+                              className="text-red-600"
+                              onClick={() => handleCancelItem(item.id)}
+                            >
                               <XCircle className="mr-2 h-4 w-4" />
-                              Reject Order
+                              Cancel Item
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
 
-            {filteredOrders.length === 0 && (
+            {filteredItems.length === 0 && (
               <div className="text-center py-8">
                 <Clock className="mx-auto h-12 w-12 text-muted-foreground" />
-                <h3 className="mt-2 text-sm font-semibold">No pending orders found</h3>
+                <h3 className="mt-2 text-sm font-semibold">No pending order items found</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  All orders are currently being processed or completed.
+                  All order items are currently being processed or completed.
                 </p>
               </div>
             )}

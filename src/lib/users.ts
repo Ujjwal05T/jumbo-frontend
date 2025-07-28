@@ -2,7 +2,7 @@
  * Users API utilities
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://c997dd342fc6.ngrok-free.app';
+import { MASTER_ENDPOINTS, createRequestOptions } from './api-config';
 
 export interface User {
   id: string;
@@ -49,13 +49,7 @@ export interface UpdateUserData {
  * Fetch all users from the API
  */
 export async function fetchUsers(): Promise<User[]> {
-  const response = await fetch(`${API_URL}/api/users`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-    },
-  });
+  const response = await fetch(MASTER_ENDPOINTS.USERS, createRequestOptions('GET'));
 
   if (!response.ok) {
     throw new Error('Failed to fetch users');
@@ -75,14 +69,7 @@ export async function createUser(userData: CreateUserFormData): Promise<User> {
 
   console.log('Sending user data:', userDataWithDefaults);
 
-  const response = await fetch(`${API_URL}/api/users/register`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-    },
-    body: JSON.stringify(userDataWithDefaults),
-  });
+  const response = await fetch(`${MASTER_ENDPOINTS.USERS}/register`, createRequestOptions('POST', userDataWithDefaults));
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -117,10 +104,11 @@ export async function createUser(userData: CreateUserFormData): Promise<User> {
  * Update a user
  */
 export async function updateUser(id: string, userData: UpdateUserData): Promise<User> {
-  const response = await fetch(`${API_URL}/api/users/${id}`, {
+  const response = await fetch(`https://fd64e10d1c13.ngrok-free.app/api/users/${id}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
     },
     body: JSON.stringify(userData),
   });
@@ -137,7 +125,7 @@ export async function updateUser(id: string, userData: UpdateUserData): Promise<
  * Delete a user
  */
 export async function deleteUser(id: string): Promise<void> {
-  const response = await fetch(`${API_URL}/api/users/${id}`, {
+  const response = await fetch(`https://fd64e10d1c13.ngrok-free.app/api/users/${id}`, {
     method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',

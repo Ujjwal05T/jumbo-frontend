@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { AUTH_ENDPOINTS, createRequestOptions } from '@/lib/api-config';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -44,17 +45,10 @@ export default function RegisterPage() {
     setError('');
 
     try {
-      const response = await fetch('https://c997dd342fc6.ngrok-free.app/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
-        },
-        body: JSON.stringify({
-          username,
-          password,
-        }),
-      });
+      const response = await fetch(AUTH_ENDPOINTS.REGISTER, createRequestOptions('POST', {
+        username,
+        password,
+      }));
 
       const data = await response.json();
 

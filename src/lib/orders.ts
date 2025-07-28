@@ -76,14 +76,10 @@ export const calculateAmount = (quantityKg: number, rate: number): number => {
   return quantityKg * rate;
 };
 
-const API_URL = 'https://c997dd342fc6.ngrok-free.app/api';
+import { MASTER_ENDPOINTS, createRequestOptions } from './api-config';
 
 export const fetchOrders = async (): Promise<Order[]> => {
-  const response = await fetch(`${API_URL}/orders`, {
-    headers: {
-      'ngrok-skip-browser-warning': 'true',
-    },
-  });
+  const response = await fetch(MASTER_ENDPOINTS.ORDERS, createRequestOptions('GET'));
   if (!response.ok) {
     throw new Error('Failed to fetch orders');
   }
@@ -101,17 +97,10 @@ export const createOrder = async (orderData: Omit<CreateOrderData, 'created_by_i
     throw new Error('At least one order item is required');
   }
 
-  const response = await fetch(`${API_URL}/orders`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-    },
-    body: JSON.stringify({
-      ...orderData,
-      created_by_id: userId,
-    }),
-  });
+  const response = await fetch(MASTER_ENDPOINTS.ORDERS, createRequestOptions('POST', {
+    ...orderData,
+    created_by_id: userId,
+  }));
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
@@ -122,14 +111,7 @@ export const createOrder = async (orderData: Omit<CreateOrderData, 'created_by_i
 };
 
 export const updateOrderStatus = async (id: string, status: Order['status']): Promise<void> => {
-  const response = await fetch(`${API_URL}/orders/${id}/status`, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-    },
-    body: JSON.stringify({ status }),
-  });
+  const response = await fetch(`${MASTER_ENDPOINTS.ORDERS}/${id}/status`, createRequestOptions('PATCH', { status }));
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
@@ -139,35 +121,20 @@ export const updateOrderStatus = async (id: string, status: Order['status']): Pr
 
 // Fetch clients and papers for dropdowns
 export const fetchClients = async () => {
-  const response = await fetch(`${API_URL}/clients`, {
-    headers: {
-      'ngrok-skip-browser-warning': 'true',
-    },
-  });
+  const response = await fetch(MASTER_ENDPOINTS.CLIENTS, createRequestOptions('GET'));
   if (!response.ok) throw new Error('Failed to fetch clients');
   return response.json();
 };
 
 export const fetchPapers = async () => {
-  const response = await fetch(`${API_URL}/papers`, {
-    headers: {
-      'ngrok-skip-browser-warning': 'true',
-    },
-  });
+  const response = await fetch(MASTER_ENDPOINTS.PAPERS, createRequestOptions('GET'));
   if (!response.ok) throw new Error('Failed to fetch papers');
   return response.json();
 };
 
 // Order Item API functions
 export const addOrderItem = async (orderId: string, itemData: CreateOrderItemData): Promise<OrderItem> => {
-  const response = await fetch(`${API_URL}/orders/${orderId}/items`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-    },
-    body: JSON.stringify(itemData),
-  });
+  const response = await fetch(`${MASTER_ENDPOINTS.ORDERS}/${orderId}/items`, createRequestOptions('POST', itemData));
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
@@ -178,14 +145,7 @@ export const addOrderItem = async (orderId: string, itemData: CreateOrderItemDat
 };
 
 export const updateOrderItem = async (itemId: string, updates: Partial<CreateOrderItemData>): Promise<OrderItem> => {
-  const response = await fetch(`${API_URL}/order-items/${itemId}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-    },
-    body: JSON.stringify(updates),
-  });
+  const response = await fetch(`${MASTER_ENDPOINTS.ORDERS.replace('/orders', '/order-items')}/${itemId}`, createRequestOptions('PUT', updates));
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
@@ -196,12 +156,7 @@ export const updateOrderItem = async (itemId: string, updates: Partial<CreateOrd
 };
 
 export const deleteOrderItem = async (itemId: string): Promise<void> => {
-  const response = await fetch(`${API_URL}/order-items/${itemId}`, {
-    method: 'DELETE',
-    headers: {
-      'ngrok-skip-browser-warning': 'true',
-    },
-  });
+  const response = await fetch(`${MASTER_ENDPOINTS.ORDERS.replace('/orders', '/order-items')}/${itemId}`, createRequestOptions('DELETE'));
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
@@ -210,14 +165,7 @@ export const deleteOrderItem = async (itemId: string): Promise<void> => {
 };
 
 export const fulfillOrderItem = async (itemId: string, quantityFulfilled: number): Promise<void> => {
-  const response = await fetch(`${API_URL}/order-items/${itemId}/fulfill`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-    },
-    body: JSON.stringify({ quantity_fulfilled: quantityFulfilled }),
-  });
+  const response = await fetch(`${MASTER_ENDPOINTS.ORDERS.replace('/orders', '/order-items')}/${itemId}/fulfill`, createRequestOptions('POST', { quantity_fulfilled: quantityFulfilled }));
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));

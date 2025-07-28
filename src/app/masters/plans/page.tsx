@@ -6,6 +6,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
+import { MASTER_ENDPOINTS, PRODUCTION_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -69,13 +70,7 @@ export default function PlansPage() {
       setLoading(true);
       setError(null);
       
-      const response = await fetch('https://c997dd342fc6.ngrok-free.app/api/plans', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
-        }
-      });
+      const response = await fetch(MASTER_ENDPOINTS.PLANS, createRequestOptions('GET'));
 
       if (!response.ok) {
         throw new Error('Failed to load plans');
@@ -95,13 +90,7 @@ export default function PlansPage() {
     try {
       setLoadingSummary(true);
       
-      const response = await fetch(`https://c997dd342fc6.ngrok-free.app/api/cut-rolls/plan/${planId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
-        }
-      });
+      const response = await fetch(PRODUCTION_ENDPOINTS.CUT_ROLLS_PLAN(planId), createRequestOptions('GET'));
 
       if (!response.ok) {
         throw new Error('Failed to load cut roll summary');
@@ -118,14 +107,7 @@ export default function PlansPage() {
 
   const updatePlanStatus = async (planId: string, status: string) => {
     try {
-      const response = await fetch(`https://c997dd342fc6.ngrok-free.app/api/plans/${planId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
-        },
-        body: JSON.stringify({ status })
-      });
+      const response = await fetch(PRODUCTION_ENDPOINTS.PLAN_STATUS(planId), createRequestOptions('PUT', { status }));
 
       if (!response.ok) {
         throw new Error('Failed to update plan status');

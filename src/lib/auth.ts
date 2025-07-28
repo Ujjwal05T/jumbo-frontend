@@ -3,8 +3,9 @@
  * Uses localStorage for session management
  */
 
+import { AUTH_ENDPOINTS, createRequestOptions } from './api-config';
+
 const USER_KEY = 'username';
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://c997dd342fc6.ngrok-free.app';
 
 /**
  * Get the current authenticated user
@@ -27,14 +28,7 @@ export function isAuthenticated(): boolean {
  * Login user
  */
 export async function login(username: string, password: string): Promise<{ username: string }> {
-  const response = await fetch(`${API_URL}/api/login`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-    },
-    body: JSON.stringify({ username, password }),
-  });
+  const response = await fetch(AUTH_ENDPOINTS.LOGIN, createRequestOptions('POST', { username, password }));
 
   if (!response.ok) {
     const error = await response.json();
@@ -50,14 +44,7 @@ export async function login(username: string, password: string): Promise<{ usern
  * Register new user
  */
 export async function register(username: string, password: string): Promise<{ username: string }> {
-  const response = await fetch(`${API_URL}/api/register`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-    },
-    body: JSON.stringify({ username, password }),
-  });
+  const response = await fetch(AUTH_ENDPOINTS.REGISTER, createRequestOptions('POST', { username, password }));
 
   if (!response.ok) {
     const error = await response.json();

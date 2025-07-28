@@ -179,7 +179,7 @@ export default function DashboardPage() {
                   <CardTitle>Recent Orders</CardTitle>
                   <CardDescription>Latest customer orders and their status</CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => router.push('/dashboard/masters/orders')}>
+                <Button variant="outline" size="sm" onClick={() => router.push('/masters/orders')}>
                   View All
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
@@ -216,7 +216,7 @@ export default function DashboardPage() {
               <Button 
                 className="w-full justify-start" 
                 variant="outline"
-                onClick={() => router.push('/dashboard/masters/orders')}
+                onClick={() => router.push('/masters/orders')}
               >
                 <ShoppingCart className="w-4 h-4 mr-2" />
                 New Order
@@ -224,7 +224,7 @@ export default function DashboardPage() {
               <Button 
                 className="w-full justify-start" 
                 variant="outline"
-                onClick={() => router.push('/dashboard/masters/clients')}
+                onClick={() => router.push('/masters/clients')}
               >
                 <Users className="w-4 h-4 mr-2" />
                 Add Client
@@ -232,7 +232,7 @@ export default function DashboardPage() {
               <Button 
                 className="w-full justify-start" 
                 variant="outline"
-                onClick={() => router.push('/dashboard/planning')}
+                onClick={() => router.push('/planning')}
               >
                 <FileText className="w-4 h-4 mr-2" />
                 Create Plan
@@ -240,7 +240,7 @@ export default function DashboardPage() {
               <Button 
                 className="w-full justify-start" 
                 variant="outline"
-                onClick={() => router.push('/dashboard/masters/papers')}
+                onClick={() => router.push('/masters/papers')}
               >
                 <Package className="w-4 h-4 mr-2" />
                 Manage Inventory

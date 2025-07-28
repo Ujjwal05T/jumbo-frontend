@@ -1,3 +1,5 @@
+import { MASTER_ENDPOINTS, createRequestOptions } from './api-config';
+
 export interface Paper {
   id: string;
   name: string;
@@ -19,17 +21,8 @@ export interface CreatePaperData {
   created_by_id: string;
 }
 
-const API_URL = 'https://c997dd342fc6.ngrok-free.app/api';
-
 export const fetchPapers = async (): Promise<Paper[]> => {
-  const response = await fetch(`${API_URL}/papers`,{
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-    },
-  }
-  );
+  const response = await fetch(MASTER_ENDPOINTS.PAPERS, createRequestOptions('GET'));
   if (!response.ok) {
     throw new Error('Failed to fetch papers');
   }
@@ -43,17 +36,10 @@ export const createPaper = async (paperData: Omit<CreatePaperData, 'created_by_i
     throw new Error('User not authenticated');
   }
 
-  const response = await fetch(`${API_URL}/papers`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-    },
-    body: JSON.stringify({
-      ...paperData,
-      created_by_id: userId,
-    }),
-  });
+  const response = await fetch(MASTER_ENDPOINTS.PAPERS, createRequestOptions('POST', {
+    ...paperData,
+    created_by_id: userId,
+  }));
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
@@ -64,13 +50,7 @@ export const createPaper = async (paperData: Omit<CreatePaperData, 'created_by_i
 };
 
 export const deletePaper = async (id: string): Promise<void> => {
-  const response = await fetch(`${API_URL}/papers/${id}`, {
-    method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-    },
-  });
+  const response = await fetch(`${MASTER_ENDPOINTS.PAPERS}/${id}`, createRequestOptions('DELETE'));
 
   if (!response.ok) {
     throw new Error('Failed to delete paper');

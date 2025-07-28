@@ -2,7 +2,7 @@
  * Client API utilities
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://c997dd342fc6.ngrok-free.app';
+import { MASTER_ENDPOINTS, createRequestOptions } from './api-config';
 
 export interface Client {
   id: string;
@@ -38,13 +38,7 @@ export interface CreateClientFormData {
  * Fetch all clients from the API
  */
 export async function fetchClients(skip: number = 0, status: string = 'active'): Promise<Client[]> {
-  const response = await fetch(`${API_URL}/api/clients?skip=${skip}&status=${status}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-    },
-  });
+  const response = await fetch(`${MASTER_ENDPOINTS.CLIENTS}?skip=${skip}&status=${status}`, createRequestOptions('GET'));
 
   if (!response.ok) {
     throw new Error('Failed to fetch clients');
@@ -82,14 +76,7 @@ export async function createClient(clientData: CreateClientFormData): Promise<Cl
 
   console.log('Sending client data:', clientDataWithUserId);
 
-  const response = await fetch(`${API_URL}/api/clients`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-    },
-    body: JSON.stringify(clientDataWithUserId),
-  });
+  const response = await fetch(MASTER_ENDPOINTS.CLIENTS, createRequestOptions('POST', clientDataWithUserId));
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -124,14 +111,7 @@ export async function createClient(clientData: CreateClientFormData): Promise<Cl
  * Update a client
  */
 export async function updateClient(id: string, clientData: Partial<CreateClientFormData>): Promise<Client> {
-  const response = await fetch(`${API_URL}/api/clients/${id}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-    },
-    body: JSON.stringify(clientData),
-  });
+  const response = await fetch(`${MASTER_ENDPOINTS.CLIENTS}/${id}`, createRequestOptions('PUT', clientData));
 
   if (!response.ok) {
     const error = await response.json();
@@ -145,13 +125,7 @@ export async function updateClient(id: string, clientData: Partial<CreateClientF
  * Delete a client
  */
 export async function deleteClient(id: string): Promise<void> {
-  const response = await fetch(`${API_URL}/api/clients/${id}`, {
-    method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-    },
-  });
+  const response = await fetch(`${MASTER_ENDPOINTS.CLIENTS}/${id}`, createRequestOptions('DELETE'));
 
   if (!response.ok) {
     const error = await response.json();

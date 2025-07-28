@@ -4,6 +4,7 @@
 "use client";
 
 import { useState } from "react";
+import { PRODUCTION_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -64,12 +65,7 @@ export default function QRScannerPage() {
       setError(null);
       setSuccess(null);
 
-      const response = await fetch(`https://c997dd342fc6.ngrok-free.app/api/qr-scan/${qrCode}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
+      const response = await fetch(`${PRODUCTION_ENDPOINTS.QR_SCAN}/${qrCode}`, createRequestOptions('GET'));
 
       if (!response.ok) {
         if (response.status === 404) {
@@ -111,18 +107,11 @@ export default function QRScannerPage() {
         throw new Error("User not authenticated");
       }
 
-      const response = await fetch('https://c997dd342fc6.ngrok-free.app/api/qr-scan/update-weight', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
-        },
-        body: JSON.stringify({
-          qr_code: qrCode,
-          actual_weight_kg: weightValue,
-          updated_by_id: user_id
-        })
-      });
+      const response = await fetch(PRODUCTION_ENDPOINTS.UPDATE_WEIGHT, createRequestOptions('POST', {
+        qr_code: qrCode,
+        actual_weight_kg: weightValue,
+        updated_by_id: user_id
+      }));
 
       if (!response.ok) {
         throw new Error('Failed to update weight');
