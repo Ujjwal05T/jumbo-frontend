@@ -2,7 +2,7 @@
  * Users API utilities
  */
 
-import { MASTER_ENDPOINTS, createRequestOptions } from './api-config';
+import { MASTER_ENDPOINTS, createRequestOptions } from "./api-config";
 
 export interface User {
   id: string;
@@ -11,7 +11,7 @@ export interface User {
   role: string;
   contact: string | null;
   department: string | null;
-  status: 'active' | 'inactive';
+  status: "active" | "inactive";
   created_at: string;
   last_login: string | null;
 }
@@ -23,7 +23,7 @@ export interface CreateUserData {
   role: string;
   contact?: string;
   department?: string;
-  status: 'active' | 'inactive';
+  status: "active" | "inactive";
 }
 
 export interface CreateUserFormData {
@@ -42,17 +42,20 @@ export interface UpdateUserData {
   role?: string;
   contact?: string;
   department?: string;
-  status?: 'active' | 'inactive';
+  status?: "active" | "inactive";
 }
 
 /**
  * Fetch all users from the API
  */
 export async function fetchUsers(): Promise<User[]> {
-  const response = await fetch(MASTER_ENDPOINTS.USERS, createRequestOptions('GET'));
+  const response = await fetch(
+    MASTER_ENDPOINTS.USERS,
+    createRequestOptions("GET")
+  );
 
   if (!response.ok) {
-    throw new Error('Failed to fetch users');
+    throw new Error("Failed to fetch users");
   }
 
   return response.json();
@@ -64,26 +67,34 @@ export async function fetchUsers(): Promise<User[]> {
 export async function createUser(userData: CreateUserFormData): Promise<User> {
   const userDataWithDefaults: CreateUserData = {
     ...userData,
-    status: 'active', // Default to active
+    status: "active", // Default to active
   };
 
-  console.log('Sending user data:', userDataWithDefaults);
+  console.log("Sending user data:", userDataWithDefaults);
 
-  const response = await fetch(`${MASTER_ENDPOINTS.USERS}/register`, createRequestOptions('POST', userDataWithDefaults));
+  const response = await fetch(
+    `${MASTER_ENDPOINTS.USERS}/register`,
+    createRequestOptions("POST", userDataWithDefaults)
+  );
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('API Error Response:', errorText);
-    console.error('Response status:', response.status);
-    
-    let errorMessage = 'Failed to create user';
-    
+    console.error("API Error Response:", errorText);
+    console.error("Response status:", response.status);
+
+    let errorMessage = "Failed to create user";
+
     try {
       const errorJson = JSON.parse(errorText);
       if (errorJson.detail) {
         if (Array.isArray(errorJson.detail)) {
           // Handle validation errors
-          errorMessage = errorJson.detail.map((err: { loc?: string[]; msg: string }) => `${err.loc?.join('.')}: ${err.msg}`).join(', ');
+          errorMessage = errorJson.detail
+            .map(
+              (err: { loc?: string[]; msg: string }) =>
+                `${err.loc?.join(".")}: ${err.msg}`
+            )
+            .join(", ");
         } else {
           errorMessage = errorJson.detail;
         }
@@ -93,7 +104,7 @@ export async function createUser(userData: CreateUserFormData): Promise<User> {
     } catch {
       errorMessage = errorText || errorMessage;
     }
-    
+
     throw new Error(errorMessage);
   }
 
@@ -103,19 +114,18 @@ export async function createUser(userData: CreateUserFormData): Promise<User> {
 /**
  * Update a user
  */
-export async function updateUser(id: string, userData: UpdateUserData): Promise<User> {
-  const response = await fetch(`https://fd64e10d1c13.ngrok-free.app/api/users/${id}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-    },
-    body: JSON.stringify(userData),
-  });
+export async function updateUser(
+  id: string,
+  userData: UpdateUserData
+): Promise<User> {
+  const response = await fetch(
+    `${MASTER_ENDPOINTS.USERS}/${id}`,
+    createRequestOptions("PUT", userData)
+  );
 
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.detail || 'Failed to update user');
+    throw new Error(error.detail || "Failed to update user");
   }
 
   return response.json();
@@ -125,22 +135,23 @@ export async function updateUser(id: string, userData: UpdateUserData): Promise<
  * Delete a user
  */
 export async function deleteUser(id: string): Promise<void> {
-  const response = await fetch(`https://fd64e10d1c13.ngrok-free.app/api/users/${id}`, {
-    method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+  const response = await fetch(
+    `${MASTER_ENDPOINTS.USERS}/${id}`,
+    createRequestOptions("DELETE")
+  );
 
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.detail || 'Failed to delete user');
+    throw new Error(error.detail || "Failed to delete user");
   }
 }
 
 /**
  * Update user status
  */
-export async function updateUserStatus(id: string, status: 'active' | 'inactive'): Promise<User> {
+export async function updateUserStatus(
+  id: string,
+  status: "active" | "inactive"
+): Promise<User> {
   return updateUser(id, { status });
 }

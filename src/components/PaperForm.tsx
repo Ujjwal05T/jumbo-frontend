@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,7 +25,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Plus } from "lucide-react";
-import { createPaper } from "@/lib/papers";
+import { createPaper, updatePaper, Paper } from "@/lib/papers";
 
 const paperFormSchema = z.object({
   name: z.string().min(2, {
@@ -49,33 +50,69 @@ type PaperFormValues = z.infer<typeof paperFormSchema>;
 interface PaperFormProps {
   onSuccess?: () => void;
   children?: React.ReactNode;
+  editingPaper?: Paper | null;
+  isEditing?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function PaperForm({ onSuccess, children }: PaperFormProps) {
-  const [open, setOpen] = useState(false);
+export function PaperForm({
+  onSuccess,
+  children,
+  editingPaper,
+  isEditing = false,
+  open: externalOpen,
+  onOpenChange,
+}: PaperFormProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const open = externalOpen !== undefined ? externalOpen : internalOpen;
+  const setOpen = onOpenChange || setInternalOpen;
 
   const form = useForm<PaperFormValues>({
     resolver: zodResolver(paperFormSchema),
     defaultValues: {
-      name: "",
-      type: "standard",
-      gsm: 1,
-      bf: 1,
-      shade: "",
+      name: editingPaper?.name || "",
+      type: editingPaper?.type || "standard",
+      gsm: editingPaper?.gsm || 1,
+      bf: editingPaper?.bf || 1,
+      shade: editingPaper?.shade || "",
     },
   });
+
+  // Reset form when editingPaper changes
+  React.useEffect(() => {
+    if (editingPaper) {
+      form.reset({
+        name: editingPaper.name,
+        type: editingPaper.type,
+        gsm: editingPaper.gsm,
+        bf: editingPaper.bf,
+        shade: editingPaper.shade,
+      });
+    }
+  }, [editingPaper, form]);
 
   const onSubmit = async (values: PaperFormValues) => {
     try {
       setLoading(true);
-      await createPaper(values);
-      alert("Paper type created successfully!");
+      if (isEditing && editingPaper) {
+        await updatePaper(editingPaper.id, values);
+        toast.success("Paper type updated successfully!");
+      } else {
+        await createPaper(values);
+        toast.success("Paper type created successfully!");
+      }
       setOpen(false);
       form.reset();
       onSuccess?.();
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Failed to create paper type.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : `Failed to ${isEditing ? "update" : "create"} paper type.`
+      );
     } finally {
       setLoading(false);
     }
@@ -83,19 +120,26 @@ export function PaperForm({ onSuccess, children }: PaperFormProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {children || (
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Paper Type
-          </Button>
-        )}
-      </DialogTrigger>
+      {(externalOpen === undefined || children) && (
+        <DialogTrigger asChild>
+          {children || (
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Paper Type
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Add New Paper Type</DialogTitle>
+          <DialogTitle>
+            {isEditing ? "Edit Paper Type" : "Add New Paper Type"}
+          </DialogTitle>
           <DialogDescription>
-            Add a new paper type to your inventory. Click save when you&apos;re done.
+            {isEditing
+              ? "Update the paper type information."
+              : "Add a new paper type to your inventory."}{" "}
+            Click save when you&apos;re done.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -120,7 +164,10 @@ export function PaperForm({ onSuccess, children }: PaperFormProps) {
                 <FormItem>
                   <FormLabel>Type</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., standard, glossy, matte" {...field} />
+                    <Input
+                      placeholder="e.g., standard, glossy, matte"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -134,12 +181,14 @@ export function PaperForm({ onSuccess, children }: PaperFormProps) {
                   <FormItem>
                     <FormLabel>GSM</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="number" 
-                        placeholder="e.g., 90" 
+                      <Input
+                        type="number"
+                        placeholder="e.g., 90"
                         {...field}
                         value={field.value}
-                        onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
+                        onChange={(e) =>
+                          field.onChange(parseInt(e.target.value, 10) || 1)
+                        }
                       />
                     </FormControl>
                     <FormMessage />
@@ -153,13 +202,15 @@ export function PaperForm({ onSuccess, children }: PaperFormProps) {
                   <FormItem>
                     <FormLabel>BF</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="number" 
-                        step="0.1" 
-                        placeholder="e.g., 18.5" 
+                      <Input
+                        type="number"
+                        step="0.1"
+                        placeholder="e.g., 18.5"
                         {...field}
                         value={field.value}
-                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 1)}
+                        onChange={(e) =>
+                          field.onChange(parseFloat(e.target.value) || 1)
+                        }
                       />
                     </FormControl>
                     <FormMessage />
@@ -181,11 +232,14 @@ export function PaperForm({ onSuccess, children }: PaperFormProps) {
               )}
             />
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOpen(false)}>
                 Cancel
               </Button>
               <Button type="submit" disabled={loading}>
-                {loading ? "Saving..." : "Save"}
+                {loading ? "Saving..." : isEditing ? "Update" : "Save"}
               </Button>
             </DialogFooter>
           </form>

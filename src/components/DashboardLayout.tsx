@@ -27,9 +27,11 @@ import {
   Star,
   ChevronDown,
   ChevronRight,
-  QrCode
+  QrCode,
+  Truck
 } from "lucide-react";
 import { getCurrentUser, logout } from "@/lib/auth";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -59,6 +61,11 @@ const navigation = [
     icon: Scissors,
   },
   {
+    name: "Dispatch",
+    href: "/dispatch",
+    icon: Truck,
+  },
+  {
     name: "QR Scanner",
     href: "/qr-scanner",
     icon: QrCode,
@@ -72,7 +79,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter();
   const user = getCurrentUser();
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
+    setShowLogoutDialog(true);
+  };
+
+  const confirmLogout = async () => {
     await logout();
     router.push("/auth/login");
   };

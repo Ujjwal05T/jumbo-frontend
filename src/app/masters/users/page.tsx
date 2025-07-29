@@ -4,6 +4,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import UserForm from "@/components/UserForm";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,6 +44,7 @@ import {
   AlertCircle
 } from "lucide-react";
 import { User as ApiUser, fetchUsers, deleteUser, updateUserStatus } from "@/lib/users";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 export default function UserMasterPage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -51,6 +53,12 @@ export default function UserMasterPage() {
   const [error, setError] = useState<string | null>(null);
   const [showUserForm, setShowUserForm] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [editingUser, setEditingUser] = useState<ApiUser | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    userId: string;
+    userName: string;
+  }>({ open: false, userId: "", userName: "" });
 
   // Load users on component mount
   useEffect(() => {
@@ -76,15 +84,32 @@ export default function UserMasterPage() {
     await loadUsers();
   };
 
-  const handleDeleteUser = async (userId: string) => {
-    if (!confirm("Are you sure you want to delete this user?")) return;
-    
+  const handleEditUser = (user: ApiUser) => {
+    setEditingUser(user);
+  };
+
+  const handleUserUpdated = async () => {
+    setEditingUser(null);
+    // Refresh the users list
+    await loadUsers();
+  };
+
+  const handleDeleteUser = (user: ApiUser) => {
+    setDeleteDialog({
+      open: true,
+      userId: user.id,
+      userName: user.name,
+    });
+  };
+
+  const confirmDeleteUser = async () => {
     try {
-      await deleteUser(userId);
+      await deleteUser(deleteDialog.userId);
       // Refresh the users list
       await loadUsers();
+      toast.success("User deleted successfully!");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to delete user");
+      toast.error(err instanceof Error ? err.message : "Failed to delete user");
     }
   };
 
@@ -96,7 +121,7 @@ export default function UserMasterPage() {
       // Refresh the users list
       await loadUsers();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to update user status");
+      toast.error(err instanceof Error ? err.message : "Failed to update user status");
     }
   };
 
@@ -256,6 +281,20 @@ export default function UserMasterPage() {
           </div>
         )}
 
+        {/* Edit User Form Modal */}
+        {editingUser && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <UserForm
+                editingUser={editingUser}
+                isEditing={true}
+                onSuccess={handleUserUpdated}
+                onCancel={() => setEditingUser(null)}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Search and Filters */}
         <Card>
           <CardHeader>
@@ -343,7 +382,6 @@ export default function UserMasterPage() {
                           <div className="space-y-1">
                             <div className="font-medium">{user.name}</div>
                             <div className="text-sm text-muted-foreground">@{user.username}</div>
-                            <div className="text-xs text-muted-foreground">{user.id}</div>
                           </div>
                         </div>
                       </TableCell>
@@ -377,7 +415,7 @@ export default function UserMasterPage() {
                               <Eye className="mr-2 h-4 w-4" />
                               View Profile
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEditUser(user)}>
                               <Edit className="mr-2 h-4 w-4" />
                               Edit User
                             </DropdownMenuItem>
@@ -403,7 +441,7 @@ export default function UserMasterPage() {
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-red-600"
-                              onClick={() => handleDeleteUser(user.id)}
+                              onClick={() => handleDeleteUser(user)}
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
                               Delete User
@@ -420,6 +458,18 @@ export default function UserMasterPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => setDeleteDialog(prev => ({ ...prev, open }))}
+        title="Delete User"
+        description={`Are you sure you want to delete "${deleteDialog.userName}"? This action cannot be undone and will remove all associated data.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="destructive"
+        onConfirm={confirmDeleteUser}
+      />
     </DashboardLayout>
   );
 }

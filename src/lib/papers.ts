@@ -49,6 +49,17 @@ export const createPaper = async (paperData: Omit<CreatePaperData, 'created_by_i
   return response.json();
 };
 
+export const updatePaper = async (id: string, paperData: Partial<Omit<CreatePaperData, 'created_by_id'>>): Promise<Paper> => {
+  const response = await fetch(`${MASTER_ENDPOINTS.PAPERS}/${id}`, createRequestOptions('PUT', paperData));
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || 'Failed to update paper');
+  }
+
+  return response.json();
+};
+
 export const deletePaper = async (id: string): Promise<void> => {
   const response = await fetch(`${MASTER_ENDPOINTS.PAPERS}/${id}`, createRequestOptions('DELETE'));
 

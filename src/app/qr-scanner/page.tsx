@@ -4,6 +4,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { PRODUCTION_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,8 +78,11 @@ export default function QRScannerPage() {
       const data = await response.json();
       setScanResult(data);
       setWeight(data.cut_roll.actual_weight_kg?.toString() || "");
+      toast.success("QR code scanned successfully!");
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to scan QR code');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to scan QR code';
+      setError(errorMessage);
+      toast.error(errorMessage);
       console.error(err);
     } finally {
       setScanning(false);
@@ -131,9 +135,13 @@ export default function QRScannerPage() {
         can_update_weight: updatedCutRoll.status === 'in_production'
       } : null);
 
-      setSuccess(`Weight updated successfully! Status: ${updatedCutRoll.status}`);
+      const successMessage = `Weight updated successfully! Status: ${updatedCutRoll.status}`;
+      setSuccess(successMessage);
+      toast.success(successMessage);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update weight');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update weight';
+      setError(errorMessage);
+      toast.error(errorMessage);
       console.error(err);
     } finally {
       setUpdating(false);

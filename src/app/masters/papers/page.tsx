@@ -4,43 +4,57 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { 
-  Package, 
-  Search, 
-  MoreHorizontal, 
-  Edit, 
-  Trash2, 
+import {
+  Package,
+  Search,
+  MoreHorizontal,
+  Edit,
+  Trash2,
   AlertTriangle,
   CheckCircle,
-  Loader2
+  Loader2,
 } from "lucide-react";
 import { Paper, fetchPapers, deletePaper } from "@/lib/papers";
 import { PaperForm } from "@/components/PaperForm";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 export default function PaperMasterPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [papers, setPapers] = useState<Paper[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingPaper, setEditingPaper] = useState<Paper | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    paperId: string;
+    paperName: string;
+  }>({ open: false, paperId: "", paperName: "" });
 
   const loadPapers = async () => {
     try {
@@ -49,7 +63,7 @@ export default function PaperMasterPage() {
       const papersData = await fetchPapers();
       setPapers(papersData);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load papers');
+      setError(err instanceof Error ? err.message : "Failed to load papers");
     } finally {
       setLoading(false);
     }
@@ -58,25 +72,41 @@ export default function PaperMasterPage() {
   useEffect(() => {
     loadPapers();
   }, []);
-  
-  const handleDeletePaper = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this paper type?')) {
-      return;
-    }
 
+  const handleEditPaper = (paper: Paper) => {
+    setEditingPaper(paper);
+  };
+
+  const handleDeletePaper = (paper: Paper) => {
+    setDeleteDialog({
+      open: true,
+      paperId: paper.id,
+      paperName: paper.name,
+    });
+  };
+
+  const confirmDeletePaper = async () => {
     try {
-      await deletePaper(id);
+      await deletePaper(deleteDialog.paperId);
       await loadPapers();
-      alert("Paper type deleted successfully.");
+      toast.success("Paper type deleted successfully.");
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete paper type');
+      toast.error(
+        err instanceof Error ? err.message : "Failed to delete paper type"
+      );
     }
   };
-  
-  const filteredPapers = papers.filter(paper =>
-    paper.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    paper.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    paper.shade.toLowerCase().includes(searchTerm.toLowerCase())
+
+  const handleEditSuccess = () => {
+    setEditingPaper(null);
+    loadPapers();
+  };
+
+  const filteredPapers = papers.filter(
+    (paper) =>
+      paper.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      paper.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      paper.shade.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getStatusBadge = (status: string) => {
@@ -93,7 +123,7 @@ export default function PaperMasterPage() {
   };
 
   const totalItems = papers.length;
-  const activeItems = papers.filter(p => p.status === "active").length;
+  const activeItems = papers.filter((p) => p.status === "active").length;
 
   return (
     <DashboardLayout>
@@ -122,10 +152,10 @@ export default function PaperMasterPage() {
               <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{loading ? "..." : totalItems}</div>
-              <p className="text-xs text-muted-foreground">
-                Paper types
-              </p>
+              <div className="text-2xl font-bold">
+                {loading ? "..." : totalItems}
+              </div>
+              <p className="text-xs text-muted-foreground">Paper types</p>
             </CardContent>
           </Card>
           <Card>
@@ -192,7 +222,9 @@ export default function PaperMasterPage() {
                     {filteredPapers.length > 0 ? (
                       filteredPapers.map((paper) => (
                         <TableRow key={paper.id}>
-                          <TableCell className="font-medium">{paper.name}</TableCell>
+                          <TableCell className="font-medium">
+                            {paper.name}
+                          </TableCell>
                           <TableCell>
                             <Badge variant="outline">{paper.type}</Badge>
                           </TableCell>
@@ -200,9 +232,11 @@ export default function PaperMasterPage() {
                           <TableCell>{paper.bf}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
-                              <div 
-                                className="w-4 h-4 rounded-full border" 
-                                style={{ backgroundColor: paper.shade.toLowerCase() }}
+                              <div
+                                className="w-4 h-4 rounded-full border"
+                                style={{
+                                  backgroundColor: paper.shade.toLowerCase(),
+                                }}
                                 title={paper.shade}
                               />
                               <span>{paper.shade}</span>
@@ -218,14 +252,14 @@ export default function PaperMasterPage() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleEditPaper(paper)}>
                                   <Edit className="mr-2 h-4 w-4" />
                                   Edit
                                 </DropdownMenuItem>
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   className="text-red-600"
-                                  onClick={() => handleDeletePaper(paper.id)}
-                                >
+                                  onClick={() => handleDeletePaper(paper)}>
                                   <Trash2 className="mr-2 h-4 w-4" />
                                   Delete
                                 </DropdownMenuItem>
@@ -248,6 +282,27 @@ export default function PaperMasterPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Edit Paper Dialog */}
+      <PaperForm
+        editingPaper={editingPaper}
+        isEditing={true}
+        open={!!editingPaper}
+        onOpenChange={(open) => !open && setEditingPaper(null)}
+        onSuccess={handleEditSuccess}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => setDeleteDialog(prev => ({ ...prev, open }))}
+        title="Delete Paper Type"
+        description={`Are you sure you want to delete "${deleteDialog.paperName}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="destructive"
+        onConfirm={confirmDeletePaper}
+      />
     </DashboardLayout>
   );
 }

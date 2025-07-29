@@ -4,6 +4,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -100,7 +101,7 @@ export default function OrderMasterPage() {
       await updateOrderStatus(orderId, newStatus);
       await loadOrders();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update order status');
+      toast.error(err instanceof Error ? err.message : 'Failed to update order status');
     }
   };
 
@@ -249,7 +250,7 @@ export default function OrderMasterPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Order ID</TableHead>
+                      <TableHead>S.No</TableHead>
                       <TableHead>Client</TableHead>
                       <TableHead>Papers</TableHead>
                       <TableHead>Widths</TableHead>
@@ -264,7 +265,7 @@ export default function OrderMasterPage() {
                   </TableHeader>
                   <TableBody>
                     {filteredOrders.length > 0 ? (
-                      filteredOrders.map((order) => {
+                      filteredOrders.map((order, index) => {
                         const totalQuantity = getTotalQuantity(order);
                         const fulfilledQuantity = getFulfilledQuantity(order);
                         const progressPercentage = totalQuantity > 0 ? (fulfilledQuantity / totalQuantity) * 100 : 0;
@@ -273,10 +274,7 @@ export default function OrderMasterPage() {
                           <TableRow key={order.id}>
                             <TableCell className="font-medium">
                               <div className="text-sm">
-                                {order.id.substring(0, 8)}...
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {new Date(order.created_at).toLocaleDateString()}
+                                {index + 1}
                               </div>
                             </TableCell>
                             <TableCell>

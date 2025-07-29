@@ -4,18 +4,41 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, AlertCircle, Factory, QrCode, X } from "lucide-react";
+import {
+  Loader2,
+  AlertCircle,
+  Factory,
+  QrCode,
+  X,
+  FileText,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
 import QRCodeDisplay from "@/components/QRCodeDisplay";
 import { fetchOrders, Order } from "@/lib/orders";
 import { PRODUCTION_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
-
+import jsPDF from "jspdf";
 
 // NEW FLOW: Cut roll interfaces
 interface CutRoll {
@@ -24,7 +47,7 @@ interface CutRoll {
   gsm: number;
   bf: number;
   shade: string;
-  source: 'cutting' | 'inventory';
+  source: "cutting" | "inventory";
   individual_roll_number?: number;
   trim_left?: number;
   inventory_id?: string;
@@ -110,14 +133,14 @@ interface ConfirmationDialogProps {
   cancelText?: string;
 }
 
-function ConfirmationDialog({ 
-  isOpen, 
-  title, 
-  message, 
-  onConfirm, 
-  onCancel, 
-  confirmText = "Confirm", 
-  cancelText = "Cancel" 
+function ConfirmationDialog({
+  isOpen,
+  title,
+  message,
+  onConfirm,
+  onCancel,
+  confirmText = "Confirm",
+  cancelText = "Cancel",
 }: ConfirmationDialogProps) {
   if (!isOpen) return null;
 
@@ -135,16 +158,18 @@ function ConfirmationDialog({
           <Button variant="outline" onClick={onCancel}>
             {cancelText}
           </Button>
-          <Button onClick={onConfirm}>
-            {confirmText}
-          </Button>
+          <Button onClick={onConfirm}>{confirmText}</Button>
         </div>
       </div>
     </div>
   );
 }
 
-function ProductionRecordsErrorBoundary({ children }: { children: React.ReactNode }) {
+function ProductionRecordsErrorBoundary({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [state, setState] = useState<ErrorBoundaryState>({ hasError: false });
 
   useEffect(() => {
@@ -152,10 +177,10 @@ function ProductionRecordsErrorBoundary({ children }: { children: React.ReactNod
       setState({ hasError: true, error: event.error });
     };
 
-    window.addEventListener('error', handleError);
+    window.addEventListener("error", handleError);
 
     return () => {
-      window.removeEventListener('error', handleError);
+      window.removeEventListener("error", handleError);
     };
   }, []);
 
@@ -165,11 +190,14 @@ function ProductionRecordsErrorBoundary({ children }: { children: React.ReactNod
         <AlertCircle className="h-4 w-4" />
         <AlertTitle>Production Records Error</AlertTitle>
         <AlertDescription>
-          Unable to load production records. Please refresh the page and try again.
+          Unable to load production records. Please refresh the page and try
+          again.
           {state.error && (
             <details className="mt-2">
               <summary className="cursor-pointer">Error details</summary>
-              <pre className="text-xs mt-1 overflow-auto">{state.error.message}</pre>
+              <pre className="text-xs mt-1 overflow-auto">
+                {state.error.message}
+              </pre>
             </details>
           )}
         </AlertDescription>
@@ -185,23 +213,31 @@ export default function PlanningPage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [planResult, setPlanResult] = useState<PlanGenerationResult | null>(null);
+  const [planResult, setPlanResult] = useState<PlanGenerationResult | null>(
+    null
+  );
   const [selectedCutRolls, setSelectedCutRolls] = useState<number[]>([]);
-  const [productionRecords, setProductionRecords] = useState<ProductionRecord[]>([]);
+  const [productionRecords, setProductionRecords] = useState<
+    ProductionRecord[]
+  >([]);
   const [creatingProduction, setCreatingProduction] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("orders");
   const [selectedQRCode, setSelectedQRCode] = useState<string | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [qrModalLoading, setQrModalLoading] = useState(false);
+  const [expandedRollSets, setExpandedRollSets] = useState<Set<string>>(
+    new Set()
+  );
+  const [generatingPDF, setGeneratingPDF] = useState(false);
 
   // Memoized computations for performance
   const filteredOrders = useMemo(() => {
-    return orders.filter(order => order.status === 'pending');
+    return orders.filter((order) => order.status === "pending");
   }, [orders]);
 
   const orderTableData = useMemo(() => {
-    return filteredOrders.map(order => ({
+    return filteredOrders.map((order) => ({
       ...order,
       aggregatedPaper: (() => {
         const firstItem = order.order_items?.[0];
@@ -213,17 +249,28 @@ export default function PlanningPage() {
         const uniqueSpecs = Array.from(
           new Set(
             order.order_items
-              ?.filter(item => item.paper)
-              .map(item => `${item.paper!.gsm}gsm, ${item.paper!.bf}bf, ${item.paper!.shade}`)
+              ?.filter((item) => item.paper)
+              .map(
+                (item) =>
+                  `${item.paper!.gsm}gsm, ${item.paper!.bf}bf, ${
+                    item.paper!.shade
+                  }`
+              )
           )
         );
-        return uniqueSpecs.length > 0 ? uniqueSpecs.join('; ') : 'N/A';
+        return uniqueSpecs.length > 0 ? uniqueSpecs.join("; ") : "N/A";
       })(),
       aggregatedWidths: (() => {
-        const widths = order.order_items?.map(item => `${item.width_inches}"`);
-        return widths?.length ? [...new Set(widths)].join(', ') : 'N/A';
+        const widths = order.order_items?.map(
+          (item) => `${item.width_inches}&quot;`
+        );
+        return widths?.length ? [...new Set(widths)].join(", ") : "N/A";
       })(),
-      totalQuantity: order.order_items?.reduce((total, item) => total + item.quantity_rolls, 0) || 0
+      totalQuantity:
+        order.order_items?.reduce(
+          (total, item) => total + item.quantity_rolls,
+          0
+        ) || 0,
     }));
   }, [filteredOrders]);
 
@@ -234,7 +281,9 @@ export default function PlanningPage() {
         const data = await fetchOrders();
         setOrders(data);
       } catch (err) {
-        setError("Failed to load orders. Please try again.");
+        const errorMessage = "Failed to load orders. Please try again.";
+        setError(errorMessage);
+        toast.error(errorMessage);
         console.error(err);
       } finally {
         setLoading(false);
@@ -245,61 +294,79 @@ export default function PlanningPage() {
   }, []);
 
   const handleOrderSelect = useCallback((orderId: string) => {
-    setSelectedOrders(prev => 
+    setSelectedOrders((prev) =>
       prev.includes(orderId)
-        ? prev.filter(id => id !== orderId)
+        ? prev.filter((id) => id !== orderId)
         : [...prev, orderId]
     );
   }, []);
 
-  const handleSelectAll = useCallback((checked: boolean) => {
-    setSelectedOrders(checked ? filteredOrders.map(order => order.id) : []);
-  }, [filteredOrders]);
+  const handleSelectAll = useCallback(
+    (checked: boolean) => {
+      setSelectedOrders(checked ? filteredOrders.map((order) => order.id) : []);
+    },
+    [filteredOrders]
+  );
 
   const handleCutRollSelect = useCallback((index: number) => {
-    setSelectedCutRolls(prev => 
-      prev.includes(index)
-        ? prev.filter(i => i !== index)
-        : [...prev, index]
+    setSelectedCutRolls((prev) =>
+      prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index]
     );
   }, []);
 
-  const handleSelectAllCutRolls = useCallback((checked: boolean) => {
-    setSelectedCutRolls(checked ? 
-      planResult?.selection_data.cut_rolls_available.map((_, index) => index) || [] : []);
-  }, [planResult]);
+  const handleSelectAllCutRolls = useCallback(
+    (checked: boolean) => {
+      setSelectedCutRolls(
+        checked
+          ? planResult?.selection_data.cut_rolls_available.map(
+              (_, index) => index
+            ) || []
+          : []
+      );
+    },
+    [planResult]
+  );
 
   const generatePlan = async () => {
     if (selectedOrders.length === 0) {
-      setError("Please select at least one order to generate a plan.");
+      const errorMessage = "Please select at least one order to generate a plan.";
+      setError(errorMessage);
+      toast.error(errorMessage);
       return;
     }
 
     try {
       setGenerating(true);
       setError(null);
-      
+
       const user_id = localStorage.getItem("user_id");
       if (!user_id) {
         throw new Error("User not authenticated");
       }
 
-      const response = await fetch(PRODUCTION_ENDPOINTS.GENERATE_PLAN, createRequestOptions('POST', {
-        order_ids: selectedOrders,
-        created_by_id: user_id
-      })
+      const response = await fetch(
+        PRODUCTION_ENDPOINTS.GENERATE_PLAN,
+        createRequestOptions("POST", {
+          order_ids: selectedOrders,
+          created_by_id: user_id,
+        })
       );
 
       if (!response.ok) {
         const errorText = await response.text();
-        let errorMessage = 'Failed to generate plan with cut roll selection';
-        
+        let errorMessage = "Failed to generate plan with cut roll selection";
+
         try {
           const errorJson = JSON.parse(errorText);
           if (errorJson.detail) {
-            errorMessage = Array.isArray(errorJson.detail) 
-              ? errorJson.detail.map((err: { msg?: string; message?: string } | string) => 
-                  typeof err === 'string' ? err : (err.msg || err.message || 'Unknown error')).join(', ')
+            errorMessage = Array.isArray(errorJson.detail)
+              ? errorJson.detail
+                  .map((err: { msg?: string; message?: string } | string) =>
+                    typeof err === "string"
+                      ? err
+                      : err.msg || err.message || "Unknown error"
+                  )
+                  .join(", ")
               : errorJson.detail;
           } else if (errorJson.message) {
             errorMessage = errorJson.message;
@@ -307,18 +374,21 @@ export default function PlanningPage() {
         } catch {
           errorMessage = errorText || errorMessage;
         }
-        
+
         throw new Error(errorMessage);
       }
 
       const data = await response.json();
       if (!data || !data.selection_data) {
-        throw new Error('Invalid response format from server');
+        throw new Error("Invalid response format from server");
       }
       setPlanResult(data);
       setActiveTab("cut-rolls");
+      toast.success("Plan generated successfully!");
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate plan');
+      const errorMessage = err instanceof Error ? err.message : "Failed to generate plan";
+      setError(errorMessage);
+      toast.error(errorMessage);
       console.error(err);
     } finally {
       setGenerating(false);
@@ -327,7 +397,9 @@ export default function PlanningPage() {
 
   const handleCreateProductionRecords = () => {
     if (selectedCutRolls.length === 0) {
-      setError("Please select at least one cut roll for production.");
+      const errorMessage = "Please select at least one cut roll for production.";
+      setError(errorMessage);
+      toast.error(errorMessage);
       return;
     }
     setShowConfirmDialog(true);
@@ -339,14 +411,14 @@ export default function PlanningPage() {
     try {
       setCreatingProduction(true);
       setError(null);
-      
+
       const user_id = localStorage.getItem("user_id");
       if (!user_id) {
         throw new Error("User not authenticated");
       }
 
       // Prepare cut roll selections
-      const cutRollSelections = selectedCutRolls.map(index => {
+      const cutRollSelections = selectedCutRolls.map((index) => {
         const cutRoll = planResult!.selection_data.cut_rolls_available[index];
         return {
           width: cutRoll.width,
@@ -357,30 +429,37 @@ export default function PlanningPage() {
           order_id: cutRoll.order_id,
           client_id: cutRoll.client_id,
           individual_roll_number: cutRoll.individual_roll_number,
-          trim_left: cutRoll.trim_left
+          trim_left: cutRoll.trim_left,
         };
       });
 
       // Generate a temporary UUID for the plan
       const tempPlanId = crypto.randomUUID();
-      
-      const response = await fetch(PRODUCTION_ENDPOINTS.SELECT_FOR_PRODUCTION, createRequestOptions('POST', {
-        plan_id: tempPlanId,
-        cut_roll_selections: cutRollSelections,
-        created_by_id: user_id
-      })
+
+      const response = await fetch(
+        PRODUCTION_ENDPOINTS.SELECT_FOR_PRODUCTION,
+        createRequestOptions("POST", {
+          plan_id: tempPlanId,
+          cut_roll_selections: cutRollSelections,
+          created_by_id: user_id,
+        })
       );
 
       if (!response.ok) {
         const errorText = await response.text();
-        let errorMessage = 'Failed to create production records';
-        
+        let errorMessage = "Failed to create production records";
+
         try {
           const errorJson = JSON.parse(errorText);
           if (errorJson.detail) {
-            errorMessage = Array.isArray(errorJson.detail) 
-              ? errorJson.detail.map((err: { msg?: string; message?: string } | string) => 
-                  typeof err === 'string' ? err : (err.msg || err.message || 'Unknown error')).join(', ')
+            errorMessage = Array.isArray(errorJson.detail)
+              ? errorJson.detail
+                  .map((err: { msg?: string; message?: string } | string) =>
+                    typeof err === "string"
+                      ? err
+                      : err.msg || err.message || "Unknown error"
+                  )
+                  .join(", ")
               : errorJson.detail;
           } else if (errorJson.message) {
             errorMessage = errorJson.message;
@@ -388,18 +467,25 @@ export default function PlanningPage() {
         } catch {
           errorMessage = errorText || errorMessage;
         }
-        
+
         throw new Error(errorMessage);
       }
 
       const data = await response.json();
       if (!Array.isArray(data)) {
-        throw new Error('Invalid response format: expected array of production records');
+        throw new Error(
+          "Invalid response format: expected array of production records"
+        );
       }
       setProductionRecords(data);
       setActiveTab("production");
+      toast.success("Production records created successfully!");
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create production records');
+      const errorMessage = err instanceof Error
+          ? err.message
+          : "Failed to create production records";
+      setError(errorMessage);
+      toast.error(errorMessage);
       console.error(err);
     } finally {
       setCreatingProduction(false);
@@ -408,12 +494,282 @@ export default function PlanningPage() {
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
-      case 'selected': return 'outline';
-      case 'in_production': return 'secondary';
-      case 'completed': return 'default';
-      case 'quality_check': return 'destructive';
-      case 'delivered': return 'default';
-      default: return 'outline';
+      case "selected":
+        return "outline";
+      case "in_production":
+        return "secondary";
+      case "completed":
+        return "default";
+      case "quality_check":
+        return "destructive";
+      case "delivered":
+        return "default";
+      default:
+        return "outline";
+    }
+  };
+
+  const toggleRollSetExpansion = (specKey: string, rollNumber: string) => {
+    const key = `${specKey}-${rollNumber}`;
+    const newExpanded = new Set(expandedRollSets);
+    if (newExpanded.has(key)) {
+      newExpanded.delete(key);
+    } else {
+      newExpanded.add(key);
+    }
+    setExpandedRollSets(newExpanded);
+  };
+
+  const handleRollSetSelection = (
+    specKey: string,
+    rollNumber: string,
+    rollsInNumber: Array<CutRoll & { originalIndex: number }>
+  ) => {
+    const indices = rollsInNumber.map((roll) => roll.originalIndex);
+    const allSelected = indices.every((i) => selectedCutRolls.includes(i));
+
+    if (allSelected) {
+      setSelectedCutRolls((prev) => prev.filter((i) => !indices.includes(i)));
+    } else {
+      setSelectedCutRolls((prev) => [...new Set([...prev, ...indices])]);
+    }
+  };
+
+  const generatePDF = async () => {
+    if (!planResult) return;
+
+    setGeneratingPDF(true);
+    try {
+      const pdf = new jsPDF();
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      let yPosition = 20;
+
+      // Helper function to check if we need a new page
+      const checkPageBreak = (height: number) => {
+        if (yPosition + height > pageHeight - 20) {
+          pdf.addPage();
+          yPosition = 20;
+        }
+      };
+
+      // Title
+      pdf.setFontSize(20);
+      pdf.setTextColor(40, 40, 40);
+      pdf.text("Production Planning Report", 20, yPosition);
+      yPosition += 15;
+
+      // Date
+      pdf.setFontSize(10);
+      pdf.setTextColor(100, 100, 100);
+      pdf.text(`Generated on: ${new Date().toLocaleString()}`, 20, yPosition);
+      yPosition += 20;
+
+      // Summary Section
+      checkPageBreak(40);
+      pdf.setFontSize(16);
+      pdf.setTextColor(40, 40, 40);
+      pdf.text("Summary", 20, yPosition);
+      yPosition += 15;
+
+      const summaryData = [
+        [
+          "Total Cut Rolls",
+          planResult.selection_data.summary.total_cut_rolls.toString(),
+        ],
+        [
+          'Individual 118" Rolls',
+          planResult.selection_data.summary.total_individual_118_rolls.toString(),
+        ],
+        [
+          "Jumbo Roll Sets Needed",
+          planResult.selection_data.summary.jumbo_roll_sets_needed.toString(),
+        ],
+        [
+          "Pending Orders",
+          planResult.selection_data.summary.pending_orders_count.toString(),
+        ],
+        ["Selected Cut Rolls", selectedCutRolls.length.toString()],
+      ];
+
+      pdf.setFontSize(12);
+      summaryData.forEach(([label, value]) => {
+        checkPageBreak(8);
+        pdf.setTextColor(60, 60, 60);
+        pdf.text(`${label}:`, 20, yPosition);
+        pdf.setTextColor(40, 40, 40);
+        pdf.text(value, 120, yPosition);
+        yPosition += 8;
+      });
+
+      yPosition += 10;
+
+      // Jumbo Roll Sets Section
+      if (planResult.selection_data.summary.jumbo_roll_sets_needed > 0) {
+        checkPageBreak(30);
+        pdf.setFontSize(16);
+        pdf.setTextColor(40, 40, 40);
+        pdf.text("Jumbo Roll Sets Required", 20, yPosition);
+        yPosition += 15;
+
+        pdf.setFontSize(12);
+        pdf.setTextColor(60, 60, 60);
+        pdf.text(
+          `Total sets needed: ${planResult.selection_data.summary.jumbo_roll_sets_needed}`,
+          20,
+          yPosition
+        );
+        yPosition += 8;
+        pdf.text(`Each set contains 3 rolls of 118" width`, 20, yPosition);
+        yPosition += 8;
+        pdf.text(
+          `Total 118" rolls required: ${
+            planResult.selection_data.summary.jumbo_roll_sets_needed * 3
+          }`,
+          20,
+          yPosition
+        );
+        yPosition += 15;
+      }
+
+      // Cut Rolls by Specification
+      checkPageBreak(30);
+      pdf.setFontSize(16);
+      pdf.setTextColor(40, 40, 40);
+      pdf.text("Cut Rolls by Specification", 20, yPosition);
+      yPosition += 15;
+
+      // Group cut rolls by specification
+      const groupedRolls = planResult.selection_data.cut_rolls_available.reduce(
+        (groups, roll, index) => {
+          const key = `${roll.gsm}gsm, ${roll.bf}bf, ${roll.shade}`;
+          if (!groups[key]) {
+            groups[key] = [];
+          }
+          groups[key].push({ ...roll, originalIndex: index });
+          return groups;
+        },
+        {} as Record<string, Array<CutRoll & { originalIndex: number }>>
+      );
+
+      Object.entries(groupedRolls).forEach(([specKey, rolls]) => {
+        checkPageBreak(25);
+
+        // Specification header
+        pdf.setFontSize(14);
+        pdf.setTextColor(40, 40, 40);
+        pdf.text(specKey, 20, yPosition);
+        yPosition += 10;
+
+        // Group by roll number
+        const rollsByNumber = rolls.reduce((rollGroups, roll) => {
+          const rollNum = roll.individual_roll_number || "No Roll #";
+          if (!rollGroups[rollNum]) {
+            rollGroups[rollNum] = [];
+          }
+          rollGroups[rollNum].push(roll);
+          return rollGroups;
+        }, {} as Record<string, Array<CutRoll & { originalIndex: number }>>);
+
+        Object.entries(rollsByNumber).forEach(([rollNumber, rollsInNumber]) => {
+          checkPageBreak(20);
+
+          pdf.setFontSize(12);
+          pdf.setTextColor(60, 60, 60);
+          const rollTitle =
+            rollNumber === "No Roll #"
+              ? "Unassigned Roll"
+              : `Roll #${rollNumber}`;
+          pdf.text(rollTitle, 25, yPosition);
+          yPosition += 8;
+
+          // Roll statistics
+          const totalUsed = rollsInNumber.reduce(
+            (sum, roll) => sum + roll.width,
+            0
+          );
+          const waste = 118 - totalUsed;
+          const efficiency = ((totalUsed / 118) * 100).toFixed(1);
+
+          pdf.setFontSize(10);
+          pdf.setTextColor(80, 80, 80);
+          pdf.text(
+            `Used: ${totalUsed}" | Waste: ${waste.toFixed(
+              1
+            )}" | Efficiency: ${efficiency}% | Cuts: ${rollsInNumber.length}`,
+            30,
+            yPosition
+          );
+          yPosition += 8;
+
+          // Individual cuts
+          const selectedInThisRoll = rollsInNumber.filter((roll) =>
+            selectedCutRolls.includes(roll.originalIndex)
+          ).length;
+          pdf.text(
+            `Selected for production: ${selectedInThisRoll}/${rollsInNumber.length} cuts`,
+            30,
+            yPosition
+          );
+          yPosition += 10;
+        });
+
+        yPosition += 5;
+      });
+
+      // Pending Orders Section
+      if (planResult.selection_data.pending_orders.length > 0) {
+        checkPageBreak(30);
+        pdf.setFontSize(16);
+        pdf.setTextColor(220, 38, 38);
+        pdf.text("Pending Orders", 20, yPosition);
+        yPosition += 15;
+
+        planResult.selection_data.pending_orders.forEach((order, index) => {
+          checkPageBreak(8);
+          pdf.setFontSize(10);
+          pdf.setTextColor(80, 80, 80);
+          pdf.text(
+            `${order.width}" × ${order.quantity} rolls (${order.gsm}gsm, ${order.bf}bf, ${order.shade}) - ${order.reason}`,
+            25,
+            yPosition
+          );
+          yPosition += 8;
+        });
+      }
+
+      // Next Steps
+      checkPageBreak(30);
+      pdf.setFontSize(16);
+      pdf.setTextColor(40, 40, 40);
+      pdf.text("Next Steps", 20, yPosition);
+      yPosition += 15;
+
+      const nextSteps = [
+        "1. Review selected cut rolls for production",
+        "2. Procure required jumbo roll sets",
+        "3. Execute cutting plans",
+        "4. Generate QR codes for production tracking",
+        "5. Monitor production progress",
+      ];
+
+      nextSteps.forEach((step) => {
+        checkPageBreak(8);
+        pdf.setFontSize(10);
+        pdf.setTextColor(60, 60, 60);
+        pdf.text(step, 25, yPosition);
+        yPosition += 8;
+      });
+
+      // Save the PDF
+      pdf.save(`production-planning-${new Date().getTime()}.pdf`);
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      const errorMessage = "Failed to generate PDF. Please try again.";
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setGeneratingPDF(false);
     }
   };
 
@@ -422,36 +778,54 @@ export default function PlanningPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Production Planning - New Flow</h1>
         <div className="flex gap-2">
-          <Button 
-            variant="default" 
+          <Button
+            variant="default"
             onClick={generatePlan}
-            disabled={generating || selectedOrders.length === 0}
-          >
+            disabled={generating || selectedOrders.length === 0}>
             {generating ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Generating Plan...
               </>
-            ) : 'Generate Plan'}
+            ) : (
+              "Generate Plan"
+            )}
           </Button>
           {planResult && (
-            <Button 
-              variant="secondary" 
-              onClick={handleCreateProductionRecords}
-              disabled={creatingProduction || selectedCutRolls.length === 0}
-            >
-              {creatingProduction ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating Production...
-                </>
-              ) : (
-                <>
-                  <Factory className="mr-2 h-4 w-4" />
-                  Start Production ({selectedCutRolls.length} rolls)
-                </>
-              )}
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                onClick={generatePDF}
+                disabled={generatingPDF}>
+                {generatingPDF ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generating PDF...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="mr-2 h-4 w-4" />
+                    Generate PDF Report
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={handleCreateProductionRecords}
+                disabled={creatingProduction || selectedCutRolls.length === 0}>
+                {creatingProduction ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating Production...
+                  </>
+                ) : (
+                  <>
+                    <Factory className="mr-2 h-4 w-4" />
+                    Start Production ({selectedCutRolls.length} rolls)
+                  </>
+                )}
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -467,16 +841,26 @@ export default function PlanningPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="orders">Orders</TabsTrigger>
-          <TabsTrigger value="cut-rolls" disabled={!planResult}>Cut Rolls</TabsTrigger>
-          <TabsTrigger value="pending-inventory" disabled={!planResult}>Pending & Inventory</TabsTrigger>
-          <TabsTrigger value="production" disabled={productionRecords.length === 0}>Production</TabsTrigger>
+          <TabsTrigger value="cut-rolls" disabled={!planResult}>
+            Cut Rolls
+          </TabsTrigger>
+          <TabsTrigger value="pending-inventory" disabled={!planResult}>
+            Pending & Inventory
+          </TabsTrigger>
+          <TabsTrigger
+            value="production"
+            disabled={productionRecords.length === 0}>
+            Production
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="orders">
           <Card>
             <CardHeader>
               <CardTitle>Orders</CardTitle>
-              <CardDescription>Select orders to include in the production plan</CardDescription>
+              <CardDescription>
+                Select orders to include in the production plan
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="rounded-md border">
@@ -484,8 +868,11 @@ export default function PlanningPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-12">
-                        <Checkbox 
-                          checked={selectedOrders.length > 0 && selectedOrders.length === filteredOrders.length}
+                        <Checkbox
+                          checked={
+                            selectedOrders.length > 0 &&
+                            selectedOrders.length === filteredOrders.length
+                          }
                           onCheckedChange={handleSelectAll}
                         />
                       </TableHead>
@@ -511,19 +898,25 @@ export default function PlanningPage() {
                       orderTableData.map((order) => (
                         <TableRow key={order.id}>
                           <TableCell>
-                            <Checkbox 
+                            <Checkbox
                               checked={selectedOrders.includes(order.id)}
-                              onCheckedChange={() => handleOrderSelect(order.id)}
+                              onCheckedChange={() =>
+                                handleOrderSelect(order.id)
+                              }
                             />
                           </TableCell>
-                          <TableCell className="font-medium">{order.id.split('-')[0]}</TableCell>
-                          <TableCell>{order.client?.company_name || 'N/A'}</TableCell>
+                          <TableCell className="font-medium">
+                            {order.id.split("-")[0]}
+                          </TableCell>
+                          <TableCell>
+                            {order.client?.company_name || "N/A"}
+                          </TableCell>
                           <TableCell>{order.aggregatedPaper}</TableCell>
                           <TableCell>{order.aggregatedWidths}</TableCell>
                           <TableCell>{order.totalQuantity} rolls</TableCell>
                           <TableCell>
                             <Badge variant="outline">
-                              {order.status.replace('_', ' ')}
+                              {order.status.replace("_", " ")}
                             </Badge>
                           </TableCell>
                         </TableRow>
@@ -546,89 +939,494 @@ export default function PlanningPage() {
           {planResult && (
             <div className="space-y-6">
               {/* Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-2xl">{planResult.selection_data.summary.total_cut_rolls}</CardTitle>
+                    <CardTitle className="text-2xl">
+                      {planResult.selection_data.summary.total_cut_rolls}
+                    </CardTitle>
                     <CardDescription>Total Cut Rolls</CardDescription>
                   </CardHeader>
                 </Card>
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-2xl">{planResult.selection_data.summary.total_individual_118_rolls}</CardTitle>
-                    <CardDescription>Individual 118&quot; Rolls</CardDescription>
+                    <CardTitle className="text-2xl">
+                      {
+                        planResult.selection_data.summary
+                          .total_individual_118_rolls
+                      }
+                    </CardTitle>
+                    <CardDescription>
+                      Individual 118&quot; Rolls
+                    </CardDescription>
                   </CardHeader>
                 </Card>
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-2xl">{planResult.selection_data.summary.jumbo_roll_sets_needed}</CardTitle>
-                    <CardDescription>Jumbo Roll Sets (3×118&quot;)</CardDescription>
+                    <CardTitle className="text-2xl">
+                      {planResult.selection_data.summary.jumbo_roll_sets_needed}
+                    </CardTitle>
+                    <CardDescription>
+                      Jumbo Roll Sets (3×118&quot;)
+                    </CardDescription>
                   </CardHeader>
                 </Card>
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-2xl">{planResult.selection_data.summary.pending_orders_count}</CardTitle>
+                    <CardTitle className="text-2xl">
+                      {planResult.selection_data.summary.pending_orders_count}
+                    </CardTitle>
                     <CardDescription>Pending Orders</CardDescription>
                   </CardHeader>
                 </Card>
               </div>
 
-              {/* Cut Rolls Selection */}
+              {/* Jumbo Roll Sets - Brief Summary */}
+              {planResult.selection_data.summary.jumbo_roll_sets_needed > 0 && (
+                <div className="mb-6 p-4 bg-muted/50 border rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-primary text-primary-foreground rounded-lg flex items-center justify-center">
+                        <span className="text-lg font-bold">
+                          {
+                            planResult.selection_data.summary
+                              .jumbo_roll_sets_needed
+                          }
+                        </span>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-foreground">
+                          Jumbo Roll Sets Required
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {
+                            planResult.selection_data.summary
+                              .jumbo_roll_sets_needed
+                          }{" "}
+                          sets × 3 rolls ={" "}
+                          {planResult.selection_data.summary
+                            .jumbo_roll_sets_needed * 3}{" "}
+                          total 118&quot; rolls needed
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant="secondary" className="text-sm">
+                      Ready for Production
+                    </Badge>
+                  </div>
+                </div>
+              )}
+
+              {/* Cut Rolls Selection - Enhanced with Roll Numbers and Cutting Visualization */}
               <Card>
                 <CardHeader>
                   <div className="flex justify-between items-center">
                     <div>
                       <CardTitle>Cut Rolls Available for Production</CardTitle>
-                      <CardDescription>Select which cut rolls to move to production phase</CardDescription>
+                      <CardDescription>
+                        Select rolls to move to production phase - organized by
+                        paper specification and roll number
+                      </CardDescription>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      {selectedCutRolls.length} of {planResult.selection_data.cut_rolls_available.length} selected
+                    <div className="flex items-center gap-4">
+                      <div className="text-sm text-muted-foreground">
+                        {selectedCutRolls.length} of{" "}
+                        {planResult.selection_data.cut_rolls_available.length}{" "}
+                        selected
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleSelectAllCutRolls(true)}>
+                          ✓ Select All
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleSelectAllCutRolls(false)}>
+                          ✗ Select None
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-12">
-                            <Checkbox 
-                              checked={selectedCutRolls.length > 0 && selectedCutRolls.length === planResult.selection_data.cut_rolls_available.length}
-                              onCheckedChange={handleSelectAllCutRolls}
-                            />
-                          </TableHead>
-                          <TableHead>Width (in)</TableHead>
-                          <TableHead>Paper Spec</TableHead>
-                          <TableHead>Source</TableHead>
-                          <TableHead>Roll #</TableHead>
-                          <TableHead>Trim Left</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {planResult.selection_data.cut_rolls_available.map((cutRoll, index) => (
-                          <TableRow key={index}>
-                            <TableCell>
-                              <Checkbox 
-                                checked={selectedCutRolls.includes(index)}
-                                onCheckedChange={() => handleCutRollSelect(index)}
-                              />
-                            </TableCell>
-                            <TableCell className="font-medium">{cutRoll.width}&quot;</TableCell>
-                            <TableCell>
-                              {cutRoll.gsm}gsm, {cutRoll.bf}bf, {cutRoll.shade}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={cutRoll.source === 'cutting' ? 'default' : 'secondary'}>
-                                {cutRoll.source}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>{cutRoll.individual_roll_number || '-'}</TableCell>
-                            <TableCell>{cutRoll.trim_left ? `${cutRoll.trim_left}&quot;` : '-'}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                  {/* Group by paper specifications */}
+                  {(() => {
+                    const groupedRolls =
+                      planResult.selection_data.cut_rolls_available.reduce(
+                        (groups, roll, index) => {
+                          const key = `${roll.gsm}gsm, ${roll.bf}bf, ${roll.shade}`;
+                          if (!groups[key]) {
+                            groups[key] = [];
+                          }
+                          groups[key].push({ ...roll, originalIndex: index });
+                          return groups;
+                        },
+                        {} as Record<
+                          string,
+                          Array<CutRoll & { originalIndex: number }>
+                        >
+                      );
+
+                    return Object.entries(groupedRolls).map(
+                      ([specKey, rolls]) => {
+                        // Group rolls by roll number within each specification
+                        const rollsByNumber = rolls.reduce(
+                          (rollGroups, roll) => {
+                            const rollNum =
+                              roll.individual_roll_number || "No Roll #";
+                            if (!rollGroups[rollNum]) {
+                              rollGroups[rollNum] = [];
+                            }
+                            rollGroups[rollNum].push(roll);
+                            return rollGroups;
+                          },
+                          {} as Record<
+                            string,
+                            Array<CutRoll & { originalIndex: number }>
+                          >
+                        );
+
+                        return (
+                          <div
+                            key={specKey}
+                            className="mb-8 border rounded-lg p-4 bg-card">
+                            {/* Specification Header */}
+                            <div className="flex justify-between items-center mb-4 pb-3 border-b">
+                              <div className="flex items-center gap-4">
+                                <Checkbox
+                                  checked={rolls.every((roll) =>
+                                    selectedCutRolls.includes(
+                                      roll.originalIndex
+                                    )
+                                  )}
+                                  onCheckedChange={(checked) => {
+                                    const indices = rolls.map(
+                                      (roll) => roll.originalIndex
+                                    );
+                                    if (checked) {
+                                      setSelectedCutRolls((prev) => [
+                                        ...new Set([...prev, ...indices]),
+                                      ]);
+                                    } else {
+                                      setSelectedCutRolls((prev) =>
+                                        prev.filter((i) => !indices.includes(i))
+                                      );
+                                    }
+                                  }}
+                                />
+                                <h3 className="text-xl font-bold text-foreground">
+                                  {specKey}
+                                </h3>
+                              </div>
+                              <div className="flex gap-2">
+                                <Badge variant="secondary" className="text-sm">
+                                  {rolls.length} total rolls
+                                </Badge>
+                                <Badge variant="outline" className="text-sm">
+                                  {
+                                    rolls.filter((roll) =>
+                                      selectedCutRolls.includes(
+                                        roll.originalIndex
+                                      )
+                                    ).length
+                                  }{" "}
+                                  selected
+                                </Badge>
+                              </div>
+                            </div>
+
+                            {/* Rolls organized by Roll Number */}
+                            <div className="space-y-6">
+                              {Object.entries(rollsByNumber).map(
+                                ([rollNumber, rollsInNumber]) => (
+                                  <div
+                                    key={rollNumber}
+                                    className="bg-background border rounded-lg p-4 shadow-sm">
+                                    {/* Roll Number Header */}
+                                    <div className="flex justify-between items-center mb-3 pb-2 border-b">
+                                      <div className="flex items-center gap-3">
+                                        <Checkbox
+                                          checked={rollsInNumber.every((roll) =>
+                                            selectedCutRolls.includes(
+                                              roll.originalIndex
+                                            )
+                                          )}
+                                          onCheckedChange={() =>
+                                            handleRollSetSelection(
+                                              specKey,
+                                              rollNumber,
+                                              rollsInNumber
+                                            )
+                                          }
+                                        />
+                                        <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-bold">
+                                          {rollNumber === "No Roll #"
+                                            ? "?"
+                                            : rollNumber}
+                                        </div>
+                                        <h4 className="text-lg font-semibold text-foreground">
+                                          {rollNumber === "No Roll #"
+                                            ? "Unassigned Roll"
+                                            : `Roll #${rollNumber}`}
+                                        </h4>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Badge variant="outline">
+                                          {rollsInNumber.length} cuts
+                                        </Badge>
+                                        <Badge
+                                          variant={
+                                            rollsInNumber.every((roll) =>
+                                              selectedCutRolls.includes(
+                                                roll.originalIndex
+                                              )
+                                            )
+                                              ? "default"
+                                              : "secondary"
+                                          }>
+                                          {
+                                            rollsInNumber.filter((roll) =>
+                                              selectedCutRolls.includes(
+                                                roll.originalIndex
+                                              )
+                                            ).length
+                                          }{" "}
+                                          selected
+                                        </Badge>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() =>
+                                            toggleRollSetExpansion(
+                                              specKey,
+                                              rollNumber
+                                            )
+                                          }>
+                                          {expandedRollSets.has(
+                                            `${specKey}-${rollNumber}`
+                                          ) ? (
+                                            <ChevronDown className="h-4 w-4" />
+                                          ) : (
+                                            <ChevronRight className="h-4 w-4" />
+                                          )}
+                                        </Button>
+                                      </div>
+                                    </div>
+
+                                    {/* Visual Cutting Representation */}
+                                    <div className="mb-4">
+                                      <div className="text-sm font-medium text-muted-foreground mb-2">
+                                        Cutting Pattern (118&quot; Jumbo Roll):
+                                      </div>
+                                      <div className="relative h-12 bg-muted rounded-lg border overflow-hidden">
+                                        {/* Show how cuts are made from 118" roll */}
+                                        {(() => {
+                                          let currentPosition = 0;
+                                          const totalUsed =
+                                            rollsInNumber.reduce(
+                                              (sum, roll) => sum + roll.width,
+                                              0
+                                            );
+                                          const waste = 118 - totalUsed;
+                                          const wastePercentage =
+                                            (waste / 118) * 100;
+
+                                          return (
+                                            <>
+                                              {/* Cut sections */}
+                                              {rollsInNumber.map(
+                                                (roll, cutIndex) => {
+                                                  const widthPercentage =
+                                                    (roll.width / 118) * 100;
+                                                  const leftPosition =
+                                                    (currentPosition / 118) *
+                                                    100;
+                                                  currentPosition += roll.width;
+
+                                                  return (
+                                                    <div
+                                                      key={cutIndex}
+                                                      className={`absolute h-full border-r-2 border-white ${
+                                                        selectedCutRolls.includes(
+                                                          roll.originalIndex
+                                                        )
+                                                          ? "bg-gradient-to-r from-green-400 to-green-500"
+                                                          : "bg-gradient-to-r from-blue-400 to-blue-500"
+                                                      }`}
+                                                      style={{
+                                                        left: `${leftPosition}%`,
+                                                        width: `${widthPercentage}%`,
+                                                      }}>
+                                                      <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
+                                                        {roll.width}&quot;
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                }
+                                              )}
+
+                                              {/* Waste section */}
+                                              {waste > 0 && (
+                                                <div
+                                                  className="absolute h-full bg-gradient-to-r from-red-400 to-red-500 border-l-2 border-white"
+                                                  style={{
+                                                    right: "0%",
+                                                    width: `${wastePercentage}%`,
+                                                  }}>
+                                                  <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
+                                                    Waste: {waste.toFixed(1)}
+                                                    &quot;
+                                                  </div>
+                                                </div>
+                                              )}
+
+                                              {/* 118" total indicator */}
+                                              <div className="absolute -bottom-6 left-0 right-0 text-center text-xs text-slate-600 font-medium">
+                                                118&quot; Total Width
+                                              </div>
+                                            </>
+                                          );
+                                        })()}
+                                      </div>
+
+                                      {/* Cutting Statistics */}
+                                      <div className="mt-4 grid grid-cols-4 gap-4 text-sm">
+                                        <div className="text-center p-3 bg-primary/10 border rounded-lg">
+                                          <div className="font-semibold text-primary">
+                                            {rollsInNumber.reduce(
+                                              (sum, roll) => sum + roll.width,
+                                              0
+                                            )}
+                                            &quot;
+                                          </div>
+                                          <div className="text-muted-foreground">
+                                            Used Width
+                                          </div>
+                                        </div>
+                                        <div className="text-center p-3 bg-destructive/10 border rounded-lg">
+                                          <div className="font-semibold text-destructive">
+                                            {(
+                                              118 -
+                                              rollsInNumber.reduce(
+                                                (sum, roll) => sum + roll.width,
+                                                0
+                                              )
+                                            ).toFixed(1)}
+                                            &quot;
+                                          </div>
+                                          <div className="text-muted-foreground">
+                                            Waste
+                                          </div>
+                                        </div>
+                                        <div className="text-center p-3 bg-green-500/10 border rounded-lg">
+                                          <div className="font-semibold text-green-700">
+                                            {(
+                                              (rollsInNumber.reduce(
+                                                (sum, roll) => sum + roll.width,
+                                                0
+                                              ) /
+                                                118) *
+                                              100
+                                            ).toFixed(1)}
+                                            %
+                                          </div>
+                                          <div className="text-muted-foreground">
+                                            Efficiency
+                                          </div>
+                                        </div>
+                                        <div className="text-center p-3 bg-secondary border rounded-lg">
+                                          <div className="font-semibold text-secondary-foreground">
+                                            {rollsInNumber.length}
+                                          </div>
+                                          <div className="text-muted-foreground">
+                                            Total Cuts
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Individual Cut Rolls - Collapsible */}
+                                    {expandedRollSets.has(
+                                      `${specKey}-${rollNumber}`
+                                    ) && (
+                                      <div className="space-y-2 mt-4 pt-4 border-t">
+                                        <h5 className="text-sm font-medium text-muted-foreground mb-2">
+                                          Individual Cut Rolls:
+                                        </h5>
+                                        {rollsInNumber.map((roll) => (
+                                          <div
+                                            key={roll.originalIndex}
+                                            className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all border ${
+                                              selectedCutRolls.includes(
+                                                roll.originalIndex
+                                              )
+                                                ? "bg-primary/10 border-primary"
+                                                : "bg-muted/50 border-border hover:bg-muted"
+                                            }`}
+                                            onClick={() =>
+                                              handleCutRollSelect(
+                                                roll.originalIndex
+                                              )
+                                            }>
+                                            <div className="flex items-center gap-3">
+                                              <Checkbox
+                                                checked={selectedCutRolls.includes(
+                                                  roll.originalIndex
+                                                )}
+                                                onChange={() => {}}
+                                              />
+                                              <div className="flex items-center gap-3">
+                                                <div className="text-xl font-bold text-foreground">
+                                                  {roll.width}&quot;
+                                                </div>
+                                                <div className="text-sm text-muted-foreground">
+                                                  Width
+                                                </div>
+                                              </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-4 text-sm">
+                                              <div className="flex items-center gap-2">
+                                                <span className="text-muted-foreground">
+                                                  Source:
+                                                </span>
+                                                <Badge
+                                                  variant={
+                                                    roll.source === "cutting"
+                                                      ? "default"
+                                                      : "secondary"
+                                                  }
+                                                  className="text-xs">
+                                                  {roll.source}
+                                                </Badge>
+                                              </div>
+                                              {roll.trim_left && (
+                                                <div className="flex items-center gap-2">
+                                                  <span className="text-muted-foreground">
+                                                    Trim:
+                                                  </span>
+                                                  <span className="font-medium text-foreground">
+                                                    {roll.trim_left}&quot;
+                                                  </span>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          </div>
+                        );
+                      }
+                    );
+                  })()}
                 </CardContent>
               </Card>
             </div>
@@ -643,7 +1441,9 @@ export default function PlanningPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle>Pending Orders</CardTitle>
-                    <CardDescription>Orders that could not be fulfilled in this plan</CardDescription>
+                    <CardDescription>
+                      Orders that could not be fulfilled in this plan
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <Table>
@@ -656,16 +1456,22 @@ export default function PlanningPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {planResult.selection_data.pending_orders.map((order, index) => (
-                          <TableRow key={index}>
-                            <TableCell>{order.width}&quot;</TableCell>
-                            <TableCell>{order.quantity} rolls</TableCell>
-                            <TableCell>{order.gsm}gsm, {order.bf}bf, {order.shade}</TableCell>
-                            <TableCell>
-                              <Badge variant="destructive">{order.reason}</Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {planResult.selection_data.pending_orders.map(
+                          (order, index) => (
+                            <TableRow key={index}>
+                              <TableCell>{order.width}&quot;</TableCell>
+                              <TableCell>{order.quantity} rolls</TableCell>
+                              <TableCell>
+                                {order.gsm}gsm, {order.bf}bf, {order.shade}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="destructive">
+                                  {order.reason}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        )}
                       </TableBody>
                     </Table>
                   </CardContent>
@@ -677,7 +1483,10 @@ export default function PlanningPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle>Inventory Items to Add</CardTitle>
-                    <CardDescription>20-25&quot; waste rolls that will be added to inventory for future use</CardDescription>
+                    <CardDescription>
+                      20-25&quot; waste rolls that will be added to inventory
+                      for future use
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <Table>
@@ -689,15 +1498,19 @@ export default function PlanningPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {planResult.selection_data.inventory_items_to_add.map((item, index) => (
-                          <TableRow key={index}>
-                            <TableCell>{item.width}&quot;</TableCell>
-                            <TableCell>{item.gsm}gsm, {item.bf}bf, {item.shade}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline">{item.source}</Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {planResult.selection_data.inventory_items_to_add.map(
+                          (item, index) => (
+                            <TableRow key={index}>
+                              <TableCell>{item.width}&quot;</TableCell>
+                              <TableCell>
+                                {item.gsm}gsm, {item.bf}bf, {item.shade}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{item.source}</Badge>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        )}
                       </TableBody>
                     </Table>
                   </CardContent>
@@ -713,7 +1526,9 @@ export default function PlanningPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Production Records</CardTitle>
-                  <CardDescription>Cut rolls moved to production with QR codes generated</CardDescription>
+                  <CardDescription>
+                    Cut rolls moved to production with QR codes generated
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Table>
@@ -739,24 +1554,33 @@ export default function PlanningPage() {
                                   setQrModalLoading(true);
                                   setSelectedQRCode(record.qr_code);
                                   // Simulate loading time for QR code generation
-                                  setTimeout(() => setQrModalLoading(false), 300);
+                                  setTimeout(
+                                    () => setQrModalLoading(false),
+                                    300
+                                  );
                                 }}
-                                aria-label={`View QR code for ${record.qr_code}`}
-                              >
+                                aria-label={`View QR code for ${record.qr_code}`}>
                                 <QrCode className="h-4 w-4" />
                               </Button>
                               <code className="text-sm">{record.qr_code}</code>
                             </div>
                           </TableCell>
                           <TableCell>{record.width_inches}&quot;</TableCell>
-                          <TableCell>{record.gsm}gsm, {record.bf}bf, {record.shade}</TableCell>
                           <TableCell>
-                            <Badge variant={getStatusBadgeVariant(record.status)}>
-                              {record.status.replace('_', ' ')}
+                            {record.gsm}gsm, {record.bf}bf, {record.shade}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={getStatusBadgeVariant(record.status)}>
+                              {record.status.replace("_", " ")}
                             </Badge>
                           </TableCell>
-                          <TableCell>{record.actual_weight_kg || '-'}</TableCell>
-                          <TableCell>{new Date(record.selected_at).toLocaleString()}</TableCell>
+                          <TableCell>
+                            {record.actual_weight_kg || "-"}
+                          </TableCell>
+                          <TableCell>
+                            {new Date(record.selected_at).toLocaleString()}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -776,7 +1600,9 @@ export default function PlanningPage() {
           <CardContent>
             <ol className="list-decimal list-inside space-y-2">
               {planResult.next_steps.map((step, index) => (
-                <li key={index} className="text-sm">{step}</li>
+                <li key={index} className="text-sm">
+                  {step}
+                </li>
               ))}
             </ol>
           </CardContent>
@@ -785,7 +1611,7 @@ export default function PlanningPage() {
 
       {/* QR Code Display Modal */}
       {selectedQRCode && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
@@ -793,15 +1619,14 @@ export default function PlanningPage() {
             }
           }}
           onKeyDown={(e) => {
-            if (e.key === 'Escape') {
+            if (e.key === "Escape") {
               setSelectedQRCode(null);
             }
           }}
           tabIndex={-1}
           role="dialog"
           aria-modal="true"
-          aria-labelledby="qr-modal-title"
-        >
+          aria-labelledby="qr-modal-title">
           <div className="bg-background p-4 rounded-lg max-w-sm w-full mx-4">
             {qrModalLoading ? (
               <div className="flex items-center justify-center p-8">
@@ -810,13 +1635,14 @@ export default function PlanningPage() {
             ) : (
               <>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 id="qr-modal-title" className="text-lg font-semibold">Cut Roll QR Code</h3>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
+                  <h3 id="qr-modal-title" className="text-lg font-semibold">
+                    Cut Roll QR Code
+                  </h3>
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setSelectedQRCode(null)}
-                    aria-label="Close QR code modal"
-                  >
+                    aria-label="Close QR code modal">
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
@@ -830,8 +1656,7 @@ export default function PlanningPage() {
                 <Button
                   className="w-full mt-4"
                   variant="outline"
-                  onClick={() => setSelectedQRCode(null)}
-                >
+                  onClick={() => setSelectedQRCode(null)}>
                   Close
                 </Button>
               </>

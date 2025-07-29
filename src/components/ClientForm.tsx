@@ -17,6 +17,7 @@ interface ClientFormProps {
   initialData?: Partial<CreateClientFormData>;
   isLoading?: boolean;
   title?: string;
+  isEditing?: boolean;
 }
 
 export default function ClientForm({
@@ -24,7 +25,8 @@ export default function ClientForm({
   onCancel,
   initialData = {},
   isLoading = false,
-  title = "Add New Client"
+  title = "Add New Client",
+  isEditing = false
 }: ClientFormProps) {
   const [formData, setFormData] = useState<CreateClientFormData>({
     company_name: initialData.company_name || "",
@@ -193,7 +195,7 @@ export default function ClientForm({
                 Cancel
               </Button>
               <Button type="submit" disabled={isLoading}>
-                {isLoading ? "Saving..." : "Save Client"}
+                {isLoading ? "Saving..." : (isEditing ? "Update Client" : "Save Client")}
               </Button>
             </div>
           </form>

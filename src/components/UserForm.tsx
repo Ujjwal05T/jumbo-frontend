@@ -4,6 +4,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,23 +17,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CreateUserFormData, createUser } from "@/lib/users";
+import { CreateUserFormData, UpdateUserData, User as ApiUser, createUser, updateUser } from "@/lib/users";
 import { User, Plus, Loader2 } from "lucide-react";
 
 interface UserFormProps {
   onSuccess?: () => void;
   onCancel?: () => void;
   isOpen?: boolean;
+  editingUser?: ApiUser | null;
+  isEditing?: boolean;
 }
 
-export default function UserForm({ onSuccess, onCancel, isOpen = true }: UserFormProps) {
+export default function UserForm({ onSuccess, onCancel, isOpen = true, editingUser, isEditing = false }: UserFormProps) {
   const [formData, setFormData] = useState<CreateUserFormData>({
-    name: "",
-    username: "",
+    name: editingUser?.name || "",
+    username: editingUser?.username || "",
     password: "",
-    role: "",
-    contact: "",
-    department: "",
+    role: editingUser?.role || "",
+    contact: editingUser?.contact || "",
+    department: editingUser?.department || "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,11 +56,23 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true }: UserFor
 
     try {
       // Validate required fields
-      if (!formData.name || !formData.username || !formData.password || !formData.role) {
+      if (!formData.name || !formData.username || (!formData.password && !isEditing) || !formData.role) {
         throw new Error("Please fill in all required fields");
       }
 
-      const newUser = await createUser(formData);
+      if (isEditing && editingUser) {
+        // For editing, only include password if it's provided
+        const updateData: UpdateUserData = {
+          name: formData.name,
+          role: formData.role,
+          contact: formData.contact || undefined,
+          department: formData.department || undefined,
+          ...(formData.password && { password: formData.password })
+        };
+        await updateUser(editingUser.id, updateData);
+      } else {
+        await createUser(formData);
+      }
       
       // Reset form
       setFormData({
@@ -69,11 +84,15 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true }: UserFor
         department: "",
       });
 
+      toast.success(`User ${isEditing ? 'updated' : 'created'} successfully!`);
+      
       if (onSuccess) {
         onSuccess();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create user");
+      const errorMessage = err instanceof Error ? err.message : `Failed to ${isEditing ? 'update' : 'create'} user`;
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -86,10 +105,10 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true }: UserFor
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <User className="w-5 h-5" />
-          Create New User
+          {isEditing ? 'Edit User' : 'Create New User'}
         </CardTitle>
         <CardDescription>
-          Add a new user to the system with appropriate role and permissions
+          {isEditing ? 'Update user information and permissions' : 'Add a new user to the system with appropriate role and permissions'}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -134,15 +153,15 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true }: UserFor
             {/* Password */}
             <div className="space-y-2">
               <Label htmlFor="password">
-                Password <span className="text-red-500">*</span>
+                Password {isEditing ? '(leave blank to keep current)' : <span className="text-red-500">*</span>}
               </Label>
               <Input
                 id="password"
                 type="password"
                 value={formData.password}
                 onChange={(e) => handleInputChange("password", e.target.value)}
-                placeholder="Enter password"
-                required
+                placeholder={isEditing ? "Enter new password (optional)" : "Enter password"}
+                required={!isEditing}
               />
             </div>
 
@@ -230,7 +249,7 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true }: UserFor
               ) : (
                 <Plus className="w-4 h-4" />
               )}
-              {isSubmitting ? "Creating..." : "Create User"}
+              {isSubmitting ? (isEditing ? "Updating..." : "Creating...") : (isEditing ? "Update User" : "Create User")}
             </Button>
           </div>
         </form>

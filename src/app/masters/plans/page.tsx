@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { MASTER_ENDPOINTS, PRODUCTION_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
 import { Button } from "@/components/ui/button";
@@ -79,7 +80,9 @@ export default function PlansPage() {
       const data = await response.json();
       setPlans(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load plans');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load plans';
+      setError(errorMessage);
+      toast.error(errorMessage);
       console.error(err);
     } finally {
       setLoading(false);
@@ -114,8 +117,11 @@ export default function PlansPage() {
       }
 
       await loadPlans(); // Refresh the list
+      toast.success("Plan status updated successfully!");
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update plan status');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update plan status';
+      setError(errorMessage);
+      toast.error(errorMessage);
       console.error(err);
     }
   };
@@ -200,10 +206,10 @@ export default function PlansPage() {
                         </TableCell>
                       </TableRow>
                     ) : plans.length > 0 ? (
-                      plans.map((plan) => (
+                      plans.map((plan, index) => (
                         <TableRow key={plan.id}>
                           <TableCell className="font-medium">
-                            {plan.name || `Plan ${plan.id.split('-')[0]}`}
+                            {plan.name || `Plan #${index + 1}`}
                           </TableCell>
                           <TableCell>
                             <Badge variant={getStatusBadgeVariant(plan.status)}>
@@ -269,7 +275,7 @@ export default function PlansPage() {
               <CardHeader>
                 <CardTitle>Plan Details</CardTitle>
                 <CardDescription>
-                  {selectedPlan.name || `Plan ${selectedPlan.id.split('-')[0]}`}
+                  {selectedPlan.name || `Plan Details`}
                 </CardDescription>
               </CardHeader>
               <CardContent>

@@ -4,6 +4,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import ClientForm from "@/components/ClientForm";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,7 +39,8 @@ import {
   Loader2,
   AlertCircle
 } from "lucide-react";
-import { Client, CreateClientFormData, fetchClients, createClient, deleteClient } from "@/lib/clients";
+import { Client, CreateClientFormData, fetchClients, createClient, updateClient, deleteClient } from "@/lib/clients";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 export default function ClientMasterPage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -47,6 +49,12 @@ export default function ClientMasterPage() {
   const [error, setError] = useState<string | null>(null);
   const [showClientForm, setShowClientForm] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    clientId: string;
+    clientName: string;
+  }>({ open: false, clientId: "", clientName: "" });
 
   // Load clients on component mount
   useEffect(() => {
@@ -79,16 +87,40 @@ export default function ClientMasterPage() {
     }
   };
 
-  const handleDeleteClient = async (clientId: string) => {
-    if (!confirm('Are you sure you want to delete this client?')) {
-      return;
-    }
+  const handleEditClient = (client: Client) => {
+    setEditingClient(client);
+  };
 
+  const handleUpdateClient = async (clientData: CreateClientFormData) => {
+    if (!editingClient) return;
+    
     try {
-      await deleteClient(clientId);
-      await loadClients(); // Reload clients after deletion
+      setFormLoading(true);
+      await updateClient(editingClient.id, clientData);
+      setEditingClient(null);
+      await loadClients(); // Reload clients after update
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete client');
+      throw err; // Let the form handle the error
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleDeleteClient = (client: Client) => {
+    setDeleteDialog({
+      open: true,
+      clientId: client.id,
+      clientName: client.company_name,
+    });
+  };
+
+  const confirmDeleteClient = async () => {
+    try {
+      await deleteClient(deleteDialog.clientId);
+      await loadClients(); // Reload clients after deletion
+      toast.success("Client deleted successfully!");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete client');
     }
   };
 
@@ -254,7 +286,6 @@ export default function ClientMasterPage() {
                           <div className="space-y-1">
                             <div className="font-medium">{client.contact_person}</div>
                             <div className="text-sm text-muted-foreground">{client.company_name}</div>
-                            <div className="text-xs text-muted-foreground">{client.id.slice(0, 8)}...</div>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -288,13 +319,13 @@ export default function ClientMasterPage() {
                                 <Eye className="mr-2 h-4 w-4" />
                                 View Details
                               </DropdownMenuItem>
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleEditClient(client)}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Edit Client
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="text-red-600"
-                                onClick={() => handleDeleteClient(client.id)}
+                                onClick={() => handleDeleteClient(client)}
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Delete Client
@@ -349,6 +380,30 @@ export default function ClientMasterPage() {
           isLoading={formLoading}
         />
       )}
+
+      {/* Edit Client Form Modal */}
+      {editingClient && (
+        <ClientForm
+          onSubmit={handleUpdateClient}
+          onCancel={() => setEditingClient(null)}
+          initialData={editingClient}
+          isLoading={formLoading}
+          title="Edit Client"
+          isEditing={true}
+        />
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => setDeleteDialog(prev => ({ ...prev, open }))}
+        title="Delete Client"
+        description={`Are you sure you want to delete "${deleteDialog.clientName}"? This action cannot be undone and will remove all associated orders and data.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="destructive"
+        onConfirm={confirmDeleteClient}
+      />
     </DashboardLayout>
   );
 }

@@ -4,6 +4,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { MASTER_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -97,6 +98,7 @@ export default function PendingOrderItemsPage() {
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';
         setError(errorMessage);
+        toast.error(errorMessage);
         console.error('Error fetching pending items:', err);
         
         // Use sample data as fallback for development
@@ -352,13 +354,13 @@ export default function PendingOrderItemsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredItems.map((item) => {
+                  {filteredItems.map((item, index) => {
                     const daysWaiting = getDaysWaiting(item.created_at);
                     return (
                     <TableRow key={item.id} className="hover:bg-muted/50">
                       <TableCell>
                         <div className="space-y-1">
-                          <div className="font-medium">{item.id}</div>
+                          <div className="font-medium">#{index + 1}</div>
                           <div className="text-sm text-muted-foreground">
                             Order: {item.original_order_id}
                           </div>
