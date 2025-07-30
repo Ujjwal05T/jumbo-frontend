@@ -31,6 +31,7 @@ export default function ClientForm({
   const [formData, setFormData] = useState<CreateClientFormData>({
     company_name: initialData.company_name || "",
     email: initialData.email || "",
+    gst_number: initialData.gst_number || "",
     address: initialData.address || "",
     contact_person: initialData.contact_person || "",
     phone: initialData.phone || "",
@@ -45,9 +46,7 @@ export default function ClientForm({
       newErrors.company_name = "Company name is required";
     }
 
-    if (!formData.email.trim()) {
-      newErrors.email = "Email is required";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+    if (formData.email && formData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = "Please enter a valid email address";
     }
 
@@ -142,13 +141,13 @@ export default function ClientForm({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email *</Label>
+                <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
                   type="email"
-                  value={formData.email}
+                  value={formData.email || ""}
                   onChange={(e) => handleInputChange("email", e.target.value)}
-                  placeholder="Enter email address"
+                  placeholder="Enter email address (optional)"
                   disabled={isLoading}
                 />
                 {errors.email && (
@@ -157,18 +156,32 @@ export default function ClientForm({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="phone">Phone *</Label>
+                <Label htmlFor="gst_number">GST Number</Label>
                 <Input
-                  id="phone"
-                  value={formData.phone}
-                  onChange={(e) => handleInputChange("phone", e.target.value)}
-                  placeholder="Enter phone number"
+                  id="gst_number"
+                  value={formData.gst_number || ""}
+                  onChange={(e) => handleInputChange("gst_number", e.target.value)}
+                  placeholder="Enter GST number (optional)"
                   disabled={isLoading}
                 />
-                {errors.phone && (
-                  <p className="text-sm text-red-600">{errors.phone}</p>
+                {errors.gst_number && (
+                  <p className="text-sm text-red-600">{errors.gst_number}</p>
                 )}
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone *</Label>
+              <Input
+                id="phone"
+                value={formData.phone}
+                onChange={(e) => handleInputChange("phone", e.target.value)}
+                placeholder="Enter phone number"
+                disabled={isLoading}
+              />
+              {errors.phone && (
+                <p className="text-sm text-red-600">{errors.phone}</p>
+              )}
             </div>
 
             <div className="space-y-2">

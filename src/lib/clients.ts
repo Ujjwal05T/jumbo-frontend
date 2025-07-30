@@ -7,7 +7,8 @@ import { MASTER_ENDPOINTS, createRequestOptions } from './api-config';
 export interface Client {
   id: string;
   company_name: string;
-  email: string;
+  email?: string;
+  gst_number?: string;
   address: string;
   contact_person: string;
   phone: string;
@@ -18,7 +19,8 @@ export interface Client {
 
 export interface CreateClientData {
   company_name: string;
-  email: string;
+  email?: string;
+  gst_number?: string;
   address: string;
   contact_person: string;
   phone: string;
@@ -28,7 +30,8 @@ export interface CreateClientData {
 
 export interface CreateClientFormData {
   company_name: string;
-  email: string;
+  email?: string;
+  gst_number?: string;
   address: string;
   contact_person: string;
   phone: string;

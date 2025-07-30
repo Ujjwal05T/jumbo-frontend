@@ -1,9 +1,9 @@
 /**
- * Dispatch page - Manage order items in production and mark them as completed
+ * Dispatch page - Manage order items in warehouse and dispatch
  */
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import {
@@ -42,170 +42,145 @@ import {
   MapPin,
   Calendar,
   User,
+  Loader2,
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { 
+  getWarehouseItems,
+  completeOrderItems as completeWarehouseItems,
+  getStatusBadgeVariant,
+  getStatusDisplayText
+} from "@/lib/production";
+import { 
+  fetchPendingItems,
+  completePendingItem,
+  WarehouseItem,
+  PendingItem
+} from "@/lib/dispatch";
 
-// Dummy data for order items in production
-const dummyDispatchItems = [
-  {
-    id: "1",
-    orderId: "ORD-001",
-    clientName: "ABC Printing Co.",
-    contactPerson: "John Smith",
-    paperType: "Glossy A4 - 90gsm",
-    width: 29,
-    quantity: 500,
-    quantityProduced: 500,
-    status: "ready_for_dispatch",
-    priority: "high",
-    productionDate: "2024-01-15",
-    expectedDelivery: "2024-01-18",
-    address: "123 Business St, Industrial Area, City",
-    phone: "+1-234-567-8900",
-    notes: "Handle with care - glossy finish",
-  },
-  {
-    id: "2",
-    orderId: "ORD-002",
-    clientName: "XYZ Publications",
-    contactPerson: "Sarah Johnson",
-    paperType: "Matte A3 - 120gsm",
-    width: 42,
-    quantity: 300,
-    quantityProduced: 300,
-    status: "ready_for_dispatch",
-    priority: "normal",
-    productionDate: "2024-01-16",
-    expectedDelivery: "2024-01-19",
-    address: "456 Print Ave, Downtown, City",
-    phone: "+1-234-567-8901",
-    notes: "Urgent delivery required",
-  },
-  {
-    id: "3",
-    orderId: "ORD-003",
-    clientName: "Quick Print Services",
-    contactPerson: "Mike Wilson",
-    paperType: "Standard A4 - 80gsm",
-    width: 21,
-    quantity: 1000,
-    quantityProduced: 1000,
-    status: "in_transit",
-    priority: "normal",
-    productionDate: "2024-01-14",
-    expectedDelivery: "2024-01-17",
-    address: "789 Commerce Blvd, Business Park, City",
-    phone: "+1-234-567-8902",
-    notes: "Regular customer - standard packaging",
-  },
-  {
-    id: "4",
-    orderId: "ORD-004",
-    clientName: "Premium Graphics Ltd",
-    contactPerson: "Lisa Chen",
-    paperType: "Premium Glossy A2 - 150gsm",
-    width: 59,
-    quantity: 200,
-    quantityProduced: 200,
-    status: "ready_for_dispatch",
-    priority: "urgent",
-    productionDate: "2024-01-16",
-    expectedDelivery: "2024-01-18",
-    address: "321 Design Street, Creative District, City",
-    phone: "+1-234-567-8903",
-    notes: "Premium quality - extra protective packaging",
-  },
-  {
-    id: "5",
-    orderId: "ORD-005",
-    clientName: "Local News Daily",
-    contactPerson: "Robert Brown",
-    paperType: "Newsprint A1 - 45gsm",
-    width: 84,
-    quantity: 2000,
-    quantityProduced: 2000,
-    status: "dispatched",
-    priority: "high",
-    productionDate: "2024-01-13",
-    expectedDelivery: "2024-01-16",
-    address: "654 Media Lane, Press Quarter, City",
-    phone: "+1-234-567-8904",
-    notes: "Daily newspaper - time sensitive",
-  },
-];
-
-type DispatchStatus = "ready_for_dispatch" | "in_transit" | "dispatched";
+type ItemType = "warehouse" | "pending";
 
 export default function DispatchPage() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [dispatchItems, setDispatchItems] = useState(dummyDispatchItems);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [warehouseItems, setWarehouseItems] = useState<any[]>([]);
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
-    itemId: string;
-    itemName: string;
-    action: "dispatch" | "complete";
-  }>({ open: false, itemId: "", itemName: "", action: "dispatch" });
+    itemIds: string[];
+    action: "complete";
+  }>({ open: false, itemIds: [], action: "complete" });
 
-  const filteredItems = dispatchItems.filter(
-    (item) =>
-      item.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.paperType.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.contactPerson.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Load data using enhanced APIs
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Use the new enhanced warehouse API - only show available inventory
+      const warehouseResponse = await getWarehouseItems();
+      
+      setWarehouseItems(warehouseResponse.warehouse_items || []);
+      
+      console.log("Loaded warehouse items:", warehouseResponse.warehouse_items?.length || 0);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load data';
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handleStatusChange = (item: any, newStatus: DispatchStatus) => {
-    const action = newStatus === "dispatched" ? "complete" : "dispatch";
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const filteredItems = warehouseItems.filter((item: any) => {
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      item.qr_code?.toLowerCase().includes(searchLower) ||
+      item.paper_spec?.toLowerCase().includes(searchLower) ||
+      item.location?.toLowerCase().includes(searchLower) ||
+      item.created_by?.toLowerCase().includes(searchLower)
+    );
+  });
+
+  const handleCompleteItems = (itemIds: string[]) => {
     setConfirmDialog({
       open: true,
-      itemId: item.id,
-      itemName: `${item.orderId} - ${item.clientName}`,
-      action,
+      itemIds,
+      action: "complete"
     });
   };
 
-  const confirmStatusChange = () => {
-    const { itemId, action } = confirmDialog;
-    const newStatus = action === "complete" ? "dispatched" : "in_transit";
+  const confirmStatusChange = async () => {
+    const { itemIds } = confirmDialog;
+    
+    try {
+      const user_id = localStorage.getItem("user_id");
+      if (!user_id) {
+        throw new Error("User not authenticated");
+      }
 
-    setDispatchItems((prev) =>
-      prev.map((item) =>
-        item.id === itemId
-          ? { ...item, status: newStatus as DispatchStatus }
-          : item
-      )
-    );
-
-    const actionText = action === "complete" ? "completed" : "dispatched";
-    toast.success(`Order item marked as ${actionText} successfully!`);
+      // Call the new dispatch API for inventory items
+      const response = await fetch('/api/dispatch/complete-items', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          inventory_ids: itemIds,
+          user_id: user_id
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to complete dispatch');
+      }
+      
+      const result = await response.json();
+      
+      toast.success(
+        `${result.summary.cut_rolls_dispatched} cut roll(s) dispatched successfully! ` +
+        `${result.summary.orders_completed} order(s) completed.`
+      );
+      
+      console.log("Dispatch completion response:", result);
+      
+      // Reload data
+      await loadData();
+      setSelectedItems([]);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to complete items';
+      toast.error(errorMessage);
+      console.error("Completion error:", error);
+    }
+    
+    setConfirmDialog(prev => ({ ...prev, open: false }));
   };
 
-  const getStatusBadge = (status: DispatchStatus) => {
-    switch (status) {
-      case "ready_for_dispatch":
-        return (
-          <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
-            <Package className="w-3 h-3 mr-1" />
-            Ready for Dispatch
-          </Badge>
-        );
-      case "in_transit":
-        return (
-          <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">
-            <Truck className="w-3 h-3 mr-1" />
-            In Transit
-          </Badge>
-        );
-      case "dispatched":
-        return (
-          <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
-            <CheckCircle className="w-3 h-3 mr-1" />
-            Dispatched
-          </Badge>
-        );
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
+  const getStatusBadge = (status: string, itemType: ItemType = "warehouse") => {
+    const variant = getStatusBadgeVariant(status, itemType === "warehouse" ? "order_item" : "pending_order");
+    const displayText = getStatusDisplayText(status);
+    
+    const iconMap = {
+      'in_warehouse': Package,
+      'pending': Clock,
+      'completed': CheckCircle,
+      'included_in_plan': AlertCircle,
+      'resolved': CheckCircle
+    };
+    
+    const Icon = iconMap[status as keyof typeof iconMap] || Package;
+    
+    return (
+      <Badge variant={variant as "default" | "secondary" | "destructive" | "outline"}>
+        <Icon className="w-3 h-3 mr-1" />
+        {displayText}
+      </Badge>
+    );
   };
 
   const getPriorityBadge = (priority: string) => {
@@ -225,15 +200,8 @@ export default function DispatchPage() {
     }
   };
 
-  const readyForDispatch = dispatchItems.filter(
-    (item) => item.status === "ready_for_dispatch"
-  ).length;
-  const inTransit = dispatchItems.filter(
-    (item) => item.status === "in_transit"
-  ).length;
-  const dispatched = dispatchItems.filter(
-    (item) => item.status === "dispatched"
-  ).length;
+  const warehouseItemsCount = warehouseItems.length;
+  const totalItems = warehouseItemsCount;
 
   return (
     <DashboardLayout>
@@ -259,9 +227,9 @@ export default function DispatchPage() {
               <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{dispatchItems.length}</div>
+              <div className="text-2xl font-bold">{totalItems}</div>
               <p className="text-xs text-muted-foreground">
-                Production completed
+                Total items in system
               </p>
             </CardContent>
           </Card>
@@ -274,36 +242,36 @@ export default function DispatchPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-blue-600">
-                {readyForDispatch}
+                {warehouseItemsCount}
               </div>
-              <p className="text-xs text-muted-foreground">Awaiting dispatch</p>
+              <p className="text-xs text-muted-foreground">Cut rolls ready</p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">In Transit</CardTitle>
-              <Truck className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Pending Orders</CardTitle>
+              <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-orange-600">
-                {inTransit}
+                {warehouseItems.filter(item => item.weight_kg > 10).length}
               </div>
               <p className="text-xs text-muted-foreground">
-                Currently shipping
+                Heavy rolls ({'>'}10kg)
               </p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Dispatched</CardTitle>
-              <CheckCircle className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Filtered Items</CardTitle>
+              <Search className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">
-                {dispatched}
+                {filteredItems.length}
               </div>
               <p className="text-xs text-muted-foreground">
-                Successfully delivered
+                Matching search
               </p>
             </CardContent>
           </Card>
@@ -339,77 +307,66 @@ export default function DispatchPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>S.No</TableHead>
-                    <TableHead>Order & Client</TableHead>
-                    <TableHead>Product Details</TableHead>
-                    <TableHead>Quantity</TableHead>
-                    <TableHead>Priority</TableHead>
-                    <TableHead>Delivery Info</TableHead>
+                    <TableHead>QR Code</TableHead>
+                    <TableHead>Paper Specs</TableHead>
+                    <TableHead>Dimensions</TableHead>
+                    <TableHead>Weight</TableHead>
+                    <TableHead>Location</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredItems.length > 0 ? (
-                    filteredItems.map((item, index) => (
-                      <TableRow key={item.id}>
+                    filteredItems.map((item: any, index) => (
+                      <TableRow key={item.inventory_id || item.id}>
                         <TableCell className="font-medium">
                           {index + 1}
                         </TableCell>
                         <TableCell>
                           <div className="space-y-1">
-                            <div className="font-medium">{item.orderId}</div>
-                            <div className="text-sm text-muted-foreground">
-                              {item.clientName}
-                            </div>
-                            <div className="text-xs text-muted-foreground flex items-center gap-1">
-                              <User className="w-3 h-3" />
-                              {item.contactPerson}
+                            <div className="font-mono text-sm">{item.qr_code}</div>
+                            <div className="text-xs text-muted-foreground">
+                              Created by: {item.created_by}
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="space-y-1">
-                            <div className="font-medium">{item.paperType}</div>
-                            <div className="text-sm text-muted-foreground">
-                              Width: {item.width}"
+                            <div className="font-medium">{item.paper_spec}</div>
+                            <div className="text-xs text-muted-foreground">
+                              Cut roll ready for dispatch
                             </div>
-                            {item.notes && (
-                              <div className="text-xs text-muted-foreground italic">
-                                {item.notes}
-                              </div>
-                            )}
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="text-center">
-                            <div className="font-medium">{item.quantity}</div>
+                            <div className="font-medium">{item.width_inches}"</div>
                             <div className="text-xs text-muted-foreground">
-                              rolls
-                            </div>
-                            <div className="text-xs text-green-600">
-                              {item.quantityProduced} produced
+                              width
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell>{getPriorityBadge(item.priority)}</TableCell>
+                        <TableCell>
+                          <div className="text-center">
+                            <div className="font-medium">{item.weight_kg}kg</div>
+                            <div className="text-xs text-green-600">
+                              Weight verified
+                            </div>
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <div className="space-y-1">
                             <div className="text-sm flex items-center gap-1">
-                              <Calendar className="w-3 h-3" />
-                              {new Date(
-                                item.expectedDelivery
-                              ).toLocaleDateString()}
-                            </div>
-                            <div className="text-xs text-muted-foreground flex items-center gap-1">
                               <MapPin className="w-3 h-3" />
-                              {item.address.split(",")[0]}
+                              {item.location}
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              {item.phone}
+                              {new Date(item.production_date).toLocaleDateString()}
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell>{getStatusBadge(item.status as DispatchStatus)}</TableCell>
+                        <TableCell>{getStatusBadge(item.status, "warehouse")}</TableCell>
                         <TableCell className="text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -421,26 +378,16 @@ export default function DispatchPage() {
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem>
                                 <Eye className="mr-2 h-4 w-4" />
-                                View Details
+                                View QR Code
                               </DropdownMenuItem>
-                              {item.status === "ready_for_dispatch" && (
-                                <DropdownMenuItem
-                                  className="text-blue-600"
-                                  onClick={() =>
-                                    handleStatusChange(item, "in_transit")
-                                  }>
-                                  <Truck className="mr-2 h-4 w-4" />
-                                  Mark as Dispatched
-                                </DropdownMenuItem>
-                              )}
-                              {item.status === "in_transit" && (
+                              {item.status === "available" && (
                                 <DropdownMenuItem
                                   className="text-green-600"
                                   onClick={() =>
-                                    handleStatusChange(item, "dispatched")
+                                    handleCompleteItems([item.inventory_id])
                                   }>
                                   <CheckCircle className="mr-2 h-4 w-4" />
-                                  Mark as Delivered
+                                  Mark as Dispatched
                                 </DropdownMenuItem>
                               )}
                             </DropdownMenuContent>
@@ -451,7 +398,14 @@ export default function DispatchPage() {
                   ) : (
                     <TableRow>
                       <TableCell colSpan={8} className="h-24 text-center">
-                        No dispatch items found.
+                        {loading ? (
+                          <div className="flex items-center justify-center">
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Loading warehouse items...
+                          </div>
+                        ) : (
+                          "No cut rolls ready for dispatch."
+                        )}
                       </TableCell>
                     </TableRow>
                   )}
@@ -471,10 +425,8 @@ export default function DispatchPage() {
             ? "Mark as Delivered"
             : "Mark as Dispatched"
         }
-        description={`Are you sure you want to mark "${
-          confirmDialog.itemName
-        }" as ${
-          confirmDialog.action === "complete" ? "delivered" : "dispatched"
+        description={`Are you sure you want to mark ${confirmDialog.itemIds.length} item(s) as ${
+          confirmDialog.action === "complete" ? "dispatched" : "processed"
         }?`}
         confirmText={
           confirmDialog.action === "complete"

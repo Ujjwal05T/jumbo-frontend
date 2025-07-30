@@ -8,8 +8,12 @@ export interface OrderItem {
   rate: number;
   amount: number;
   quantity_fulfilled: number;
+  item_status: 'created' | 'in_process' | 'in_warehouse' | 'completed';
   created_at: string;
   updated_at: string;
+  started_production_at?: string;
+  moved_to_warehouse_at?: string;
+  dispatched_at?: string;
   paper?: {
     id: string;
     name: string;
@@ -25,17 +29,20 @@ export interface Order {
   client_id: string;
   priority: 'low' | 'normal' | 'high' | 'urgent';
   payment_type: 'bill' | 'cash';
-  status: 'pending' | 'processing' | 'partially_fulfilled' | 'completed' | 'cancelled';
+  status: 'created' | 'in_process' | 'completed' | 'cancelled';
   delivery_date: string | null;
-  notes: string | null;
   created_by_id: string;
   created_at: string;
   updated_at: string;
+  started_production_at?: string;
+  moved_to_warehouse_at?: string;
+  dispatched_at?: string;
   client: {
     id: string;
     company_name: string;
     contact_person: string;
-    email: string;
+    email?: string;
+    gst_number?: string;
     phone: string;
     address: string;
     status: string;
@@ -57,7 +64,6 @@ export interface CreateOrderData {
   priority: 'low' | 'normal' | 'high' | 'urgent';
   payment_type: 'bill' | 'cash';
   delivery_date?: string;
-  notes?: string;
   created_by_id: string;
   order_items: CreateOrderItemData[]; // Properly typed order items
 }

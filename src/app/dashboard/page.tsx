@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { isAuthenticated } from "@/lib/auth";
 import DashboardLayout from "@/components/DashboardLayout";
+import { StatusMonitor } from "@/components/StatusMonitor";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -61,7 +62,7 @@ export default function DashboardPage() {
       description: "From last month"
     },
     {
-      title: "Pending Orders",
+      title: "Created Orders",
       value: "23",
       change: "-8%",
       trend: "down",
@@ -97,14 +98,14 @@ export default function DashboardPage() {
     {
       id: "ORD-002",
       client: "XYZ Industries",
-      status: "pending",
+      status: "created",
       amount: "$1,890",
       date: "2024-01-19"
     },
     {
       id: "ORD-003",
       client: "Tech Solutions Ltd",
-      status: "processing",
+      status: "in_process",
       amount: "$3,200",
       date: "2024-01-18"
     },
@@ -121,10 +122,10 @@ export default function DashboardPage() {
     switch (status) {
       case "completed":
         return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Completed</Badge>;
-      case "pending":
-        return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">Pending</Badge>;
-      case "processing":
-        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Processing</Badge>;
+      case "created":
+        return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">Created</Badge>;
+      case "in_process":
+        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">In Process</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -249,50 +250,12 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* System Status */}
-        <div className="grid gap-6 md:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-green-600" />
-                System Status
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm">Database Connection</span>
-                <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Online</Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm">API Services</span>
-                <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Running</Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm">Backup Status</span>
-                <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Up to date</Badge>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-yellow-600" />
-                Alerts & Notifications
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-sm font-medium text-yellow-800">Low Inventory Alert</p>
-                <p className="text-xs text-yellow-600">Paper roll type A is running low</p>
-              </div>
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm font-medium text-blue-800">Pending Approvals</p>
-                <p className="text-xs text-blue-600">3 orders waiting for approval</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        {/* Enhanced System Status Monitor */}
+        <StatusMonitor 
+          refreshInterval={30000}
+          showValidation={true}
+          showAutoUpdate={true}
+        />
       </div>
     </DashboardLayout>
   );

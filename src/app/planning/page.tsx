@@ -1,10 +1,28 @@
 /**
- * Planning page - NEW FLOW: Cut roll selection and production planning
+ * Planning page - NEW FLOW: 3-input/4-output optimization workflow
  */
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { toast } from "sonner";
+import { 
+  processMultipleOrders,
+  generateCuttingPlan,
+  validateCuttingPlan,
+  getWorkflowStatus,
+  convertOrdersToRequirements,
+  groupCutRollsBySpec,
+  calculateEfficiencyMetrics,
+  formatPaperSpec,
+  getStatusBadgeVariant as getNewFlowStatusBadgeVariant,
+  OptimizationResult,
+  WorkflowProcessRequest,
+  CuttingPlanRequest
+} from "@/lib/new-flow";
+import { 
+  selectCutRollsForProduction,
+  CutRollProductionRequest
+} from "@/lib/production";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -40,70 +58,11 @@ import { fetchOrders, Order } from "@/lib/orders";
 import { PRODUCTION_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
 import jsPDF from "jspdf";
 
-// NEW FLOW: Cut roll interfaces
-interface CutRoll {
-  width: number;
-  quantity: number;
-  gsm: number;
-  bf: number;
-  shade: string;
-  source: "cutting" | "inventory";
-  individual_roll_number?: number;
-  trim_left?: number;
-  inventory_id?: string;
-  order_id?: string;
-  client_id?: string;
-  paper_id?: string;
-}
-
-interface PendingOrder {
-  width: number;
-  quantity: number;
-  gsm: number;
-  bf: number;
-  shade: string;
-  reason: string;
-}
-
-interface InventoryItem {
-  width: number;
-  quantity: number;
-  gsm: number;
-  bf: number;
-  shade: string;
-  source: string;
-  inventory_id?: string;
-}
-
-interface PlanGenerationResult {
-  optimization_result: {
-    cut_rolls_generated: CutRoll[];
-    jumbo_roll_sets_needed: number;
-    pending_orders: PendingOrder[];
-    inventory_remaining: InventoryItem[];
-    summary: {
-      total_cut_rolls: number;
-      total_individual_118_rolls: number;
-      total_jumbo_roll_sets_needed: number;
-      total_pending_orders: number;
-      total_pending_quantity: number;
-      total_inventory_created: number;
-      specification_groups_processed: number;
-    };
-  };
-  selection_data: {
-    cut_rolls_available: CutRoll[];
-    pending_orders: PendingOrder[];
-    inventory_items_to_add: InventoryItem[];
-    summary: {
-      total_cut_rolls: number;
-      total_individual_118_rolls: number;
-      jumbo_roll_sets_needed: number;
-      pending_orders_count: number;
-      inventory_items_count: number;
-    };
-  };
-  next_steps: string[];
+// NEW FLOW: Updated interfaces
+interface PlanGenerationResult extends OptimizationResult {
+  plan_id?: string;
+  validation_result?: any;
+  next_steps?: string[];
 }
 
 interface ProductionRecord {
@@ -233,7 +192,7 @@ export default function PlanningPage() {
 
   // Memoized computations for performance
   const filteredOrders = useMemo(() => {
-    return orders.filter((order) => order.status === "pending");
+    return orders.filter((order) => order.status === "created");
   }, [orders]);
 
   const orderTableData = useMemo(() => {
@@ -279,6 +238,7 @@ export default function PlanningPage() {
       try {
         setLoading(true);
         const data = await fetchOrders();
+        console.log("Fetched orders:", data);
         setOrders(data);
       } catch (err) {
         const errorMessage = "Failed to load orders. Please try again.";
@@ -318,7 +278,7 @@ export default function PlanningPage() {
     (checked: boolean) => {
       setSelectedCutRolls(
         checked
-          ? planResult?.selection_data.cut_rolls_available.map(
+          ? planResult?.cut_rolls_generated.map(
               (_, index) => index
             ) || []
           : []
@@ -344,47 +304,40 @@ export default function PlanningPage() {
         throw new Error("User not authenticated");
       }
 
-      const response = await fetch(
-        PRODUCTION_ENDPOINTS.GENERATE_PLAN,
-        createRequestOptions("POST", {
-          order_ids: selectedOrders,
-          created_by_id: user_id,
-        })
-      );
+      // NEW FLOW: Use the 3-input/4-output workflow
+      const request: WorkflowProcessRequest = {
+        order_ids: selectedOrders,
+        user_id: user_id,
+        include_pending_orders: true,
+        include_available_inventory: true
+      };
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorMessage = "Failed to generate plan with cut roll selection";
+      const optimizationResult = await processMultipleOrders(request);
+      
+      // Validate the plan automatically
+      const validationResult = await validateCuttingPlan(optimizationResult);
+      
+      const planResult: PlanGenerationResult = {
+        ...optimizationResult,
+        validation_result: validationResult,
+        next_steps: [
+          "Review optimization results and efficiency metrics",
+          "Select cut rolls for production",
+          "Validate plan constraints and waste levels",
+          "Start production with selected rolls",
+          `Procure ${optimizationResult.jumbo_rolls_needed} jumbo rolls (${optimizationResult.jumbo_rolls_needed * 3} individual 118" rolls)`
+        ]
+      };
 
-        try {
-          const errorJson = JSON.parse(errorText);
-          if (errorJson.detail) {
-            errorMessage = Array.isArray(errorJson.detail)
-              ? errorJson.detail
-                  .map((err: { msg?: string; message?: string } | string) =>
-                    typeof err === "string"
-                      ? err
-                      : err.msg || err.message || "Unknown error"
-                  )
-                  .join(", ")
-              : errorJson.detail;
-          } else if (errorJson.message) {
-            errorMessage = errorJson.message;
-          }
-        } catch {
-          errorMessage = errorText || errorMessage;
-        }
-
-        throw new Error(errorMessage);
-      }
-
-      const data = await response.json();
-      if (!data || !data.selection_data) {
-        throw new Error("Invalid response format from server");
-      }
-      setPlanResult(data);
+      setPlanResult(planResult);
       setActiveTab("cut-rolls");
-      toast.success("Plan generated successfully!");
+      
+      if (validationResult.is_valid) {
+        toast.success(`Plan generated successfully! Efficiency: ${calculateEfficiencyMetrics(optimizationResult.cut_rolls_generated).averageEfficiency.toFixed(1)}%`);
+      } else {
+        toast.warning(`Plan generated with ${validationResult.violations.length} constraint violations`);
+      }
+      
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to generate plan";
       setError(errorMessage);
@@ -417,76 +370,79 @@ export default function PlanningPage() {
         throw new Error("User not authenticated");
       }
 
-      // Prepare cut roll selections
-      const cutRollSelections = selectedCutRolls.map((index) => {
-        const cutRoll = planResult!.selection_data.cut_rolls_available[index];
+      // NEW FLOW: Prepare cut roll selections for production
+      const selectedRolls = selectedCutRolls.map((index) => {
+        const cutRoll = planResult!.cut_rolls_generated[index];
+        
+        // DEBUG: Log cut roll data to see what's available
+        console.log('🔍 DEBUG Frontend: Cut roll data for production:', cutRoll);
+        
+        // Try to find paper_id from the cut roll, or fallback to other fields
+        let paper_id = cutRoll.paper_id || '';
+        
+        // If paper_id is empty, try to find it from order data or create a lookup
+        if (!paper_id && cutRoll.order_id) {
+          const orderFound = orders.find(o => o.id === cutRoll.order_id);
+          if (orderFound?.order_items?.[0]?.paper_id) {
+            paper_id = orderFound.order_items[0].paper_id;
+            console.log('✅ DEBUG Frontend: Found paper_id from order:', paper_id);
+          }
+        }
+        
+        // If still no paper_id, look for one in the original selected orders
+        if (!paper_id && selectedOrders.length > 0) {
+          const firstOrder = orders.find(o => selectedOrders.includes(o.id));
+          if (firstOrder?.order_items?.[0]?.paper_id) {
+            paper_id = firstOrder.order_items[0].paper_id;
+            console.log('✅ DEBUG Frontend: Using fallback paper_id from first selected order:', paper_id);
+          }
+        }
+        
+        console.log('🔍 DEBUG Frontend: Final paper_id for cut roll:', paper_id);
+        
         return {
-          width: cutRoll.width,
-          gsm: cutRoll.gsm,
-          bf: cutRoll.bf,
-          shade: cutRoll.shade,
-          paper_id: cutRoll.paper_id,
-          order_id: cutRoll.order_id,
-          client_id: cutRoll.client_id,
-          individual_roll_number: cutRoll.individual_roll_number,
-          trim_left: cutRoll.trim_left,
+          paper_id: paper_id,
+          width_inches: cutRoll.width,
+          qr_code: `CUT_${Date.now()}_${index}`, // Generate temporary QR code
+          cutting_pattern: `Roll #${cutRoll.individual_roll_number || 'N/A'}`
         };
       });
 
-      // Generate a temporary UUID for the plan
-      const tempPlanId = crypto.randomUUID();
+      const productionRequest: CutRollProductionRequest = {
+        plan_id: planResult?.plan_id,
+        selected_rolls: selectedRolls,
+        created_by_id: user_id
+      };
 
-      const response = await fetch(
-        PRODUCTION_ENDPOINTS.SELECT_FOR_PRODUCTION,
-        createRequestOptions("POST", {
-          plan_id: tempPlanId,
-          cut_roll_selections: cutRollSelections,
-          created_by_id: user_id,
-        })
+      const response = await selectCutRollsForProduction(productionRequest);
+
+      // Update UI with the production response
+      setProductionRecords(response.selected_rolls.map(roll => ({
+        id: roll.inventory_id,
+        qr_code: roll.qr_code,
+        width_inches: roll.width_inches,
+        gsm: planResult!.cut_rolls_generated[0]?.gsm || 0,
+        bf: planResult!.cut_rolls_generated[0]?.bf || 0,
+        shade: planResult!.cut_rolls_generated[0]?.shade || '',
+        status: roll.status,
+        selected_at: new Date().toISOString()
+      })));
+
+      setActiveTab("production");
+      
+      toast.success(
+        `Production started successfully! Created ${response.production_summary.total_inventory_items_created} inventory records.`
       );
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorMessage = "Failed to create production records";
+      console.log("Production started:", response);
 
-        try {
-          const errorJson = JSON.parse(errorText);
-          if (errorJson.detail) {
-            errorMessage = Array.isArray(errorJson.detail)
-              ? errorJson.detail
-                  .map((err: { msg?: string; message?: string } | string) =>
-                    typeof err === "string"
-                      ? err
-                      : err.msg || err.message || "Unknown error"
-                  )
-                  .join(", ")
-              : errorJson.detail;
-          } else if (errorJson.message) {
-            errorMessage = errorJson.message;
-          }
-        } catch {
-          errorMessage = errorText || errorMessage;
-        }
-
-        throw new Error(errorMessage);
-      }
-
-      const data = await response.json();
-      if (!Array.isArray(data)) {
-        throw new Error(
-          "Invalid response format: expected array of production records"
-        );
-      }
-      setProductionRecords(data);
-      setActiveTab("production");
-      toast.success("Production records created successfully!");
     } catch (err) {
       const errorMessage = err instanceof Error
           ? err.message
-          : "Failed to create production records";
+          : "Failed to start production";
       setError(errorMessage);
       toast.error(errorMessage);
-      console.error(err);
+      console.error("Production start error:", err);
     } finally {
       setCreatingProduction(false);
     }
@@ -938,80 +894,70 @@ export default function PlanningPage() {
         <TabsContent value="cut-rolls">
           {planResult && (
             <div className="space-y-6">
-              {/* Summary Cards */}
+              {/* Summary Cards - NEW FLOW */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-2xl">
-                      {planResult.selection_data.summary.total_cut_rolls}
+                    <CardTitle className="text-2xl text-primary">
+                      {planResult.summary.total_cut_rolls}
                     </CardTitle>
                     <CardDescription>Total Cut Rolls</CardDescription>
                   </CardHeader>
                 </Card>
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-2xl">
-                      {
-                        planResult.selection_data.summary
-                          .total_individual_118_rolls
-                      }
+                    <CardTitle className="text-2xl text-blue-600">
+                      {planResult.jumbo_rolls_needed}
                     </CardTitle>
                     <CardDescription>
-                      Individual 118&quot; Rolls
+                      Jumbo Rolls Needed (CORRECTED)
                     </CardDescription>
                   </CardHeader>
                 </Card>
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-2xl">
-                      {planResult.selection_data.summary.jumbo_roll_sets_needed}
+                    <CardTitle className="text-2xl text-green-600">
+                      {calculateEfficiencyMetrics(planResult.cut_rolls_generated).averageEfficiency.toFixed(1)}%
                     </CardTitle>
                     <CardDescription>
-                      Jumbo Roll Sets (3×118&quot;)
+                      Material Efficiency
                     </CardDescription>
                   </CardHeader>
                 </Card>
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-2xl">
-                      {planResult.selection_data.summary.pending_orders_count}
+                    <CardTitle className="text-2xl text-orange-600">
+                      {planResult.summary.total_pending_orders}
                     </CardTitle>
                     <CardDescription>Pending Orders</CardDescription>
                   </CardHeader>
                 </Card>
               </div>
 
-              {/* Jumbo Roll Sets - Brief Summary */}
-              {planResult.selection_data.summary.jumbo_roll_sets_needed > 0 && (
+              {/* Jumbo Roll Sets - Brief Summary - NEW FLOW */}
+              {planResult.jumbo_rolls_needed > 0 && (
                 <div className="mb-6 p-4 bg-muted/50 border rounded-lg">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-primary text-primary-foreground rounded-lg flex items-center justify-center">
                         <span className="text-lg font-bold">
-                          {
-                            planResult.selection_data.summary
-                              .jumbo_roll_sets_needed
-                          }
+                          {planResult.jumbo_rolls_needed}
                         </span>
                       </div>
                       <div>
                         <h3 className="font-semibold text-foreground">
-                          Jumbo Roll Sets Required
+                          Jumbo Rolls Required (CORRECTED)
                         </h3>
                         <p className="text-sm text-muted-foreground">
-                          {
-                            planResult.selection_data.summary
-                              .jumbo_roll_sets_needed
-                          }{" "}
-                          sets × 3 rolls ={" "}
-                          {planResult.selection_data.summary
-                            .jumbo_roll_sets_needed * 3}{" "}
-                          total 118&quot; rolls needed
+                          {planResult.jumbo_rolls_needed} jumbo rolls × 3 individual rolls = {planResult.jumbo_rolls_needed * 3} total 118&quot; rolls
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Algorithm: {planResult.summary.algorithm_note}
                         </p>
                       </div>
                     </div>
                     <Badge variant="secondary" className="text-sm">
-                      Ready for Production
+                      NEW FLOW Ready
                     </Badge>
                   </div>
                 </div>
@@ -1031,7 +977,7 @@ export default function PlanningPage() {
                     <div className="flex items-center gap-4">
                       <div className="text-sm text-muted-foreground">
                         {selectedCutRolls.length} of{" "}
-                        {planResult.selection_data.cut_rolls_available.length}{" "}
+                        {planResult.cut_rolls_generated.length}{" "}
                         selected
                       </div>
                       <div className="flex gap-2">
@@ -1052,25 +998,20 @@ export default function PlanningPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {/* Group by paper specifications */}
+                  {/* Group by paper specifications - NEW FLOW */}
                   {(() => {
-                    const groupedRolls =
-                      planResult.selection_data.cut_rolls_available.reduce(
-                        (groups, roll, index) => {
-                          const key = `${roll.gsm}gsm, ${roll.bf}bf, ${roll.shade}`;
-                          if (!groups[key]) {
-                            groups[key] = [];
-                          }
-                          groups[key].push({ ...roll, originalIndex: index });
-                          return groups;
-                        },
-                        {} as Record<
-                          string,
-                          Array<CutRoll & { originalIndex: number }>
-                        >
-                      );
+                    const groupedRolls = groupCutRollsBySpec(planResult.cut_rolls_generated);
+                    const groupedWithIndex = Object.fromEntries(
+                      Object.entries(groupedRolls).map(([key, rolls]) => [
+                        key.replace(/-/g, ', '),
+                        rolls.map((roll, idx) => ({ 
+                          ...roll, 
+                          originalIndex: planResult.cut_rolls_generated.findIndex(r => r === roll)
+                        }))
+                      ])
+                    );
 
-                    return Object.entries(groupedRolls).map(
+                    return Object.entries(groupedWithIndex).map(
                       ([specKey, rolls]) => {
                         // Group rolls by roll number within each specification
                         const rollsByNumber = rolls.reduce(
@@ -1436,8 +1377,8 @@ export default function PlanningPage() {
         <TabsContent value="pending-inventory">
           {planResult && (
             <div className="space-y-6">
-              {/* Pending Orders */}
-              {planResult.selection_data.pending_orders.length > 0 && (
+              {/* Pending Orders - NEW FLOW */}
+              {planResult.pending_orders.length > 0 && (
                 <Card>
                   <CardHeader>
                     <CardTitle>Pending Orders</CardTitle>
@@ -1456,13 +1397,13 @@ export default function PlanningPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {planResult.selection_data.pending_orders.map(
+                        {planResult.pending_orders.map(
                           (order, index) => (
                             <TableRow key={index}>
                               <TableCell>{order.width}&quot;</TableCell>
                               <TableCell>{order.quantity} rolls</TableCell>
                               <TableCell>
-                                {order.gsm}gsm, {order.bf}bf, {order.shade}
+                                {formatPaperSpec(order.gsm, order.bf, order.shade)}
                               </TableCell>
                               <TableCell>
                                 <Badge variant="destructive">
@@ -1478,8 +1419,8 @@ export default function PlanningPage() {
                 </Card>
               )}
 
-              {/* Inventory Items to Add */}
-              {planResult.selection_data.inventory_items_to_add.length > 0 && (
+              {/* Inventory Items to Add - NEW FLOW */}
+              {planResult.inventory_remaining.length > 0 && (
                 <Card>
                   <CardHeader>
                     <CardTitle>Inventory Items to Add</CardTitle>
@@ -1498,12 +1439,12 @@ export default function PlanningPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {planResult.selection_data.inventory_items_to_add.map(
+                        {planResult.inventory_remaining.map(
                           (item, index) => (
                             <TableRow key={index}>
                               <TableCell>{item.width}&quot;</TableCell>
                               <TableCell>
-                                {item.gsm}gsm, {item.bf}bf, {item.shade}
+                                {formatPaperSpec(item.gsm, item.bf, item.shade)}
                               </TableCell>
                               <TableCell>
                                 <Badge variant="outline">{item.source}</Badge>

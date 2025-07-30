@@ -39,6 +39,7 @@ import {
   Loader2
 } from "lucide-react";
 import { fetchOrders, updateOrderStatus, Order } from "@/lib/orders";
+import { getStatusBadgeVariant, getStatusDisplayText } from "@/lib/production";
 import { useRouter } from "next/navigation";
 
 export default function OrderMasterPage() {
@@ -65,20 +66,24 @@ export default function OrderMasterPage() {
   }, []);
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return <Badge variant="secondary"><Clock className="w-3 h-3 mr-1" /> Pending</Badge>;
-      case 'processing':
-        return <Badge className="bg-blue-100 text-blue-800"><Truck className="w-3 h-3 mr-1" /> Processing</Badge>;
-      case 'partially_fulfilled':
-        return <Badge className="bg-orange-100 text-orange-800"><AlertCircle className="w-3 h-3 mr-1" /> Partially Fulfilled</Badge>;
-      case 'completed':
-        return <Badge className="bg-green-100 text-green-800"><CheckCircle className="w-3 h-3 mr-1" /> Completed</Badge>;
-      case 'cancelled':
-        return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" /> Cancelled</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
+    const variant = getStatusBadgeVariant(status, 'order');
+    const displayText = getStatusDisplayText(status);
+    
+    const iconMap = {
+      'created': Clock,
+      'in_process': Truck,
+      'completed': CheckCircle,
+      'cancelled': XCircle
+    };
+    
+    const Icon = iconMap[status as keyof typeof iconMap] || Clock;
+    
+    return (
+      <Badge variant={variant as "default" | "secondary" | "destructive" | "outline"}>
+        <Icon className="w-3 h-3 mr-1" />
+        {displayText}
+      </Badge>
+    );
   };
 
   const getPriorityBadge = (priority: string) => {
@@ -116,8 +121,8 @@ export default function OrderMasterPage() {
     );
   });
 
-  const pendingOrders = orders.filter((o: Order) => o.status === 'pending').length;
-  const processingOrders = orders.filter((o: Order) => o.status === 'processing').length;
+  const createdOrders = orders.filter((o: Order) => o.status === 'created').length;
+  const inProcessOrders = orders.filter((o: Order) => o.status === 'in_process').length;
   const completedOrders = orders.filter((o: Order) => o.status === 'completed').length;
 
   // Helper functions for order item calculations
@@ -176,23 +181,23 @@ export default function OrderMasterPage() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending</CardTitle>
+              <CardTitle className="text-sm font-medium">Created</CardTitle>
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{loading ? "..." : pendingOrders}</div>
+              <div className="text-2xl font-bold">{loading ? "..." : createdOrders}</div>
               <p className="text-xs text-muted-foreground">
-                Awaiting processing
+                Newly created orders
               </p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Processing</CardTitle>
+              <CardTitle className="text-sm font-medium">In Process</CardTitle>
               <Truck className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{loading ? "..." : processingOrders}</div>
+              <div className="text-2xl font-bold">{loading ? "..." : inProcessOrders}</div>
               <p className="text-xs text-muted-foreground">
                 Currently being processed
               </p>
@@ -351,22 +356,16 @@ export default function OrderMasterPage() {
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuLabel>Update Status</DropdownMenuLabel>
-                                {order.status !== 'pending' && (
-                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'pending')}>
+                                {order.status !== 'created' && (
+                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'created')}>
                                     <Clock className="mr-2 h-4 w-4" />
-                                    Set as Pending
+                                    Set as Created
                                   </DropdownMenuItem>
                                 )}
-                                {order.status !== 'processing' && (
-                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'processing')}>
+                                {order.status !== 'in_process' && (
+                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'in_process')}>
                                     <Truck className="mr-2 h-4 w-4" />
-                                    Mark as Processing
-                                  </DropdownMenuItem>
-                                )}
-                                {order.status !== 'partially_fulfilled' && (
-                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'partially_fulfilled')}>
-                                    <AlertCircle className="mr-2 h-4 w-4" />
-                                    Mark as Partially Fulfilled
+                                    Mark as In Process
                                   </DropdownMenuItem>
                                 )}
                                 {order.status !== 'completed' && (
