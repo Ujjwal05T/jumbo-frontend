@@ -67,7 +67,8 @@ export const STATUS_ENDPOINTS = {
 // Dispatch endpoints
 export const DISPATCH_ENDPOINTS = {
   WAREHOUSE_ITEMS: `${API_BASE_URL}/dispatch/warehouse-items`,
-  COMPLETE_ITEMS: `${API_BASE_URL}/dispatch/complete-items`,
+  CREATE_DISPATCH: `${API_BASE_URL}/dispatch/create-dispatch`,
+  CLIENTS: `${API_BASE_URL}/dispatch/clients`,
   PENDING_ITEMS: `${API_BASE_URL}/dispatch/pending-items`,
   COMPLETE_PENDING_ITEM: `${API_BASE_URL}/dispatch/complete-pending-item`,
 };

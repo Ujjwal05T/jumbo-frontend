@@ -54,9 +54,16 @@ export interface PendingItem {
   };
 }
 
-export interface CompleteBatchRequest {
-  order_item_ids: string[];
-  completed_by_id: string;
+export interface DispatchFormData {
+  vehicle_number: string;
+  driver_name: string;
+  driver_mobile: string;
+  payment_type: string;
+  dispatch_number: string;
+  reference_number?: string;
+  client_id: string;
+  primary_order_id?: string;
+  inventory_ids: string[];
 }
 
 export interface CompletePendingItemRequest {
@@ -78,25 +85,65 @@ export async function fetchWarehouseItems(): Promise<WarehouseItem[]> {
 }
 
 /**
- * Complete multiple order items in batch
+ * Create dispatch record with vehicle/driver details and complete items
  */
-export async function completeOrderItems(orderItemIds: string[]): Promise<void> {
+export async function createDispatchRecord(dispatchData: {
+  vehicle_number: string;
+  driver_name: string;
+  driver_mobile: string;
+  payment_type: string;
+  dispatch_number: string;
+  reference_number?: string;
+  client_id: string;
+  primary_order_id?: string;
+  inventory_ids: string[];
+}): Promise<{
+  dispatch_id: string;
+  dispatch_number: string;
+  message: string;
+  summary: {
+    dispatched_items: number;
+    orders_completed: number;
+    total_weight: number;
+  };
+}> {
   const userId = localStorage.getItem('user_id');
   if (!userId) {
     throw new Error('User not authenticated');
   }
 
-  const request: CompleteBatchRequest = {
-    order_item_ids: orderItemIds,
-    completed_by_id: userId
+  // Format the request to match backend schema
+  const request = {
+    vehicle_number: dispatchData.vehicle_number.trim(),
+    driver_name: dispatchData.driver_name.trim(),
+    driver_mobile: dispatchData.driver_mobile.trim(),
+    payment_type: dispatchData.payment_type,
+    dispatch_date: new Date().toISOString(),
+    dispatch_number: dispatchData.dispatch_number.trim(),
+    reference_number: dispatchData.reference_number?.trim() || null,
+    client_id: dispatchData.client_id,
+    primary_order_id: dispatchData.primary_order_id || null,
+    order_date: null,
+    inventory_ids: dispatchData.inventory_ids,
+    created_by_id: userId
   };
 
-  const response = await fetch(DISPATCH_ENDPOINTS.COMPLETE_ITEMS, createRequestOptions('POST', request));
+  console.log('Sending dispatch request:', request);
+  
+  const response = await fetch(DISPATCH_ENDPOINTS.CREATE_DISPATCH, createRequestOptions('POST', request));
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.detail || errorData.message || 'Failed to complete order items');
+    console.error('Dispatch creation failed:', {
+      status: response.status,
+      statusText: response.statusText,
+      errorData,
+      request
+    });
+    throw new Error(errorData.detail || errorData.message || `HTTP ${response.status}: Failed to create dispatch record`);
   }
+
+  return response.json();
 }
 
 /**

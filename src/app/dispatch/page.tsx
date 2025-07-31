@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -45,15 +46,17 @@ import {
   Loader2,
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { DispatchForm } from "@/components/DispatchForm";
+import { DispatchSuccessModal } from "@/components/DispatchSuccessModal";
 import { 
   getWarehouseItems,
-  completeOrderItems as completeWarehouseItems,
   getStatusBadgeVariant,
   getStatusDisplayText
 } from "@/lib/production";
 import { 
   fetchPendingItems,
   completePendingItem,
+  createDispatchRecord,
   WarehouseItem,
   PendingItem
 } from "@/lib/dispatch";
@@ -71,6 +74,11 @@ export default function DispatchPage() {
     itemIds: string[];
     action: "complete";
   }>({ open: false, itemIds: [], action: "complete" });
+  const [dispatchFormOpen, setDispatchFormOpen] = useState(false);
+  const [selectedItemsForDispatch, setSelectedItemsForDispatch] = useState<any[]>([]);
+  const [dispatchLoading, setDispatchLoading] = useState(false);
+  const [successModalOpen, setSuccessModalOpen] = useState(false);
+  const [dispatchResult, setDispatchResult] = useState<any>(null);
 
   // Load data using enhanced APIs
   const loadData = async () => {
@@ -108,57 +116,56 @@ export default function DispatchPage() {
   });
 
   const handleCompleteItems = (itemIds: string[]) => {
-    setConfirmDialog({
-      open: true,
-      itemIds,
-      action: "complete"
-    });
+    // Get selected items data for dispatch form
+    const selectedItems = warehouseItems.filter(item => 
+      itemIds.includes(item.inventory_id)
+    );
+    
+    setSelectedItemsForDispatch(selectedItems);
+    setDispatchFormOpen(true);
+  };
+
+  const handleDispatchConfirm = async (formData: any) => {
+    try {
+      setDispatchLoading(true);
+      
+      const dispatchData = {
+        ...formData,
+        inventory_ids: selectedItemsForDispatch.map(item => item.inventory_id)
+      };
+      
+      const result = await createDispatchRecord(dispatchData);
+      
+      // Show success modal with dispatch details
+      setDispatchResult(result);
+      setSuccessModalOpen(true);
+      
+      // Reload data and reset selections
+      await loadData();
+      setSelectedItems([]);
+      setSelectedItemsForDispatch([]);
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create dispatch';
+      toast.error(errorMessage);
+      console.error("Dispatch error:", error);
+      throw error; // Re-throw to prevent modal from closing on error
+    } finally {
+      setDispatchLoading(false);
+    }
   };
 
   const confirmStatusChange = async () => {
-    const { itemIds } = confirmDialog;
-    
-    try {
-      const user_id = localStorage.getItem("user_id");
-      if (!user_id) {
-        throw new Error("User not authenticated");
-      }
-
-      // Call the new dispatch API for inventory items
-      const response = await fetch('/api/dispatch/complete-items', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          inventory_ids: itemIds,
-          user_id: user_id
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to complete dispatch');
-      }
-      
-      const result = await response.json();
-      
-      toast.success(
-        `${result.summary.cut_rolls_dispatched} cut roll(s) dispatched successfully! ` +
-        `${result.summary.orders_completed} order(s) completed.`
-      );
-      
-      console.log("Dispatch completion response:", result);
-      
-      // Reload data
-      await loadData();
-      setSelectedItems([]);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to complete items';
-      toast.error(errorMessage);
-      console.error("Completion error:", error);
-    }
-    
+    // This is now handled by the dispatch form
     setConfirmDialog(prev => ({ ...prev, open: false }));
+  };
+
+  const handleBulkDispatch = () => {
+    if (selectedItems.length === 0) {
+      toast.error("Please select items to dispatch");
+      return;
+    }
+    handleCompleteItems(selectedItems);
   };
 
   const getStatusBadge = (status: string, itemType: ItemType = "warehouse") => {
@@ -287,16 +294,27 @@ export default function DispatchPage() {
                   Manage order items ready for dispatch and delivery
                 </CardDescription>
               </div>
-              <div className="w-64">
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    type="search"
-                    placeholder="Search orders..."
-                    className="pl-8"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
+              <div className="flex items-center gap-4">
+                {selectedItems.length > 0 && (
+                  <Button 
+                    onClick={handleBulkDispatch}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    <Truck className="mr-2 h-4 w-4" />
+                    Dispatch {selectedItems.length} Items
+                  </Button>
+                )}
+                <div className="w-64">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="search"
+                      placeholder="Search orders..."
+                      className="pl-8"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -306,6 +324,18 @@ export default function DispatchPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[50px]">
+                      <Checkbox
+                        checked={selectedItems.length === filteredItems.length && filteredItems.length > 0}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedItems(filteredItems.map(item => item.inventory_id));
+                          } else {
+                            setSelectedItems([]);
+                          }
+                        }}
+                      />
+                    </TableHead>
                     <TableHead>S.No</TableHead>
                     <TableHead>QR Code</TableHead>
                     <TableHead>Paper Specs</TableHead>
@@ -320,6 +350,18 @@ export default function DispatchPage() {
                   {filteredItems.length > 0 ? (
                     filteredItems.map((item: any, index) => (
                       <TableRow key={item.inventory_id || item.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedItems.includes(item.inventory_id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedItems(prev => [...prev, item.inventory_id]);
+                              } else {
+                                setSelectedItems(prev => prev.filter(id => id !== item.inventory_id));
+                              }
+                            }}
+                          />
+                        </TableCell>
                         <TableCell className="font-medium">
                           {index + 1}
                         </TableCell>
@@ -397,7 +439,7 @@ export default function DispatchPage() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-24 text-center">
+                      <TableCell colSpan={9} className="h-24 text-center">
                         {loading ? (
                           <div className="flex items-center justify-center">
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -415,6 +457,29 @@ export default function DispatchPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Dispatch Form Modal */}
+      <DispatchForm
+        open={dispatchFormOpen}
+        onOpenChange={setDispatchFormOpen}
+        selectedItems={selectedItemsForDispatch.map(item => ({
+          inventory_id: item.inventory_id,
+          qr_code: item.qr_code,
+          paper_spec: item.paper_spec,
+          width_inches: item.width_inches,
+          weight_kg: item.weight_kg,
+          location: item.location
+        }))}
+        onConfirmDispatch={handleDispatchConfirm}
+        loading={dispatchLoading}
+      />
+
+      {/* Success Modal */}
+      <DispatchSuccessModal
+        open={successModalOpen}
+        onOpenChange={setSuccessModalOpen}
+        dispatchResult={dispatchResult}
+      />
 
       {/* Confirmation Dialog */}
       <ConfirmDialog

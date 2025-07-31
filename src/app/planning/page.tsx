@@ -17,7 +17,8 @@ import {
   getStatusBadgeVariant as getNewFlowStatusBadgeVariant,
   OptimizationResult,
   WorkflowProcessRequest,
-  CuttingPlanRequest
+  CuttingPlanRequest,
+  CutRoll
 } from "@/lib/new-flow";
 import { 
   selectCutRollsForProduction,
@@ -57,6 +58,7 @@ import QRCodeDisplay from "@/components/QRCodeDisplay";
 import { fetchOrders, Order } from "@/lib/orders";
 import { PRODUCTION_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
 import jsPDF from "jspdf";
+import QRCode from "qrcode";
 
 // NEW FLOW: Updated interfaces
 interface PlanGenerationResult extends OptimizationResult {
@@ -189,6 +191,7 @@ export default function PlanningPage() {
     new Set()
   );
   const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [generatingQRPDF, setGeneratingQRPDF] = useState(false);
 
   // Memoized computations for performance
   const filteredOrders = useMemo(() => {
@@ -492,7 +495,15 @@ export default function PlanningPage() {
   };
 
   const generatePDF = async () => {
-    if (!planResult) return;
+    if (!planResult) {
+      toast.error("No plan result available to generate PDF");
+      return;
+    }
+
+    if (!planResult.summary) {
+      toast.error("Plan result is missing summary data");
+      return;
+    }
 
     setGeneratingPDF(true);
     try {
@@ -521,67 +532,26 @@ export default function PlanningPage() {
       pdf.text(`Generated on: ${new Date().toLocaleString()}`, 20, yPosition);
       yPosition += 20;
 
-      // Summary Section
-      checkPageBreak(40);
-      pdf.setFontSize(16);
-      pdf.setTextColor(40, 40, 40);
-      pdf.text("Summary", 20, yPosition);
-      yPosition += 15;
-
-      const summaryData = [
-        [
-          "Total Cut Rolls",
-          planResult.selection_data.summary.total_cut_rolls.toString(),
-        ],
-        [
-          'Individual 118" Rolls',
-          planResult.selection_data.summary.total_individual_118_rolls.toString(),
-        ],
-        [
-          "Jumbo Roll Sets Needed",
-          planResult.selection_data.summary.jumbo_roll_sets_needed.toString(),
-        ],
-        [
-          "Pending Orders",
-          planResult.selection_data.summary.pending_orders_count.toString(),
-        ],
-        ["Selected Cut Rolls", selectedCutRolls.length.toString()],
-      ];
-
-      pdf.setFontSize(12);
-      summaryData.forEach(([label, value]) => {
-        checkPageBreak(8);
-        pdf.setTextColor(60, 60, 60);
-        pdf.text(`${label}:`, 20, yPosition);
-        pdf.setTextColor(40, 40, 40);
-        pdf.text(value, 120, yPosition);
-        yPosition += 8;
-      });
-
-      yPosition += 10;
-
       // Jumbo Roll Sets Section
-      if (planResult.selection_data.summary.jumbo_roll_sets_needed > 0) {
+      if (planResult.jumbo_rolls_needed > 0) {
         checkPageBreak(30);
         pdf.setFontSize(16);
         pdf.setTextColor(40, 40, 40);
-        pdf.text("Jumbo Roll Sets Required", 20, yPosition);
+        pdf.text("Jumbo Rolls Required", 20, yPosition);
         yPosition += 15;
 
         pdf.setFontSize(12);
         pdf.setTextColor(60, 60, 60);
         pdf.text(
-          `Total sets needed: ${planResult.selection_data.summary.jumbo_roll_sets_needed}`,
+          `Total jumbo rolls needed: ${planResult.jumbo_rolls_needed}`,
           20,
           yPosition
         );
         yPosition += 8;
-        pdf.text(`Each set contains 3 rolls of 118" width`, 20, yPosition);
+        pdf.text(`Each jumbo roll contains 3 rolls of 118" width`, 20, yPosition);
         yPosition += 8;
         pdf.text(
-          `Total 118" rolls required: ${
-            planResult.selection_data.summary.jumbo_roll_sets_needed * 3
-          }`,
+          `Total 118" rolls produced: ${planResult.jumbo_rolls_needed * 3}`,
           20,
           yPosition
         );
@@ -596,7 +566,7 @@ export default function PlanningPage() {
       yPosition += 15;
 
       // Group cut rolls by specification
-      const groupedRolls = planResult.selection_data.cut_rolls_available.reduce(
+      const groupedRolls = planResult.cut_rolls_generated.reduce(
         (groups, roll, index) => {
           const key = `${roll.gsm}gsm, ${roll.bf}bf, ${roll.shade}`;
           if (!groups[key]) {
@@ -628,7 +598,7 @@ export default function PlanningPage() {
         }, {} as Record<string, Array<CutRoll & { originalIndex: number }>>);
 
         Object.entries(rollsByNumber).forEach(([rollNumber, rollsInNumber]) => {
-          checkPageBreak(20);
+          checkPageBreak(30);
 
           pdf.setFontSize(12);
           pdf.setTextColor(60, 60, 60);
@@ -658,30 +628,40 @@ export default function PlanningPage() {
           );
           yPosition += 8;
 
-          // Individual cuts
-          const selectedInThisRoll = rollsInNumber.filter((roll) =>
-            selectedCutRolls.includes(roll.originalIndex)
-          ).length;
-          pdf.text(
-            `Selected for production: ${selectedInThisRoll}/${rollsInNumber.length} cuts`,
-            30,
-            yPosition
-          );
-          yPosition += 10;
+          // Individual cut details - show each cut with its width
+          pdf.setFontSize(9);
+          pdf.setTextColor(100, 100, 100);
+          pdf.text("Individual Cuts:", 30, yPosition);
+          yPosition += 6;
+
+          rollsInNumber.forEach((roll, cutIndex) => {
+            checkPageBreak(6);
+            const isSelected = selectedCutRolls.includes(roll.originalIndex);
+            pdf.setTextColor(...(isSelected ? [34, 197, 94] : [100, 100, 100])); // Green if selected, gray if not
+            const statusText = isSelected ? "✓ Selected" : "  Not Selected";
+            pdf.text(
+              `  • ${roll.width}" width - ${statusText} - Source: ${roll.source || 'cutting'}`,
+              35,
+              yPosition
+            );
+            yPosition += 5;
+          });
+
+          yPosition += 5;
         });
 
         yPosition += 5;
       });
 
       // Pending Orders Section
-      if (planResult.selection_data.pending_orders.length > 0) {
+      if (planResult.pending_orders.length > 0) {
         checkPageBreak(30);
         pdf.setFontSize(16);
         pdf.setTextColor(220, 38, 38);
         pdf.text("Pending Orders", 20, yPosition);
         yPosition += 15;
 
-        planResult.selection_data.pending_orders.forEach((order, index) => {
+        planResult.pending_orders.forEach((order, index) => {
           checkPageBreak(8);
           pdf.setFontSize(10);
           pdf.setTextColor(80, 80, 80);
@@ -694,28 +674,51 @@ export default function PlanningPage() {
         });
       }
 
-      // Next Steps
-      checkPageBreak(30);
+      // Summary Section - moved to bottom
+      checkPageBreak(50);
       pdf.setFontSize(16);
       pdf.setTextColor(40, 40, 40);
-      pdf.text("Next Steps", 20, yPosition);
+      pdf.text("Production Summary", 20, yPosition);
       yPosition += 15;
 
-      const nextSteps = [
-        "1. Review selected cut rolls for production",
-        "2. Procure required jumbo roll sets",
-        "3. Execute cutting plans",
-        "4. Generate QR codes for production tracking",
-        "5. Monitor production progress",
+      const summaryData = [
+        [
+          "Total Cut Rolls Generated",
+          planResult.summary.total_cut_rolls.toString(),
+        ],
+        [
+          'Individual 118" Rolls Required',
+          planResult.summary.total_individual_118_rolls.toString(),
+        ],
+        [
+          "Jumbo Rolls Needed",
+          planResult.jumbo_rolls_needed.toString(),
+        ],
+        [
+          "Total Pending Orders",
+          planResult.summary.total_pending_orders.toString(),
+        ],
+        [
+          "Selected for Production", 
+          selectedCutRolls.length.toString()
+        ],
+        [
+          "Material Efficiency",
+          `${calculateEfficiencyMetrics(planResult.cut_rolls_generated).averageEfficiency.toFixed(1)}%`
+        ],
       ];
 
-      nextSteps.forEach((step) => {
+      pdf.setFontSize(12);
+      summaryData.forEach(([label, value]) => {
         checkPageBreak(8);
-        pdf.setFontSize(10);
         pdf.setTextColor(60, 60, 60);
-        pdf.text(step, 25, yPosition);
+        pdf.text(`${label}:`, 20, yPosition);
+        pdf.setTextColor(40, 40, 40);
+        pdf.text(value, 120, yPosition);
         yPosition += 8;
       });
+
+      yPosition += 10;
 
       // Save the PDF
       pdf.save(`production-planning-${new Date().getTime()}.pdf`);
@@ -726,6 +729,106 @@ export default function PlanningPage() {
       toast.error(errorMessage);
     } finally {
       setGeneratingPDF(false);
+    }
+  };
+
+  const generateQRCodesPDF = async () => {
+    if (productionRecords.length === 0) {
+      toast.error("No production records available to generate QR codes PDF");
+      return;
+    }
+
+    setGeneratingQRPDF(true);
+    try {
+      const pdf = new jsPDF();
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      let yPosition = 20;
+      const qrSize = 60; // Size of QR code in PDF
+      const itemsPerRow = 2; // Number of QR codes per row
+      const itemsPerPage = 6; // Number of QR codes per page (3 rows × 2 columns)
+      let currentItem = 0;
+
+      // Helper function to check if we need a new page
+      const checkPageBreak = () => {
+        if (currentItem > 0 && currentItem % itemsPerPage === 0) {
+          pdf.addPage();
+          yPosition = 20;
+        }
+      };
+
+      // Title
+      pdf.setFontSize(18);
+      pdf.setTextColor(40, 40, 40);
+      pdf.text("Production QR Codes", pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 10;
+
+      // Date
+      pdf.setFontSize(10);
+      pdf.setTextColor(100, 100, 100);
+      pdf.text(`Generated on: ${new Date().toLocaleString()}`, pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 20;
+
+      for (let i = 0; i < productionRecords.length; i++) {
+        const record = productionRecords[i];
+        
+        checkPageBreak();
+        
+        // Calculate position
+        const col = currentItem % itemsPerRow;
+        const row = Math.floor((currentItem % itemsPerPage) / itemsPerRow);
+        const xPosition = 20 + col * (pageWidth / 2);
+        const itemYPosition = yPosition + row * 90;
+
+        try {
+          // Generate QR code as data URL
+          const qrDataUrl = await QRCode.toDataURL(record.qr_code, {
+            width: 200,
+            margin: 1,
+            color: {
+              dark: '#000000',
+              light: '#FFFFFF'
+            }
+          });
+
+          // Add QR code image
+          pdf.addImage(qrDataUrl, 'PNG', xPosition, itemYPosition, qrSize, qrSize);
+
+          // Add QR code text below
+          pdf.setFontSize(8);
+          pdf.setTextColor(40, 40, 40);
+          pdf.text(record.qr_code, xPosition + qrSize/2, itemYPosition + qrSize + 8, { align: 'center' });
+
+          // Add roll details
+          pdf.setFontSize(7);
+          pdf.setTextColor(80, 80, 80);
+          pdf.text(`${record.width_inches}" width`, xPosition + qrSize/2, itemYPosition + qrSize + 15, { align: 'center' });
+          pdf.text(`${record.gsm}gsm, ${record.bf}bf`, xPosition + qrSize/2, itemYPosition + qrSize + 20, { align: 'center' });
+          pdf.text(`${record.shade}`, xPosition + qrSize/2, itemYPosition + qrSize + 25, { align: 'center' });
+
+        } catch (qrError) {
+          console.error(`Error generating QR code for ${record.qr_code}:`, qrError);
+          // Fallback: just show text
+          pdf.setFontSize(10);
+          pdf.setTextColor(40, 40, 40);
+          pdf.text(`QR: ${record.qr_code}`, xPosition, itemYPosition);
+          pdf.text(`${record.width_inches}" - ${record.gsm}gsm`, xPosition, itemYPosition + 10);
+        }
+
+        currentItem++;
+      }
+
+      // Save the PDF
+      pdf.save(`production-qr-codes-${new Date().getTime()}.pdf`);
+      toast.success(`Generated QR codes PDF with ${productionRecords.length} codes`);
+
+    } catch (error) {
+      console.error("Error generating QR codes PDF:", error);
+      const errorMessage = "Failed to generate QR codes PDF. Please try again.";
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setGeneratingQRPDF(false);
     }
   };
 
@@ -1466,10 +1569,30 @@ export default function PlanningPage() {
             {productionRecords.length > 0 && (
               <Card>
                 <CardHeader>
-                  <CardTitle>Production Records</CardTitle>
-                  <CardDescription>
-                    Cut rolls moved to production with QR codes generated
-                  </CardDescription>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <CardTitle>Production Records</CardTitle>
+                      <CardDescription>
+                        Cut rolls moved to production with QR codes generated
+                      </CardDescription>
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={generateQRCodesPDF}
+                      disabled={generatingQRPDF || productionRecords.length === 0}>
+                      {generatingQRPDF ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Generating QR PDF...
+                        </>
+                      ) : (
+                        <>
+                          <QrCode className="mr-2 h-4 w-4" />
+                          Print QR Codes ({productionRecords.length})
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <Table>
