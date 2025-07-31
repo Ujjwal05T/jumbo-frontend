@@ -283,19 +283,25 @@ export default function OrderMasterPage() {
                               </div>
                             </TableCell>
                             <TableCell>
-                              <div className="font-medium">{order.client?.company_name || 'N/A'}</div>
-                              <div className="text-xs text-muted-foreground">
+                              <div className="font-medium max-w-32 truncate" title={order.client?.company_name || 'N/A'}>
+                                {order.client?.company_name || 'N/A'}
+                              </div>
+                              <div className="text-xs text-muted-foreground max-w-32 truncate" title={order.client?.contact_person || 'N/A'}>
                                 {order.client?.contact_person || 'N/A'}
                               </div>
                             </TableCell>
                             <TableCell>
-                              <div className="font-medium text-xs">{getOrderPapers(order)}</div>
+                              <div className="font-medium text-xs max-w-32 truncate" title={getOrderPapers(order)}>
+                                {getOrderPapers(order)}
+                              </div>
                               <div className="text-xs text-muted-foreground">
                                 {order.order_items?.length || 0} different papers
                               </div>
                             </TableCell>
                             <TableCell>
-                              <div className="text-sm">{getOrderWidths(order)}</div>
+                              <div className="text-sm max-w-24 truncate" title={getOrderWidths(order)}>
+                                {getOrderWidths(order)}
+                              </div>
                             </TableCell>
                             <TableCell>
                               <div className="text-center">

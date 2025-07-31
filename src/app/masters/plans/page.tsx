@@ -1,5 +1,5 @@
 /**
- * Plan Master page - Display and manage cutting plans
+ * Plan Master page - Display and manage cutting plans with detailed cut roll information
  */
 "use client";
 
@@ -13,8 +13,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, AlertCircle, Eye, Play, CheckCircle, Factory, QrCode } from "lucide-react";
-import QRCodeDisplay from "@/components/QRCodeDisplay";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2, AlertCircle, Eye, Play, CheckCircle, Factory, Search, Filter } from "lucide-react";
 
 interface Plan {
   id: string;
@@ -31,47 +32,64 @@ interface Plan {
   };
 }
 
-interface CutRollSummary {
-  plan_id: string;
-  total_cut_rolls: number;
-  status_breakdown: Record<string, number>;
-  total_weight_kg: number;
-  individual_118_rolls: number;
-  jumbo_roll_sets_needed: number;
-  cut_rolls: CutRoll[];
-}
-
-interface CutRoll {
+interface Client {
   id: string;
-  qr_code: string;
-  width_inches: number;
-  status: string;
-  actual_weight_kg?: number;
-  gsm: number;
-  shade: string;
+  company_name: string;
 }
 
 export default function PlansPage() {
   const router = useRouter();
   const [plans, setPlans] = useState<Plan[]>([]);
-  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
-  const [cutRollSummary, setCutRollSummary] = useState<CutRollSummary | null>(null);
+  const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(false);
-  const [loadingSummary, setLoadingSummary] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showQRCodes, setShowQRCodes] = useState(false);
-  const [selectedQRCode, setSelectedQRCode] = useState<string | null>(null);
+  
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [clientFilter, setClientFilter] = useState<string>("all");
+  const [dateFilter, setDateFilter] = useState<string>("all");
+
+  useEffect(() => {
+    loadClients();
+  }, []);
 
   useEffect(() => {
     loadPlans();
-  }, []);
+  }, [statusFilter, clientFilter, dateFilter]);
 
   const loadPlans = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const response = await fetch(MASTER_ENDPOINTS.PLANS, createRequestOptions('GET'));
+      // Build query parameters for backend filtering
+      const params = new URLSearchParams();
+      if (statusFilter !== "all") params.append("status", statusFilter);
+      if (clientFilter !== "all") params.append("client_id", clientFilter);
+      
+      // Add date filtering
+      if (dateFilter !== "all") {
+        const today = new Date();
+        let dateFrom = "";
+        switch (dateFilter) {
+          case "today":
+            dateFrom = today.toISOString().split('T')[0];
+            break;
+          case "week":
+            const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+            dateFrom = weekAgo.toISOString().split('T')[0];
+            break;
+          case "month":
+            const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+            dateFrom = monthAgo.toISOString().split('T')[0];
+            break;
+        }
+        if (dateFrom) params.append("date_from", dateFrom);
+      }
+      
+      const url = `${MASTER_ENDPOINTS.PLANS}${params.toString() ? `?${params.toString()}` : ''}`;
+      const response = await fetch(url, createRequestOptions('GET'));
 
       if (!response.ok) {
         throw new Error('Failed to load plans');
@@ -89,22 +107,15 @@ export default function PlansPage() {
     }
   };
 
-  const loadCutRollSummary = async (planId: string) => {
+  const loadClients = async () => {
     try {
-      setLoadingSummary(true);
-      
-      const response = await fetch(PRODUCTION_ENDPOINTS.CUT_ROLLS_PLAN(planId), createRequestOptions('GET'));
-
-      if (!response.ok) {
-        throw new Error('Failed to load cut roll summary');
+      const response = await fetch(MASTER_ENDPOINTS.CLIENTS, createRequestOptions('GET'));
+      if (response.ok) {
+        const data = await response.json();
+        setClients(data);
       }
-
-      const data = await response.json();
-      setCutRollSummary(data);
     } catch (err) {
-      console.error('Error loading cut roll summary:', err);
-    } finally {
-      setLoadingSummary(false);
+      console.error('Error loading clients:', err);
     }
   };
 
@@ -147,19 +158,48 @@ export default function PlansPage() {
   };
 
   const handleViewPlan = (plan: Plan) => {
-    setSelectedPlan(plan);
-    loadCutRollSummary(plan.id);
+    // Navigate to the dedicated plan details page
+    router.push(`/masters/plans/${plan.id}`);
   };
 
-  const handleShowQRCode = (qrCode: string) => {
-    setSelectedQRCode(qrCode);
-  };
+  // Filter functions
+  const filteredPlans = plans.filter(plan => {
+    const matchesSearch = !searchTerm || 
+      plan.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      plan.created_by?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === "all" || plan.status === statusFilter;
+    
+    const matchesDate = dateFilter === "all" || (() => {
+      const planDate = new Date(plan.created_at);
+      const today = new Date();
+      switch (dateFilter) {
+        case "today":
+          return planDate.toDateString() === today.toDateString();
+        case "week":
+          const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+          return planDate >= weekAgo;
+        case "month":
+          const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+          return planDate >= monthAgo;
+        default:
+          return true;
+      }
+    })();
+    
+    return matchesSearch && matchesStatus && matchesDate;
+  });
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Plan Master - Production Plans</h1>
+          <div>
+            <h1 className="text-3xl font-bold">Plan Master - Production Plans</h1>
+            <p className="text-muted-foreground mt-1">
+              Manage cutting plans and track cut roll production with detailed analytics
+            </p>
+          </div>
           <Button 
             variant="default" 
             onClick={() => router.push('/planning')}
@@ -169,6 +209,91 @@ export default function PlansPage() {
           </Button>
         </div>
 
+        {/* Filters Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Filter className="h-5 w-5" />
+              Filters
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Search Plans</label>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by name or creator..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Status</label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="planned">Planned</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="failed">Failed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Client</label>
+                <Select value={clientFilter} onValueChange={setClientFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All clients" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Clients</SelectItem>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.company_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Date Range</label>
+                <Select value={dateFilter} onValueChange={setDateFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All dates" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Time</SelectItem>
+                    <SelectItem value="today">Today</SelectItem>
+                    <SelectItem value="week">Last 7 Days</SelectItem>
+                    <SelectItem value="month">Last 30 Days</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setSearchTerm("");
+                    setStatusFilter("all");
+                    setClientFilter("all");
+                    setDateFilter("all");
+                  }}
+                  className="w-full"
+                >
+                  Clear Filters
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {error && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
@@ -177,252 +302,110 @@ export default function PlansPage() {
           </Alert>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Plans List */}
-          <Card>
-            <CardHeader>
-              <CardTitle>All Plans</CardTitle>
-              <CardDescription>Manage and monitor cutting plans</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
+        {/* Plans List */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Plans ({filteredPlans.length})</CardTitle>
+            <CardDescription>Manage and monitor cutting plans - click View Details to see comprehensive plan information</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Plan Name</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Expected Waste</TableHead>
+                    <TableHead>Created By</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
                     <TableRow>
-                      <TableHead>Plan Name</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead>Actions</TableHead>
+                      <TableCell colSpan={6} className="h-24 text-center">
+                        <div className="flex items-center justify-center">
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Loading plans...
+                        </div>
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {loading ? (
-                      <TableRow>
-                        <TableCell colSpan={4} className="h-24 text-center">
-                          <div className="flex items-center justify-center">
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Loading plans...
+                  ) : filteredPlans.length > 0 ? (
+                    filteredPlans.map((plan, index) => (
+                      <TableRow key={plan.id}>
+                        <TableCell className="font-medium">
+                          {plan.name || `Plan #${index + 1}`}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getStatusBadgeVariant(plan.status)}>
+                            <div className="flex items-center gap-1">
+                              {getStatusIcon(plan.status)}
+                              {plan.status.replace('_', ' ')}
+                            </div>
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-medium">{plan.expected_waste_percentage}%</span>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{plan.created_by?.name || 'testuser'}</div>
+                            <div className="text-xs text-muted-foreground">@{plan.created_by?.username || 'test'}</div>
                           </div>
                         </TableCell>
-                      </TableRow>
-                    ) : plans.length > 0 ? (
-                      plans.map((plan, index) => (
-                        <TableRow key={plan.id}>
-                          <TableCell className="font-medium">
-                            {plan.name || `Plan #${index + 1}`}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={getStatusBadgeVariant(plan.status)}>
-                              <div className="flex items-center gap-1">
-                                {getStatusIcon(plan.status)}
-                                {plan.status.replace('_', ' ')}
-                              </div>
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {new Date(plan.created_at).toLocaleDateString()}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleViewPlan(plan)}
-                              >
-                                <Eye className="h-3 w-3 mr-1" />
-                                View
-                              </Button>
-                              {plan.status === 'planned' && (
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  onClick={() => updatePlanStatus(plan.id, 'in_progress')}
-                                >
-                                  <Play className="h-3 w-3 mr-1" />
-                                  Start
-                                </Button>
-                              )}
-                              {plan.status === 'in_progress' && (
-                                <Button
-                                  size="sm"
-                                  variant="default"
-                                  onClick={() => updatePlanStatus(plan.id, 'completed')}
-                                >
-                                  <CheckCircle className="h-3 w-3 mr-1" />
-                                  Complete
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={4} className="h-24 text-center">
-                          No plans found. Create your first plan to get started.
+                        <TableCell>
+                          {new Date(plan.created_at).toLocaleDateString()}
                         </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Plan Details */}
-          {selectedPlan && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Plan Details</CardTitle>
-                <CardDescription>
-                  {selectedPlan.name || `Plan Details`}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {/* Plan Info */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium">Status</label>
-                      <div className="mt-1">
-                        <Badge variant={getStatusBadgeVariant(selectedPlan.status)}>
-                          <div className="flex items-center gap-1">
-                            {getStatusIcon(selectedPlan.status)}
-                            {selectedPlan.status.replace('_', ' ')}
-                          </div>
-                        </Badge>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium">Expected Waste</label>
-                      <p className="mt-1 text-sm">{selectedPlan.expected_waste_percentage}%</p>
-                    </div>
-                    {selectedPlan.actual_waste_percentage && (
-                      <div>
-                        <label className="text-sm font-medium">Actual Waste</label>
-                        <p className="mt-1 text-sm">{selectedPlan.actual_waste_percentage}%</p>
-                      </div>
-                    )}
-                    <div>
-                      <label className="text-sm font-medium">Created By</label>
-                      <p className="mt-1 text-sm">
-                        {selectedPlan.created_by?.name || 'Unknown'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Cut Roll Summary */}
-                  {loadingSummary ? (
-                    <div className="text-center">
-                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
-                      <p className="text-sm text-muted-foreground mt-2">Loading cut roll details...</p>
-                    </div>
-                  ) : cutRollSummary ? (
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-medium">Production Summary</h4>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Total Cut Rolls:</span>
-                          <span className="font-medium ml-2">{cutRollSummary.total_cut_rolls}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">118&quot; Rolls:</span>
-                          <span className="font-medium ml-2">{cutRollSummary.individual_118_rolls}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Jumbo Sets:</span>
-                          <span className="font-medium ml-2">{cutRollSummary.jumbo_roll_sets_needed}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Total Weight:</span>
-                          <span className="font-medium ml-2">{cutRollSummary.total_weight_kg} kg</span>
-                        </div>
-                      </div>
-
-                      {/* Status Breakdown */}
-                      <div>
-                        <h5 className="text-sm font-medium mb-2">Cut Roll Status</h5>
-                        <div className="space-y-1">
-                          {Object.entries(cutRollSummary.status_breakdown).map(([status, count]) => (
-                            <div key={status} className="flex justify-between text-sm">
-                              <Badge variant={getStatusBadgeVariant(status)} className="text-xs">
-                                {status.replace('_', ' ')}
-                              </Badge>
-                              <span className="font-medium">{count}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* QR Codes Section */}
-                      {cutRollSummary.cut_rolls && cutRollSummary.cut_rolls.length > 0 && (
-                        <div>
-                          <div className="flex justify-between items-center mb-2">
-                            <h5 className="text-sm font-medium">QR Codes</h5>
+                        <TableCell>
+                          <div className="flex gap-2">
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => setShowQRCodes(!showQRCodes)}
+                              onClick={() => handleViewPlan(plan)}
                             >
-                              <QrCode className="h-3 w-3 mr-1" />
-                              {showQRCodes ? 'Hide' : 'Show'} QR Codes
+                              <Eye className="h-3 w-3 mr-1" />
+                              View Details
                             </Button>
+                            {plan.status === 'planned' && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => updatePlanStatus(plan.id, 'in_progress')}
+                              >
+                                <Play className="h-3 w-3 mr-1" />
+                                Start
+                              </Button>
+                            )}
+                            {plan.status === 'in_progress' && (
+                              <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() => updatePlanStatus(plan.id, 'completed')}
+                              >
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                Complete
+                              </Button>
+                            )}
                           </div>
-                          
-                          {showQRCodes && (
-                            <div className="space-y-2 max-h-60 overflow-y-auto">
-                              {cutRollSummary.cut_rolls.map((roll) => (
-                                <div key={roll.id} className="flex justify-between items-center p-2 border rounded">
-                                  <div className="text-xs">
-                                    <div className="font-medium">{roll.width_inches}&quot; - {roll.gsm}gsm</div>
-                                    <div className="text-muted-foreground">{roll.qr_code}</div>
-                                  </div>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => handleShowQRCode(roll.qr_code)}
-                                  >
-                                    <QrCode className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
                   ) : (
-                    <p className="text-sm text-muted-foreground">
-                      No cut roll data available for this plan.
-                    </p>
+                    <TableRow>
+                      <TableCell colSpan={6} className="h-24 text-center">
+                        {plans.length === 0 
+                          ? "No plans found. Create your first plan to get started."
+                          : "No plans match the current filters."
+                        }
+                      </TableCell>
+                    </TableRow>
                   )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* QR Code Display Modal */}
-        {selectedQRCode && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-background p-4 rounded-lg max-w-sm w-full mx-4">
-              <QRCodeDisplay
-                value={selectedQRCode}
-                title="Cut Roll QR Code"
-                description={`Scan this code to access cut roll details`}
-                size={200}
-                showActions={true}
-              />
-              <Button
-                className="w-full mt-4"
-                variant="outline"
-                onClick={() => setSelectedQRCode(null)}
-              >
-                Close
-              </Button>
+                </TableBody>
+              </Table>
             </div>
-          </div>
-        )}
+          </CardContent>
+        </Card>
       </div>
     </DashboardLayout>
   );

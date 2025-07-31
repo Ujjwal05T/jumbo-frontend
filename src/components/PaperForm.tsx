@@ -75,8 +75,8 @@ export function PaperForm({
     defaultValues: {
       name: editingPaper?.name || "",
       type: editingPaper?.type || "standard",
-      gsm: editingPaper?.gsm || 1,
-      bf: editingPaper?.bf || 1,
+      gsm: editingPaper?.gsm || undefined,
+      bf: editingPaper?.bf || undefined,
       shade: editingPaper?.shade || "",
     },
   });
@@ -204,7 +204,6 @@ export function PaperForm({
                     <FormControl>
                       <Input
                         type="number"
-                        step="0.1"
                         placeholder="e.g., 18.5"
                         {...field}
                         value={field.value}

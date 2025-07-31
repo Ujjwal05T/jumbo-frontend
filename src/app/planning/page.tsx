@@ -530,7 +530,37 @@ export default function PlanningPage() {
       pdf.setFontSize(10);
       pdf.setTextColor(100, 100, 100);
       pdf.text(`Generated on: ${new Date().toLocaleString()}`, 20, yPosition);
-      yPosition += 20;
+      yPosition += 15;
+
+      // Legend
+      pdf.setFontSize(12);
+      pdf.setTextColor(40, 40, 40);
+      pdf.text("Color Legend:", 20, yPosition);
+      yPosition += 8;
+
+      const legendItems = [
+        { color: [34, 197, 94], text: "✓ Selected for Production" },
+        { color: [59, 130, 246], text: "Available but Not Selected" },
+        { color: [239, 68, 68], text: "Waste Material" }
+      ];
+
+      legendItems.forEach((item, index) => {
+        const legendX = 20 + (index * 65);
+        
+        // Draw color box
+        pdf.setFillColor(...item.color);
+        pdf.rect(legendX, yPosition - 3, 8, 6, 'F');
+        pdf.setDrawColor(0, 0, 0);
+        pdf.setLineWidth(0.2);
+        pdf.rect(legendX, yPosition - 3, 8, 6, 'S');
+        
+        // Add text
+        pdf.setFontSize(8);
+        pdf.setTextColor(60, 60, 60);
+        pdf.text(item.text, legendX + 10, yPosition);
+      });
+
+      yPosition += 15;
 
       // Jumbo Roll Sets Section
       if (planResult.jumbo_rolls_needed > 0) {
@@ -609,43 +639,128 @@ export default function PlanningPage() {
           pdf.text(rollTitle, 25, yPosition);
           yPosition += 8;
 
-          // Roll statistics
-          const totalUsed = rollsInNumber.reduce(
-            (sum, roll) => sum + roll.width,
-            0
-          );
+          // Visual cutting pattern representation in PDF
+          checkPageBreak(25);
+          pdf.setFontSize(9);
+          pdf.setTextColor(60, 60, 60);
+          pdf.text("Cutting Pattern:", 30, yPosition);
+          yPosition += 8;
+
+          // Draw visual cutting representation
+          const rectStartX = 30;
+          const rectWidth = pageWidth - 60; // Leave margins
+          const rectHeight = 12;
+          let currentX = rectStartX;
+
+          rollsInNumber.forEach((roll, cutIndex) => {
+            const widthRatio = roll.width / 118;
+            const sectionWidth = rectWidth * widthRatio;
+            const isSelected = selectedCutRolls.includes(roll.originalIndex);
+
+            // Set color based on selection
+            if (isSelected) {
+              pdf.setFillColor(34, 197, 94); // Green for selected
+            } else {
+              pdf.setFillColor(59, 130, 246); // Blue for not selected
+            }
+
+            // Draw rectangle for this cut
+            pdf.rect(currentX, yPosition, sectionWidth, rectHeight, 'F');
+            
+            // Add border
+            pdf.setDrawColor(255, 255, 255);
+            pdf.setLineWidth(0.5);
+            pdf.rect(currentX, yPosition, sectionWidth, rectHeight, 'S');
+
+            // Add width text inside the rectangle
+            pdf.setTextColor(255, 255, 255);
+            pdf.setFontSize(7);
+            const textX = currentX + sectionWidth/2;
+            const textY = yPosition + rectHeight/2 + 1;
+            pdf.text(`${roll.width}"`, textX, textY, { align: 'center' });
+
+            currentX += sectionWidth;
+          });
+
+          // Calculate roll statistics for visualization
+          const totalUsed = rollsInNumber.reduce((sum, roll) => sum + roll.width, 0);
           const waste = 118 - totalUsed;
           const efficiency = ((totalUsed / 118) * 100).toFixed(1);
 
-          pdf.setFontSize(10);
-          pdf.setTextColor(80, 80, 80);
-          pdf.text(
-            `Used: ${totalUsed}" | Waste: ${waste.toFixed(
-              1
-            )}" | Efficiency: ${efficiency}% | Cuts: ${rollsInNumber.length}`,
-            30,
-            yPosition
-          );
+          // Draw waste section if any
+          if (waste > 0) {
+            const wasteRatio = waste / 118;
+            const wasteWidth = rectWidth * wasteRatio;
+            
+            pdf.setFillColor(239, 68, 68); // Red for waste
+            pdf.rect(currentX, yPosition, wasteWidth, rectHeight, 'F');
+            pdf.setDrawColor(255, 255, 255);
+            pdf.rect(currentX, yPosition, wasteWidth, rectHeight, 'S');
+            
+            pdf.setTextColor(255, 255, 255);
+            pdf.setFontSize(6);
+            pdf.text(`Waste: ${waste.toFixed(1)}"`, currentX + wasteWidth/2, yPosition + rectHeight/2 + 1, { align: 'center' });
+          }
+
+          yPosition += rectHeight + 3;
+
+          // Add 118" total indicator
+          pdf.setTextColor(100, 100, 100);
+          pdf.setFontSize(7);
+          pdf.text("118\" Total Width", rectStartX + rectWidth/2, yPosition, { align: 'center' });
           yPosition += 8;
 
-          // Individual cut details - show each cut with its width
-          pdf.setFontSize(9);
-          pdf.setTextColor(100, 100, 100);
-          pdf.text("Individual Cuts:", 30, yPosition);
-          yPosition += 6;
+          // Enhanced statistics boxes
+          checkPageBreak(20);
+          const statsY = yPosition;
+          const statsBoxWidth = (rectWidth - 15) / 4; // 4 stats boxes with gaps
+          const statsBoxHeight = 15;
 
-          rollsInNumber.forEach((roll, cutIndex) => {
-            checkPageBreak(6);
-            const isSelected = selectedCutRolls.includes(roll.originalIndex);
-            pdf.setTextColor(...(isSelected ? [34, 197, 94] : [100, 100, 100])); // Green if selected, gray if not
-            const statusText = isSelected ? "✓ Selected" : "  Not Selected";
-            pdf.text(
-              `  • ${roll.width}" width - ${statusText} - Source: ${roll.source || 'cutting'}`,
-              35,
-              yPosition
-            );
-            yPosition += 5;
-          });
+          // Used Width box
+          pdf.setDrawColor(60, 60, 60);
+          pdf.setLineWidth(0.5);
+          pdf.rect(rectStartX, statsY, statsBoxWidth, statsBoxHeight, 'S');
+          pdf.setTextColor(40, 40, 40);
+          pdf.setFontSize(10);
+          pdf.text(`${totalUsed}"`, rectStartX + statsBoxWidth/2, statsY + 6, { align: 'center' });
+          pdf.setFontSize(7);
+          pdf.text("Used Width", rectStartX + statsBoxWidth/2, statsY + 12, { align: 'center' });
+
+          // Waste box
+          const wasteX = rectStartX + statsBoxWidth + 5;
+          pdf.setDrawColor(60, 60, 60);
+          pdf.setLineWidth(0.5);
+          pdf.rect(wasteX, statsY, statsBoxWidth, statsBoxHeight, 'S');
+          pdf.setTextColor(40, 40, 40);
+          pdf.setFontSize(10);
+          pdf.text(`${waste.toFixed(1)}"`, wasteX + statsBoxWidth/2, statsY + 6, { align: 'center' });
+          pdf.setFontSize(7);
+          pdf.text("Waste", wasteX + statsBoxWidth/2, statsY + 12, { align: 'center' });
+
+          // Efficiency box
+          const efficiencyX = wasteX + statsBoxWidth + 5;
+          pdf.setDrawColor(60, 60, 60);
+          pdf.setLineWidth(0.5);
+          pdf.rect(efficiencyX, statsY, statsBoxWidth, statsBoxHeight, 'S');
+          pdf.setTextColor(40, 40, 40);
+          pdf.setFontSize(10);
+          pdf.text(`${efficiency}%`, efficiencyX + statsBoxWidth/2, statsY + 6, { align: 'center' });
+          pdf.setFontSize(7);
+          pdf.text("Efficiency", efficiencyX + statsBoxWidth/2, statsY + 12, { align: 'center' });
+
+          // Cuts box
+          const cutsX = efficiencyX + statsBoxWidth + 5;
+          pdf.setDrawColor(60, 60, 60);
+          pdf.setLineWidth(0.5);
+          pdf.rect(cutsX, statsY, statsBoxWidth, statsBoxHeight, 'S');
+          pdf.setTextColor(40, 40, 40);
+          pdf.setFontSize(10);
+          pdf.text(`${rollsInNumber.length}`, cutsX + statsBoxWidth/2, statsY + 6, { align: 'center' });
+          pdf.setFontSize(7);
+          pdf.text("Total Cuts", cutsX + statsBoxWidth/2, statsY + 12, { align: 'center' });
+
+          yPosition += statsBoxHeight + 10;
+
 
           yPosition += 5;
         });
@@ -744,14 +859,13 @@ export default function PlanningPage() {
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       let yPosition = 20;
-      const qrSize = 60; // Size of QR code in PDF
-      const itemsPerRow = 2; // Number of QR codes per row
-      const itemsPerPage = 6; // Number of QR codes per page (3 rows × 2 columns)
-      let currentItem = 0;
+      const qrSize = 50; // Size of QR code in PDF
+      const qrGroupHeight = 80; // Total height for QR code + its data + spacing to next group
+      const maxItemsPerPage = Math.floor((pageHeight - 60) / qrGroupHeight); // Items per page based on height
 
       // Helper function to check if we need a new page
       const checkPageBreak = () => {
-        if (currentItem > 0 && currentItem % itemsPerPage === 0) {
+        if (yPosition + qrGroupHeight > pageHeight - 20) {
           pdf.addPage();
           yPosition = 20;
         }
@@ -774,11 +888,9 @@ export default function PlanningPage() {
         
         checkPageBreak();
         
-        // Calculate position
-        const col = currentItem % itemsPerRow;
-        const row = Math.floor((currentItem % itemsPerPage) / itemsPerRow);
-        const xPosition = 20 + col * (pageWidth / 2);
-        const itemYPosition = yPosition + row * 90;
+        // Single column layout - QR code at top, data below
+        const qrX = (pageWidth - qrSize) / 2; // Center QR code horizontally
+        const currentY = yPosition;
 
         try {
           // Generate QR code as data URL
@@ -791,31 +903,33 @@ export default function PlanningPage() {
             }
           });
 
-          // Add QR code image
-          pdf.addImage(qrDataUrl, 'PNG', xPosition, itemYPosition, qrSize, qrSize);
+          // Add QR code image (centered at top)
+          pdf.addImage(qrDataUrl, 'PNG', qrX, currentY, qrSize, qrSize);
 
-          // Add QR code text below
-          pdf.setFontSize(8);
+          // Add data below QR code with tight grouping
+          const dataY = currentY + qrSize + 3; // Start data 3pt below QR code (tighter)
+          
+          // Row 1: QR Code ID only
+          pdf.setFontSize(10);
+          pdf.setTextColor(0, 0, 0);
+          pdf.text(record.qr_code, pageWidth / 2, dataY, { align: 'center' });
+          
+          // Row 2: Rest of the fields (Width, Paper, Shade) in one row
+          pdf.setFontSize(9);
           pdf.setTextColor(40, 40, 40);
-          pdf.text(record.qr_code, xPosition + qrSize/2, itemYPosition + qrSize + 8, { align: 'center' });
-
-          // Add roll details
-          pdf.setFontSize(7);
-          pdf.setTextColor(80, 80, 80);
-          pdf.text(`${record.width_inches}" width`, xPosition + qrSize/2, itemYPosition + qrSize + 15, { align: 'center' });
-          pdf.text(`${record.gsm}gsm, ${record.bf}bf`, xPosition + qrSize/2, itemYPosition + qrSize + 20, { align: 'center' });
-          pdf.text(`${record.shade}`, xPosition + qrSize/2, itemYPosition + qrSize + 25, { align: 'center' });
+          const detailsText = `${record.width_inches}" | ${record.gsm}gsm, ${record.bf}bf | ${record.shade}`;
+          pdf.text(detailsText, pageWidth / 2, dataY + 8, { align: 'center' }); // Tighter spacing between text rows
 
         } catch (qrError) {
           console.error(`Error generating QR code for ${record.qr_code}:`, qrError);
-          // Fallback: just show text
+          // Fallback: just show text data
           pdf.setFontSize(10);
           pdf.setTextColor(40, 40, 40);
-          pdf.text(`QR: ${record.qr_code}`, xPosition, itemYPosition);
-          pdf.text(`${record.width_inches}" - ${record.gsm}gsm`, xPosition, itemYPosition + 10);
+          pdf.text(`QR: ${record.qr_code}`, pageWidth / 2, currentY, { align: 'center' });
+          pdf.text(`${record.width_inches}" - ${record.gsm}gsm - ${record.shade}`, pageWidth / 2, currentY + 12, { align: 'center' });
         }
 
-        currentItem++;
+        yPosition += qrGroupHeight; // Move to next QR group with proper spacing
       }
 
       // Save the PDF
