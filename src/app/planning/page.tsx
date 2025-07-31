@@ -1636,44 +1636,7 @@ export default function PlanningPage() {
                 </Card>
               )}
 
-              {/* Inventory Items to Add - NEW FLOW */}
-              {planResult.inventory_remaining.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Inventory Items to Add</CardTitle>
-                    <CardDescription>
-                      20-25&quot; waste rolls that will be added to inventory
-                      for future use
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Width (in)</TableHead>
-                          <TableHead>Paper Spec</TableHead>
-                          <TableHead>Source</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {planResult.inventory_remaining.map(
-                          (item, index) => (
-                            <TableRow key={index}>
-                              <TableCell>{item.width}&quot;</TableCell>
-                              <TableCell>
-                                {formatPaperSpec(item.gsm, item.bf, item.shade)}
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="outline">{item.source}</Badge>
-                              </TableCell>
-                            </TableRow>
-                          )
-                        )}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-              )}
+              {/* Note: Inventory Items section removed - no more waste inventory creation */}
             </div>
           )}
         </TabsContent>

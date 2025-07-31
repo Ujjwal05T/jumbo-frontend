@@ -55,16 +55,7 @@ export interface CutRoll {
   paper_id?: string;
 }
 
-export interface InventoryRemaining {
-  width: number;
-  quantity: number;
-  gsm: number;
-  bf: number;
-  shade: string;
-  source: string;
-  from_individual_roll?: number;
-  inventory_id?: string;
-}
+// InventoryRemaining interface removed - no more waste inventory creation
 
 export interface OptimizationSummary {
   total_cut_rolls: number;
@@ -72,18 +63,16 @@ export interface OptimizationSummary {
   total_jumbo_rolls_needed: number; // CORRECTED: 1 jumbo = 3×118" rolls
   total_pending_orders: number;
   total_pending_quantity: number;
-  total_inventory_created: number;
   specification_groups_processed: number;
   high_trim_patterns: number;
   algorithm_note: string;
 }
 
-// NEW FLOW: Main optimization result
+// NEW FLOW: Main optimization result (updated - removed inventory_remaining)
 export interface OptimizationResult {
   cut_rolls_generated: CutRoll[];
   jumbo_rolls_needed: number; // CORRECTED calculation
   pending_orders: PendingOrder[];
-  inventory_remaining: InventoryRemaining[];
   summary: OptimizationSummary;
   high_trim_approved?: Array<{
     combo: number[];
