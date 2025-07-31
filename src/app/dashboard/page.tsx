@@ -7,7 +7,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { isAuthenticated } from "@/lib/auth";
 import DashboardLayout from "@/components/DashboardLayout";
-import { StatusMonitor } from "@/components/StatusMonitor";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -250,12 +249,6 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Enhanced System Status Monitor */}
-        <StatusMonitor 
-          refreshInterval={30000}
-          showValidation={true}
-          showAutoUpdate={true}
-        />
       </div>
     </DashboardLayout>
   );

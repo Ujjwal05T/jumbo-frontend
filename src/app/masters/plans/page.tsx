@@ -26,6 +26,7 @@ interface Plan {
   created_at: string;
   executed_at?: string;
   completed_at?: string;
+  created_by_id: string;
   created_by?: {
     name: string;
     username: string;
@@ -37,10 +38,17 @@ interface Client {
   company_name: string;
 }
 
+interface User {
+  id: string;
+  name: string;
+  username: string;
+}
+
 export default function PlansPage() {
   const router = useRouter();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -52,6 +60,7 @@ export default function PlansPage() {
 
   useEffect(() => {
     loadClients();
+    loadUsers();
   }, []);
 
   useEffect(() => {
@@ -119,6 +128,22 @@ export default function PlansPage() {
     }
   };
 
+  const loadUsers = async () => {
+    try {
+      const response = await fetch(MASTER_ENDPOINTS.USERS, createRequestOptions('GET'));
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data);
+      }
+    } catch (err) {
+      console.error('Error loading users:', err);
+    }
+  };
+
+  const getUserById = (userId: string): User | null => {
+    return users.find(user => user.id === userId) || null;
+  };
+
   const updatePlanStatus = async (planId: string, status: string) => {
     try {
       const response = await fetch(PRODUCTION_ENDPOINTS.PLAN_STATUS(planId), createRequestOptions('PUT', { status }));
@@ -164,9 +189,10 @@ export default function PlansPage() {
 
   // Filter functions
   const filteredPlans = plans.filter(plan => {
+    const user = getUserById(plan.created_by_id);
     const matchesSearch = !searchTerm || 
       plan.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      plan.created_by?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+      user?.name?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = statusFilter === "all" || plan.status === statusFilter;
     
@@ -350,8 +376,15 @@ export default function PlansPage() {
                         </TableCell>
                         <TableCell>
                           <div>
-                            <div className="font-medium">{plan.created_by?.name || 'testuser'}</div>
-                            <div className="text-xs text-muted-foreground">@{plan.created_by?.username || 'test'}</div>
+                            {(() => {
+                              const user = getUserById(plan.created_by_id);
+                              return (
+                                <>
+                                  <div className="font-medium">{user?.name || 'Unknown User'}</div>
+                                  <div className="text-xs text-muted-foreground">@{user?.username || 'unknown'}</div>
+                                </>
+                              );
+                            })()}
                           </div>
                         </TableCell>
                         <TableCell>

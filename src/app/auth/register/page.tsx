@@ -30,6 +30,11 @@ export default function RegisterPage() {
       setError('Please fill in all fields');
       return;
     }
+
+    if (username.trim().length < 3) {
+      setError('Username must be at least 3 characters long');
+      return;
+    }
     
     if (password !== confirmPassword) {
       setError('Passwords do not match');
@@ -46,8 +51,13 @@ export default function RegisterPage() {
 
     try {
       const response = await fetch(AUTH_ENDPOINTS.REGISTER, createRequestOptions('POST', {
-        username,
+        name: username.trim(), // Use trimmed username as name
+        username: username.trim(),
         password,
+        role: "sales", // Default role - matches backend UserRole enum
+        contact: null, // Optional - use null instead of empty string  
+        department: null // Optional - use null instead of empty string
+        // status defaults to "active" in backend schema
       }));
 
       const data = await response.json();
@@ -56,8 +66,11 @@ export default function RegisterPage() {
         throw new Error(data.detail || 'Registration failed');
       }
 
-      // Store username in localStorage and redirect to dashboard
+      // Backend returns UserMaster object directly
       localStorage.setItem('username', data.username);
+      localStorage.setItem('user_id', data.id);
+      localStorage.setItem('user_name', data.name);
+      localStorage.setItem('user_role', data.role);
       router.push('/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');

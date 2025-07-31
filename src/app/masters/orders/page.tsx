@@ -36,10 +36,15 @@ import {
   Clock,
   XCircle,
   AlertCircle,
-  Loader2
+  Loader2,
+  Edit,
+  Trash2,
+  Eye
 } from "lucide-react";
-import { fetchOrders, updateOrderStatus, Order } from "@/lib/orders";
+import { fetchOrders, updateOrderStatus, deleteOrder, Order } from "@/lib/orders";
 import { getStatusBadgeVariant, getStatusDisplayText } from "@/lib/production";
+import { MASTER_ENDPOINTS } from "@/lib/api-config";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useRouter } from "next/navigation";
 
 export default function OrderMasterPage() {
@@ -47,6 +52,11 @@ export default function OrderMasterPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    orderId: string;
+    orderInfo: string;
+  }>({ open: false, orderId: "", orderInfo: "" });
   const router = useRouter();
 
   const loadOrders = async () => {
@@ -107,6 +117,30 @@ export default function OrderMasterPage() {
       await loadOrders();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to update order status');
+    }
+  };
+
+  const handleEditOrder = (order: Order) => {
+    // Navigate to edit page (you can create an edit page similar to the new order page)
+    router.push(`/masters/orders/${order.id}/edit`);
+  };
+
+  const handleDeleteOrder = (order: Order) => {
+    setDeleteDialog({
+      open: true,
+      orderId: order.id,
+      orderInfo: `${order.client?.company_name || 'Unknown Client'} order`
+    });
+  };
+
+  const confirmDeleteOrder = async () => {
+    try {
+      await deleteOrder(deleteDialog.orderId);
+      toast.success('Order deleted successfully!');
+      await loadOrders();
+      setDeleteDialog({ open: false, orderId: '', orderInfo: '' });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete order');
     }
   };
 
@@ -358,8 +392,26 @@ export default function OrderMasterPage() {
                                 <DropdownMenuItem 
                                   onClick={() => router.push(`/masters/orders/${order.id}`)}
                                 >
+                                  <Eye className="mr-2 h-4 w-4" />
                                   View Details
                                 </DropdownMenuItem>
+                                {order.status === 'created' && (
+                                  <>
+                                    <DropdownMenuItem 
+                                      onClick={() => handleEditOrder(order)}
+                                    >
+                                      <Edit className="mr-2 h-4 w-4" />
+                                      Edit Order
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem 
+                                      className="text-red-600"
+                                      onClick={() => handleDeleteOrder(order)}
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Delete Order
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
                                 <DropdownMenuSeparator />
                                 <DropdownMenuLabel>Update Status</DropdownMenuLabel>
                                 {order.status !== 'created' && (
@@ -409,6 +461,18 @@ export default function OrderMasterPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => setDeleteDialog(prev => ({ ...prev, open }))}
+        title="Delete Order"
+        description={`Are you sure you want to delete this ${deleteDialog.orderInfo}? This action cannot be undone and will remove all associated order items.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="destructive"
+        onConfirm={confirmDeleteOrder}
+      />
     </DashboardLayout>
   );
 }

@@ -92,6 +92,15 @@ export const fetchOrders = async (): Promise<Order[]> => {
   return response.json();
 };
 
+export const fetchOrder = async (id: string): Promise<Order> => {
+  const response = await fetch(`${MASTER_ENDPOINTS.ORDERS}/${id}`, createRequestOptions('GET'));
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || errorData.message || 'Failed to fetch order');
+  }
+  return response.json();
+};
+
 export const createOrder = async (orderData: Omit<CreateOrderData, 'created_by_id'>): Promise<Order> => {
   const userId = localStorage.getItem('user_id');
   if (!userId) {
@@ -116,12 +125,37 @@ export const createOrder = async (orderData: Omit<CreateOrderData, 'created_by_i
   return response.json();
 };
 
+export const updateOrder = async (id: string, orderData: {
+  priority?: 'low' | 'normal' | 'high' | 'urgent';
+  payment_type?: 'bill' | 'cash';
+  delivery_date?: string | null;
+  order_items: CreateOrderItemData[];
+}): Promise<Order> => {
+  const response = await fetch(`${MASTER_ENDPOINTS.ORDERS}/${id}/with-items`, createRequestOptions('PUT', orderData));
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || errorData.message || 'Failed to update order');
+  }
+
+  return response.json();
+};
+
 export const updateOrderStatus = async (id: string, status: Order['status']): Promise<void> => {
   const response = await fetch(`${MASTER_ENDPOINTS.ORDERS}/${id}/status`, createRequestOptions('PATCH', { status }));
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.message || 'Failed to update order status');
+  }
+};
+
+export const deleteOrder = async (id: string): Promise<void> => {
+  const response = await fetch(`${MASTER_ENDPOINTS.ORDERS}/${id}`, createRequestOptions('DELETE'));
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || errorData.message || 'Failed to delete order');
   }
 };
 

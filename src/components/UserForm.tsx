@@ -61,13 +61,13 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true, editingUs
       }
 
       if (isEditing && editingUser) {
-        // For editing, only include password if it's provided
+        // For editing, exclude password field entirely for security
         const updateData: UpdateUserData = {
           name: formData.name,
           role: formData.role,
           contact: formData.contact || undefined,
-          department: formData.department || undefined,
-          ...(formData.password && { password: formData.password })
+          department: formData.department || undefined
+          // Password updates are disabled for security
         };
         await updateUser(editingUser.id, updateData);
       } else {
@@ -153,16 +153,23 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true, editingUs
             {/* Password */}
             <div className="space-y-2">
               <Label htmlFor="password">
-                Password {isEditing ? '(leave blank to keep current)' : <span className="text-red-500">*</span>}
+                Password {isEditing ? '(disabled for security)' : <span className="text-red-500">*</span>}
               </Label>
               <Input
                 id="password"
                 type="password"
-                value={formData.password}
-                onChange={(e) => handleInputChange("password", e.target.value)}
-                placeholder={isEditing ? "Enter new password (optional)" : "Enter password"}
+                value={isEditing ? "••••••••" : formData.password}
+                onChange={isEditing ? undefined : (e) => handleInputChange("password", e.target.value)}
+                placeholder={isEditing ? "Password change disabled" : "Enter password"}
+                disabled={isEditing}
                 required={!isEditing}
+                className={isEditing ? "bg-gray-100 cursor-not-allowed" : ""}
               />
+              {isEditing && (
+                <p className="text-xs text-muted-foreground">
+                  Password changes are disabled for security. Contact administrator to reset password.
+                </p>
+              )}
             </div>
 
             {/* Role */}
@@ -180,9 +187,9 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true, editingUs
                       <Badge className="bg-purple-100 text-purple-800">Admin</Badge>
                     </div>
                   </SelectItem>
-                  <SelectItem value="manager">
+                  <SelectItem value="supervisor">
                     <div className="flex items-center gap-2">
-                      <Badge className="bg-blue-100 text-blue-800">Manager</Badge>
+                      <Badge className="bg-blue-100 text-blue-800">Supervisor</Badge>
                     </div>
                   </SelectItem>
                   <SelectItem value="planner">
@@ -190,14 +197,9 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true, editingUs
                       <Badge className="bg-green-100 text-green-800">Planner</Badge>
                     </div>
                   </SelectItem>
-                  <SelectItem value="operator">
+                  <SelectItem value="sales">
                     <div className="flex items-center gap-2">
-                      <Badge className="bg-orange-100 text-orange-800">Operator</Badge>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="viewer">
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-gray-100 text-gray-800">Viewer</Badge>
+                      <Badge className="bg-orange-100 text-orange-800">Sales</Badge>
                     </div>
                   </SelectItem>
                 </SelectContent>

@@ -173,22 +173,19 @@ export default function NewOrderPage() {
       const cleanOrderItems = orderItems.map((item) => {
         const cleanItem: CreateOrderItemData = {
           paper_id: item.paper_id,
-          width_inches: parseFloat(item.width_inches as string),
-          rate: parseFloat(item.rate as string),
+          width_inches: parseInt(String(item.width_inches)), // Backend expects int
+          rate: parseFloat(String(item.rate)),
         };
 
         // Only include quantity fields if they have values
         if (item.quantity_rolls && item.quantity_rolls !== "") {
-          cleanItem.quantity_rolls = parseInt(
-            item.quantity_rolls as string,
-            10
-          );
+          cleanItem.quantity_rolls = parseInt(String(item.quantity_rolls));
         }
         if (item.quantity_kg && item.quantity_kg !== "") {
-          cleanItem.quantity_kg = parseFloat(item.quantity_kg as string);
+          cleanItem.quantity_kg = parseFloat(String(item.quantity_kg));
         }
         if (item.amount && item.amount !== "") {
-          cleanItem.amount = parseFloat(item.amount as string);
+          cleanItem.amount = parseFloat(String(item.amount));
         }
 
         return cleanItem;
@@ -480,28 +477,18 @@ export default function NewOrderPage() {
 
               <div className="space-y-4">
                 {orderItems.map((item, index) => (
-                  <div key={index} className="border rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-medium text-sm text-gray-700">
-                        Item #{index + 1}
-                      </h4>
-                      {orderItems.length > 1 && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => removeOrderItem(index)}
-                          disabled={loading}
-                          className="text-red-600 hover:text-red-700">
-                          <X className="h-4 w-4 mr-1" />
-                          Remove
-                        </Button>
-                      )}
-                    </div>
+                  <div key={index} className="border rounded-lg p-3">
+                    <div className="flex items-end gap-3">
+                      {/* Item Number */}
+                      <div className="flex-shrink-0 w-12">
+                        <Label className="text-sm font-medium">Item</Label>
+                        <div className="flex items-center justify-center mt-2">
+                          <span className="text-sm font-medium bg-gray-100 px-2 py-1 rounded">#{index + 1}</span>
+                        </div>
+                      </div>
 
-                    {/* All fields in one row */}
-                    <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-                      <div className="space-y-2">
+                      {/* Paper - Wider field */}
+                      <div className="flex-1 min-w-0 max-w-96">
                         <Label htmlFor={`paper_${index}`}>Paper Type *</Label>
                         <Select
                           value={item.paper_id}
@@ -509,22 +496,22 @@ export default function NewOrderPage() {
                             updateOrderItem(index, "paper_id", value)
                           }
                           disabled={loading}>
-                          <SelectTrigger>
+                          <SelectTrigger className="mt-2">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
                             {papers.map((paper) => (
                               <SelectItem key={paper.id} value={paper.id}>
-                                {paper.name} ({paper.gsm}gsm, {paper.bf}bf,{" "}
-                                {paper.shade})
+                                {paper.name} ({paper.gsm}gsm, {paper.bf}bf, {paper.shade})
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor={`width_${index}`}>Width (in) *</Label>
+                      {/* Width */}
+                      <div className="flex-shrink-0 ">
+                        <Label htmlFor={`width_${index}`}>Width *</Label>
                         <Input
                           id={`width_${index}`}
                           type="text"
@@ -534,11 +521,16 @@ export default function NewOrderPage() {
                           onChange={(e) =>
                             handleNumberInput(e, index, "width_inches")
                           }
+                          placeholder="Inches"
                           disabled={loading}
+                          className="mt-2"
                         />
                       </div>
 
-                      <div className="space-y-2">
+                      
+
+                      {/* Quantity Rolls */}
+                      <div className="flex-shrink-0 ">
                         <Label htmlFor={`quantity_rolls_${index}`}>Rolls</Label>
                         <Input
                           id={`quantity_rolls_${index}`}
@@ -549,14 +541,15 @@ export default function NewOrderPage() {
                           onChange={(e) =>
                             handleIntegerInput(e, index, "quantity_rolls")
                           }
+                          placeholder="Number"
                           disabled={loading}
+                          className="mt-2"
                         />
                       </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor={`quantity_kg_${index}`}>
-                          Weight (kg)
-                        </Label>
+                      {/* Quantity Kg */}
+                      <div className="flex-shrink-0 ">
+                        <Label htmlFor={`quantity_kg_${index}`}>Weight (Kg)</Label>
                         <Input
                           id={`quantity_kg_${index}`}
                           type="text"
@@ -566,11 +559,14 @@ export default function NewOrderPage() {
                           onChange={(e) =>
                             handleNumberInput(e, index, "quantity_kg")
                           }
+                          placeholder="Weight"
                           disabled={loading}
+                          className="mt-2"
                         />
                       </div>
 
-                      <div className="space-y-2">
+                      {/* Rate */}
+                      <div className="flex-shrink-0">
                         <Label htmlFor={`rate_${index}`}>Rate *</Label>
                         <Input
                           id={`rate_${index}`}
@@ -579,19 +575,43 @@ export default function NewOrderPage() {
                           pattern="[0-9]*\.?[0-9]*"
                           value={item.rate}
                           onChange={(e) => handleNumberInput(e, index, "rate")}
+                          placeholder="Per kg"
                           disabled={loading}
+                          className="mt-2"
                         />
                       </div>
 
-                      <div className="space-y-2">
+                      {/* Amount */}
+                      <div className="flex-shrink-0">
                         <Label htmlFor={`amount_${index}`}>Amount</Label>
                         <Input
                           id={`amount_${index}`}
                           type="text"
                           value={item.amount}
                           disabled
-                          className="bg-gray-50"
+                          className="bg-gray-50 mt-2"
                         />
+                      </div>
+
+                      {/* Remove Button at the very end */}
+                      <div className="flex-shrink-0">
+                        <Label className="text-sm font-medium opacity-0">Remove</Label>
+                        <div className="mt-2">
+                          {orderItems.length > 1 ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeOrderItem(index)}
+                              disabled={loading}
+                              className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <div className="h-8 w-8"></div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>

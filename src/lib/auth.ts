@@ -27,7 +27,7 @@ export function isAuthenticated(): boolean {
 /**
  * Login user
  */
-export async function login(username: string, password: string): Promise<{ username: string }> {
+export async function login(username: string, password: string): Promise<any> {
   const response = await fetch(AUTH_ENDPOINTS.LOGIN, createRequestOptions('POST', { username, password }));
 
   if (!response.ok) {
@@ -36,15 +36,19 @@ export async function login(username: string, password: string): Promise<{ usern
   }
 
   const data = await response.json();
-  localStorage.setItem(USER_KEY, data.username);
+  // Store all user data from UserMaster response
+  localStorage.setItem('username', data.username);
+  localStorage.setItem('user_id', data.id);
+  localStorage.setItem('user_name', data.name);
+  localStorage.setItem('user_role', data.role);
   return data;
 }
 
 /**
  * Register new user
  */
-export async function register(username: string, password: string): Promise<{ username: string }> {
-  const response = await fetch(AUTH_ENDPOINTS.REGISTER, createRequestOptions('POST', { username, password }));
+export async function register(userData: any): Promise<any> {
+  const response = await fetch(AUTH_ENDPOINTS.REGISTER, createRequestOptions('POST', userData));
 
   if (!response.ok) {
     const error = await response.json();
@@ -52,14 +56,22 @@ export async function register(username: string, password: string): Promise<{ us
   }
 
   const data = await response.json();
+  // Store all user data from UserMaster response
+  localStorage.setItem('username', data.username);
+  localStorage.setItem('user_id', data.id);
+  localStorage.setItem('user_name', data.name);
+  localStorage.setItem('user_role', data.role);
   return data;
 }
 
 /**
- * Logout user
+ * Logout user - Clear all stored authentication data
  */
 export function logout(): void {
   localStorage.removeItem(USER_KEY);
+  localStorage.removeItem('user_id');
+  localStorage.removeItem('user_name');
+  localStorage.removeItem('user_role');
 }
 
 /**

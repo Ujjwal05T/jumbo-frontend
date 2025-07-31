@@ -75,11 +75,13 @@ const navigation = [
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>(["Masters"]);
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const user = getCurrentUser();
 
   const handleLogout = () => {
+    console.log('Logout button clicked');
     setShowLogoutDialog(true);
   };
 
@@ -251,6 +253,18 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           {children}
         </main>
       </div>
+
+      {/* Logout confirmation dialog */}
+      <ConfirmDialog
+        open={showLogoutDialog}
+        onOpenChange={setShowLogoutDialog}
+        onConfirm={confirmLogout}
+        title="Confirm Logout"
+        description="Are you sure you want to logout? You will need to sign in again to access the system."
+        confirmText="Logout"
+        cancelText="Cancel"
+        variant="destructive"
+      />
     </div>
   );
 }

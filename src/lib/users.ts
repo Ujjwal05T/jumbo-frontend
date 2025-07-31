@@ -73,7 +73,7 @@ export async function createUser(userData: CreateUserFormData): Promise<User> {
   console.log("Sending user data:", userDataWithDefaults);
 
   const response = await fetch(
-    `${MASTER_ENDPOINTS.USERS}/register`,
+    MASTER_ENDPOINTS.USERS,
     createRequestOptions("POST", userDataWithDefaults)
   );
 

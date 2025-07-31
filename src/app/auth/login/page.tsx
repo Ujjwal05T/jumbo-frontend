@@ -41,10 +41,14 @@ export default function LoginPage() {
         throw new Error(data.detail || 'Login failed');
       }
 
-      // Store username in localStorage
-      localStorage.setItem('username', data.user.username);
-      localStorage.setItem('user_id', data.user.id);
-      console.log('User ID stored:', data.user.id);
+      // Backend returns UserMaster object directly
+      localStorage.setItem('username', data.username);
+      localStorage.setItem('user_id', data.id);
+      localStorage.setItem('user_name', data.name);
+      localStorage.setItem('user_role', data.role);
+      console.log('User ID stored:', data.id);
+      console.log('Username stored:', data.username);
+      console.log('User Name stored:', data.name);
       console.log(localStorage.getItem('user_id'));
       
       // Redirect to dashboard or previous page
