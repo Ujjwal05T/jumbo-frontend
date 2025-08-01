@@ -1,5 +1,6 @@
 export interface OrderItem {
   id: string;
+  frontend_id?: string; // Human-readable order item ID (e.g., ORI-001)
   order_id: string;
   paper_id: string;
   width_inches: number;
@@ -26,6 +27,7 @@ export interface OrderItem {
 
 export interface Order {
   id: string;
+  frontend_id?: string; // Human-readable order ID (e.g., ORD-2025-001)
   client_id: string;
   priority: 'low' | 'normal' | 'high' | 'urgent';
   payment_type: 'bill' | 'cash';

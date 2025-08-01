@@ -209,6 +209,7 @@ export default function PaperMasterPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>Paper ID</TableHead>
                       <TableHead>Name</TableHead>
                       <TableHead>Type</TableHead>
                       <TableHead>GSM</TableHead>
@@ -222,6 +223,9 @@ export default function PaperMasterPage() {
                     {filteredPapers.length > 0 ? (
                       filteredPapers.map((paper) => (
                         <TableRow key={paper.id}>
+                          <TableCell className="font-mono text-sm font-medium">
+                            {paper.frontend_id || 'Generating...'}
+                          </TableCell>
                           <TableCell className="font-medium">
                             {paper.name}
                           </TableCell>
@@ -270,7 +274,7 @@ export default function PaperMasterPage() {
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={7} className="h-24 text-center">
+                        <TableCell colSpan={8} className="h-24 text-center">
                           No papers found.
                         </TableCell>
                       </TableRow>

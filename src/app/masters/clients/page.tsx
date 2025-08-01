@@ -271,6 +271,7 @@ export default function ClientMasterPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>Client ID</TableHead>
                       <TableHead>Client</TableHead>
                       <TableHead>Contact</TableHead>
                       <TableHead>Address</TableHead>
@@ -282,6 +283,11 @@ export default function ClientMasterPage() {
                   <TableBody>
                     {filteredClients.map((client) => (
                       <TableRow key={client.id} className="hover:bg-muted/50">
+                        <TableCell>
+                          <div className="font-mono text-sm font-medium">
+                            {client.frontend_id || 'Generating...'}
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <div className="space-y-1">
                             <div className="font-medium">{client.contact_person}</div>

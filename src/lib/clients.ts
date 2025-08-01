@@ -6,6 +6,7 @@ import { MASTER_ENDPOINTS, createRequestOptions } from './api-config';
 
 export interface Client {
   id: string;
+  frontend_id?: string; // Human-readable client ID (e.g., CL-001)
   company_name: string;
   email?: string;
   gst_number?: string;

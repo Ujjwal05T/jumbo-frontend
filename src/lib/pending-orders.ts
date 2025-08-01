@@ -4,6 +4,7 @@
 /* eslint-disable */
 export interface PendingOrderItem {
   id: string;
+  frontend_id?: string; // Human-readable pending order ID (e.g., POM-001)
   original_order_id: string;
   width_inches: number;
   gsm: number;

@@ -2,6 +2,7 @@ import { MASTER_ENDPOINTS, createRequestOptions } from './api-config';
 
 export interface Paper {
   id: string;
+  frontend_id?: string; // Human-readable paper ID (e.g., PAP-001)
   name: string;
   type: string;
   gsm: number;

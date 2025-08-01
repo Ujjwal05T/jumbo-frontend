@@ -343,6 +343,7 @@ export default function PendingOrderItemsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Pending ID</TableHead>
                     <TableHead>Item Details</TableHead>
                     <TableHead>Paper Specification</TableHead>
                     <TableHead>Client</TableHead>
@@ -358,6 +359,9 @@ export default function PendingOrderItemsPage() {
                     const daysWaiting = getDaysWaiting(item.created_at);
                     return (
                     <TableRow key={item.id} className="hover:bg-muted/50">
+                      <TableCell className="font-mono text-sm font-medium">
+                        {item.frontend_id || 'Generating...'}
+                      </TableCell>
                       <TableCell>
                         <div className="space-y-1">
                           <div className="font-medium">#{index + 1}</div>

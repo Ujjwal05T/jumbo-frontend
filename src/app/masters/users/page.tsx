@@ -334,6 +334,7 @@ export default function UserMasterPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>User ID</TableHead>
                     <TableHead>User</TableHead>
                     <TableHead>Contact</TableHead>
                     <TableHead>Role</TableHead>
@@ -347,7 +348,7 @@ export default function UserMasterPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8">
+                      <TableCell colSpan={9} className="text-center py-8">
                         <div className="flex items-center justify-center gap-2">
                           <Loader2 className="w-4 h-4 animate-spin" />
                           Loading users...
@@ -356,7 +357,7 @@ export default function UserMasterPage() {
                     </TableRow>
                   ) : filteredUsers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8">
+                      <TableCell colSpan={9} className="text-center py-8">
                         <Users className="mx-auto h-12 w-12 text-muted-foreground" />
                         <h3 className="mt-2 text-sm font-semibold">No users found</h3>
                         <p className="mt-1 text-sm text-muted-foreground">
@@ -367,6 +368,11 @@ export default function UserMasterPage() {
                   ) : (
                     filteredUsers.map((user) => (
                     <TableRow key={user.id} className="hover:bg-muted/50">
+                      <TableCell>
+                        <div className="font-mono text-sm font-medium">
+                          {user.frontend_id || 'Generating...'}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center space-x-3">
                           <Avatar className="w-8 h-8">

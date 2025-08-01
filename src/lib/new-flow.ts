@@ -31,6 +31,7 @@ export interface PendingOrder {
 
 export interface AvailableInventory {
   id: string;
+  frontend_id?: string; // Human-readable inventory ID (e.g., INV-001)
   width: number;
   gsm: number;
   bf: number;

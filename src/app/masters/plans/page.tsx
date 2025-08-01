@@ -339,6 +339,7 @@ export default function PlansPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Plan ID</TableHead>
                     <TableHead>Plan Name</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Expected Waste</TableHead>
@@ -350,7 +351,7 @@ export default function PlansPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="h-24 text-center">
+                      <TableCell colSpan={7} className="h-24 text-center">
                         <div className="flex items-center justify-center">
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Loading plans...
@@ -360,6 +361,9 @@ export default function PlansPage() {
                   ) : filteredPlans.length > 0 ? (
                     filteredPlans.map((plan, index) => (
                       <TableRow key={plan.id}>
+                        <TableCell className="font-mono text-sm font-medium">
+                          {plan.frontend_id || 'Generating...'}
+                        </TableCell>
                         <TableCell className="font-medium">
                           {plan.name || `Plan #${index + 1}`}
                         </TableCell>
@@ -426,7 +430,7 @@ export default function PlansPage() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={6} className="h-24 text-center">
+                      <TableCell colSpan={7} className="h-24 text-center">
                         {plans.length === 0 
                           ? "No plans found. Create your first plan to get started."
                           : "No plans match the current filters."

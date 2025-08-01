@@ -289,6 +289,7 @@ export default function OrderMasterPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>Order ID</TableHead>
                       <TableHead>S.No</TableHead>
                       <TableHead>Client</TableHead>
                       <TableHead>Papers</TableHead>
@@ -311,6 +312,9 @@ export default function OrderMasterPage() {
                         
                         return (
                           <TableRow key={order.id}>
+                            <TableCell className="font-mono text-sm font-medium">
+                              {order.frontend_id || 'Generating...'}
+                            </TableCell>
                             <TableCell className="font-medium">
                               <div className="text-sm">
                                 {index + 1}
@@ -449,7 +453,7 @@ export default function OrderMasterPage() {
                       })
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={11} className="h-24 text-center">
+                        <TableCell colSpan={12} className="h-24 text-center">
                           No orders found.
                         </TableCell>
                       </TableRow>

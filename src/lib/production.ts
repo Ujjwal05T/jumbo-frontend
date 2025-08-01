@@ -43,6 +43,7 @@ export interface ProductionStartResponse {
 
 export interface InventoryItem {
   id: string;
+  frontend_id?: string; // Human-readable inventory ID (e.g., INV-001)
   width: number;
   qr_code: string;
   status: string;

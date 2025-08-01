@@ -6,6 +6,7 @@ import { MASTER_ENDPOINTS, createRequestOptions } from "./api-config";
 
 export interface User {
   id: string;
+  frontend_id?: string; // Human-readable user ID (e.g., USR-001)
   name: string;
   username: string;
   role: string;
