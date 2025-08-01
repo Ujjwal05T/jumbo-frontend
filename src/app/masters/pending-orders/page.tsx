@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Table, 
   TableBody, 
@@ -36,7 +37,9 @@ import {
   Calendar,
   DollarSign,
   Package,
-  Play
+  Play,
+  Settings,
+  Target
 } from "lucide-react";
 
 interface PendingOrderItem {
@@ -64,11 +67,58 @@ interface PendingOrderItem {
   };
 }
 
+interface OptimizationResult {
+  status: string;
+  remaining_pending: any[];
+  roll_combinations: Array<{
+    combination_id: string;
+    paper_specs: {
+      gsm: number;
+      bf: number;
+      shade: string;
+    };
+    rolls: Array<{
+      width: number;
+      quantity: number;
+    }>;
+    total_width: number;
+    trim: number;
+  }>;
+  roll_suggestions: Array<{
+    suggestion_id: string;
+    paper_specs: {
+      gsm: number;
+      bf: number;
+      shade: string;
+    };
+    existing_width: number;
+    needed_width: number;
+    possible_combinations: Array<{
+      rolls: number[];
+      total_width: number;
+      trim: number;
+    }>;
+    description: string;
+  }>;
+  summary: {
+    total_pending_input: number;
+    combinations_found: number;
+    remaining_pending: number;
+    suggested_rolls: number;
+  };
+}
+
 export default function PendingOrderItemsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [pendingItems, setPendingItems] = useState<PendingOrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Optimization preview state
+  const [showOptimization, setShowOptimization] = useState(false);
+  const [optimizationResult, setOptimizationResult] = useState<OptimizationResult | null>(null);
+  const [optimizationLoading, setOptimizationLoading] = useState(false);
+  const [selectedCombinations, setSelectedCombinations] = useState<Set<string>>(new Set());
 
   // Fetch pending order items from API
   useEffect(() => {
@@ -235,6 +285,69 @@ export default function PendingOrderItemsPage() {
     handleUpdateStatus(itemId, 'cancelled');
   };
 
+  // Optimization preview functions
+  const handleOptimizePreview = async () => {
+    try {
+      setOptimizationLoading(true);
+      const response = await fetch(`${MASTER_ENDPOINTS.PENDING_ORDERS}/optimize-preview`, createRequestOptions('POST'));
+      
+      if (!response.ok) {
+        throw new Error(`Optimization failed: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      setOptimizationResult(result);
+      setShowOptimization(true);
+      const actualCombinations = result.roll_combinations?.length || 0;
+      toast.success(`Found ${actualCombinations} possible combinations`);
+    } catch (error) {
+      toast.error('Failed to run optimization preview');
+      console.error('Optimization error:', error);
+    } finally {
+      setOptimizationLoading(false);
+    }
+  };
+
+  const handleToggleCombination = (combinationId: string) => {
+    const newSelected = new Set(selectedCombinations);
+    if (newSelected.has(combinationId)) {
+      newSelected.delete(combinationId);
+    } else {
+      newSelected.add(combinationId);
+    }
+    setSelectedCombinations(newSelected);
+  };
+
+  const handleAcceptCombinations = async () => {
+    if (selectedCombinations.size === 0) {
+      toast.error('Please select at least one combination');
+      return;
+    }
+
+    try {
+      const selectedCombos = optimizationResult?.roll_combinations.filter(combo => 
+        selectedCombinations.has(combo.combination_id)
+      ) || [];
+
+      const response = await fetch(`${MASTER_ENDPOINTS.PENDING_ORDERS}/accept-combinations`, 
+        createRequestOptions('POST', { combinations: selectedCombos })
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to accept combinations: ${response.status}`);
+      }
+
+      const result = await response.json();
+      toast.success(`Created plan: ${result.plan_name}`);
+      
+      // Refresh pending items
+      window.location.reload();
+    } catch (error) {
+      toast.error('Failed to accept combinations');
+      console.error('Accept combinations error:', error);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -250,14 +363,28 @@ export default function PendingOrderItemsPage() {
             </p>
           </div>
           <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              className="gap-2"
+              onClick={handleOptimizePreview}
+              disabled={optimizationLoading || displayItems.length === 0}
+            >
+              <Target className="w-4 h-4" />
+              {optimizationLoading ? 'Optimizing...' : 'Optimize Preview'}
+            </Button>
             <Button variant="outline" className="gap-2">
               <Play className="w-4 h-4" />
               Process All
             </Button>
-            <Button className="gap-2">
-              <CheckCircle className="w-4 h-4" />
-              Approve Selected
-            </Button>
+            {showOptimization && selectedCombinations.size > 0 && (
+              <Button 
+                className="gap-2"
+                onClick={handleAcceptCombinations}
+              >
+                <CheckCircle className="w-4 h-4" />
+                Accept Selected ({selectedCombinations.size})
+              </Button>
+            )}
           </div>
         </div>
 
@@ -312,6 +439,173 @@ export default function PendingOrderItemsPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Optimization Preview Results */}
+        {showOptimization && optimizationResult && (
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="w-5 h-5" />
+                  Optimization Preview Results
+                </CardTitle>
+                <CardDescription>
+                  Found {optimizationResult.summary.combinations_found} possible roll combinations. 
+                  Select combinations to create a plan.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {/* Summary Stats */}
+                <div className="grid gap-4 md:grid-cols-4 mb-6">
+                  <div className="text-center p-4 bg-blue-50 rounded-lg">
+                    <div className="text-2xl font-bold text-blue-600">{optimizationResult.summary.combinations_found}</div>
+                    <div className="text-sm text-blue-800">Combinations Found</div>
+                  </div>
+                  <div className="text-center p-4 bg-green-50 rounded-lg">
+                    <div className="text-2xl font-bold text-green-600">{optimizationResult.summary.total_pending_input - optimizationResult.summary.remaining_pending}</div>
+                    <div className="text-sm text-green-800">Orders Resolved</div>
+                  </div>
+                  <div className="text-center p-4 bg-yellow-50 rounded-lg">
+                    <div className="text-2xl font-bold text-yellow-600">{optimizationResult.summary.remaining_pending}</div>
+                    <div className="text-sm text-yellow-800">Still Pending</div>
+                  </div>
+                  <div className="text-center p-4 bg-purple-50 rounded-lg">
+                    <div className="text-2xl font-bold text-purple-600">{optimizationResult.summary.suggested_rolls}</div>
+                    <div className="text-sm text-purple-800">Roll Suggestions</div>
+                  </div>
+                </div>
+
+                {/* Roll Combinations */}
+                {optimizationResult.roll_combinations.length > 0 && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold">Available Roll Combinations</h3>
+                      <div className="flex items-center gap-2">
+                        <Checkbox 
+                          checked={selectedCombinations.size === optimizationResult.roll_combinations.length}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedCombinations(new Set(optimizationResult.roll_combinations.map(c => c.combination_id)));
+                            } else {
+                              setSelectedCombinations(new Set());
+                            }
+                          }}
+                        />
+                        <span className="text-sm font-medium">Select All</span>
+                      </div>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {optimizationResult.roll_combinations.map((combo) => (
+                        <Card 
+                          key={combo.combination_id} 
+                          className={`cursor-pointer transition-colors ${
+                            selectedCombinations.has(combo.combination_id) 
+                              ? 'ring-2 ring-blue-500 bg-blue-50' 
+                              : 'hover:bg-gray-50'
+                          }`}
+                          onClick={() => handleToggleCombination(combo.combination_id)}
+                        >
+                          <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <Checkbox 
+                                  checked={selectedCombinations.has(combo.combination_id)}
+                                  onCheckedChange={(checked) => {
+                                    handleToggleCombination(combo.combination_id);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                                <CardTitle className="text-base">
+                                  {combo.paper_specs.shade} {combo.paper_specs.gsm}GSM
+                                </CardTitle>
+                              </div>
+                              <Badge className={combo.trim <= 6 ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}>
+                                {combo.trim}" trim
+                              </Badge>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            <div className="space-y-2">
+                              <div className="text-sm text-muted-foreground">
+                                BF: {combo.paper_specs.bf}
+                              </div>
+                              <div className="space-y-1">
+                                <div className="text-sm font-medium">Rolls:</div>
+                                {combo.rolls.map((roll, idx) => (
+                                  <div key={idx} className="text-sm text-muted-foreground pl-2">
+                                    {roll.width}" × {roll.quantity} rolls
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="text-sm">
+                                <span className="font-medium">Total: {combo.total_width}" / 118"</span>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Roll Suggestions */}
+                {optimizationResult.roll_suggestions.length > 0 && (
+                  <div className="space-y-4 mt-6">
+                    <h3 className="text-lg font-semibold">Roll Suggestions for Remaining Items</h3>
+                    <div className="space-y-3">
+                      {optimizationResult.roll_suggestions.map((suggestion) => (
+                        <Card key={suggestion.suggestion_id} className="bg-gray-50">
+                          <CardContent className="pt-4">
+                            <div className="space-y-2">
+                              <div className="font-medium">
+                                {suggestion.paper_specs.shade} {suggestion.paper_specs.gsm}GSM Paper
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                {suggestion.description}
+                              </div>
+                              <div className="space-y-1">
+                                <div className="text-sm font-medium">Suggested combinations:</div>
+                                {suggestion.possible_combinations.slice(0, 3).map((combo, idx) => (
+                                  <div key={idx} className="text-sm text-muted-foreground pl-2">
+                                    {combo.rolls.join('" + ')} = {combo.total_width}" (trim: {combo.trim}")
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2 mt-6">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setShowOptimization(false);
+                      setSelectedCombinations(new Set());
+                    }}
+                  >
+                    Close Preview
+                  </Button>
+                  <Button 
+                    onClick={() => setSelectedCombinations(new Set(optimizationResult.roll_combinations.map(c => c.combination_id)))}
+                    variant="outline"
+                  >
+                    Select All
+                  </Button>
+                  <Button 
+                    onClick={() => setSelectedCombinations(new Set())}
+                    variant="outline"
+                  >
+                    Clear Selection
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Search and Filters */}
         <Card>

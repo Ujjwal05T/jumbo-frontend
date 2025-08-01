@@ -32,6 +32,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Truck,
   Search,
   MoreHorizontal,
@@ -60,6 +67,7 @@ import {
   WarehouseItem,
   PendingItem
 } from "@/lib/dispatch";
+import { API_BASE_URL } from "@/lib/api-config";
 
 type ItemType = "warehouse" | "pending";
 
@@ -80,18 +88,82 @@ export default function DispatchPage() {
   const [successModalOpen, setSuccessModalOpen] = useState(false);
   const [dispatchResult, setDispatchResult] = useState<any>(null);
 
-  // Load data using enhanced APIs
+  // New state for client-order selection
+  const [clients, setClients] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<string>("all");
+  const [selectedOrderId, setSelectedOrderId] = useState<string>("all");
+  const [clientsLoading, setClientsLoading] = useState(false);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+
+  // Load clients on page load
+  const loadClients = async () => {
+    try {
+      setClientsLoading(true);
+      const response = await fetch(`${API_BASE_URL}/dispatch/clients`, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      });
+      if (!response.ok) throw new Error('Failed to load clients');
+      const data = await response.json();
+      setClients(data.clients || []);
+    } catch (err) {
+      console.error('Error loading clients:', err);
+      toast.error('Failed to load clients');
+    } finally {
+      setClientsLoading(false);
+    }
+  };
+
+  // Load orders for selected client
+  const loadOrders = async (clientId: string) => {
+    if (!clientId) {
+      setOrders([]);
+      return;
+    }
+    
+    try {
+      setOrdersLoading(true);
+      const response = await fetch(`${API_BASE_URL}/orders?client_id=${clientId}`, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      });
+      if (!response.ok) throw new Error('Failed to load orders');
+      const data = await response.json();
+      setOrders(data || []);
+    } catch (err) {
+      console.error('Error loading orders:', err);
+      toast.error('Failed to load orders');
+    } finally {
+      setOrdersLoading(false);
+    }
+  };
+
+  // Load warehouse items with optional filtering
   const loadData = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // Use the new enhanced warehouse API - only show available inventory
-      const warehouseResponse = await getWarehouseItems();
+      // Build query parameters for filtering
+      const params = new URLSearchParams();
+      if (selectedClientId && selectedClientId !== "all") params.append('client_id', selectedClientId);
+      if (selectedOrderId && selectedOrderId !== "all") params.append('order_id', selectedOrderId);
+      
+      const queryString = params.toString();
+      const url = queryString 
+        ? `${API_BASE_URL}/dispatch/warehouse-items?${queryString}`
+        : `${API_BASE_URL}/dispatch/warehouse-items`;
+      
+      const response = await fetch(url, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      });
+      
+      if (!response.ok) throw new Error('Failed to load warehouse items');
+      const warehouseResponse = await response.json();
       
       setWarehouseItems(warehouseResponse.warehouse_items || []);
       
       console.log("Loaded warehouse items:", warehouseResponse.warehouse_items?.length || 0);
+      console.log("Filter applied:", warehouseResponse.dispatch_info);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load data';
       setError(errorMessage);
@@ -102,8 +174,25 @@ export default function DispatchPage() {
   };
 
   useEffect(() => {
-    loadData();
+    loadClients(); // Load clients on page load
+    loadData(); // Load all warehouse items initially
   }, []);
+
+  // Load orders when client changes
+  useEffect(() => {
+    if (selectedClientId && selectedClientId !== "all") {
+      loadOrders(selectedClientId);
+      setSelectedOrderId("all"); // Reset order selection when client changes
+    } else {
+      setOrders([]);
+      setSelectedOrderId("all");
+    }
+  }, [selectedClientId]);
+
+  // Reload warehouse items when client or order filter changes
+  useEffect(() => {
+    loadData();
+  }, [selectedClientId, selectedOrderId]);
 
   const filteredItems = warehouseItems.filter((item: any) => {
     const searchLower = searchTerm.toLowerCase();
@@ -124,6 +213,10 @@ export default function DispatchPage() {
     setSelectedItemsForDispatch(selectedItems);
     setDispatchFormOpen(true);
   };
+
+  // Get selected client and order info for dispatch form
+  const selectedClient = selectedClientId !== "all" ? clients.find(c => c.id === selectedClientId) : null;
+  const selectedOrder = selectedOrderId !== "all" ? orders.find(o => o.id === selectedOrderId) : null;
 
   const handleDispatchConfirm = async (formData: any) => {
     try {
@@ -225,6 +318,100 @@ export default function DispatchPage() {
             </p>
           </div>
         </div>
+
+        {/* Client and Order Selection */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="w-5 h-5" />
+              Filter by Client & Order
+            </CardTitle>
+            <CardDescription>
+              Select a client and order to view specific warehouse items ready for dispatch
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Client Selection */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Client</label>
+                <Select 
+                  value={selectedClientId} 
+                  onValueChange={(value) => {
+                    setSelectedClientId(value);
+                    setSelectedItems([]); // Clear selected items when filter changes
+                  }}
+                  disabled={clientsLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={clientsLoading ? "Loading clients..." : "Select client"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Clients</SelectItem>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.company_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Order Selection */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Order</label>
+                <Select 
+                  value={selectedOrderId} 
+                  onValueChange={(value) => {
+                    setSelectedOrderId(value);
+                    setSelectedItems([]); // Clear selected items when filter changes
+                  }}
+                  disabled={ordersLoading || !selectedClientId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={
+                      !selectedClientId ? "Select client first" :
+                      ordersLoading ? "Loading orders..." : 
+                      "Select order (optional)"
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Orders</SelectItem>
+                    {orders.map((order) => (
+                      <SelectItem key={order.id} value={order.id}>
+                        Order #{order.frontend_id || order.id.slice(0, 8)} - {order.status}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Filter Status */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Current Filter</label>
+                <div className="p-2 bg-muted rounded-md text-sm">
+                  {(selectedClientId === "all" && selectedOrderId === "all") && (
+                    <span className="text-muted-foreground">No filters applied</span>
+                  )}
+                  {selectedClientId && selectedClientId !== "all" && (
+                    <div className="flex items-center gap-1">
+                      <Badge variant="secondary">
+                        Client: {clients.find(c => c.id === selectedClientId)?.company_name}
+                      </Badge>
+                    </div>
+                  )}
+                  {selectedOrderId && selectedOrderId !== "all" && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <Badge variant="outline">
+                        Order: #{orders.find(o => o.id === selectedOrderId)?.frontend_id}
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Stats Cards */}
         <div className="grid gap-4 md:grid-cols-4">
@@ -472,6 +659,8 @@ export default function DispatchPage() {
         }))}
         onConfirmDispatch={handleDispatchConfirm}
         loading={dispatchLoading}
+        preSelectedClient={selectedClient}
+        preSelectedOrder={selectedOrder}
       />
 
       {/* Success Modal */}

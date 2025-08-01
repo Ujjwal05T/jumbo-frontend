@@ -33,7 +33,7 @@ export interface QRWeightUpdate {
   qr_code: string;
   weight_kg: number;
   location?: string;
-  status?: string;
+  // Note: status is automatically set to 'available' when weight is updated
 }
 
 export interface QRWeightUpdateResult {

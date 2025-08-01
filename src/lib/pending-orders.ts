@@ -126,3 +126,20 @@ export async function getConsolidationOpportunities(): Promise<any> {
   }
   return response.json();
 }
+
+// Optimization preview functions
+export async function getOptimizationPreview(): Promise<any> {
+  const response = await fetch(`${MASTER_ENDPOINTS.PENDING_ORDERS}/optimize-preview`, createRequestOptions('POST'));
+  if (!response.ok) {
+    throw new Error(`Failed to get optimization preview: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function acceptCombinations(combinations: any[]): Promise<any> {
+  const response = await fetch(`${MASTER_ENDPOINTS.PENDING_ORDERS}/accept-combinations`, createRequestOptions('POST', { combinations }));
+  if (!response.ok) {
+    throw new Error(`Failed to accept combinations: ${response.status}`);
+  }
+  return response.json();
+}

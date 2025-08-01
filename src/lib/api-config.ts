@@ -37,7 +37,7 @@ export const PRODUCTION_ENDPOINTS = {
   GENERATE_QR: `${API_BASE_URL}/qr/generate`,
   CUT_ROLLS_PLAN: (planId: string) => `${API_BASE_URL}/cut-rolls/production/${planId}`,
   PLAN_STATUS: (planId: string) => `${API_BASE_URL}/optimizer/plans/${planId}/status`,
-  START_PRODUCTION: (planId: string) => `${API_BASE_URL}/optimizer/plans/${planId}/execute`,
+  START_PRODUCTION: (planId: string) => `${API_BASE_URL}/plans/${planId}/start-production`,
   COMPLETE_PLAN: (planId: string) => `${API_BASE_URL}/optimizer/plans/${planId}/complete`,
 };
 
@@ -71,6 +71,13 @@ export const DISPATCH_ENDPOINTS = {
   CLIENTS: `${API_BASE_URL}/dispatch/clients`,
   PENDING_ITEMS: `${API_BASE_URL}/dispatch/pending-items`,
   COMPLETE_PENDING_ITEM: `${API_BASE_URL}/dispatch/complete-pending-item`,
+};
+
+// Dashboard endpoints
+export const DASHBOARD_ENDPOINTS = {
+  SUMMARY: `${API_BASE_URL}/dashboard/summary`,
+  RECENT_ACTIVITY: `${API_BASE_URL}/dashboard/recent-activity`,
+  ALERTS: `${API_BASE_URL}/dashboard/alerts`,
 };
 
 /**

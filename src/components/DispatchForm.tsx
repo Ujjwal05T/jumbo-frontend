@@ -70,6 +70,8 @@ interface DispatchFormProps {
   selectedItems: SelectedItem[];
   onConfirmDispatch: (formData: DispatchFormData) => Promise<void>;
   loading?: boolean;
+  preSelectedClient?: any;
+  preSelectedOrder?: any;
 }
 
 export function DispatchForm({
@@ -78,6 +80,8 @@ export function DispatchForm({
   selectedItems,
   onConfirmDispatch,
   loading = false,
+  preSelectedClient,
+  preSelectedOrder,
 }: DispatchFormProps) {
   const [formData, setFormData] = useState<DispatchFormData>({
     vehicle_number: "",
@@ -98,14 +102,23 @@ export function DispatchForm({
   const totalItems = selectedItems.length;
   const totalWeight = selectedItems.reduce((sum, item) => sum + item.weight_kg, 0);
 
-  // Load clients on modal open
+  // Load clients on modal open and pre-fill if client is pre-selected
   useEffect(() => {
     if (open) {
       loadClients();
       generateDispatchNumber();
       resetForm();
+      
+      // Pre-fill client if provided
+      if (preSelectedClient) {
+        setFormData(prev => ({ 
+          ...prev, 
+          client_id: preSelectedClient.id,
+          primary_order_id: preSelectedOrder?.id || ""
+        }));
+      }
     }
-  }, [open]);
+  }, [open, preSelectedClient, preSelectedOrder]);
 
   const loadClients = async () => {
     try {

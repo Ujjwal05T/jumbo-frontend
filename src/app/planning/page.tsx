@@ -20,10 +20,7 @@ import {
   CuttingPlanRequest,
   CutRoll
 } from "@/lib/new-flow";
-import { 
-  selectCutRollsForProduction,
-  CutRollProductionRequest
-} from "@/lib/production";
+// Removed old production imports - now using direct API calls
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -56,7 +53,7 @@ import {
 } from "lucide-react";
 import QRCodeDisplay from "@/components/QRCodeDisplay";
 import { fetchOrders, Order } from "@/lib/orders";
-import { PRODUCTION_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
+import { PRODUCTION_ENDPOINTS, API_BASE_URL, createRequestOptions } from "@/lib/api-config";
 import jsPDF from "jspdf";
 import QRCode from "qrcode";
 
@@ -177,7 +174,8 @@ export default function PlanningPage() {
   const [planResult, setPlanResult] = useState<PlanGenerationResult | null>(
     null
   );
-  const [selectedCutRolls, setSelectedCutRolls] = useState<number[]>([]);
+  const [selectedCutRolls, setSelectedCutRolls] = useState<number[]>([]); // Individual cut piece indices
+  const [selected118Rolls, setSelected118Rolls] = useState<number[]>([]); // 118" roll numbers
   const [productionRecords, setProductionRecords] = useState<
     ProductionRecord[]
   >([]);
@@ -256,6 +254,53 @@ export default function PlanningPage() {
     loadOrders();
   }, []);
 
+  // Helper function to get unique 118" roll numbers from cut rolls
+  const get118RollNumbers = useCallback(() => {
+    if (!planResult) return [];
+    const rollNumbers = new Set<number>();
+    planResult.cut_rolls_generated.forEach(roll => {
+      if (roll.individual_roll_number) {
+        rollNumbers.add(roll.individual_roll_number);
+      }
+    });
+    return Array.from(rollNumbers).sort((a, b) => a - b);
+  }, [planResult]);
+
+  // Helper function to check if 118" roll selection is valid (multiples of 3)
+  const isValid118RollSelection = useCallback(
+    (selectedRollCount: number) => {
+      return selectedRollCount === 0 || selectedRollCount % 3 === 0;
+    },
+    []
+  );
+
+  // Helper function to get available jumbo roll count (based on 118" rolls)
+  const getAvailableJumboRolls = useCallback(() => {
+    const rollNumbers = get118RollNumbers();
+    return Math.floor(rollNumbers.length / 3);
+  }, [get118RollNumbers]);
+
+  // Helper function to select specific number of jumbo rolls (3 x 118" rolls each)
+  const selectJumboRolls = useCallback(
+    (jumboCount: number) => {
+      const rollNumbers = get118RollNumbers();
+      const rollsToSelect = jumboCount * 3;
+      const selectedRollNumbers = rollNumbers.slice(0, rollsToSelect);
+      setSelected118Rolls(selectedRollNumbers);
+      
+      // Also update selectedCutRolls to match the 118" roll selection
+      if (!planResult) return;
+      const cutRollIndices: number[] = [];
+      planResult.cut_rolls_generated.forEach((roll, index) => {
+        if (roll.individual_roll_number && selectedRollNumbers.includes(roll.individual_roll_number)) {
+          cutRollIndices.push(index);
+        }
+      });
+      setSelectedCutRolls(cutRollIndices);
+    },
+    [get118RollNumbers, planResult]
+  );
+
   const handleOrderSelect = useCallback((orderId: string) => {
     setSelectedOrders((prev) =>
       prev.includes(orderId)
@@ -271,23 +316,60 @@ export default function PlanningPage() {
     [filteredOrders]
   );
 
-  const handleCutRollSelect = useCallback((index: number) => {
-    setSelectedCutRolls((prev) =>
-      prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index]
-    );
-  }, []);
+  // Handler for selecting individual 118" rolls - ALLOWS ANY SELECTION
+  const handle118RollSelect = useCallback((rollNumber: number) => {
+    setSelected118Rolls((prev) => {
+      const newSelection = prev.includes(rollNumber) 
+        ? prev.filter((r) => r !== rollNumber) 
+        : [...prev, rollNumber].sort((a, b) => a - b);
+      
+      // Always allow the selection - no restrictions during selection
+      // Update selectedCutRolls to match the 118" roll selection
+      if (planResult) {
+        const cutRollIndices: number[] = [];
+        planResult.cut_rolls_generated.forEach((roll, index) => {
+          if (roll.individual_roll_number && newSelection.includes(roll.individual_roll_number)) {
+            cutRollIndices.push(index);
+          }
+        });
+        setSelectedCutRolls(cutRollIndices);
+      }
+      
+      return newSelection;
+    });
+  }, [planResult]);
 
-  const handleSelectAllCutRolls = useCallback(
+  // Legacy handler for individual cut pieces (kept for backward compatibility but discouraged)
+  const handleCutRollSelect = useCallback((index: number) => {
+    // This should ideally not be used - we want to select by 118" rolls
+    if (!planResult) return;
+    const cutRoll = planResult.cut_rolls_generated[index];
+    if (cutRoll.individual_roll_number) {
+      handle118RollSelect(cutRoll.individual_roll_number);
+    }
+  }, [planResult, handle118RollSelect]);
+
+  const handleSelectAll118Rolls = useCallback(
     (checked: boolean) => {
-      setSelectedCutRolls(
-        checked
-          ? planResult?.cut_rolls_generated.map(
-              (_, index) => index
-            ) || []
-          : []
-      );
+      const rollNumbers = get118RollNumbers();
+      
+      // Select ALL available 118" rolls, not just complete jumbos
+      const selectedRollNumbers = checked ? rollNumbers : [];
+      
+      setSelected118Rolls(selectedRollNumbers);
+      
+      // Update selectedCutRolls to match
+      if (planResult) {
+        const cutRollIndices: number[] = [];
+        planResult.cut_rolls_generated.forEach((roll, index) => {
+          if (roll.individual_roll_number && selectedRollNumbers.includes(roll.individual_roll_number)) {
+            cutRollIndices.push(index);
+          }
+        });
+        setSelectedCutRolls(cutRollIndices);
+      }
     },
-    [planResult]
+    [get118RollNumbers, planResult]
   );
 
   const generatePlan = async () => {
@@ -352,12 +434,21 @@ export default function PlanningPage() {
   };
 
   const handleCreateProductionRecords = () => {
-    if (selectedCutRolls.length === 0) {
-      const errorMessage = "Please select at least one cut roll for production.";
+    if (selected118Rolls.length === 0) {
+      const errorMessage = "Please select at least one 118\" roll for production.";
       setError(errorMessage);
       toast.error(errorMessage);
       return;
     }
+    
+    if (!isValid118RollSelection(selected118Rolls.length)) {
+      const availableJumbos = getAvailableJumboRolls();
+      const errorMessage = `Please select 118" rolls in multiples of 3 to match jumbo roll constraints. Available options: ${Array.from({ length: availableJumbos }, (_, i) => (i + 1) * 3).join(', ')} rolls`;
+      setError(errorMessage);
+      toast.error(errorMessage);
+      return;
+    }
+    
     setShowConfirmDialog(true);
   };
 
@@ -373,22 +464,38 @@ export default function PlanningPage() {
         throw new Error("User not authenticated");
       }
 
-      // NEW FLOW: Prepare cut roll selections for production
+      // Get plan ID from the plan result (from plans_created array)
+      console.log("🔍 DEBUG: Plan result structure:", planResult);
+      const planId = planResult?.plans_created?.[0];
+      console.log("🔍 DEBUG: Extracted plan ID:", planId);
+      
+      if (!planId) {
+        console.error("❌ ERROR: No plan ID found in plan result:", planResult);
+        throw new Error("No plan ID found. Please regenerate the plan.");
+      }
+
+      // Validate 118" roll selection before proceeding
+      if (!isValid118RollSelection(selected118Rolls.length)) {
+        const availableJumbos = getAvailableJumboRolls();
+        toast.error(
+          `Please select 118" rolls in multiples of 3 to match jumbo roll constraints. ` +
+          `Available options: ${Array.from({ length: availableJumbos }, (_, i) => (i + 1) * 3).join(', ')} 118" rolls`
+        );
+        return;
+      }
+
+      // NEW FLOW: Prepare cut roll selections for production start
       const selectedRolls = selectedCutRolls.map((index) => {
         const cutRoll = planResult!.cut_rolls_generated[index];
-        
-        // DEBUG: Log cut roll data to see what's available
-        console.log('🔍 DEBUG Frontend: Cut roll data for production:', cutRoll);
         
         // Try to find paper_id from the cut roll, or fallback to other fields
         let paper_id = cutRoll.paper_id || '';
         
-        // If paper_id is empty, try to find it from order data or create a lookup
+        // If paper_id is empty, try to find it from order data
         if (!paper_id && cutRoll.order_id) {
           const orderFound = orders.find(o => o.id === cutRoll.order_id);
           if (orderFound?.order_items?.[0]?.paper_id) {
             paper_id = orderFound.order_items[0].paper_id;
-            console.log('✅ DEBUG Frontend: Found paper_id from order:', paper_id);
           }
         }
         
@@ -397,47 +504,112 @@ export default function PlanningPage() {
           const firstOrder = orders.find(o => selectedOrders.includes(o.id));
           if (firstOrder?.order_items?.[0]?.paper_id) {
             paper_id = firstOrder.order_items[0].paper_id;
-            console.log('✅ DEBUG Frontend: Using fallback paper_id from first selected order:', paper_id);
           }
         }
-        
-        console.log('🔍 DEBUG Frontend: Final paper_id for cut roll:', paper_id);
         
         return {
           paper_id: paper_id,
           width_inches: cutRoll.width,
-          qr_code: `CUT_${Date.now()}_${index}`, // Generate temporary QR code
-          cutting_pattern: `Roll #${cutRoll.individual_roll_number || 'N/A'}`
+          qr_code: `CUT_ROLL_${index}`, // Generate temporary QR code based on index
+          gsm: cutRoll.gsm,
+          bf: cutRoll.bf,
+          shade: cutRoll.shade,
+          individual_roll_number: cutRoll.individual_roll_number,
+          trim_left: cutRoll.trim_left,
+          order_id: cutRoll.order_id
         };
       });
 
-      const productionRequest: CutRollProductionRequest = {
-        plan_id: planResult?.plan_id,
-        selected_rolls: selectedRolls,
+      // Prepare ALL available cuts (for backend to handle unselected ones)
+      // SHOW ALL ROLLS - don't limit to complete jumbos, show everything the algorithm generated
+      const allAvailableCuts = planResult!.cut_rolls_generated
+        .map((cutRoll, index) => {
+          let paper_id = cutRoll.paper_id || '';
+          
+          if (!paper_id && cutRoll.order_id) {
+            const orderFound = orders.find(o => o.id === cutRoll.order_id);
+            if (orderFound?.order_items?.[0]?.paper_id) {
+              paper_id = orderFound.order_items[0].paper_id;
+            }
+          }
+          
+          if (!paper_id && selectedOrders.length > 0) {
+            const firstOrder = orders.find(o => selectedOrders.includes(o.id));
+            if (firstOrder?.order_items?.[0]?.paper_id) {
+              paper_id = firstOrder.order_items[0].paper_id;
+            }
+          }
+          
+          return {
+            paper_id: paper_id,
+            width_inches: cutRoll.width,
+            qr_code: `CUT_ROLL_${index}`,
+            gsm: cutRoll.gsm,
+            bf: cutRoll.bf,
+            shade: cutRoll.shade,
+            individual_roll_number: cutRoll.individual_roll_number,
+            trim_left: cutRoll.trim_left,
+            order_id: cutRoll.order_id
+          };
+        });
+
+      // Call the new backend endpoint for starting production with comprehensive status updates
+      const productionRequest = {
+        selected_cut_rolls: selectedRolls,
+        all_available_cuts: allAvailableCuts,
         created_by_id: user_id
       };
 
-      const response = await selectCutRollsForProduction(productionRequest);
+      const response = await fetch(`${API_BASE_URL}/plans/${planId}/start-production`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
+        body: JSON.stringify(productionRequest)
+      });
 
-      // Update UI with the production response
-      setProductionRecords(response.selected_rolls.map(roll => ({
-        id: roll.inventory_id,
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || errorData.message || 'Failed to start production');
+      }
+
+      const result = await response.json();
+
+      // Create production records for UI display
+      const productionRecords = selectedRolls.map((roll, index) => ({
+        id: `inv_${Date.now()}_${index}`,
         qr_code: roll.qr_code,
         width_inches: roll.width_inches,
-        gsm: planResult!.cut_rolls_generated[0]?.gsm || 0,
-        bf: planResult!.cut_rolls_generated[0]?.bf || 0,
-        shade: planResult!.cut_rolls_generated[0]?.shade || '',
-        status: roll.status,
+        gsm: roll.gsm,
+        bf: roll.bf,
+        shade: roll.shade,
+        status: "cutting",
         selected_at: new Date().toISOString()
-      })));
+      }));
 
+      setProductionRecords(productionRecords);
       setActiveTab("production");
       
-      toast.success(
-        `Production started successfully! Created ${response.production_summary.total_inventory_items_created} inventory records.`
-      );
+      // Show comprehensive success message with pending items info
+      let successMessage = `Production started successfully! Updated ${result.summary.orders_updated} orders, ${result.summary.order_items_updated} order items`;
+      if (result.summary.pending_items_created > 0) {
+        successMessage += `, and created ${result.summary.pending_items_created} pending items from unselected rolls`;
+      }
+      if (result.summary.pending_orders_updated > 0) {
+        successMessage += `, and updated ${result.summary.pending_orders_updated} pending orders`;
+      }
+      successMessage += '.';
+      
+      toast.success(successMessage);
 
-      console.log("Production started:", response);
+      console.log("✅ Production started successfully with comprehensive status updates:", {
+        planId,
+        updatedOrders: result.summary.orders_updated,
+        updatedOrderItems: result.summary.order_items_updated,
+        updatedPendingOrders: result.summary.pending_orders_updated,
+        inventoryCreated: result.summary.inventory_created
+      });
 
     } catch (err) {
       const errorMessage = err instanceof Error
@@ -484,14 +656,12 @@ export default function PlanningPage() {
     rollNumber: string,
     rollsInNumber: Array<CutRoll & { originalIndex: number }>
   ) => {
-    const indices = rollsInNumber.map((roll) => roll.originalIndex);
-    const allSelected = indices.every((i) => selectedCutRolls.includes(i));
-
-    if (allSelected) {
-      setSelectedCutRolls((prev) => prev.filter((i) => !indices.includes(i)));
-    } else {
-      setSelectedCutRolls((prev) => [...new Set([...prev, ...indices])]);
-    }
+    // Get the 118" roll number from the first roll in the set
+    const roll118Number = parseInt(rollNumber);
+    if (isNaN(roll118Number)) return; // Skip if no valid roll number
+    
+    // Use the handle118RollSelect function for proper validation
+    handle118RollSelect(roll118Number);
   };
 
   const generatePDF = async () => {
@@ -985,7 +1155,7 @@ export default function PlanningPage() {
               <Button
                 variant="secondary"
                 onClick={handleCreateProductionRecords}
-                disabled={creatingProduction || selectedCutRolls.length === 0}>
+                disabled={creatingProduction || selected118Rolls.length === 0 || !isValid118RollSelection(selected118Rolls.length)}>
                 {creatingProduction ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -994,7 +1164,7 @@ export default function PlanningPage() {
                 ) : (
                   <>
                     <Factory className="mr-2 h-4 w-4" />
-                    Start Production ({selectedCutRolls.length} rolls)
+                    Start Production ({selected118Rolls.length} × 118" rolls)
                   </>
                 )}
               </Button>
@@ -1190,24 +1360,75 @@ export default function PlanningPage() {
                         Select rolls to move to production phase - organized by
                         paper specification and roll number
                       </CardDescription>
+                      {/* Jumbo Roll Constraint Indicator */}
+                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                          <span className="text-sm font-medium text-blue-700">
+                            User Choice: Select any 118" rolls you want - production requires multiples of 3
+                          </span>
+                        </div>
+                        <div className="text-xs text-blue-600 mt-1">
+                          Available: {get118RollNumbers().length} individual 118" rolls total ({getAvailableJumboRolls()} complete jumbos)
+                          {get118RollNumbers().length % 3 > 0 && (
+                            <span className="ml-2 text-orange-600">
+                              • {get118RollNumbers().length % 3} additional 118" roll(s) - your choice to include
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="text-sm text-muted-foreground">
-                        {selectedCutRolls.length} of{" "}
-                        {planResult.cut_rolls_generated.length}{" "}
-                        selected
+                        {selected118Rolls.length} of{" "}
+                        {get118RollNumbers().length}{" "}
+                        individual 118" rolls selected
+                        {selected118Rolls.length > 0 && (
+                          <span className={`ml-2 px-2 py-1 rounded text-xs ${
+                            isValid118RollSelection(selected118Rolls.length) 
+                              ? 'bg-green-100 text-green-700' 
+                              : 'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {isValid118RollSelection(selected118Rolls.length) 
+                              ? `✓ ${selected118Rolls.length / 3} jumbo roll${selected118Rolls.length / 3 > 1 ? 's' : ''} (${selectedCutRolls.length} cut pieces)` 
+                              : `⚠ Need multiples of 3 (currently ${selected118Rolls.length} rolls)`
+                            }
+                          </span>
+                        )}
                       </div>
+                      {/* Show warning message when selection is invalid */}
+                      {selected118Rolls.length > 0 && !isValid118RollSelection(selected118Rolls.length) && (
+                        <div className="text-xs text-yellow-600 mt-1">
+                          ⚠ Production disabled: Please select 118" rolls in multiples of 3 to match jumbo roll constraints
+                        </div>
+                      )}
                       <div className="flex gap-2">
+                        {/* Jumbo Roll Selection Helpers */}
+                        {getAvailableJumboRolls() > 0 && (
+                          <>
+                            {Array.from({ length: getAvailableJumboRolls() }, (_, i) => i + 1).map((jumboCount) => (
+                              <Button
+                                key={jumboCount}
+                                size="sm"
+                                variant={selected118Rolls.length === jumboCount * 3 ? "default" : "outline"}
+                                onClick={() => selectJumboRolls(jumboCount)}
+                                className="text-xs">
+                                {jumboCount} Jumbo{jumboCount > 1 ? 's' : ''} ({jumboCount * 3} × 118" rolls)
+                              </Button>
+                            ))}
+                            <div className="w-px h-6 bg-border mx-1" />
+                          </>
+                        )}
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleSelectAllCutRolls(true)}>
-                          ✓ Select All
+                          onClick={() => handleSelectAll118Rolls(true)}>
+                          ✓ Select All 118" Rolls
                         </Button>
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleSelectAllCutRolls(false)}>
+                          onClick={() => handleSelectAll118Rolls(false)}>
                           ✗ Select None
                         </Button>
                       </div>
@@ -1307,11 +1528,10 @@ export default function PlanningPage() {
                                     <div className="flex justify-between items-center mb-3 pb-2 border-b">
                                       <div className="flex items-center gap-3">
                                         <Checkbox
-                                          checked={rollsInNumber.every((roll) =>
-                                            selectedCutRolls.includes(
-                                              roll.originalIndex
-                                            )
-                                          )}
+                                          checked={(() => {
+                                            const roll118Number = parseInt(rollNumber);
+                                            return !isNaN(roll118Number) && selected118Rolls.includes(roll118Number);
+                                          })()}
                                           onCheckedChange={() =>
                                             handleRollSetSelection(
                                               specKey,
@@ -1336,23 +1556,18 @@ export default function PlanningPage() {
                                           {rollsInNumber.length} cuts
                                         </Badge>
                                         <Badge
-                                          variant={
-                                            rollsInNumber.every((roll) =>
-                                              selectedCutRolls.includes(
-                                                roll.originalIndex
-                                              )
-                                            )
+                                          variant={(() => {
+                                            const roll118Number = parseInt(rollNumber);
+                                            return !isNaN(roll118Number) && selected118Rolls.includes(roll118Number)
                                               ? "default"
-                                              : "secondary"
-                                          }>
-                                          {
-                                            rollsInNumber.filter((roll) =>
-                                              selectedCutRolls.includes(
-                                                roll.originalIndex
-                                              )
-                                            ).length
-                                          }{" "}
-                                          selected
+                                              : "secondary";
+                                          })()}>
+                                          {(() => {
+                                            const roll118Number = parseInt(rollNumber);
+                                            return !isNaN(roll118Number) && selected118Rolls.includes(roll118Number)
+                                              ? "✓ Selected"
+                                              : "Not Selected";
+                                          })()}
                                         </Badge>
                                         <Button
                                           size="sm"
@@ -1810,7 +2025,7 @@ export default function PlanningPage() {
       <ConfirmationDialog
         isOpen={showConfirmDialog}
         title="Confirm Production Creation"
-        message={`Are you sure you want to move ${selectedCutRolls.length} cut roll(s) to production? This action will generate QR codes and cannot be undone.`}
+        message={`Are you sure you want to move ${selected118Rolls.length} individual 118" roll(s) (containing ${selectedCutRolls.length} cut pieces) to production? This action will generate QR codes and cannot be undone.`}
         onConfirm={createProductionRecords}
         onCancel={() => setShowConfirmDialog(false)}
         confirmText="Start Production"
