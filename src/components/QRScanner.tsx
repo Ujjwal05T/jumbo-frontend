@@ -78,7 +78,7 @@ function WeightUpdateForm({ scanResult, onUpdate, loading }: WeightUpdateFormPro
     
     try {
       await onUpdate({
-        qr_code: scanResult.qr_code,
+        qr_code: scanResult.barcode_id || scanResult.qr_code,
         weight_kg: weightNum,
         location
       });
@@ -95,7 +95,7 @@ function WeightUpdateForm({ scanResult, onUpdate, loading }: WeightUpdateFormPro
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="weight">Weight (kg) *</Label>
+          <Label htmlFor="weight" className='pb-2'>Weight (kg) *</Label>
           <Input
             id="weight"
             type="number"
@@ -109,7 +109,7 @@ function WeightUpdateForm({ scanResult, onUpdate, loading }: WeightUpdateFormPro
         </div>
         
         <div>
-          <Label htmlFor="location">Location (Optional)</Label>
+          <Label htmlFor="location" className='pb-2'>Location (Optional)</Label>
           <Input
             id="location"
             value={location}
@@ -149,7 +149,7 @@ function ScanResultDisplay({ result }: ScanResultDisplayProps) {
         <div className="flex justify-between items-start">
           <div>
             <CardTitle className="text-lg">Roll Details</CardTitle>
-            <CardDescription>QR Code: {formatQRCodeDisplay(result.qr_code)}</CardDescription>
+            <CardDescription>Code: {result.barcode_id || formatQRCodeDisplay(result.qr_code)}</CardDescription>
           </div>
           <Badge 
             style={{ backgroundColor: statusColor, color: 'white' }}
@@ -212,10 +212,6 @@ export default function QRScanner() {
   const [scanResult, setScanResult] = useState<QRScanResult | null>(null);
   const [scanHistory, setScanHistory] = useState<ScanHistoryItem[]>([]);
   
-  // Camera state
-  const [isCameraActive, setIsCameraActive] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
   
   // Generation state
   const [generateRequest, setGenerateRequest] = useState<QRGenerateRequest>({});
@@ -230,13 +226,6 @@ export default function QRScanner() {
         console.error('Failed to load scan history:', err);
       }
     }
-    
-    return () => {
-      // Cleanup camera stream on unmount
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-    };
   }, []);
   
   const saveScanHistory = (newHistory: ScanHistoryItem[]) => {
@@ -345,30 +334,7 @@ export default function QRScanner() {
     }
   };
   
-  const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' } // Use rear camera on mobile
-      });
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        streamRef.current = stream;
-        setIsCameraActive(true);
-      }
-    } catch (err) {
-      toast.error('Failed to access camera');
-      console.error('Camera error:', err);
-    }
-  };
-  
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    setIsCameraActive(false);
-  };
+
   
   const exportScanHistory = () => {
     if (scanHistory.length === 0) {
@@ -402,8 +368,8 @@ export default function QRScanner() {
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">QR Code Management</h1>
-          <p className="text-muted-foreground">Scan, track, and manage production roll QR codes</p>
+          <h1 className="text-3xl font-bold">Barcode & QR Management</h1>
+          <p className="text-muted-foreground">Scan, track, and manage production roll barcodes and QR codes</p>
         </div>
         
         <div className="flex gap-2">
@@ -445,21 +411,21 @@ export default function QRScanner() {
         <TabsContent value="scan" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>QR Code Scanner</CardTitle>
+              <CardTitle>Barcode & QR Scanner</CardTitle>
               <CardDescription>
-                Scan QR codes manually or using camera
+                Scan barcodes or QR codes manually
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex gap-4">
                 <div className="flex-1">
-                  <Label htmlFor="qr-input">Enter QR Code</Label>
-                  <div className="flex gap-2">
+                  <Label htmlFor="qr-input">Enter Barcode or QR Code</Label>
+                  <div className="flex gap-2 p-2">
                     <Input
                       id="qr-input"
                       value={qrInput}
                       onChange={(e) => setQrInput(e.target.value)}
-                      placeholder="Enter or paste QR code"
+                      placeholder="Enter barcode (CR_00001) or QR code"
                       onKeyDown={(e) => e.key === 'Enter' && handleManualScan()}
                     />
                     <Button onClick={handleManualScan} disabled={loading || !qrInput.trim()}>
@@ -471,31 +437,7 @@ export default function QRScanner() {
                     </Button>
                   </div>
                 </div>
-                
-                <div className="flex items-end">
-                  <Button
-                    variant="outline"
-                    onClick={isCameraActive ? stopCamera : startCamera}
-                  >
-                    <Camera className="mr-2 h-4 w-4" />
-                    {isCameraActive ? 'Stop Camera' : 'Start Camera'}
-                  </Button>
-                </div>
               </div>
-              
-              {isCameraActive && (
-                <div className="space-y-2">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    className="w-full max-w-md mx-auto border rounded-lg"
-                  />
-                  <p className="text-sm text-muted-foreground text-center">
-                    Point camera at QR code to scan
-                  </p>
-                </div>
-              )}
             </CardContent>
           </Card>
           
@@ -508,7 +450,7 @@ export default function QRScanner() {
               <CardHeader>
                 <CardTitle>Update Roll Weight</CardTitle>
                 <CardDescription>
-                  Update weight and status for QR: {formatQRCodeDisplay(scanResult.qr_code)}
+                  Update weight and status for: {scanResult.barcode_id || formatQRCodeDisplay(scanResult.qr_code)}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -582,7 +524,7 @@ export default function QRScanner() {
                     <div key={index} className="p-3 border rounded-lg">
                       <div className="flex justify-between items-start mb-2">
                         <div>
-                          <p className="font-medium">{formatQRCodeDisplay(item.qr_code)}</p>
+                          <p className="font-medium">{item.barcode_id || formatQRCodeDisplay(item.qr_code)}</p>
                           <p className="text-sm text-muted-foreground">
                             {formatDimensions(item.roll_details.width_inches)} - {formatWeight(item.roll_details.weight_kg)}
                           </p>

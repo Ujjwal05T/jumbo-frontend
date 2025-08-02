@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { MASTER_ENDPOINTS, PRODUCTION_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
+import jsPDF from 'jspdf';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -15,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, AlertCircle, Eye, Play, CheckCircle, Factory, Search, Filter } from "lucide-react";
+import { Loader2, AlertCircle, Eye, Play, CheckCircle, Factory, Search, Filter, Download, FileText } from "lucide-react";
 
 interface Plan {
   id: string;
@@ -216,6 +217,98 @@ export default function PlansPage() {
     return matchesSearch && matchesStatus && matchesDate;
   });
 
+  // PDF Export Functions
+  const exportPlanSummaryToPDF = () => {
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.width;
+      let yPosition = 20;
+
+      // Title
+      doc.setFontSize(20);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Production Plans Summary', pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 15;
+
+      // Date and filters
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Generated on: ${new Date().toLocaleString()}`, 20, yPosition);
+      yPosition += 5;
+      doc.text(`Total Plans: ${filteredPlans.length}`, 20, yPosition);
+      yPosition += 5;
+      if (statusFilter !== "all") doc.text(`Status Filter: ${statusFilter}`, 20, yPosition), yPosition += 5;
+      if (dateFilter !== "all") doc.text(`Date Filter: ${dateFilter}`, 20, yPosition), yPosition += 5;
+      yPosition += 10;
+
+      // Table headers
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      const headers = ['Plan ID', 'Plan Name', 'Status', 'Waste %', 'Created By', 'Created Date'];
+      const colWidths = [25, 45, 20, 15, 35, 30];
+      let xPosition = 20;
+      
+      headers.forEach((header, index) => {
+        doc.text(header, xPosition, yPosition);
+        xPosition += colWidths[index];
+      });
+      yPosition += 5;
+
+      // Draw header line
+      doc.line(20, yPosition, pageWidth - 20, yPosition);
+      yPosition += 5;
+
+      // Table data
+      doc.setFont('helvetica', 'normal');
+      filteredPlans.forEach((plan, index) => {
+        if (yPosition > 270) { // New page if needed
+          doc.addPage();
+          yPosition = 20;
+        }
+
+        xPosition = 20;
+        const user = getUserById(plan.created_by_id);
+        const rowData = [
+          plan.frontend_id || `P${index + 1}`,
+          (plan.name || `Plan #${index + 1}`).substring(0, 25),
+          plan.status,
+          `${plan.expected_waste_percentage}%`,
+          (user?.name || 'Unknown').substring(0, 20),
+          new Date(plan.created_at).toLocaleDateString()
+        ];
+
+        rowData.forEach((data, colIndex) => {
+          doc.text(data.toString(), xPosition, yPosition);
+          xPosition += colWidths[colIndex];
+        });
+        yPosition += 5;
+      });
+
+      // Status summary
+      yPosition += 10;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Status Summary:', 20, yPosition);
+      yPosition += 5;
+      
+      const statusCounts = filteredPlans.reduce((acc, plan) => {
+        acc[plan.status] = (acc[plan.status] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      doc.setFont('helvetica', 'normal');
+      Object.entries(statusCounts).forEach(([status, count]) => {
+        doc.text(`${status}: ${count}`, 20, yPosition);
+        yPosition += 4;
+      });
+
+      doc.save(`plans-summary-${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success('Plans summary exported to PDF successfully!');
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      toast.error('Failed to export PDF');
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -226,13 +319,23 @@ export default function PlansPage() {
               Manage cutting plans and track cut roll production with detailed analytics
             </p>
           </div>
-          <Button 
-            variant="default" 
-            onClick={() => router.push('/planning')}
-          >
-            <Factory className="mr-2 h-4 w-4" />
-            Create New Plan
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={exportPlanSummaryToPDF}
+              disabled={filteredPlans.length === 0}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export PDF
+            </Button>
+            <Button 
+              variant="default" 
+              onClick={() => router.push('/planning')}
+            >
+              <Factory className="mr-2 h-4 w-4" />
+              Create New Plan
+            </Button>
+          </div>
         </div>
 
         {/* Filters Section */}

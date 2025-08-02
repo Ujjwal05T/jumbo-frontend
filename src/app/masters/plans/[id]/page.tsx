@@ -22,7 +22,8 @@ import {
   Play, 
   CheckCircle, 
   Factory, 
-  QrCode, 
+  QrCode,
+  ScanLine, 
   Search, 
   Package, 
   Weight, 
@@ -31,9 +32,15 @@ import {
   Calendar,
   User,
   Clock,
-  MapPin
+  MapPin,
+  Download,
+  FileText,
+  BarChart3
 } from "lucide-react";
 import QRCodeDisplay from "@/components/QRCodeDisplay";
+import BarcodeDisplay from "@/components/BarcodeDisplay";
+import jsPDF from 'jspdf';
+import JsBarcode from 'jsbarcode';
 
 interface Plan {
   id: string;
@@ -81,6 +88,7 @@ interface CutRollItem {
   status: string;
   location: string;
   qr_code: string;
+  barcode_id?: string;
   created_at: string;
   paper_specs?: {
     gsm: number;
@@ -239,10 +247,301 @@ export default function PlanDetailsPage() {
     setSelectedQRCode(qrCode);
   };
 
+  // Helper function to generate barcode as canvas
+  const generateBarcodeCanvas = (value: string): HTMLCanvasElement => {
+    const canvas = document.createElement('canvas');
+    try {
+      JsBarcode(canvas, value, {
+        format: "CODE128",
+        width: 2,
+        height: 60,
+        displayValue: true,
+        fontSize: 12,
+        textAlign: "center",
+        textPosition: "bottom"
+      });
+    } catch (error) {
+      console.error('Error generating barcode:', error);
+      // Fallback: create a simple canvas with text
+      canvas.width = 200;
+      canvas.height = 80;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'black';
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(value, canvas.width / 2, canvas.height / 2);
+      }
+    }
+    return canvas;
+  };
+
+  // PDF Export Functions
+  const exportBarcodesToPDF = () => {
+    try {
+      if (!productionSummary || filteredCutRolls.length === 0) {
+        toast.error('No cut rolls available for export');
+        return;
+      }
+
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.width;
+      const pageHeight = doc.internal.pageSize.height;
+      
+      // Single column layout configuration
+      const marginX = 20;
+      const marginY = 20;
+      const labelWidth = pageWidth - (marginX * 2);
+      const itemsPerPage = 10; // More items per page since content is simpler
+      
+      let yPosition = marginY;
+      let itemCount = 0;
+      let pageCount = 1;
+
+      // Title on first page
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Barcode Labels - ${plan?.name || 'Plan Details'}`, pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 15;
+      
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Generated on: ${new Date().toLocaleString()}`, pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 8;
+      doc.text(`Total Items: ${filteredCutRolls.length}`, pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 20;
+      
+      filteredCutRolls.forEach((item, index) => {
+        // Check if we need a new page
+        if (itemCount >= itemsPerPage || yPosition > pageHeight - 60) {
+          doc.addPage();
+          pageCount++;
+          yPosition = marginY;
+          itemCount = 0;
+        }
+
+        const barcodeValue = item.barcode_id || item.qr_code;
+        
+        // Generate and add barcode image
+        try {
+          const canvas = generateBarcodeCanvas(barcodeValue);
+          const barcodeDataUrl = canvas.toDataURL('image/png');
+          
+          // Barcode at full width, centered
+          const barcodeWidth = labelWidth * 0.8; // 80% of available width
+          const barcodeHeight = 25;
+          const barcodeX = marginX + (labelWidth - barcodeWidth) / 2;
+          const barcodeY = yPosition;
+          
+          doc.addImage(barcodeDataUrl, 'PNG', barcodeX, barcodeY, barcodeWidth, barcodeHeight);
+          yPosition += barcodeHeight + 8;
+          
+        } catch (error) {
+          console.error('Error adding barcode:', error);
+          // Fallback: text representation
+          doc.setFontSize(12);
+          doc.setFont('courier', 'bold');
+          doc.text(`|||| ${barcodeValue} ||||`, pageWidth / 2, yPosition, { align: 'center' });
+          yPosition += 12;
+        }
+
+        // Paper specifications in single row (only if available)
+        if (item.paper_specs) {
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'normal');
+          doc.text(`${item.paper_specs.gsm}gsm, BF:${item.paper_specs.bf}, ${item.paper_specs.shade}`, pageWidth / 2, yPosition, { align: 'center' });
+          yPosition += 12;
+        } else {
+          // Small spacing if no paper specs
+          yPosition += 8;
+        }
+
+        // Separation line
+        if (index < filteredCutRolls.length - 1) {
+          doc.setDrawColor(150, 150, 150);
+          doc.setLineWidth(0.5);
+          doc.line(marginX + 20, yPosition, pageWidth - marginX - 20, yPosition);
+          yPosition += 15;
+        }
+
+        itemCount++;
+      });
+
+      // Add page numbers
+      const totalPages = doc.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Page ${i} of ${totalPages}`, pageWidth - 20, pageHeight - 10, { align: 'right' });
+      }
+
+      doc.save(`barcode-labels-${plan?.name || 'plan'}-${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success('Barcode labels exported to PDF successfully!');
+    } catch (error) {
+      console.error('Error exporting barcode PDF:', error);
+      toast.error('Failed to export barcode PDF');
+    }
+  };
+
+  const exportPlanDetailsToPDF = () => {
+    try {
+      if (!plan || !productionSummary) {
+        toast.error('Plan data not available for export');
+        return;
+      }
+
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.width;
+      let yPosition = 20;
+
+      // Title
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Plan Details Report`, pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 15;
+
+      // Plan Information
+      doc.setFontSize(14);
+      doc.text(`Plan: ${plan.name || 'Unnamed Plan'}`, 20, yPosition);
+      yPosition += 8;
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Status: ${plan.status}`, 20, yPosition);
+      yPosition += 5;
+      doc.text(`Expected Waste: ${plan.expected_waste_percentage}%`, 20, yPosition);
+      yPosition += 5;
+      if (plan.actual_waste_percentage) {
+        doc.text(`Actual Waste: ${plan.actual_waste_percentage}%`, 20, yPosition);
+        yPosition += 5;
+      }
+      doc.text(`Created: ${new Date(plan.created_at).toLocaleString()}`, 20, yPosition);
+      yPosition += 5;
+      doc.text(`Created By: ${plan.created_by?.name || 'Unknown'} (@${plan.created_by?.username || 'unknown'})`, 20, yPosition);
+      yPosition += 10;
+
+      // Production Summary
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Production Summary', 20, yPosition);
+      yPosition += 8;
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Total Cut Rolls: ${productionSummary.production_summary.total_cut_rolls}`, 20, yPosition);
+      yPosition += 5;
+      doc.text(`Total Weight: ${productionSummary.production_summary.total_weight_kg} kg`, 20, yPosition);
+      yPosition += 5;
+      doc.text(`Average Weight per Roll: ${productionSummary.production_summary.average_weight_per_roll.toFixed(1)} kg`, 20, yPosition);
+      yPosition += 5;
+      doc.text(`Different Paper Types: ${productionSummary.production_summary.paper_specifications.length}`, 20, yPosition);
+      yPosition += 10;
+
+      // Status Breakdown
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Status Breakdown', 20, yPosition);
+      yPosition += 8;
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      Object.entries(productionSummary.production_summary.status_breakdown).forEach(([status, data]) => {
+        doc.text(`${status}: ${data.count} rolls (${data.total_weight.toFixed(1)} kg)`, 20, yPosition);
+        yPosition += 5;
+      });
+      yPosition += 5;
+
+      // Paper Specifications
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Paper Specifications', 20, yPosition);
+      yPosition += 8;
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      productionSummary.production_summary.paper_specifications.forEach((spec) => {
+        doc.text(`${spec.gsm}gsm, BF:${spec.bf}, ${spec.shade} - ${spec.roll_count} rolls`, 20, yPosition);
+        yPosition += 5;
+      });
+      yPosition += 10;
+
+      // Add new page for detailed items if needed
+      if (yPosition > 200) {
+        doc.addPage();
+        yPosition = 20;
+      }
+
+      // Detailed Cut Rolls Table
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Cut Rolls Details', 20, yPosition);
+      yPosition += 8;
+
+      // Table headers
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      const headers = ['Barcode', 'Width', 'Weight', 'Status', 'Location', 'Paper', 'Client'];
+      const colWidths = [25, 12, 15, 18, 25, 30, 25];
+      let xPosition = 20;
+      
+      headers.forEach((header, index) => {
+        doc.text(header, xPosition, yPosition);
+        xPosition += colWidths[index];
+      });
+      yPosition += 5;
+
+      // Draw header line
+      doc.line(20, yPosition, pageWidth - 20, yPosition);
+      yPosition += 3;
+
+      // Table data
+      doc.setFont('helvetica', 'normal');
+      filteredCutRolls.forEach((item) => {
+        if (yPosition > 270) {
+          doc.addPage();
+          yPosition = 20;
+        }
+
+        xPosition = 20;
+        const rowData = [
+          (item.barcode_id || item.qr_code).substring(0, 12),
+          `${item.width_inches}"`,
+          `${item.weight_kg}kg`,
+          item.status.substring(0, 8),
+          item.location.substring(0, 12),
+          item.paper_specs ? `${item.paper_specs.gsm}gsm` : 'N/A',
+          (item.client_name || 'Unknown').substring(0, 12)
+        ];
+
+        rowData.forEach((data, colIndex) => {
+          doc.text(data.toString(), xPosition, yPosition);
+          xPosition += colWidths[colIndex];
+        });
+        yPosition += 4;
+      });
+
+      // Footer
+      yPosition += 10;
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'italic');
+      doc.text(`Report generated on ${new Date().toLocaleString()}`, pageWidth / 2, yPosition, { align: 'center' });
+
+      doc.save(`plan-details-${plan.name || 'plan'}-${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success('Plan details exported to PDF successfully!');
+    } catch (error) {
+      console.error('Error exporting plan details PDF:', error);
+      toast.error('Failed to export plan details PDF');
+    }
+  };
+
   // Filter cut rolls
   const filteredCutRolls = productionSummary?.detailed_items.filter(item => {
     const matchesSearch = !cutRollSearchTerm || 
       item.qr_code.toLowerCase().includes(cutRollSearchTerm.toLowerCase()) ||
+      item.barcode_id?.toLowerCase().includes(cutRollSearchTerm.toLowerCase()) ||
       item.location.toLowerCase().includes(cutRollSearchTerm.toLowerCase()) ||
       item.paper_specs?.shade.toLowerCase().includes(cutRollSearchTerm.toLowerCase()) ||
       item.client_name?.toLowerCase().includes(cutRollSearchTerm.toLowerCase());
@@ -304,6 +603,26 @@ export default function PlanDetailsPage() {
             </div>
           </div>
           <div className="flex gap-2">
+            {productionSummary && filteredCutRolls.length > 0 && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={exportBarcodesToPDF}
+                >
+                  <ScanLine className="mr-2 h-4 w-4" />
+                  Export Labels
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={exportPlanDetailsToPDF}
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  Export Plan Report
+                </Button>
+              </>
+            )}
             {plan.status === 'planned' && (
               <Button
                 onClick={() => updatePlanStatus('in_progress')}
@@ -474,6 +793,17 @@ export default function PlanDetailsPage() {
                     <CardDescription>Detailed information about all cut rolls in this plan</CardDescription>
                   </div>
                   <div className="flex gap-3">
+                    {filteredCutRolls.length > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={exportBarcodesToPDF}
+                        className="text-purple-600 border-purple-600 hover:bg-purple-50"
+                      >
+                        <Download className="h-3 w-3 mr-1" />
+                        Export Labels
+                      </Button>
+                    )}
                     {productionSummary.detailed_items.length === 0 && (
                       <Button
                         size="sm"
@@ -515,7 +845,7 @@ export default function PlanDetailsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>QR Code</TableHead>
+                        <TableHead>Barcode</TableHead>
                         <TableHead>Dimensions</TableHead>
                         <TableHead>Paper Specs</TableHead>
                         <TableHead>Weight</TableHead>
@@ -531,7 +861,7 @@ export default function PlanDetailsPage() {
                         filteredCutRolls.map((item) => (
                           <TableRow key={item.inventory_id}>
                             <TableCell>
-                              <div className="font-mono text-xs">{item.qr_code}</div>
+                              <div className="font-mono text-xs">{item.barcode_id || item.qr_code}</div>
                             </TableCell>
                             <TableCell>
                               <div className="font-medium">{item.width_inches}"</div>
@@ -579,9 +909,9 @@ export default function PlanDetailsPage() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => handleShowQRCode(item.qr_code)}
+                                onClick={() => handleShowQRCode(item.barcode_id || item.qr_code)}
                               >
-                                <QrCode className="h-3 w-3" />
+                                {item.barcode_id ? <ScanLine className="h-3 w-3" /> : <QrCode className="h-3 w-3" />}
                               </Button>
                             </TableCell>
                           </TableRow>
@@ -618,13 +948,24 @@ export default function PlanDetailsPage() {
         {selectedQRCode && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-background p-4 rounded-lg max-w-sm w-full mx-4">
-              <QRCodeDisplay
-                value={selectedQRCode}
-                title="Cut Roll QR Code"
-                description={`Scan this code to access cut roll details`}
-                size={200}
-                showActions={true}
-              />
+              {selectedQRCode?.startsWith('CR_') ? (
+                <BarcodeDisplay
+                  value={selectedQRCode}
+                  title="Cut Roll Barcode"
+                  description={`Scan this barcode to access cut roll details`}
+                  width={2}
+                  height={100}
+                  showActions={true}
+                />
+              ) : (
+                <QRCodeDisplay
+                  value={selectedQRCode}
+                  title="Cut Roll QR Code"
+                  description={`Scan this code to access cut roll details`}
+                  size={200}
+                  showActions={true}
+                />
+              )}
               <Button
                 className="w-full mt-4"
                 variant="outline"

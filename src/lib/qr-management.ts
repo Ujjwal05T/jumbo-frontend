@@ -9,6 +9,7 @@ import { PRODUCTION_ENDPOINTS, createRequestOptions } from './api-config';
 export interface QRScanResult {
   inventory_id: string;
   qr_code: string;
+  barcode_id?: string;
   roll_details: {
     width_inches: number;
     weight_kg: number;
@@ -39,6 +40,7 @@ export interface QRWeightUpdate {
 export interface QRWeightUpdateResult {
   inventory_id: string;
   qr_code: string;
+  barcode_id?: string;
   weight_update: {
     old_weight_kg: number;
     new_weight_kg: number;

@@ -204,6 +204,7 @@ export default function DispatchPage() {
     const searchLower = searchTerm.toLowerCase();
     return (
       item.qr_code?.toLowerCase().includes(searchLower) ||
+      item.barcode_id?.toLowerCase().includes(searchLower) ||
       item.paper_spec?.toLowerCase().includes(searchLower) ||
       item.location?.toLowerCase().includes(searchLower) ||
       item.created_by?.toLowerCase().includes(searchLower)
@@ -568,7 +569,7 @@ export default function DispatchPage() {
                         </TableCell>
                         <TableCell>
                           <div className="space-y-1">
-                            <div className="font-mono text-sm">{item.qr_code}</div>
+                            <div className="font-mono text-sm">{item.barcode_id || item.qr_code}</div>
                             <div className="text-xs text-muted-foreground">
                               Created by: {item.created_by}
                             </div>
@@ -682,6 +683,7 @@ export default function DispatchPage() {
         selectedItems={selectedItemsForDispatch.map(item => ({
           inventory_id: item.inventory_id,
           qr_code: item.qr_code,
+          barcode_id: item.barcode_id,
           paper_spec: item.paper_spec,
           width_inches: item.width_inches,
           weight_kg: item.weight_kg,

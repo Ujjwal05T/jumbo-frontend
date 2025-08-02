@@ -48,7 +48,7 @@ export default function LandingPage() {
     {
       icon: BarChart3,
       title: "Real-time Tracking",
-      description: "Monitor inventory, production status, and order fulfillment with QR codes and live updates."
+      description: "Monitor inventory, production status, and order fulfillment with barcodes and live updates."
     }
   ];
 

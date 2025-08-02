@@ -50,6 +50,7 @@ interface DispatchFormData {
 interface SelectedItem {
   inventory_id: string;
   qr_code: string;
+  barcode_id?: string;
   paper_spec: string;
   width_inches: number;
   weight_kg: number;

@@ -46,16 +46,17 @@ import {
   AlertCircle,
   Factory,
   QrCode,
+  ScanLine,
   X,
   FileText,
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
-import QRCodeDisplay from "@/components/QRCodeDisplay";
+import BarcodeDisplay from "@/components/BarcodeDisplay";
 import { fetchOrders, Order } from "@/lib/orders";
 import { PRODUCTION_ENDPOINTS, API_BASE_URL, createRequestOptions } from "@/lib/api-config";
 import jsPDF from "jspdf";
-import QRCode from "qrcode";
+import JsBarcode from 'jsbarcode';
 
 // NEW FLOW: Updated interfaces
 interface PlanGenerationResult extends OptimizationResult {
@@ -67,6 +68,7 @@ interface PlanGenerationResult extends OptimizationResult {
 interface ProductionRecord {
   id: string;
   qr_code: string;
+  barcode_id?: string;
   width_inches: number;
   gsm: number;
   bf: number;
@@ -182,14 +184,45 @@ export default function PlanningPage() {
   const [creatingProduction, setCreatingProduction] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("orders");
-  const [selectedQRCode, setSelectedQRCode] = useState<string | null>(null);
+  const [selectedBarcode, setSelectedBarcode] = useState<string | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [qrModalLoading, setQrModalLoading] = useState(false);
+  const [barcodeModalLoading, setBarcodeModalLoading] = useState(false);
   const [expandedRollSets, setExpandedRollSets] = useState<Set<string>>(
     new Set()
   );
   const [generatingPDF, setGeneratingPDF] = useState(false);
-  const [generatingQRPDF, setGeneratingQRPDF] = useState(false);
+  const [generatingBarcodePDF, setGeneratingBarcodePDF] = useState(false);
+
+  // Helper function to generate barcode as canvas
+  const generateBarcodeCanvas = (value: string): HTMLCanvasElement => {
+    const canvas = document.createElement('canvas');
+    try {
+      JsBarcode(canvas, value, {
+        format: "CODE128",
+        width: 2,
+        height: 60,
+        displayValue: true,
+        fontSize: 12,
+        textAlign: "center",
+        textPosition: "bottom"
+      });
+    } catch (error) {
+      console.error('Error generating barcode:', error);
+      // Fallback: create a simple canvas with text
+      canvas.width = 200;
+      canvas.height = 60;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, 200, 60);
+        ctx.fillStyle = 'black';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(value, 100, 35);
+      }
+    }
+    return canvas;
+  };
 
   // Memoized computations for performance
   const filteredOrders = useMemo(() => {
@@ -511,6 +544,7 @@ export default function PlanningPage() {
           paper_id: paper_id,
           width_inches: cutRoll.width,
           qr_code: `CUT_ROLL_${Date.now()}_${Math.random().toString(36).substr(2, 4)}_${index}`, // Generate unique QR code
+          barcode_id: `CR_${String(index + 1).padStart(5, '0')}`, // Generate barcode ID like CR_00001
           gsm: cutRoll.gsm,
           bf: cutRoll.bf,
           shade: cutRoll.shade,
@@ -544,6 +578,7 @@ export default function PlanningPage() {
             paper_id: paper_id,
             width_inches: cutRoll.width,
             qr_code: `CUT_ROLL_${Date.now()}_${Math.random().toString(36).substr(2, 4)}_${index}`,
+            barcode_id: `CR_${String(index + 1).padStart(5, '0')}`,
             gsm: cutRoll.gsm,
             bf: cutRoll.bf,
             shade: cutRoll.shade,
@@ -580,6 +615,7 @@ export default function PlanningPage() {
       const productionRecords = selectedRolls.map((roll, index) => ({
         id: `inv_${Date.now()}_${index}`,
         qr_code: roll.qr_code,
+        barcode_id: roll.barcode_id,
         width_inches: roll.width_inches,
         gsm: roll.gsm,
         bf: roll.bf,
@@ -1017,109 +1053,115 @@ export default function PlanningPage() {
     }
   };
 
-  const generateQRCodesPDF = async () => {
+  const generateBarcodesPDF = async () => {
     if (productionRecords.length === 0) {
-      toast.error("No production records available to generate QR codes PDF");
+      toast.error("No production records available to generate barcode labels PDF");
       return;
     }
 
-    setGeneratingQRPDF(true);
+    setGeneratingBarcodePDF(true);
     try {
-      const pdf = new jsPDF();
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      let yPosition = 20;
-      const qrSize = 50; // Size of QR code in PDF
-      const qrGroupHeight = 80; // Total height for QR code + its data + spacing to next group
-      const maxItemsPerPage = Math.floor((pageHeight - 60) / qrGroupHeight); // Items per page based on height
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.width;
+      const pageHeight = doc.internal.pageSize.height;
+      
+      // Single column layout configuration
+      const marginX = 20;
+      const marginY = 20;
+      const labelWidth = pageWidth - (marginX * 2);
+      const itemsPerPage = 10; // More items per page since content is simpler
+      
+      let yPosition = marginY;
+      let itemCount = 0;
+      let pageCount = 1;
 
-      // Helper function to check if we need a new page
-      const checkPageBreak = () => {
-        if (yPosition + qrGroupHeight > pageHeight - 20) {
-          pdf.addPage();
-          yPosition = 20;
-        }
-      };
-
-      // Title
-      pdf.setFontSize(18);
-      pdf.setTextColor(40, 40, 40);
-      pdf.text("Production QR Codes", pageWidth / 2, yPosition, { align: 'center' });
-      yPosition += 10;
-
-      // Date
-      pdf.setFontSize(10);
-      pdf.setTextColor(100, 100, 100);
-      pdf.text(`Generated on: ${new Date().toLocaleString()}`, pageWidth / 2, yPosition, { align: 'center' });
+      // Title on first page
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Barcode Labels - Production Records`, pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 15;
+      
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Generated on: ${new Date().toLocaleString()}`, pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 8;
+      doc.text(`Total Items: ${productionRecords.length}`, pageWidth / 2, yPosition, { align: 'center' });
       yPosition += 20;
-
-      for (let i = 0; i < productionRecords.length; i++) {
-        const record = productionRecords[i];
-        
-        checkPageBreak();
-        
-        // Single column layout - QR code at top, data below
-        const qrX = (pageWidth - qrSize) / 2; // Center QR code horizontally
-        const currentY = yPosition;
-
-        try {
-          // Generate QR code as data URL
-          const qrDataUrl = await QRCode.toDataURL(record.qr_code, {
-            width: 200,
-            margin: 1,
-            color: {
-              dark: '#000000',
-              light: '#FFFFFF'
-            }
-          });
-
-          // Add QR code image (centered at top)
-          pdf.addImage(qrDataUrl, 'PNG', qrX, currentY, qrSize, qrSize);
-
-          // Add data below QR code with tight grouping
-          const dataY = currentY + qrSize + 3; // Start data 3pt below QR code (tighter)
-          
-          // Row 1: QR Code ID only
-          pdf.setFontSize(10);
-          pdf.setTextColor(0, 0, 0);
-          pdf.text(record.qr_code, pageWidth / 2, dataY, { align: 'center' });
-          
-          // Row 2: Rest of the fields (Width, Paper, Shade) in one row
-          pdf.setFontSize(9);
-          pdf.setTextColor(40, 40, 40);
-          const detailsText = `${record.width_inches}" | ${record.gsm}gsm, ${record.bf}bf | ${record.shade}`;
-          pdf.text(detailsText, pageWidth / 2, dataY + 8, { align: 'center' }); // Tighter spacing between text rows
-
-        } catch (qrError) {
-          console.error(`Error generating QR code for ${record.qr_code}:`, qrError);
-          // Fallback: just show text data
-          pdf.setFontSize(10);
-          pdf.setTextColor(40, 40, 40);
-          pdf.text(`QR: ${record.qr_code}`, pageWidth / 2, currentY, { align: 'center' });
-          pdf.text(`${record.width_inches}" - ${record.gsm}gsm - ${record.shade}`, pageWidth / 2, currentY + 12, { align: 'center' });
+      
+      productionRecords.forEach((record, index) => {
+        // Check if we need a new page
+        if (itemCount >= itemsPerPage || yPosition > pageHeight - 60) {
+          doc.addPage();
+          pageCount++;
+          yPosition = marginY;
+          itemCount = 0;
         }
 
-        yPosition += qrGroupHeight; // Move to next QR group with proper spacing
+        const barcodeValue = record.barcode_id || record.qr_code;
+        
+        // Generate and add barcode image
+        try {
+          const canvas = generateBarcodeCanvas(barcodeValue);
+          const barcodeDataUrl = canvas.toDataURL('image/png');
+          
+          // Barcode at full width, centered
+          const barcodeWidth = labelWidth * 0.8; // 80% of available width
+          const barcodeHeight = 25;
+          const barcodeX = marginX + (labelWidth - barcodeWidth) / 2;
+          const barcodeY = yPosition;
+          
+          doc.addImage(barcodeDataUrl, 'PNG', barcodeX, barcodeY, barcodeWidth, barcodeHeight);
+          yPosition += barcodeHeight + 8;
+          
+        } catch (error) {
+          console.error('Error adding barcode:', error);
+          // Fallback: text representation
+          doc.setFontSize(12);
+          doc.setFont('courier', 'bold');
+          doc.text(`|||| ${barcodeValue} ||||`, pageWidth / 2, yPosition, { align: 'center' });
+          yPosition += 12;
+        }
+
+        // Paper specifications in single row
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${record.gsm}gsm, BF:${record.bf}, ${record.shade}`, pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 12;
+
+        // Separation line
+        if (index < productionRecords.length - 1) {
+          doc.setDrawColor(150, 150, 150);
+          doc.setLineWidth(0.5);
+          doc.line(marginX + 20, yPosition, pageWidth - marginX - 20, yPosition);
+          yPosition += 15;
+        }
+
+        itemCount++;
+      });
+
+      // Add page numbers
+      const totalPages = doc.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Page ${i} of ${totalPages}`, pageWidth - 20, pageHeight - 10, { align: 'right' });
       }
 
-      // Save the PDF
-      pdf.save(`production-qr-codes-${new Date().getTime()}.pdf`);
-      toast.success(`Generated QR codes PDF with ${productionRecords.length} codes`);
-
+      doc.save(`barcode-labels-production-${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success('Barcode labels exported to PDF successfully!');
     } catch (error) {
-      console.error("Error generating QR codes PDF:", error);
-      const errorMessage = "Failed to generate QR codes PDF. Please try again.";
-      setError(errorMessage);
-      toast.error(errorMessage);
+      console.error('Error exporting barcode PDF:', error);
+      toast.error('Failed to export barcode PDF');
     } finally {
-      setGeneratingQRPDF(false);
+      setGeneratingBarcodePDF(false);
     }
   };
 
   return (
     <div className="space-y-6 m-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Production Planning - New Flow</h1>
+        <h1 className="text-3xl font-bold">Production Planning </h1>
         <div className="flex gap-2">
           <Button
             variant="default"
@@ -1865,22 +1907,22 @@ export default function PlanningPage() {
                     <div>
                       <CardTitle>Production Records</CardTitle>
                       <CardDescription>
-                        Cut rolls moved to production with QR codes generated
+                        Cut rolls moved to production with barcode labels generated
                       </CardDescription>
                     </div>
                     <Button
                       variant="outline"
-                      onClick={generateQRCodesPDF}
-                      disabled={generatingQRPDF || productionRecords.length === 0}>
-                      {generatingQRPDF ? (
+                      onClick={generateBarcodesPDF}
+                      disabled={generatingBarcodePDF || productionRecords.length === 0}>
+                      {generatingBarcodePDF ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Generating QR PDF...
+                          Generating Barcode PDF...
                         </>
                       ) : (
                         <>
-                          <QrCode className="mr-2 h-4 w-4" />
-                          Print QR Codes ({productionRecords.length})
+                          <ScanLine className="mr-2 h-4 w-4" />
+                          Print Barcode Labels ({productionRecords.length})
                         </>
                       )}
                     </Button>
@@ -1890,7 +1932,7 @@ export default function PlanningPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>QR Code</TableHead>
+                        <TableHead>Barcode</TableHead>
                         <TableHead>Width (in)</TableHead>
                         <TableHead>Paper Spec</TableHead>
                         <TableHead>Status</TableHead>
@@ -1907,18 +1949,18 @@ export default function PlanningPage() {
                                 size="sm"
                                 variant="ghost"
                                 onClick={() => {
-                                  setQrModalLoading(true);
-                                  setSelectedQRCode(record.qr_code);
-                                  // Simulate loading time for QR code generation
+                                  setBarcodeModalLoading(true);
+                                  setSelectedBarcode(record.barcode_id || record.qr_code);
+                                  // Simulate loading time for barcode generation
                                   setTimeout(
-                                    () => setQrModalLoading(false),
+                                    () => setBarcodeModalLoading(false),
                                     300
                                   );
                                 }}
-                                aria-label={`View QR code for ${record.qr_code}`}>
-                                <QrCode className="h-4 w-4" />
+                                aria-label={`View barcode for ${record.barcode_id || record.qr_code}`}>
+                                <ScanLine className="h-4 w-4" />
                               </Button>
-                              <code className="text-sm">{record.qr_code}</code>
+                              <code className="text-sm">{record.barcode_id || record.qr_code}</code>
                             </div>
                           </TableCell>
                           <TableCell>{record.width_inches}&quot;</TableCell>
@@ -1965,54 +2007,55 @@ export default function PlanningPage() {
         </Card>
       )}
 
-      {/* QR Code Display Modal */}
-      {selectedQRCode && (
+      {/* Barcode Display Modal */}
+      {selectedBarcode && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
-              setSelectedQRCode(null);
+              setSelectedBarcode(null);
             }
           }}
           onKeyDown={(e) => {
             if (e.key === "Escape") {
-              setSelectedQRCode(null);
+              setSelectedBarcode(null);
             }
           }}
           tabIndex={-1}
           role="dialog"
           aria-modal="true"
-          aria-labelledby="qr-modal-title">
+          aria-labelledby="barcode-modal-title">
           <div className="bg-background p-4 rounded-lg max-w-sm w-full mx-4">
-            {qrModalLoading ? (
+            {barcodeModalLoading ? (
               <div className="flex items-center justify-center p-8">
                 <Loader2 className="h-8 w-8 animate-spin" />
               </div>
             ) : (
               <>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 id="qr-modal-title" className="text-lg font-semibold">
-                    Cut Roll QR Code
+                  <h3 id="barcode-modal-title" className="text-lg font-semibold">
+                    Cut Roll Barcode
                   </h3>
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setSelectedQRCode(null)}
-                    aria-label="Close QR code modal">
+                    onClick={() => setSelectedBarcode(null)}
+                    aria-label="Close barcode modal">
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
-                <QRCodeDisplay
-                  value={selectedQRCode}
-                  title="Cut Roll QR Code"
-                  description={`Production QR Code`}
-                  size={200}
+                <BarcodeDisplay
+                  value={selectedBarcode}
+                  title="Cut Roll Barcode"
+                  description={`Production Barcode`}
+                  width={2}
+                  height={100}
                   showActions={true}
                 />
                 <Button
                   className="w-full mt-4"
                   variant="outline"
-                  onClick={() => setSelectedQRCode(null)}>
+                  onClick={() => setSelectedBarcode(null)}>
                   Close
                 </Button>
               </>
@@ -2025,7 +2068,7 @@ export default function PlanningPage() {
       <ConfirmationDialog
         isOpen={showConfirmDialog}
         title="Confirm Production Creation"
-        message={`Are you sure you want to move ${selected118Rolls.length} individual 118" roll(s) (containing ${selectedCutRolls.length} cut pieces) to production? This action will generate QR codes and cannot be undone.`}
+        message={`Are you sure you want to move ${selected118Rolls.length} individual 118" roll(s) (containing ${selectedCutRolls.length} cut pieces) to production? This action will generate barcode labels and cannot be undone.`}
         onConfirm={createProductionRecords}
         onCancel={() => setShowConfirmDialog(false)}
         confirmText="Start Production"

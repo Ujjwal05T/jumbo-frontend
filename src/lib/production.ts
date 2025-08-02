@@ -46,6 +46,7 @@ export interface InventoryItem {
   frontend_id?: string; // Human-readable inventory ID (e.g., INV-001)
   width: number;
   qr_code: string;
+  barcode_id?: string;
   status: string;
 }
 
