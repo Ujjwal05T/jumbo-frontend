@@ -510,7 +510,7 @@ export default function PlanningPage() {
         return {
           paper_id: paper_id,
           width_inches: cutRoll.width,
-          qr_code: `CUT_ROLL_${index}`, // Generate temporary QR code based on index
+          qr_code: `CUT_ROLL_${Date.now()}_${Math.random().toString(36).substr(2, 4)}_${index}`, // Generate unique QR code
           gsm: cutRoll.gsm,
           bf: cutRoll.bf,
           shade: cutRoll.shade,
@@ -543,7 +543,7 @@ export default function PlanningPage() {
           return {
             paper_id: paper_id,
             width_inches: cutRoll.width,
-            qr_code: `CUT_ROLL_${index}`,
+            qr_code: `CUT_ROLL_${Date.now()}_${Math.random().toString(36).substr(2, 4)}_${index}`,
             gsm: cutRoll.gsm,
             bf: cutRoll.bf,
             shade: cutRoll.shade,

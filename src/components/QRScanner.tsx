@@ -61,7 +61,6 @@ interface WeightUpdateFormProps {
 function WeightUpdateForm({ scanResult, onUpdate, loading }: WeightUpdateFormProps) {
   const [weight, setWeight] = useState<string>('');
   const [location, setLocation] = useState<string>(scanResult.roll_details.location);
-  const [status, setStatus] = useState<string>(scanResult.roll_details.status);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -81,12 +80,11 @@ function WeightUpdateForm({ scanResult, onUpdate, loading }: WeightUpdateFormPro
       await onUpdate({
         qr_code: scanResult.qr_code,
         weight_kg: weightNum,
-        location,
-        status
+        location
       });
       
       setWeight('');
-      toast.success('Weight updated successfully!');
+      toast.success('Weight updated successfully! Status automatically set to available.');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update weight';
       toast.error(errorMessage);
@@ -95,7 +93,7 @@ function WeightUpdateForm({ scanResult, onUpdate, loading }: WeightUpdateFormPro
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="weight">Weight (kg) *</Label>
           <Input
@@ -111,7 +109,7 @@ function WeightUpdateForm({ scanResult, onUpdate, loading }: WeightUpdateFormPro
         </div>
         
         <div>
-          <Label htmlFor="location">Location</Label>
+          <Label htmlFor="location">Location (Optional)</Label>
           <Input
             id="location"
             value={location}
@@ -119,22 +117,12 @@ function WeightUpdateForm({ scanResult, onUpdate, loading }: WeightUpdateFormPro
             placeholder="Roll location"
           />
         </div>
-        
-        <div>
-          <Label htmlFor="status">Status</Label>
-          <select
-            id="status"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            className="w-full px-3 py-2 border border-input rounded-md"
-          >
-            <option value="cutting">Cutting</option>
-            <option value="completed">Completed</option>
-            <option value="quality_check">Quality Check</option>
-            <option value="available">Available</option>
-            <option value="damaged">Damaged</option>
-          </select>
-        </div>
+      </div>
+      
+      <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+        <p className="text-sm text-blue-700">
+          <strong>Note:</strong> When weight is added, the roll status will automatically be set to "available" and ready for dispatch.
+        </p>
       </div>
       
       <Button type="submit" disabled={loading || !weight}>

@@ -324,17 +324,24 @@ export default function PendingOrderItemsPage() {
       return;
     }
 
+    if (selectedCombinations.size % 3 !== 0) {
+      toast.error('Only multiple of 3 rolls can be selected');
+      return;
+    }
+
     try {
       const selectedCombos = optimizationResult?.roll_combinations.filter(combo => 
         selectedCombinations.has(combo.combination_id)
       ) || [];
 
       const response = await fetch(`${MASTER_ENDPOINTS.PENDING_ORDERS}/accept-combinations`, 
-        createRequestOptions('POST', { combinations: selectedCombos })
+        createRequestOptions('POST', selectedCombos)
       );
 
       if (!response.ok) {
-        throw new Error(`Failed to accept combinations: ${response.status}`);
+        const errorData = await response.json().catch(() => null);
+        const errorMessage = errorData?.detail || `Failed to accept combinations: ${response.status}`;
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
@@ -343,7 +350,8 @@ export default function PendingOrderItemsPage() {
       // Refresh pending items
       window.location.reload();
     } catch (error) {
-      toast.error('Failed to accept combinations');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to accept combinations';
+      toast.error(errorMessage);
       console.error('Accept combinations error:', error);
     }
   };
@@ -380,9 +388,13 @@ export default function PendingOrderItemsPage() {
               <Button 
                 className="gap-2"
                 onClick={handleAcceptCombinations}
+                disabled={selectedCombinations.size % 3 !== 0}
               >
                 <CheckCircle className="w-4 h-4" />
                 Accept Selected ({selectedCombinations.size})
+                {selectedCombinations.size % 3 !== 0 && (
+                  <span className="text-xs ml-1">(Must be multiple of 3)</span>
+                )}
               </Button>
             )}
           </div>
@@ -477,10 +489,10 @@ export default function PendingOrderItemsPage() {
 
                 {/* Roll Combinations */}
                 {optimizationResult.roll_combinations.length > 0 && (
-                  <div className="space-y-4">
+                  <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <h3 className="text-lg font-semibold">Available Roll Combinations</h3>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
                         <Checkbox 
                           checked={selectedCombinations.size === optimizationResult.roll_combinations.length}
                           onCheckedChange={(checked) => {
@@ -505,9 +517,9 @@ export default function PendingOrderItemsPage() {
                           }`}
                           onClick={() => handleToggleCombination(combo.combination_id)}
                         >
-                          <CardHeader className="pb-3">
+                          <CardHeader className="pb-1">
                             <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-2">
                                 <Checkbox 
                                   checked={selectedCombinations.has(combo.combination_id)}
                                   onCheckedChange={(checked) => {
@@ -516,7 +528,7 @@ export default function PendingOrderItemsPage() {
                                   onClick={(e) => e.stopPropagation()}
                                 />
                                 <CardTitle className="text-base">
-                                  {combo.paper_specs.shade} {combo.paper_specs.gsm}GSM
+                                  {combo.paper_specs.shade} {combo.paper_specs.gsm}GSM BF: {combo.paper_specs.bf}
                                 </CardTitle>
                               </div>
                               <Badge className={combo.trim <= 6 ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}>
@@ -526,16 +538,57 @@ export default function PendingOrderItemsPage() {
                           </CardHeader>
                           <CardContent className="pt-0">
                             <div className="space-y-2">
-                              <div className="text-sm text-muted-foreground">
-                                BF: {combo.paper_specs.bf}
-                              </div>
-                              <div className="space-y-1">
-                                <div className="text-sm font-medium">Rolls:</div>
-                                {combo.rolls.map((roll, idx) => (
-                                  <div key={idx} className="text-sm text-muted-foreground pl-2">
-                                    {roll.width}" × {roll.quantity} rolls
-                                  </div>
-                                ))}
+                              {/* Visual Cutting Pattern */}
+                              <div>
+                                <div className="text-sm font-medium text-muted-foreground mb-2">
+                                  Cutting Pattern (118" Jumbo Roll):
+                                </div>
+                                <div className="relative h-12 bg-muted rounded-lg border overflow-hidden">
+                                  {(() => {
+                                    let currentPosition = 0;
+                                    const waste = 118 - combo.total_width;
+                                    const wastePercentage = (waste / 118) * 100;
+
+                                    return (
+                                      <>
+                                        {/* Cut sections */}
+                                        {combo.rolls.map((roll, idx) => {
+                                          const widthPercentage = (roll.width / 118) * 100;
+                                          const leftPosition = (currentPosition / 118) * 100;
+                                          currentPosition += roll.width;
+
+                                          return (
+                                            <div
+                                              key={idx}
+                                              className="absolute h-full border-r-2 border-white bg-gradient-to-r from-blue-400 to-blue-500"
+                                              style={{
+                                                left: `${leftPosition}%`,
+                                                width: `${widthPercentage}%`,
+                                              }}>
+                                              <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
+                                                {roll.width}"
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+
+                                        {/* Waste section */}
+                                        {waste > 0 && (
+                                          <div
+                                            className="absolute h-full bg-gradient-to-r from-red-400 to-red-500 border-l-2 border-white"
+                                            style={{
+                                              right: "0%",
+                                              width: `${wastePercentage}%`,
+                                            }}>
+                                            <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
+                                              Waste: {waste.toFixed(1)}"
+                                            </div>
+                                          </div>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
+                                </div>
                               </div>
                               <div className="text-sm">
                                 <span className="font-medium">Total: {combo.total_width}" / 118"</span>
@@ -556,20 +609,55 @@ export default function PendingOrderItemsPage() {
                       {optimizationResult.roll_suggestions.map((suggestion) => (
                         <Card key={suggestion.suggestion_id} className="bg-gray-50">
                           <CardContent className="pt-4">
-                            <div className="space-y-2">
+                            <div className="space-y-4">
                               <div className="font-medium">
                                 {suggestion.paper_specs.shade} {suggestion.paper_specs.gsm}GSM Paper
                               </div>
-                              <div className="text-sm text-muted-foreground">
+                              <div className="text-sm font-medium">
                                 {suggestion.description}
                               </div>
-                              <div className="space-y-1">
-                                <div className="text-sm font-medium">Suggested combinations:</div>
-                                {suggestion.possible_combinations.slice(0, 3).map((combo, idx) => (
-                                  <div key={idx} className="text-sm text-muted-foreground pl-2">
-                                    {combo.rolls.join('" + ')} = {combo.total_width}" (trim: {combo.trim}")
-                                  </div>
-                                ))}
+                              
+                              {/* Visual Pattern for Available/Required */}
+                              <div>
+                                <div className="text-sm font-medium text-muted-foreground mb-2">
+                                  118" Roll Completion Pattern:
+                                </div>
+                                <div className="relative h-12 bg-muted rounded-lg border overflow-hidden">
+                                  {(() => {
+                                    const availableWidth = suggestion.existing_width;
+                                    const requiredWidth = suggestion.needed_width;
+                                    const availablePercentage = (availableWidth / 118) * 100;
+                                    const requiredPercentage = (requiredWidth / 118) * 100;
+
+                                    return (
+                                      <>
+                                        {/* Available section (green) */}
+                                        <div
+                                          className="absolute h-full border-r-2 border-white bg-gradient-to-r from-green-400 to-green-500"
+                                          style={{
+                                            left: "0%",
+                                            width: `${availablePercentage}%`,
+                                          }}>
+                                          <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
+                                            Available: {availableWidth}"
+                                          </div>
+                                        </div>
+
+                                        {/* Required section (orange) */}
+                                        <div
+                                          className="absolute h-full bg-gradient-to-r from-orange-400 to-orange-500 border-l-2 border-white"
+                                          style={{
+                                            left: `${availablePercentage}%`,
+                                            width: `${requiredPercentage}%`,
+                                          }}>
+                                          <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
+                                            Required: {requiredWidth}"
+                                          </div>
+                                        </div>
+                                      </>
+                                    );
+                                  })()}
+                                </div>
                               </div>
                             </div>
                           </CardContent>

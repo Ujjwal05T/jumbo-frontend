@@ -91,8 +91,8 @@ export default function DispatchPage() {
   // New state for client-order selection
   const [clients, setClients] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
-  const [selectedClientId, setSelectedClientId] = useState<string>("all");
-  const [selectedOrderId, setSelectedOrderId] = useState<string>("all");
+  const [selectedClientId, setSelectedClientId] = useState<string>("none");
+  const [selectedOrderId, setSelectedOrderId] = useState<string>("none");
   const [clientsLoading, setClientsLoading] = useState(false);
   const [ordersLoading, setOrdersLoading] = useState(false);
 
@@ -143,15 +143,21 @@ export default function DispatchPage() {
       setLoading(true);
       setError(null);
       
+      // If no client is selected, don't load any items - require client selection first
+      if (selectedClientId === "none") {
+        setWarehouseItems([]);
+        console.log("No client selected - showing empty list");
+        setLoading(false);
+        return;
+      }
+      
       // Build query parameters for filtering
       const params = new URLSearchParams();
-      if (selectedClientId && selectedClientId !== "all") params.append('client_id', selectedClientId);
-      if (selectedOrderId && selectedOrderId !== "all") params.append('order_id', selectedOrderId);
+      if (selectedClientId && selectedClientId !== "none") params.append('client_id', selectedClientId);
+      if (selectedOrderId && selectedOrderId !== "none") params.append('order_id', selectedOrderId);
       
       const queryString = params.toString();
-      const url = queryString 
-        ? `${API_BASE_URL}/dispatch/warehouse-items?${queryString}`
-        : `${API_BASE_URL}/dispatch/warehouse-items`;
+      const url = `${API_BASE_URL}/dispatch/warehouse-items?${queryString}`;
       
       const response = await fetch(url, {
         headers: { 'ngrok-skip-browser-warning': 'true' }
@@ -175,17 +181,17 @@ export default function DispatchPage() {
 
   useEffect(() => {
     loadClients(); // Load clients on page load
-    loadData(); // Load all warehouse items initially
+    loadData(); // Load warehouse items based on initial state (will be empty since no client selected)
   }, []);
 
   // Load orders when client changes
   useEffect(() => {
-    if (selectedClientId && selectedClientId !== "all") {
+    if (selectedClientId && selectedClientId !== "none") {
       loadOrders(selectedClientId);
-      setSelectedOrderId("all"); // Reset order selection when client changes
+      setSelectedOrderId("none"); // Reset order selection when client changes
     } else {
       setOrders([]);
-      setSelectedOrderId("all");
+      setSelectedOrderId("none");
     }
   }, [selectedClientId]);
 
@@ -215,8 +221,8 @@ export default function DispatchPage() {
   };
 
   // Get selected client and order info for dispatch form
-  const selectedClient = selectedClientId !== "all" ? clients.find(c => c.id === selectedClientId) : null;
-  const selectedOrder = selectedOrderId !== "all" ? orders.find(o => o.id === selectedOrderId) : null;
+  const selectedClient = selectedClientId && selectedClientId !== "none" ? clients.find(c => c.id === selectedClientId) : null;
+  const selectedOrder = selectedOrderId && selectedOrderId !== "none" ? orders.find(o => o.id === selectedOrderId) : null;
 
   const handleDispatchConfirm = async (formData: any) => {
     try {
@@ -347,7 +353,7 @@ export default function DispatchPage() {
                     <SelectValue placeholder={clientsLoading ? "Loading clients..." : "Select client"} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Clients</SelectItem>
+                    <SelectItem value="none">Select Client</SelectItem>
                     {clients.map((client) => (
                       <SelectItem key={client.id} value={client.id}>
                         {client.company_name}
@@ -376,7 +382,7 @@ export default function DispatchPage() {
                     } />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Orders</SelectItem>
+                    <SelectItem value="none">Select Order</SelectItem>
                     {orders.map((order) => (
                       <SelectItem key={order.id} value={order.id}>
                         Order #{order.frontend_id || order.id.slice(0, 8)} - {order.status}
@@ -390,21 +396,29 @@ export default function DispatchPage() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Current Filter</label>
                 <div className="p-2 bg-muted rounded-md text-sm">
-                  {(selectedClientId === "all" && selectedOrderId === "all") && (
-                    <span className="text-muted-foreground">No filters applied</span>
+                  {selectedClientId === "none" && (
+                    <span className="text-muted-foreground">Please select a client to view warehouse items</span>
                   )}
-                  {selectedClientId && selectedClientId !== "all" && (
+                  {selectedClientId !== "none" && selectedOrderId === "none" && (
                     <div className="flex items-center gap-1">
                       <Badge variant="secondary">
                         Client: {clients.find(c => c.id === selectedClientId)?.company_name}
                       </Badge>
+                      <span className="text-muted-foreground ml-2">All orders for this client</span>
                     </div>
                   )}
-                  {selectedOrderId && selectedOrderId !== "all" && (
-                    <div className="flex items-center gap-1 mt-1">
-                      <Badge variant="outline">
-                        Order: #{orders.find(o => o.id === selectedOrderId)?.frontend_id}
-                      </Badge>
+                  {selectedClientId !== "none" && selectedOrderId !== "none" && (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1">
+                        <Badge variant="secondary">
+                          Client: {clients.find(c => c.id === selectedClientId)?.company_name}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Badge variant="outline">
+                          Order: #{orders.find(o => o.id === selectedOrderId)?.frontend_id}
+                        </Badge>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -632,8 +646,24 @@ export default function DispatchPage() {
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                             Loading warehouse items...
                           </div>
+                        ) : selectedClientId === "none" ? (
+                          <div className="text-center py-4">
+                            <div className="text-muted-foreground">
+                              <p className="font-medium">Please select a client first</p>
+                              <p className="text-sm">Choose a client from the dropdown above to view their warehouse items ready for dispatch</p>
+                            </div>
+                          </div>
                         ) : (
-                          "No cut rolls ready for dispatch."
+                          <div className="text-center py-4">
+                            <div className="text-muted-foreground">
+                              <p className="font-medium">No cut rolls ready for dispatch</p>
+                              <p className="text-sm">
+                                {selectedOrderId !== "none" 
+                                  ? "No items found for the selected client and order" 
+                                  : "No items found for the selected client"}
+                              </p>
+                            </div>
+                          </div>
                         )}
                       </TableCell>
                     </TableRow>
