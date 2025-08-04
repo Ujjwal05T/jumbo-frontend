@@ -191,6 +191,7 @@ export default function PlansPage() {
   // Filter functions
   const filteredPlans = plans.filter(plan => {
     const user = getUserById(plan.created_by_id);
+    console.log(user)
     const matchesSearch = !searchTerm || 
       plan.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user?.name?.toLowerCase().includes(searchTerm.toLowerCase());

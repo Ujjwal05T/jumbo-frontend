@@ -28,6 +28,8 @@ import {
   Loader2,
 } from "lucide-react";
 import jsPDF from "jspdf";
+import { generatePackingSlipPDF, convertDispatchToPackingSlip } from "@/lib/packing-slip-pdf";
+import { API_BASE_URL } from "@/lib/api-config";
 
 interface DispatchResult {
   dispatch_id: string;
@@ -185,6 +187,30 @@ export function DispatchSuccessModal({
     generateDispatchPDF(false);
   };
 
+  const handleDownloadPackingSlip = async () => {
+    try {
+      setPdfLoading(true);
+      
+      // Fetch detailed dispatch data
+      const response = await fetch(`${API_BASE_URL}/dispatch/${dispatchResult.dispatch_id}/details`, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch dispatch details');
+      
+      const dispatchData = await response.json();
+      const packingSlipData = convertDispatchToPackingSlip(dispatchData);
+      generatePackingSlipPDF(packingSlipData);
+      
+      toast.success('Packing slip downloaded successfully');
+    } catch (error) {
+      console.error('Packing slip generation error:', error);
+      toast.error('Failed to generate packing slip');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl h-[85vh] overflow-y-auto">
@@ -323,7 +349,7 @@ export function DispatchSuccessModal({
             ) : (
               <FileText className="w-4 h-4" />
             )}
-            Print Dispatch Slip
+            Print Report
           </Button>
           <Button
             variant="outline"
@@ -337,6 +363,19 @@ export function DispatchSuccessModal({
               <Download className="w-4 h-4" />
             )}
             Download Report
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleDownloadPackingSlip}
+            className="flex items-center gap-2"
+            disabled={pdfLoading}
+          >
+            {pdfLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Package className="w-4 h-4" />
+            )}
+            Packing Slip
           </Button>
           <Button onClick={() => onOpenChange(false)} className="bg-green-600 hover:bg-green-700">
             <CheckCircle className="w-4 h-4 mr-2" />

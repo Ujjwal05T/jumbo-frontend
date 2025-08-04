@@ -251,7 +251,7 @@ export default function EditOrderPage() {
           : null, // Backend expects ISO datetime string
         order_items: orderItems.map(item => ({
           paper_id: item.paper_id,
-          width_inches: parseInt(String(item.width_inches)), // Backend expects int
+          width_inches: parseFloat(String(item.width_inches)), // Backend expects float
           quantity_rolls: item.quantity_rolls ? parseInt(String(item.quantity_rolls)) : undefined, // Backend expects int or null
           quantity_kg: item.quantity_kg ? parseFloat(String(item.quantity_kg)) : undefined, // Backend expects float or null
           rate: parseFloat(String(item.rate)), // Backend expects float

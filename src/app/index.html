@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Packing Slip</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td {
+            border: 1px solid #000;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Packing Slip</h2>
+
+<table>
+    <thead>
+        <tr>
+            <th>S.No.</th>
+            <th>GSM</th>
+            <th>BF</th>
+            <th>Size</th>
+            <th>Reel No.</th>
+            <th>Weight</th>
+            <th>NAT./GOLD</th>
+        </tr>
+    </thead>
+    <tbody id="tableBody">
+        <!-- Rows will be inserted dynamically -->
+    </tbody>
+</table>
+
+<script>
+    const data = [
+        { sno: 1, gsm: 140, bf: 18, size: 28, reel: 3392, weight: 373, natgold: '' },
+        { sno: 2, gsm: '', bf: '', size: '', reel: 3385, weight: 405, natgold: '' },
+        { sno: 3, gsm: '', bf: '', size: '', reel: 3396, weight: 352, natgold: '' },
+        { sno: 4, gsm: '', bf: '', size: '', reel: 3380, weight: 371, natgold: '' },
+        { sno: 5, gsm: '', bf: '', size: '', reel: 3388, weight: 368, natgold: '' },
+        { sno: 6, gsm: '', bf: '', size: '', reel: 3390, weight: 381, natgold: '' },
+        { sno: 7, gsm: '', bf: '', size: '', reel: 3387, weight: 375, natgold: '' },
+        { sno: 8, gsm: '', bf: '', size: '', reel: 3385, weight: 386, natgold: '' },
+        { sno: 9, gsm: 100, bf: 18, size: 28, reel: 3449, weight: 386, natgold: '' },
+        { sno: 10, gsm: '', bf: '', size: '', reel: 3399, weight: 357, natgold: '' },
+        { sno: 11, gsm: '', bf: '', size: '', reel: 3413, weight: 360, natgold: '' },
+        { sno: 12, gsm: '', bf: '', size: '', reel: 3444, weight: 363, natgold: '' },
+        { sno: 13, gsm: '', bf: '', size: '', reel: 3448, weight: 370, natgold: '' },
+        { sno: 14, gsm: '', bf: '', size: '', reel: 3420, weight: 371, natgold: '' },
+        { sno: 15, gsm: '', bf: '', size: '', reel: 3421, weight: 359, natgold: '' },
+        { sno: 16, gsm: '', bf: '', size: '', reel: 3429, weight: 358, natgold: '' },
+        { sno: 17, gsm: '', bf: '', size: '', reel: 3415, weight: 352, natgold: '' },
+        { sno: 18, gsm: '', bf: '', size: '', reel: 3445, weight: 378, natgold: '' },
+        { sno: 19, gsm: '', bf: '', size: '', reel: 3427, weight: 355, natgold: '' },
+        { sno: 20, gsm: '', bf: '', size: '', reel: 3443, weight: 364, natgold: '' },
+        { sno: 21, gsm: '', bf: '', size: '', reel: 3428, weight: 341, natgold: '' },
+        { sno: 22, gsm: '', bf: '', size: '', reel: 3438, weight: 352, natgold: '' }
+    ];
+
+    const tbody = document.getElementById('tableBody');
+    data.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${row.sno}</td>
+            <td>${row.gsm}</td>
+            <td>${row.bf}</td>
+            <td>${row.size}</td>
+            <td>${row.reel}</td>
+            <td>${row.weight}</td>
+            <td>${row.natgold}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+</script>
+
+</body>
+</html>

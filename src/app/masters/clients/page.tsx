@@ -127,7 +127,7 @@ export default function ClientMasterPage() {
   const filteredClients = clients.filter(client =>
     client.contact_person.toLowerCase().includes(searchTerm.toLowerCase()) ||
     client.company_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.email.toLowerCase().includes(searchTerm.toLowerCase())
+    client.email!.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getStatusBadge = (status: string) => {

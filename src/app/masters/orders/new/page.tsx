@@ -173,7 +173,7 @@ export default function NewOrderPage() {
       const cleanOrderItems = orderItems.map((item) => {
         const cleanItem: CreateOrderItemData = {
           paper_id: item.paper_id,
-          width_inches: parseInt(String(item.width_inches)), // Backend expects int
+          width_inches: parseFloat(String(item.width_inches)), // Backend expects float
           rate: parseFloat(String(item.rate)),
         };
 
