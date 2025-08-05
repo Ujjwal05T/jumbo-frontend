@@ -185,6 +185,13 @@ function ScanResultDisplay({ result }: ScanResultDisplayProps) {
           </div>
         )}
         
+        <div>
+          <Label className="text-sm text-muted-foreground">Client</Label>
+          <p className="font-semibold text-blue-600">
+            {result.client_info?.client_name || 'No Client Assigned'}
+          </p>
+        </div>
+        
         <Separator />
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -528,6 +535,11 @@ export default function QRScanner() {
                           <p className="text-sm text-muted-foreground">
                             {formatDimensions(item.roll_details.width_inches)} - {formatWeight(item.roll_details.weight_kg)}
                           </p>
+                          {item.client_info?.client_name && (
+                            <p className="text-sm text-blue-600 font-medium">
+                              Client: {item.client_info.client_name}
+                            </p>
+                          )}
                         </div>
                         <Badge variant="outline">{item.roll_details.status}</Badge>
                       </div>

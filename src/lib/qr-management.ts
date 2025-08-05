@@ -27,6 +27,9 @@ export interface QRScanResult {
     created_at: string;
     created_by: string | null;
   };
+  client_info: {
+    client_name: string | null;
+  };
   scan_timestamp: string;
 }
 
@@ -291,6 +294,7 @@ export const exportQRDataToCSV = (scanResults: QRScanResult[]): string => {
     'GSM',
     'BF',
     'Shade',
+    'Client Name',
     'Created At',
     'Scan Timestamp'
   ];
@@ -304,6 +308,7 @@ export const exportQRDataToCSV = (scanResults: QRScanResult[]): string => {
     result.paper_specifications?.gsm.toString() || '',
     result.paper_specifications?.bf.toString() || '',
     result.paper_specifications?.shade || '',
+    result.client_info?.client_name || 'No Client',
     result.production_info.created_at,
     result.scan_timestamp
   ]);

@@ -51,6 +51,7 @@ interface Plan {
   created_at: string;
   executed_at?: string;
   completed_at?: string;
+  created_by_id: string;
   created_by?: {
     name: string;
     username: string;
@@ -100,6 +101,12 @@ interface CutRollItem {
   order_date?: string;
 }
 
+interface User {
+  id: string;
+  name: string;
+  username: string;
+}
+
 export default function PlanDetailsPage() {
   const router = useRouter();
   const params = useParams();
@@ -107,6 +114,7 @@ export default function PlanDetailsPage() {
 
   const [plan, setPlan] = useState<Plan | null>(null);
   const [productionSummary, setProductionSummary] = useState<ProductionSummary | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +123,10 @@ export default function PlanDetailsPage() {
   // Filter states for cut rolls
   const [cutRollSearchTerm, setCutRollSearchTerm] = useState("");
   const [cutRollStatusFilter, setCutRollStatusFilter] = useState<string>("all");
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
 
   useEffect(() => {
     if (planId) {
@@ -179,6 +191,22 @@ export default function PlanDetailsPage() {
     } finally {
       setLoadingSummary(false);
     }
+  };
+
+  const loadUsers = async () => {
+    try {
+      const response = await fetch(MASTER_ENDPOINTS.USERS, createRequestOptions('GET'));
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data);
+      }
+    } catch (err) {
+      console.error('Error loading users:', err);
+    }
+  };
+
+  const getUserById = (userId: string): User | null => {
+    return users.find(user => user.id === userId) || null;
   };
 
   const createSampleData = async () => {
@@ -432,7 +460,8 @@ export default function PlanDetailsPage() {
       }
       doc.text(`Created: ${new Date(plan.created_at).toLocaleString()}`, 20, yPosition);
       yPosition += 5;
-      doc.text(`Created By: ${plan.created_by?.name || 'Unknown'} (@${plan.created_by?.username || 'unknown'})`, 20, yPosition);
+      const user = getUserById(plan.created_by_id);
+      doc.text(`Created By: ${user?.name || plan.created_by?.name || 'Unknown'} (@${user?.username || plan.created_by?.username || 'unknown'})`, 20, yPosition);
       yPosition += 15;
 
       // Legend
@@ -818,10 +847,16 @@ export default function PlanDetailsPage() {
                   Created By
                 </label>
                 <p className="text-lg font-medium">
-                  {plan.created_by?.name || 'Unknown'}
+                  {(() => {
+                    const user = getUserById(plan.created_by_id);
+                    return user?.name || plan.created_by?.name || 'Unknown';
+                  })()}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  @{plan.created_by?.username || 'unknown'}
+                  @{(() => {
+                    const user = getUserById(plan.created_by_id);
+                    return user?.username || plan.created_by?.username || 'unknown';
+                  })()}
                 </p>
               </div>
             </div>

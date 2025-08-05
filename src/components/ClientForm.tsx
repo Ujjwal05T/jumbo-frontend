@@ -54,9 +54,6 @@ export default function ClientForm({
       newErrors.contact_person = "Contact person is required";
     }
 
-    if (!formData.phone.trim()) {
-      newErrors.phone = "Phone number is required";
-    }
 
     if (!formData.address.trim()) {
       newErrors.address = "Address is required";
@@ -171,12 +168,12 @@ export default function ClientForm({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone *</Label>
+              <Label htmlFor="phone">Phone</Label>
               <Input
                 id="phone"
-                value={formData.phone}
+                value={formData.phone || ""}
                 onChange={(e) => handleInputChange("phone", e.target.value)}
-                placeholder="Enter phone number"
+                placeholder="Enter phone number (optional)"
                 disabled={isLoading}
               />
               {errors.phone && (

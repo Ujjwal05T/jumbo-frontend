@@ -51,6 +51,7 @@ import {
   FileText,
   ChevronDown,
   ChevronRight,
+  ArrowLeft,
 } from "lucide-react";
 import BarcodeDisplay from "@/components/BarcodeDisplay";
 import { fetchOrders, Order } from "@/lib/orders";
@@ -194,6 +195,7 @@ export default function PlanningPage() {
   );
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [generatingBarcodePDF, setGeneratingBarcodePDF] = useState(false);
+  const [productionStarted, setProductionStarted] = useState(false);
 
   // Helper function to generate barcode as canvas
   const generateBarcodeCanvas = (value: string): HTMLCanvasElement => {
@@ -487,6 +489,12 @@ export default function PlanningPage() {
     setShowConfirmDialog(true);
   };
 
+  const handleBackToDashboard = () => {
+    // Redirect to dashboard after production is completed
+    toast.success("Production completed successfully. Redirecting to dashboard...");
+    window.location.href = "/dashboard";
+  };
+
   const createProductionRecords = async () => {
     setShowConfirmDialog(false);
 
@@ -613,8 +621,19 @@ export default function PlanningPage() {
 
       const result = await response.json();
 
-      // Create production records for UI display
-      const productionRecords = selectedRolls.map((roll, index) => ({
+      // Create production records for UI display using ACTUAL backend-generated barcodes
+      const productionRecords = result.created_inventory_details?.map((inventory, index) => ({
+        id: inventory.id,
+        qr_code: inventory.qr_code,
+        barcode_id: inventory.barcode_id, // Use REAL barcode from backend
+        width_inches: inventory.width_inches,
+        gsm: selectedRolls[index]?.gsm || 0, // Get additional details from selected rolls
+        bf: selectedRolls[index]?.bf || 0,
+        shade: selectedRolls[index]?.shade || '',
+        status: inventory.status,
+        selected_at: inventory.created_at || new Date().toISOString()
+      })) || selectedRolls.map((roll, index) => ({
+        // Fallback to old method if created_inventory_details is not available
         id: `inv_${Date.now()}_${index}`,
         qr_code: roll.qr_code,
         barcode_id: roll.barcode_id,
@@ -628,6 +647,7 @@ export default function PlanningPage() {
 
       setProductionRecords(productionRecords);
       setActiveTab("production");
+      setProductionStarted(true); // Mark production as started
       
       // Show comprehensive success message with pending items info
       let successMessage = `Production started successfully! Updated ${result.summary.orders_updated} orders, ${result.summary.order_items_updated} order items`;
@@ -1165,53 +1185,66 @@ export default function PlanningPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Production Planning </h1>
         <div className="flex gap-2">
-          <Button
-            variant="default"
-            onClick={generatePlan}
-            disabled={generating || selectedOrders.length === 0}>
-            {generating ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Generating Plan...
-              </>
-            ) : (
-              "Generate Plan"
-            )}
-          </Button>
-          {planResult && (
+          {productionStarted ? (
+            // After production started - only show Back button
+            <Button
+              variant="outline"
+              onClick={handleBackToDashboard}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Dashboard
+            </Button>
+          ) : (
+            // Before production started - show normal buttons
             <>
               <Button
-                variant="outline"
-                onClick={generatePDF}
-                disabled={generatingPDF}>
-                {generatingPDF ? (
+                variant="default"
+                onClick={generatePlan}
+                disabled={generating || selectedOrders.length === 0}>
+                {generating ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating PDF...
+                    Generating Plan...
                   </>
                 ) : (
-                  <>
-                    <FileText className="mr-2 h-4 w-4" />
-                    Generate PDF Report
-                  </>
+                  "Generate Plan"
                 )}
               </Button>
-              <Button
-                variant="secondary"
-                onClick={handleCreateProductionRecords}
-                disabled={creatingProduction || selected118Rolls.length === 0 || !isValid118RollSelection(selected118Rolls.length)}>
-                {creatingProduction ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating Production...
-                  </>
-                ) : (
-                  <>
-                    <Factory className="mr-2 h-4 w-4" />
-                    Start Production ({selected118Rolls.length} × 118" rolls)
-                  </>
-                )}
-              </Button>
+              {planResult && (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={generatePDF}
+                    disabled={generatingPDF}>
+                    {generatingPDF ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Generating PDF...
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="mr-2 h-4 w-4" />
+                        Generate PDF Report
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={handleCreateProductionRecords}
+                    disabled={creatingProduction || selected118Rolls.length === 0 || !isValid118RollSelection(selected118Rolls.length)}>
+                    {creatingProduction ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creating Production...
+                      </>
+                    ) : (
+                      <>
+                        <Factory className="mr-2 h-4 w-4" />
+                        Start Production ({selected118Rolls.length} × 118" rolls)
+                      </>
+                    )}
+                  </Button>
+                </>
+              )}
             </>
           )}
         </div>

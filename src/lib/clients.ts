@@ -12,7 +12,7 @@ export interface Client {
   gst_number?: string;
   address: string;
   contact_person: string;
-  phone: string;
+  phone?: string;
   status: 'active' | 'inactive';
   created_by_id: string;
   created_at: string;
@@ -24,7 +24,7 @@ export interface CreateClientData {
   gst_number?: string;
   address: string;
   contact_person: string;
-  phone: string;
+  phone?: string;
   status: 'active' | 'inactive';
   created_by_id: string;
 }
@@ -35,7 +35,7 @@ export interface CreateClientFormData {
   gst_number?: string;
   address: string;
   contact_person: string;
-  phone: string;
+  phone?: string;
 }
 
 /**
