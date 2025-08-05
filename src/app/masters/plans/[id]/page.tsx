@@ -55,6 +55,7 @@ interface Plan {
     name: string;
     username: string;
   };
+  cut_pattern?: any[];
 }
 
 interface ProductionSummary {
@@ -452,7 +453,7 @@ export default function PlanDetailsPage() {
         const legendX = 20 + (index * 65);
         
         // Draw color box
-        doc.setFillColor(...item.color);
+        doc.setFillColor(item.color[0], item.color[1], item.color[2]);
         doc.rect(legendX, yPosition - 3, 8, 6, 'F');
         doc.setDrawColor(0, 0, 0);
         doc.setLineWidth(0.2);
@@ -523,7 +524,7 @@ export default function PlanDetailsPage() {
           return groups;
         }, {} as Record<string, Array<any>>);
 
-        Object.entries(groupedCutPatterns).forEach(([specKey, rolls]) => {
+        Object.entries(groupedCutPatterns).forEach(([specKey, rolls]:[any,any]) => {
           checkPageBreak(25);
 
           // Specification header
@@ -533,7 +534,7 @@ export default function PlanDetailsPage() {
           yPosition += 10;
 
           // Group by individual_roll_number (118" jumbo roll)
-          const rollsByNumber = rolls.reduce((rollGroups, roll) => {
+          const rollsByNumber = rolls.reduce((rollGroups:any, roll:any) => {
             const rollNum = roll.individual_roll_number || "No Roll #";
             if (!rollGroups[rollNum]) {
               rollGroups[rollNum] = [];
@@ -542,7 +543,7 @@ export default function PlanDetailsPage() {
             return rollGroups;
           }, {} as Record<string, Array<any>>);
 
-          Object.entries(rollsByNumber).forEach(([rollNumber, rollsInNumber]) => {
+          Object.entries(rollsByNumber).forEach(([rollNumber, rollsInNumber]:[any,any]) => {
             checkPageBreak(50);
 
             doc.setFontSize(12);
@@ -565,11 +566,11 @@ export default function PlanDetailsPage() {
             let currentX = rectStartX;
 
             // Calculate total used width from cut pattern data
-            const totalUsedWidth = rollsInNumber.reduce((sum, roll) => sum + (roll.width || 0), 0);
+            const totalUsedWidth = rollsInNumber.reduce((sum:any, roll:any) => sum + (roll.width || 0), 0);
             const waste = rollsInNumber[0]?.trim_left || (118 - totalUsedWidth);
 
             // Draw each cut section from the cut pattern data
-            rollsInNumber.forEach((roll, rollIndex) => {
+            rollsInNumber.forEach((roll:any, rollIndex:any) => {
               const widthRatio = (roll.width || 0) / 118;
               const sectionWidth = rectWidth * widthRatio;
 

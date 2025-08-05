@@ -571,7 +571,7 @@ export default function NewFlowWorkflow() {
                           <div className="flex items-center gap-3">
                             <Checkbox 
                               checked={selectedOrders.includes(order.order_id)}
-                              readOnly
+                              
                             />
                             <div>
                               <p className="font-medium">{order.client_name}</p>
@@ -602,7 +602,7 @@ export default function NewFlowWorkflow() {
                       <Checkbox 
                         id="include-pending"
                         checked={includePending}
-                        onCheckedChange={setIncludePending}
+                        onCheckedChange={(checked) => setIncludePending(checked === true)}
                       />
                       <Label htmlFor="include-pending">Include Pending Orders</Label>
                     </div>
@@ -611,7 +611,7 @@ export default function NewFlowWorkflow() {
                       <Checkbox 
                         id="include-inventory"
                         checked={includeInventory}
-                        onCheckedChange={setIncludeInventory}
+                        onCheckedChange={(checked) => setIncludeInventory(checked === true)}
                       />
                       <Label htmlFor="include-inventory">Include Available Inventory (20-25" waste)</Label>
                     </div>

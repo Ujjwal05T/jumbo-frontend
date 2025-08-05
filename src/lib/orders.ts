@@ -54,11 +54,11 @@ export interface Order {
 
 export interface CreateOrderItemData {
   paper_id: string;
-  width_inches: string | number;
-  quantity_rolls?: string | number;
-  quantity_kg?: string | number;
-  rate: string | number;
-  amount?: string | number;
+  width_inches: any;
+  quantity_rolls?: any;
+  quantity_kg?: any;
+  rate: any;
+  amount?: any;
 }
 
 export interface CreateOrderData {

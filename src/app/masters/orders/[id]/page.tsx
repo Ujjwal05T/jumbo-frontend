@@ -60,7 +60,7 @@ interface OrderItem {
 }
 
 interface OrderDetails extends Order {
-  order_items: OrderItem[];
+  order_items: any[];
 }
 
 export default function OrderDetailsPage() {

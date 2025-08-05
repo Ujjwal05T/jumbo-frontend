@@ -32,6 +32,7 @@ interface Plan {
     name: string;
     username: string;
   };
+  frontend_id?: string; // Human-readable plan ID
 }
 
 interface Client {

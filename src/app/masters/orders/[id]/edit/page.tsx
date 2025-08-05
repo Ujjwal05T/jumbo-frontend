@@ -62,8 +62,8 @@ export default function EditOrderPage() {
   // Form state
   const [formData, setFormData] = useState({
     client_id: "",
-    priority: "normal" as const,
-    payment_type: "bill" as const,
+    priority: "normal" as any,
+    payment_type: "bill" as any,
     delivery_date: "",
   });
 
@@ -103,8 +103,8 @@ export default function EditOrderPage() {
         // Populate form with existing order data
         setFormData({
           client_id: orderData.client_id,
-          priority: orderData.priority,
-          payment_type: orderData.payment_type,
+          priority: orderData.priority as any,
+          payment_type: orderData.payment_type as any,
           delivery_date: orderData.delivery_date ? orderData.delivery_date.split('T')[0] : "",
         });
 
@@ -133,7 +133,7 @@ export default function EditOrderPage() {
     }
   }, [orderId]);
 
-  const handleInputChange = (field: string, value: string | number) => {
+  const handleInputChange = (field: string, value: any) => {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
@@ -141,57 +141,69 @@ export default function EditOrderPage() {
   };
 
   const handleOrderItemChange = (
-    index: number,
-    field: keyof CreateOrderItemData,
-    value: string | number
-  ) => {
-    setOrderItems((prev) => {
-      const updated:any = [...prev];
-      updated[index] = { ...updated[index], [field]: value };
+  index: number,
+  field: keyof CreateOrderItemData,
+  value: any
+) => {
+  setOrderItems((prev) => {
+    const updated: any = [...prev];
+    updated[index] = { ...updated[index], [field]: value };
 
-      // Auto-calculate related fields when certain values change
-      if (field === "paper_id") {
-        const paper = papers.find((p) => p.id === value);
-        if (paper) {
-          // Reset calculations when paper changes
-          updated[index].quantity_kg = 0;
-          updated[index].quantity_rolls = 0;
-          updated[index].amount = 0;
-        }
-      } else if (field === "quantity_rolls" || field === "width_inches") {
-        const paper = papers.find((p) => p.id === updated[index].paper_id);
-        if (paper && updated[index].quantity_rolls > 0 && updated[index].width_inches > 0) {
-          updated[index].quantity_kg = calculateQuantityKg(
-            updated[index].width_inches,
-            updated[index].quantity_rolls
-          );
-          updated[index].amount = calculateAmount(
-            updated[index].quantity_kg,
-            updated[index].rate
-          );
-        }
-      } else if (field === "quantity_kg" || field === "width_inches") {
-        const paper = papers.find((p) => p.id === updated[index].paper_id);
-        if (paper && updated[index].quantity_kg > 0 && updated[index].width_inches > 0) {
-          updated[index].quantity_rolls = calculateQuantityRolls(
-            updated[index].width_inches,
-            updated[index].quantity_kg
-          );
-          updated[index].amount = calculateAmount(
-            updated[index].quantity_kg,
-            updated[index].rate
-          );
-        }
-      } else if (field === "rate") {
+    // Auto-calculate related fields when certain values change
+    if (field === "paper_id") {
+      const paper = papers.find((p) => p.id === value);
+      if (paper) {
+        // Reset calculations when paper changes
+        updated[index].quantity_kg = 0;
+        updated[index].quantity_rolls = 0;
+        updated[index].amount = 0;
+      }
+    } else if (field === "quantity_rolls") {
+      const paper = papers.find((p) => p.id === updated[index].paper_id);
+      if (paper && updated[index].quantity_rolls > 0 && updated[index].width_inches > 0) {
+        updated[index].quantity_kg = calculateQuantityKg(
+          updated[index].width_inches,
+          updated[index].quantity_rolls
+        );
         updated[index].amount = calculateAmount(
           updated[index].quantity_kg,
-          Number(value)
+          updated[index].rate
         );
       }
+    } else if (field === "quantity_kg") {
+      const paper = papers.find((p) => p.id === updated[index].paper_id);
+      if (paper && updated[index].quantity_kg > 0 && updated[index].width_inches > 0) {
+        updated[index].quantity_rolls = calculateQuantityRolls(
+          updated[index].width_inches,
+          updated[index].quantity_kg
+        );
+        updated[index].amount = calculateAmount(
+          updated[index].quantity_kg,
+          updated[index].rate
+        );
+      }
+    } else if (field === "width_inches") {
+      const paper = papers.find((p) => p.id === updated[index].paper_id);
+      if (paper && updated[index].quantity_kg > 0 && updated[index].width_inches > 0) {
+        updated[index].quantity_rolls = calculateQuantityRolls(
+          updated[index].width_inches,
+          updated[index].quantity_kg
+        );
+        updated[index].amount = calculateAmount(
+          updated[index].quantity_kg,
+          updated[index].rate
+        );
+      }
+    } else if (field === "rate") {
+      updated[index].amount = calculateAmount(
+        updated[index].quantity_kg,
+        Number(value)
+      );
+    }
 
-      return updated;
-    });
-  };
+    return updated;
+  });
+};
 
   const addOrderItem = () => {
     setOrderItems((prev) => [
@@ -234,7 +246,7 @@ export default function EditOrderPage() {
         if (item.width_inches <= 0) {
           throw new Error(`Please enter width for item ${i + 1}`);
         }
-        if (item.quantity_rolls <= 0 && item.quantity_kg <= 0) {
+        if (item.quantity_rolls! <= 0 && item.quantity_kg! <= 0) {
           throw new Error(`Please enter quantity for item ${i + 1}`);
         }
         if (item.rate <= 0) {
@@ -243,13 +255,13 @@ export default function EditOrderPage() {
       }
 
       // Prepare order data with proper type conversion for backend validation
-      const orderData = {
+      const orderData: any = {
         priority: formData.priority,
         payment_type: formData.payment_type,
         delivery_date: formData.delivery_date 
           ? new Date(formData.delivery_date).toISOString() 
           : null, // Backend expects ISO datetime string
-        order_items: orderItems.map(item => ({
+        order_items: orderItems.map((item: any) => ({
           paper_id: item.paper_id,
           width_inches: parseFloat(String(item.width_inches)), // Backend expects float
           quantity_rolls: item.quantity_rolls ? parseInt(String(item.quantity_rolls)) : undefined, // Backend expects int or null

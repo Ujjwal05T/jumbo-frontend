@@ -65,6 +65,7 @@ interface PendingOrderItem {
   created_by?: {
     name: string;
   };
+  frontend_id?: string; // Human-readable ID for display
 }
 
 interface OptimizationResult {
@@ -151,8 +152,8 @@ export default function PendingOrderItemsPage() {
         toast.error(errorMessage);
         console.error('Error fetching pending items:', err);
         
-        // Use sample data as fallback for development
-        setPendingItems(samplePendingItems);
+        // No fallback data - show empty state instead
+        setPendingItems([]);
       } finally {
         setLoading(false);
       }
@@ -161,54 +162,9 @@ export default function PendingOrderItemsPage() {
     fetchPendingItems();
   }, []);
 
-  // Sample data for demo (remove when API is working)
-  const samplePendingItems: PendingOrderItem[] = [
-    {
-      id: "pend-001",
-      original_order_id: "ord-123",
-      width_inches: 34,
-      gsm: 80,
-      bf: 18.0,
-      shade: "Natural",
-      quantity_pending: 5,
-      reason: "no_suitable_jumbo",
-      status: "pending",
-      created_at: "2024-01-18T10:00:00Z",
-      original_order: {
-        id: "ord-123",
-        client: {
-          company_name: "Tech Solutions Corp"
-        }
-      },
-      created_by: {
-        name: "John Doe"
-      }
-    },
-    {
-      id: "pend-002", 
-      original_order_id: "ord-124",
-      width_inches: 28,
-      gsm: 90,
-      bf: 20.0,
-      shade: "White",
-      quantity_pending: 3,
-      reason: "waste_too_high",
-      status: "pending",
-      created_at: "2024-01-19T14:30:00Z",
-      original_order: {
-        id: "ord-124",
-        client: {
-          company_name: "Print Masters Inc"
-        }
-      },
-      created_by: {
-        name: "Jane Smith"
-      }
-    }
-  ];
 
-  // Use real data or sample data as fallback
-  const displayItems = pendingItems.length > 0 ? pendingItems : (loading ? [] : samplePendingItems);
+  // Use real data only - no fallback to sample data
+  const displayItems = pendingItems;
 
   const filteredItems = displayItems.filter(item =>
     item.id.toLowerCase().includes(searchTerm.toLowerCase()) ||

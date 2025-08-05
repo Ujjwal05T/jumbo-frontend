@@ -63,6 +63,7 @@ interface PlanGenerationResult extends OptimizationResult {
   plan_id?: string;
   validation_result?: any;
   next_steps?: string[];
+  plans_created?: string[]; // Array of plan IDs created
 }
 
 interface ProductionRecord {
@@ -76,6 +77,7 @@ interface ProductionRecord {
   status: string;
   actual_weight_kg?: number;
   selected_at: string;
+  
 }
 
 interface ErrorBoundaryState {
@@ -255,7 +257,7 @@ export default function PlanningPage() {
       })(),
       aggregatedWidths: (() => {
         const widths = order.order_items?.map(
-          (item) => `${item.width_inches}&quot;`
+          (item) => `${item.width_inches} inches`
         );
         return widths?.length ? [...new Set(widths)].join(", ") : "N/A";
       })(),
@@ -754,7 +756,7 @@ export default function PlanningPage() {
         const legendX = 20 + (index * 65);
         
         // Draw color box
-        pdf.setFillColor(...item.color);
+        pdf.setFillColor(item.color[0], item.color[1], item.color[2]);
         pdf.rect(legendX, yPosition - 3, 8, 6, 'F');
         pdf.setDrawColor(0, 0, 0);
         pdf.setLineWidth(0.2);
@@ -1997,7 +1999,7 @@ export default function PlanningPage() {
           </CardHeader>
           <CardContent>
             <ol className="list-decimal list-inside space-y-2">
-              {planResult.next_steps.map((step, index) => (
+              {planResult.next_steps!.map((step, index) => (
                 <li key={index} className="text-sm">
                   {step}
                 </li>

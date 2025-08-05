@@ -71,6 +71,7 @@ export const DISPATCH_ENDPOINTS = {
   CLIENTS: `${API_BASE_URL}/dispatch/clients`,
   PENDING_ITEMS: `${API_BASE_URL}/dispatch/pending-items`,
   COMPLETE_PENDING_ITEM: `${API_BASE_URL}/dispatch/complete-pending-item`,
+  COMPLETE_ITEMS: `${API_BASE_URL}/dispatch/complete-items`,
 };
 
 // Dashboard endpoints

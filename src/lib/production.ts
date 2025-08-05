@@ -182,7 +182,7 @@ export async function completeOrderItems(itemIds: string[], userId: string) {
  * Status badge helper for consistent UI
  */
 export function getStatusBadgeVariant(status: string, entityType: 'order' | 'order_item' | 'inventory' | 'pending_order' = 'order') {
-  const statusMappings = {
+  const statusMappings: Record<string, Record<string, string>> = {
     order: {
       'created': 'outline',
       'in_process': 'secondary',

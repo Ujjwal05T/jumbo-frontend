@@ -159,7 +159,7 @@ export function addRollColorLegend(
     const legendX = 20 + (index * 65);
     
     // Draw color box
-    pdf.setFillColor(...item.color);
+    pdf.setFillColor(item.color[0], item.color[1], item.color[2]);
     pdf.rect(legendX, yPosition - 3, 8, 6, 'F');
     pdf.setDrawColor(0, 0, 0);
     pdf.setLineWidth(0.2);
@@ -218,7 +218,7 @@ export function addRollStatistics(
     pdf.rect(boxX, yPosition, statsBoxWidth, statsBoxHeight, 'S');
     
     // Add colored header
-    pdf.setFillColor(...stat.color);
+    pdf.setFillColor(stat.color[0], stat.color[1], stat.color[2]);
     pdf.rect(boxX, yPosition, statsBoxWidth, 5, 'F');
     
     // Add label
