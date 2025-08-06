@@ -622,7 +622,7 @@ export default function PlanningPage() {
       const result = await response.json();
 
       // Create production records for UI display using ACTUAL backend-generated barcodes
-      const productionRecords = result.created_inventory_details?.map((inventory, index) => ({
+      const productionRecords = result.created_inventory_details?.map((inventory:any, index:any) => ({
         id: inventory.id,
         qr_code: inventory.qr_code,
         barcode_id: inventory.barcode_id, // Use REAL barcode from backend

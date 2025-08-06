@@ -11,11 +11,16 @@ export interface PendingOrderItem {
   bf: number;
   shade: string;
   quantity_pending: number;
+  quantity_fulfilled?: number;
   reason: string;
-  status: "pending" | "in_production" | "resolved" | "cancelled";
+  status: "pending" | "included_in_plan" | "in_production" | "resolved" | "cancelled";
   production_order_id?: string;
   created_at: string;
   resolved_at?: string;
+  // NEW: Plan generation tracking fields
+  included_in_plan_generation?: boolean;
+  generated_cut_rolls_count?: number;
+  plan_generation_date?: string;
   // Related data
   original_order?: {
     id: string;
