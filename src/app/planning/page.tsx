@@ -180,7 +180,7 @@ export default function PlanningPage() {
     null
   );
   const [selectedCutRolls, setSelectedCutRolls] = useState<number[]>([]); // Individual cut piece indices
-  const [selected118Rolls, setSelected118Rolls] = useState<number[]>([]); // 118" roll numbers
+  const [selected118Rolls, setSelected118Rolls] = useState<string[]>([]); // 118" roll composite keys (spec-rollNumber)
   const [productionRecords, setProductionRecords] = useState<
     ProductionRecord[]
   >([]);
@@ -196,6 +196,27 @@ export default function PlanningPage() {
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [generatingBarcodePDF, setGeneratingBarcodePDF] = useState(false);
   const [productionStarted, setProductionStarted] = useState(false);
+
+  // Helper functions for composite roll keys
+  const generateRollKey = useCallback((gsm: number, bf: number, shade: string, rollNumber: number): string => {
+    return `${gsm}gsm-${bf}bf-${shade}-${rollNumber}`;
+  }, []);
+
+  const parseRollKey = useCallback((key: string): { gsm: number, bf: number, shade: string, rollNumber: number } | null => {
+    const match = key.match(/^(\d+)gsm-([.\d]+)bf-(.+)-(\d+)$/);
+    if (!match) return null;
+    return {
+      gsm: parseInt(match[1]),
+      bf: parseFloat(match[2]),
+      shade: match[3],
+      rollNumber: parseInt(match[4])
+    };
+  }, []);
+
+  const getRollKeyFromCutRoll = useCallback((cutRoll: CutRoll): string | null => {
+    if (!cutRoll.individual_roll_number) return null;
+    return generateRollKey(cutRoll.gsm, cutRoll.bf, cutRoll.shade, cutRoll.individual_roll_number);
+  }, [generateRollKey]);
 
   // Helper function to generate barcode as canvas
   const generateBarcodeCanvas = (value: string): HTMLCanvasElement => {
@@ -291,7 +312,20 @@ export default function PlanningPage() {
     loadOrders();
   }, []);
 
-  // Helper function to get unique 118" roll numbers from cut rolls
+  // Helper function to get unique 118" roll keys from cut rolls
+  const get118RollKeys = useCallback(() => {
+    if (!planResult) return [];
+    const rollKeys = new Set<string>();
+    planResult.cut_rolls_generated.forEach(roll => {
+      const key = getRollKeyFromCutRoll(roll);
+      if (key) {
+        rollKeys.add(key);
+      }
+    });
+    return Array.from(rollKeys).sort();
+  }, [planResult, getRollKeyFromCutRoll]);
+
+  // Helper function to get unique 118" roll numbers (for backward compatibility)
   const get118RollNumbers = useCallback(() => {
     if (!planResult) return [];
     const rollNumbers = new Set<number>();
@@ -313,29 +347,30 @@ export default function PlanningPage() {
 
   // Helper function to get available jumbo roll count (based on 118" rolls)
   const getAvailableJumboRolls = useCallback(() => {
-    const rollNumbers = get118RollNumbers();
-    return Math.floor(rollNumbers.length / 3);
-  }, [get118RollNumbers]);
+    const rollKeys = get118RollKeys();
+    return Math.floor(rollKeys.length / 3);
+  }, [get118RollKeys]);
 
   // Helper function to select specific number of jumbo rolls (3 x 118" rolls each)
   const selectJumboRolls = useCallback(
     (jumboCount: number) => {
-      const rollNumbers = get118RollNumbers();
+      const rollKeys = get118RollKeys();
       const rollsToSelect = jumboCount * 3;
-      const selectedRollNumbers = rollNumbers.slice(0, rollsToSelect);
-      setSelected118Rolls(selectedRollNumbers);
+      const selectedRollKeys = rollKeys.slice(0, rollsToSelect);
+      setSelected118Rolls(selectedRollKeys);
       
       // Also update selectedCutRolls to match the 118" roll selection
       if (!planResult) return;
       const cutRollIndices: number[] = [];
       planResult.cut_rolls_generated.forEach((roll, index) => {
-        if (roll.individual_roll_number && selectedRollNumbers.includes(roll.individual_roll_number)) {
+        const rollKey = getRollKeyFromCutRoll(roll);
+        if (rollKey && selectedRollKeys.includes(rollKey)) {
           cutRollIndices.push(index);
         }
       });
       setSelectedCutRolls(cutRollIndices);
     },
-    [get118RollNumbers, planResult]
+    [get118RollKeys, planResult, getRollKeyFromCutRoll]
   );
 
   const handleOrderSelect = useCallback((orderId: string) => {
@@ -353,19 +388,22 @@ export default function PlanningPage() {
     [filteredOrders]
   );
 
-  // Handler for selecting individual 118" rolls - ALLOWS ANY SELECTION
-  const handle118RollSelect = useCallback((rollNumber: number) => {
+  // Handler for selecting individual 118" rolls using composite keys - ALLOWS ANY SELECTION
+  const handle118RollSelect = useCallback((gsm: number, bf: number, shade: string, rollNumber: number) => {
+    const rollKey = generateRollKey(gsm, bf, shade, rollNumber);
+    
     setSelected118Rolls((prev) => {
-      const newSelection = prev.includes(rollNumber) 
-        ? prev.filter((r) => r !== rollNumber) 
-        : [...prev, rollNumber].sort((a, b) => a - b);
+      const newSelection = prev.includes(rollKey) 
+        ? prev.filter((r) => r !== rollKey) 
+        : [...prev, rollKey].sort();
       
       // Always allow the selection - no restrictions during selection
       // Update selectedCutRolls to match the 118" roll selection
       if (planResult) {
         const cutRollIndices: number[] = [];
         planResult.cut_rolls_generated.forEach((roll, index) => {
-          if (roll.individual_roll_number && newSelection.includes(roll.individual_roll_number)) {
+          const cutRollKey = getRollKeyFromCutRoll(roll);
+          if (cutRollKey && newSelection.includes(cutRollKey)) {
             cutRollIndices.push(index);
           }
         });
@@ -374,7 +412,20 @@ export default function PlanningPage() {
       
       return newSelection;
     });
-  }, [planResult]);
+  }, [planResult, generateRollKey, getRollKeyFromCutRoll]);
+
+  // Legacy handler for backward compatibility with roll numbers
+  const handle118RollSelectByNumber = useCallback((rollNumber: number) => {
+    // This should ideally not be used - we want to select by composite keys
+    // Find the first cut roll with this roll number and use its specification
+    if (!planResult) return;
+    const cutRoll = planResult.cut_rolls_generated.find(roll => 
+      roll.individual_roll_number === rollNumber
+    );
+    if (cutRoll) {
+      handle118RollSelect(cutRoll.gsm, cutRoll.bf, cutRoll.shade, rollNumber);
+    }
+  }, [planResult, handle118RollSelect]);
 
   // Legacy handler for individual cut pieces (kept for backward compatibility but discouraged)
   const handleCutRollSelect = useCallback((index: number) => {
@@ -382,31 +433,32 @@ export default function PlanningPage() {
     if (!planResult) return;
     const cutRoll = planResult.cut_rolls_generated[index];
     if (cutRoll.individual_roll_number) {
-      handle118RollSelect(cutRoll.individual_roll_number);
+      handle118RollSelect(cutRoll.gsm, cutRoll.bf, cutRoll.shade, cutRoll.individual_roll_number);
     }
   }, [planResult, handle118RollSelect]);
 
   const handleSelectAll118Rolls = useCallback(
     (checked: boolean) => {
-      const rollNumbers = get118RollNumbers();
+      const rollKeys = get118RollKeys();
       
       // Select ALL available 118" rolls, not just complete jumbos
-      const selectedRollNumbers = checked ? rollNumbers : [];
+      const selectedRollKeys = checked ? rollKeys : [];
       
-      setSelected118Rolls(selectedRollNumbers);
+      setSelected118Rolls(selectedRollKeys);
       
       // Update selectedCutRolls to match
       if (planResult) {
         const cutRollIndices: number[] = [];
         planResult.cut_rolls_generated.forEach((roll, index) => {
-          if (roll.individual_roll_number && selectedRollNumbers.includes(roll.individual_roll_number)) {
+          const cutRollKey = getRollKeyFromCutRoll(roll);
+          if (cutRollKey && selectedRollKeys.includes(cutRollKey)) {
             cutRollIndices.push(index);
           }
         });
         setSelectedCutRolls(cutRollIndices);
       }
     },
-    [get118RollNumbers, planResult]
+    [get118RollKeys, planResult, getRollKeyFromCutRoll]
   );
 
   const generatePlan = async () => {
@@ -718,8 +770,12 @@ export default function PlanningPage() {
     const roll118Number = parseInt(rollNumber);
     if (isNaN(roll118Number)) return; // Skip if no valid roll number
     
-    // Use the handle118RollSelect function for proper validation
-    handle118RollSelect(roll118Number);
+    // Get specification details from the first roll in the set
+    const firstRoll = rollsInNumber[0];
+    if (!firstRoll) return;
+    
+    // Use the handle118RollSelect function with composite key
+    handle118RollSelect(firstRoll.gsm, firstRoll.bf, firstRoll.shade, roll118Number);
   };
 
   const generatePDF = async () => {
@@ -1326,7 +1382,7 @@ export default function PlanningPage() {
                             />
                           </TableCell>
                           <TableCell className="font-medium">
-                            {order.id.split("-")[0]}
+                            {order.frontend_id || order.id.split("-")[0]}
                           </TableCell>
                           <TableCell>
                             {order.client?.company_name || "N/A"}
@@ -1437,28 +1493,11 @@ export default function PlanningPage() {
                         Select rolls to move to production phase - organized by
                         paper specification and roll number
                       </CardDescription>
-                      {/* Jumbo Roll Constraint Indicator */}
-                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                          <span className="text-sm font-medium text-blue-700">
-                            User Choice: Select any 118" rolls you want - production requires multiples of 3
-                          </span>
-                        </div>
-                        <div className="text-xs text-blue-600 mt-1">
-                          Available: {get118RollNumbers().length} individual 118" rolls total ({getAvailableJumboRolls()} complete jumbos)
-                          {get118RollNumbers().length % 3 > 0 && (
-                            <span className="ml-2 text-orange-600">
-                              • {get118RollNumbers().length % 3} additional 118" roll(s) - your choice to include
-                            </span>
-                          )}
-                        </div>
-                      </div>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-col gap-3">
                       <div className="text-sm text-muted-foreground">
                         {selected118Rolls.length} of{" "}
-                        {get118RollNumbers().length}{" "}
+                        {get118RollKeys().length}{" "}
                         individual 118" rolls selected
                         {selected118Rolls.length > 0 && (
                           <span className={`ml-2 px-2 py-1 rounded text-xs ${
@@ -1475,11 +1514,11 @@ export default function PlanningPage() {
                       </div>
                       {/* Show warning message when selection is invalid */}
                       {selected118Rolls.length > 0 && !isValid118RollSelection(selected118Rolls.length) && (
-                        <div className="text-xs text-yellow-600 mt-1">
+                        <div className="text-xs text-yellow-600">
                           ⚠ Production disabled: Please select 118" rolls in multiples of 3 to match jumbo roll constraints
                         </div>
                       )}
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         {/* Jumbo Roll Selection Helpers */}
                         {getAvailableJumboRolls() > 0 && (
                           <>
@@ -1607,7 +1646,10 @@ export default function PlanningPage() {
                                         <Checkbox
                                           checked={(() => {
                                             const roll118Number = parseInt(rollNumber);
-                                            return !isNaN(roll118Number) && selected118Rolls.includes(roll118Number);
+                                            if (isNaN(roll118Number) || rollsInNumber.length === 0) return false;
+                                            const firstRoll = rollsInNumber[0];
+                                            const rollKey = generateRollKey(firstRoll.gsm, firstRoll.bf, firstRoll.shade, roll118Number);
+                                            return selected118Rolls.includes(rollKey);
                                           })()}
                                           onCheckedChange={() =>
                                             handleRollSetSelection(
@@ -1635,15 +1677,17 @@ export default function PlanningPage() {
                                         <Badge
                                           variant={(() => {
                                             const roll118Number = parseInt(rollNumber);
-                                            return !isNaN(roll118Number) && selected118Rolls.includes(roll118Number)
-                                              ? "default"
-                                              : "secondary";
+                                            if (isNaN(roll118Number) || rollsInNumber.length === 0) return "secondary";
+                                            const firstRoll = rollsInNumber[0];
+                                            const rollKey = generateRollKey(firstRoll.gsm, firstRoll.bf, firstRoll.shade, roll118Number);
+                                            return selected118Rolls.includes(rollKey) ? "default" : "secondary";
                                           })()}>
                                           {(() => {
                                             const roll118Number = parseInt(rollNumber);
-                                            return !isNaN(roll118Number) && selected118Rolls.includes(roll118Number)
-                                              ? "✓ Selected"
-                                              : "Not Selected";
+                                            if (isNaN(roll118Number) || rollsInNumber.length === 0) return "Not Selected";
+                                            const firstRoll = rollsInNumber[0];
+                                            const rollKey = generateRollKey(firstRoll.gsm, firstRoll.bf, firstRoll.shade, roll118Number);
+                                            return selected118Rolls.includes(rollKey) ? "✓ Selected" : "Not Selected";
                                           })()}
                                         </Badge>
                                         <Button

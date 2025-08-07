@@ -38,9 +38,8 @@ import {
   FileText,
   Download
 } from "lucide-react";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import { fetchOrders, updateOrderStatus, Order } from "@/lib/orders";
+import { generateOrderPDF } from "@/lib/order-pdf-utils";
 import { getStatusBadgeVariant, getStatusDisplayText } from "@/lib/production";
 
 interface OrderItem {
@@ -205,89 +204,16 @@ export default function OrderDetailsPage() {
     return matchesSearch && matchesStatus;
   }) || [];
 
-  const exportToPDF = () => {
+  const exportToPDF = (includeRates: boolean = true) => {
     if (!order) return;
-
-    const doc = new jsPDF();
     
-    // Header - Order Details (Line 1)
-    doc.setFontSize(12);
-    doc.text(`Order ID: ${order.frontend_id || order.id}`, 20, 20);
-    doc.text(`Date: ${new Date(order.created_at).toLocaleDateString()}`, 120, 20);
-    doc.text(`${order.payment_type.toUpperCase()}`, 170, 20);
-    
-    // Client Information (Line 2)
-    doc.text(`Client: ${order.client?.company_name || 'N/A'}`, 20, 35);
-    if (order.client?.contact_person) {
-      doc.text(`Contact: ${order.client.contact_person}`, 120, 35);
+    try {
+      generateOrderPDF(order, includeRates);
+      toast.success('PDF exported successfully!');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error('Failed to generate PDF');
     }
-    
-    // Order Items Table
-    const tableData = order.order_items?.map((item, index) => [
-      index + 1,
-      item.paper?.name || 'N/A',
-      `${item.paper?.gsm || 0}gsm`,
-      `${item.paper?.bf || 0}`,
-      item.paper?.shade || 'N/A',
-      `${item.width_inches || 0}"`,
-      item.quantity_rolls || 0,
-      `${item.quantity_kg || 0}kg`,
-      (item.rate || 0).toFixed(2),
-      item.notes || '-'
-    ]) || [];
-    
-    autoTable(doc, {
-      head: [[
-        '#',
-        'Paper',
-        'GSM',
-        'BF',
-        'Shade',
-        'Width',
-        'Qty',
-        'Weight',
-        'Rate',
-        'Notes'
-      ]],
-      body: tableData,
-      startY: 50,
-      styles: {
-        fontSize: 9,
-        cellPadding: 2,
-        textColor: [0, 0, 0],
-        fillColor: [255, 255, 255]
-      },
-      headStyles: {
-        fillColor: [240, 240, 240],
-        textColor: [0, 0, 0],
-        fontStyle: 'bold',
-        fontSize: 8
-      },
-      columnStyles: {
-        0: { halign: 'center', cellWidth: 15 },
-        1: { cellWidth: 35 },
-        2: { halign: 'center', cellWidth: 18 },
-        3: { halign: 'center', cellWidth: 15 },
-        4: { cellWidth: 22 },
-        5: { halign: 'center', cellWidth: 18 },
-        6: { halign: 'center', cellWidth: 15 },
-        7: { halign: 'center', cellWidth: 20 },
-        8: { halign: 'center', cellWidth: 18 },
-        9: { cellWidth: 30 }
-      },
-      margin: { left: 10, right: 10 }
-    });
-    
-    // Footer
-    const pageHeight = doc.internal.pageSize.height;
-    doc.setFontSize(8);
-    doc.text(`Generated on: ${new Date().toLocaleString()}`, 20, pageHeight - 10);
-    
-    // Save the PDF
-    const filename = `order-${order.frontend_id || order.id}-${new Date().toISOString().split('T')[0]}.pdf`;
-    doc.save(filename);
-    
-    toast.success('PDF exported successfully!');
   };
 
   if (loading) {
@@ -344,11 +270,19 @@ export default function OrderDetailsPage() {
           <div className="flex gap-2">
             <Button
               variant="outline"
-              onClick={exportToPDF}
+              onClick={() => exportToPDF(true)}
               className="text-blue-600 border-blue-600 hover:bg-blue-50"
             >
               <Download className="mr-2 h-4 w-4" />
-              Export PDF
+              PDF with Rates
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => exportToPDF(false)}
+              className="text-green-600 border-green-600 hover:bg-green-50"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              PDF without Rates
             </Button>
             {order.status !== 'completed' && order.status !== 'cancelled' && (
               <>

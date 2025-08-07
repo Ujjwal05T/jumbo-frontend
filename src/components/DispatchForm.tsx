@@ -307,8 +307,8 @@ export function DispatchForm({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="bill">Bill Payment</SelectItem>
-                          <SelectItem value="cash">Cash Payment</SelectItem>
+                          <SelectItem value="bill">Bill</SelectItem>
+                          <SelectItem value="cash">Cash</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

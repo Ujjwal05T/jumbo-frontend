@@ -29,7 +29,11 @@ import {
   calculateQuantityKg,
   calculateQuantityRolls,
   calculateAmount,
+  Order,
 } from "@/lib/orders";
+import { generateOrderPDF } from "@/lib/order-pdf-utils";
+import { toast } from "sonner";
+import { MASTER_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
 import {
   Loader2,
   ArrowLeft,
@@ -203,17 +207,45 @@ export default function NewOrderPage() {
       };
 
       console.log("Sending order data:", JSON.stringify(orderData, null, 2));
-      await createOrder(orderData);
+      const createdOrder: Order = await createOrder(orderData);
 
       setAlert({
         type: "success",
-        message: "Order created successfully! Redirecting...",
+        message: "Order created successfully! Downloading PDF...",
       });
 
-      // Redirect after a short delay to show success message
+      // Auto-download PDF after successful creation
+      try {
+        // Need to fetch the complete order details including client info for PDF
+        const response = await fetch(`${MASTER_ENDPOINTS.ORDERS}/${createdOrder.id}`, createRequestOptions('GET'));
+        if (response.ok) {
+          const orderWithDetails = await response.json();
+          
+          // Generate and download PDF automatically
+          generateOrderPDF(orderWithDetails, true);
+          toast.success('Order created and PDF downloaded successfully!');
+        } else {
+          // Fallback - create PDF with available data
+          const pdfData = {
+            ...createdOrder,
+            client: clients.find(c => c.id === formData.client_id),
+            order_items: cleanOrderItems.map((item, index) => ({
+              ...item,
+              paper: papers.find(p => p.id === item.paper_id)
+            }))
+          };
+          generateOrderPDF(pdfData, true);
+          toast.success('Order created and PDF downloaded successfully!');
+        }
+      } catch (pdfError) {
+        console.error('Error generating PDF:', pdfError);
+        toast.error('Order created but PDF generation failed');
+      }
+
+      // Redirect after a short delay to show success message and allow PDF download
       setTimeout(() => {
         router.push("/masters/orders");
-      }, 1500);
+      }, 2000);
     } catch (error) {
       console.error("Error creating order:", error);
       setAlert({

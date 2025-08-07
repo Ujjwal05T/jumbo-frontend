@@ -16,8 +16,8 @@ export interface PackingSlipData {
   dispatch_date: string;
   client: {
     company_name: string;
-    contact_person: string;
-    address: string;
+    contact_person?: string;
+    address?: string;
     mobile?: string;
   };
   vehicle_number: string;
@@ -76,19 +76,6 @@ export const generatePackingSlipPDF = (data: PackingSlipData): void => {
     
     doc.text(`Company: ${data.client.company_name}`, rightColX, rightYPos);
     rightYPos += 6;
-    
-    doc.text(`Contact: ${data.client.contact_person}`, rightColX, rightYPos);
-    rightYPos += 6;
-    
-    if (data.client.mobile) {
-      doc.text(`Mobile: ${data.client.mobile}`, rightColX, rightYPos);
-      rightYPos += 6;
-    }
-    
-    // Address (may be multiline)
-    const addressLines = doc.splitTextToSize(`Address: ${data.client.address}`, pageWidth / 2 - 20);
-    doc.text(addressLines, rightColX, rightYPos);
-    rightYPos += addressLines.length * 6;
     
     yPosition = Math.max(yPosition, rightYPos) + 10;
 

@@ -35,7 +35,8 @@ import {
   MapPin,
   Download,
   FileText,
-  BarChart3
+  BarChart3,
+  Printer
 } from "lucide-react";
 import QRCodeDisplay from "@/components/QRCodeDisplay";
 import BarcodeDisplay from "@/components/BarcodeDisplay";
@@ -305,6 +306,262 @@ export default function PlanDetailsPage() {
       }
     }
     return canvas;
+  };
+
+  // Print Function
+  const printPlanDetails = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error('Unable to open print window. Please check your browser settings.');
+      return;
+    }
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Plan Details - ${plan?.name || 'Unnamed Plan'}</title>
+          <style>
+            body { 
+              font-family: Arial, sans-serif; 
+              margin: 20px; 
+              font-size: 14px; 
+              line-height: 1.4;
+            }
+            .header { 
+              text-align: center; 
+              margin-bottom: 30px; 
+              border-bottom: 2px solid #333;
+              padding-bottom: 15px;
+            }
+            .header h1 { 
+              margin: 0; 
+              font-size: 24px; 
+              color: #333; 
+            }
+            .header p { 
+              margin: 5px 0; 
+              color: #666; 
+            }
+            .section { 
+              margin-bottom: 25px; 
+            }
+            .section h2 { 
+              font-size: 18px; 
+              color: #333; 
+              border-bottom: 1px solid #ccc;
+              padding-bottom: 5px;
+            }
+            .info-grid { 
+              display: grid; 
+              grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+              gap: 15px; 
+              margin-bottom: 20px; 
+            }
+            .info-item { 
+              padding: 10px; 
+              background: #f8f9fa; 
+              border-radius: 5px;
+            }
+            .info-item label { 
+              font-weight: bold; 
+              color: #555; 
+              font-size: 12px;
+              text-transform: uppercase;
+            }
+            .info-item value { 
+              display: block; 
+              font-size: 16px; 
+              color: #333; 
+              margin-top: 3px;
+            }
+            .stats-grid {
+              display: grid;
+              grid-template-columns: repeat(4, 1fr);
+              gap: 15px;
+              margin: 20px 0;
+            }
+            .stat-card {
+              text-align: center;
+              padding: 15px;
+              background: #f8f9fa;
+              border-radius: 5px;
+              border: 1px solid #e9ecef;
+            }
+            .stat-value {
+              font-size: 24px;
+              font-weight: bold;
+              color: #333;
+            }
+            .stat-label {
+              font-size: 12px;
+              color: #666;
+              margin-top: 5px;
+            }
+            table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin: 15px 0;
+            }
+            th, td { 
+              border: 1px solid #ddd; 
+              padding: 8px; 
+              text-align: left; 
+            }
+            th { 
+              background-color: #f8f9fa; 
+              font-weight: bold;
+            }
+            .footer {
+              margin-top: 30px;
+              text-align: center;
+              font-size: 12px;
+              color: #666;
+              border-top: 1px solid #ccc;
+              padding-top: 15px;
+            }
+            @media print {
+              body { margin: 0; }
+              .header, .section { page-break-inside: avoid; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>${plan?.name || 'Plan Details'}</h1>
+            <p>Production Planning Report</p>
+            <p>Generated on: ${new Date().toLocaleString()}</p>
+          </div>
+
+          <div class="section">
+            <h2>Plan Information</h2>
+            <div class="info-grid">
+              <div class="info-item">
+                <label>Status</label>
+                <value>${plan?.status.replace('_', ' ') || 'Unknown'}</value>
+              </div>
+              <div class="info-item">
+                <label>Expected Waste</label>
+                <value>${plan?.expected_waste_percentage || 0}%</value>
+              </div>
+              ${plan?.actual_waste_percentage ? `
+              <div class="info-item">
+                <label>Actual Waste</label>
+                <value>${plan.actual_waste_percentage}%</value>
+              </div>` : ''}
+              <div class="info-item">
+                <label>Created</label>
+                <value>${plan?.created_at ? new Date(plan.created_at).toLocaleString() : 'Unknown'}</value>
+              </div>
+              <div class="info-item">
+                <label>Created By</label>
+                <value>${(() => {
+                  const user = getUserById(plan?.created_by_id || '');
+                  return user?.name || plan?.created_by?.name || 'Unknown';
+                })()}</value>
+              </div>
+            </div>
+          </div>
+
+          ${productionSummary ? `
+          <div class="section">
+            <h2>Production Summary</h2>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-value">${productionSummary.production_summary.total_cut_rolls}</div>
+                <div class="stat-label">Total Rolls</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value">${productionSummary.production_summary.total_weight_kg}kg</div>
+                <div class="stat-label">Total Weight</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value">${productionSummary.production_summary.average_weight_per_roll.toFixed(1)}kg</div>
+                <div class="stat-label">Avg Weight per Roll</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value">${productionSummary.production_summary.paper_specifications.length}</div>
+                <div class="stat-label">Paper Types</div>
+              </div>
+            </div>
+
+            <h3>Status Breakdown</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Count</th>
+                  <th>Weight (kg)</th>
+                  <th>Widths</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${Object.entries(productionSummary.production_summary.status_breakdown)
+                  .map(([status, data]) => `
+                    <tr>
+                      <td>${status.replace('_', ' ')}</td>
+                      <td>${data.count}</td>
+                      <td>${data.total_weight.toFixed(1)}</td>
+                      <td>${[...new Set(data.widths)].join('", ')}"</td>
+                    </tr>
+                  `).join('')}
+              </tbody>
+            </table>
+
+            ${filteredCutRolls.length > 0 ? `
+            <h3>Cut Rolls Details (${filteredCutRolls.length} items)</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>S.No</th>
+                  <th>Barcode</th>
+                  <th>Width</th>
+                  <th>Weight</th>
+                  <th>Paper Specs</th>
+                  <th>Status</th>
+                  <th>Location</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${filteredCutRolls.slice(0, 50).map((item, index) => `
+                  <tr>
+                    <td>${index + 1}</td>
+                    <td style="font-family: monospace; font-size: 12px;">${item.barcode_id || item.qr_code}</td>
+                    <td>${item.width_inches}"</td>
+                    <td>${item.weight_kg}kg</td>
+                    <td>${item.paper_specs ? `${item.paper_specs.gsm}gsm, BF:${item.paper_specs.bf}, ${item.paper_specs.shade}` : 'N/A'}</td>
+                    <td>${item.status.replace('_', ' ')}</td>
+                    <td>${item.location}</td>
+                  </tr>
+                `).join('')}
+                ${filteredCutRolls.length > 50 ? `
+                <tr>
+                  <td colspan="7" style="text-align: center; font-style: italic;">
+                    ... and ${filteredCutRolls.length - 50} more items
+                  </td>
+                </tr>` : ''}
+              </tbody>
+            </table>` : ''}
+          </div>` : ''}
+
+          <div class="footer">
+            <p>This document was generated from the Production Planning System</p>
+            <p>Plan ID: ${planId}</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    
+    // Wait for content to load before printing
+    printWindow.addEventListener('load', () => {
+      printWindow.print();
+      printWindow.close();
+    });
+
+    toast.success('Print preview opened');
   };
 
   // PDF Export Functions
@@ -760,6 +1017,14 @@ export default function PlanDetailsPage() {
           <div className="flex gap-2">
             {productionSummary && filteredCutRolls.length > 0 && (
               <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={printPlanDetails}
+                >
+                  <Printer className="mr-2 h-4 w-4" />
+                  Print
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"

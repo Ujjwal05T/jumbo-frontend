@@ -51,6 +51,7 @@ import {
   Calendar,
   User,
   Loader2,
+  History,
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DispatchForm } from "@/components/DispatchForm";
@@ -324,6 +325,13 @@ export default function DispatchPage() {
               Manage order items ready for dispatch and track delivery status
             </p>
           </div>
+          <Button
+            onClick={() => window.location.href = '/dispatch/history'}
+            variant="outline"
+          >
+            <History className="w-4 h-4 mr-2" />
+            View Dispatch History
+          </Button>
         </div>
 
         {/* Client and Order Selection */}
