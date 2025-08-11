@@ -12,13 +12,15 @@ import {
   getWorkflowStatus,
   convertOrdersToRequirements,
   groupCutRollsBySpec,
+  groupCutRollsByJumbo,
   calculateEfficiencyMetrics,
   formatPaperSpec,
   getStatusBadgeVariant as getNewFlowStatusBadgeVariant,
   OptimizationResult,
   WorkflowProcessRequest,
   CuttingPlanRequest,
-  CutRoll
+  CutRoll,
+  JumboRollDetail
 } from "@/lib/new-flow";
 // Removed old production imports - now using direct API calls
 import { Button } from "@/components/ui/button";
@@ -197,6 +199,7 @@ export default function PlanningPage() {
   const [generatingBarcodePDF, setGeneratingBarcodePDF] = useState(false);
   const [productionStarted, setProductionStarted] = useState(false);
   const [wastage, setWastage] = useState(1); // Default 1 inch wastage
+  const [displayMode, setDisplayMode] = useState<'traditional' | 'jumbo'>('traditional'); // Display mode toggle
 
   // Calculate planning width from wastage
   const planningWidth = useMemo(() => {
@@ -578,7 +581,7 @@ export default function PlanningPage() {
       // Create a plan record first with actual optimization data
       const planCreateRequest = {
         name: `Production Plan - ${new Date().toISOString().split('T')[0]}`,
-        cut_pattern: planResult.cut_rolls_generated.map((roll, index) => ({
+        cut_pattern: planResult.cut_rolls_generated.map((roll:CutRoll, index) => ({
           width: roll.width,
           gsm: roll.gsm,
           bf: roll.bf,
@@ -899,53 +902,251 @@ export default function PlanningPage() {
 
       yPosition += 15;
 
-      // Jumbo Roll Sets Section
+      // Enhanced Jumbo Roll Summary Section
       if (planResult.jumbo_rolls_needed > 0) {
-        checkPageBreak(30);
+        checkPageBreak(40);
         pdf.setFontSize(16);
         pdf.setTextColor(40, 40, 40);
-        pdf.text("Jumbo Rolls Required", 20, yPosition);
+        pdf.text("Jumbo Rolls Summary", 20, yPosition);
         yPosition += 15;
 
+        // Basic statistics
         pdf.setFontSize(12);
         pdf.setTextColor(60, 60, 60);
-        pdf.text(
-          `Total jumbo rolls needed: ${planResult.jumbo_rolls_needed}`,
-          20,
-          yPosition
-        );
+        pdf.text(`Total Virtual Jumbo Rolls: ${planResult.jumbo_rolls_needed}`, 20, yPosition);
         yPosition += 8;
-        pdf.text(`Each jumbo roll contains 3 rolls of ${planningWidth}" width`, 20, yPosition);
+        
+        // Enhanced statistics if jumbo details are available
+        if (planResult.summary.complete_jumbos !== undefined && planResult.summary.partial_jumbos !== undefined) {
+          pdf.text(`Complete Jumbos (3/3 rolls): ${planResult.summary.complete_jumbos}`, 20, yPosition);
+          yPosition += 8;
+          pdf.text(`Partial Jumbos (<3 rolls): ${planResult.summary.partial_jumbos}`, 20, yPosition);
+          yPosition += 8;
+        }
+        
+        pdf.text(`Each jumbo roll contains up to 3 rolls of ${planningWidth}" width`, 20, yPosition);
         yPosition += 8;
-        pdf.text(
-          `Total ${planningWidth}" rolls produced: ${planResult.jumbo_rolls_needed * 3}`,
-          20,
-          yPosition
-        );
+        pdf.text(`Total ${planningWidth}" rolls produced: ${planResult.jumbo_rolls_needed * 3}`, 20, yPosition);
+        yPosition += 8;
+        
+        // Efficiency metrics
+        const metrics = calculateEfficiencyMetrics(planResult.cut_rolls_generated);
+        pdf.text(`Overall Material Efficiency: ${metrics.averageEfficiency.toFixed(1)}%`, 20, yPosition);
+        yPosition += 8;
+        pdf.text(`Total Cut Rolls Generated: ${planResult.summary.total_cut_rolls}`, 20, yPosition);
         yPosition += 15;
       }
 
-      // Cut Rolls by Specification
+      // Enhanced: Jumbo Roll Hierarchy Section
       checkPageBreak(30);
       pdf.setFontSize(16);
       pdf.setTextColor(40, 40, 40);
-      pdf.text("Cut Rolls by Specification", 20, yPosition);
-      yPosition += 15;
+      
+      // Check if we have jumbo roll details for enhanced view
+      if (planResult.jumbo_roll_details && planResult.jumbo_roll_details.length > 0) {
+        pdf.text("Production Plan - Jumbo Roll Hierarchy", 20, yPosition);
+        yPosition += 15;
 
-      // Group cut rolls by specification
-      const groupedRolls = planResult.cut_rolls_generated.reduce(
-        (groups, roll, index) => {
-          const key = `${roll.gsm}gsm, ${roll.bf}bf, ${roll.shade}`;
-          if (!groups[key]) {
-            groups[key] = [];
-          }
-          groups[key].push({ ...roll, originalIndex: index });
-          return groups;
-        },
-        {} as Record<string, Array<CutRoll & { originalIndex: number }>>
-      );
+        // Process jumbo roll details
+        (planResult.jumbo_roll_details || []).forEach((jumboDetail: JumboRollDetail) => {
+          if (!jumboDetail) return; // Skip if jumboDetail is null/undefined
+          
+          checkPageBreak(40);
 
-      Object.entries(groupedRolls).forEach(([specKey, rolls]) => {
+          // Jumbo Roll Header
+          pdf.setFontSize(14);
+          pdf.setTextColor(40, 40, 40);
+          pdf.text(`Jumbo Roll ${jumboDetail.jumbo_frontend_id || jumboDetail.jumbo_id || 'Unknown'}`, 20, yPosition);
+          yPosition += 8;
+
+          // Jumbo Roll Details
+          pdf.setFontSize(10);
+          pdf.setTextColor(80, 80, 80);
+          pdf.text(`Paper: ${jumboDetail.paper_spec || 'Unknown'}`, 25, yPosition);
+          pdf.text(`Rolls: ${jumboDetail.roll_count || 0}/3`, 120, yPosition);
+          pdf.text(`Efficiency: ${jumboDetail.efficiency_percentage || 0}%`, 160, yPosition);
+          yPosition += 8;
+
+          pdf.text(`Total Cuts: ${jumboDetail.total_cuts || 0}`, 25, yPosition);
+          pdf.text(`Status: ${jumboDetail.is_complete ? 'Complete' : 'Partial'}`, 120, yPosition);
+          yPosition += 12;
+
+          // Get cut rolls for this jumbo
+          const jumboRolls = (planResult.cut_rolls_generated || []).filter(roll => 
+            roll && roll.jumbo_roll_id === jumboDetail.jumbo_id
+          );
+
+          // Group by 118" roll
+          const roll118Groups = jumboRolls.reduce((groups, roll, index) => {
+            if (!roll) return groups; // Skip null/undefined rolls
+            const key = roll.parent_118_roll_id || `roll-${roll.individual_roll_number || 0}`;
+            if (!groups[key]) {
+              groups[key] = [];
+            }
+            const originalIndex = (planResult.cut_rolls_generated || []).findIndex(r => r === roll);
+            groups[key].push({ ...roll, originalIndex: originalIndex >= 0 ? originalIndex : index });
+            return groups;
+          }, {} as Record<string, Array<CutRoll & { originalIndex: number }>>);
+
+          // Process each 118" roll within this jumbo
+          Object.entries(roll118Groups).forEach(([roll118Id, cutsInRoll]) => {
+            checkPageBreak(35);
+
+            const rollNum = cutsInRoll[0]?.individual_roll_number || 'Unknown';
+            const rollSeq = cutsInRoll[0]?.roll_sequence || '?';
+            
+            pdf.setFontSize(12);
+            pdf.setTextColor(60, 60, 60);
+            pdf.text(`118" Roll #${rollNum} (Position ${rollSeq})`, 30, yPosition);
+            yPosition += 8;
+
+            // Visual cutting representation
+            checkPageBreak(25);
+            pdf.setFontSize(9);
+            pdf.setTextColor(60, 60, 60);
+            pdf.text("Cutting Pattern:", 35, yPosition);
+            yPosition += 8;
+
+            // Draw visual cutting representation
+            const rectStartX = 35;
+            const rectWidth = pageWidth - 70;
+            const rectHeight = 12;
+            let currentX = rectStartX;
+
+            cutsInRoll.forEach((roll) => {
+              // Add safety checks for undefined values
+              const rollWidth = roll.width || 0;
+              const rollOriginalIndex = roll.originalIndex ?? -1;
+              
+              const widthRatio = rollWidth / planningWidth;
+              const sectionWidth = rectWidth * widthRatio;
+              const isSelected = selectedCutRolls.includes(rollOriginalIndex);
+
+              // Set color based on selection
+              if (isSelected) {
+                pdf.setFillColor(34, 197, 94); // Green for selected
+              } else {
+                pdf.setFillColor(59, 130, 246); // Blue for not selected
+              }
+
+              // Draw rectangle for this cut
+              pdf.rect(currentX, yPosition, sectionWidth, rectHeight, 'F');
+              
+              // Add border
+              pdf.setDrawColor(255, 255, 255);
+              pdf.setLineWidth(0.5);
+              pdf.rect(currentX, yPosition, sectionWidth, rectHeight, 'S');
+
+              // Add width text inside the rectangle if wide enough
+              if (sectionWidth > 15 && rollWidth > 0) {
+                pdf.setTextColor(255, 255, 255);
+                pdf.setFontSize(7);
+                const textX = currentX + sectionWidth/2;
+                const textY = yPosition + rectHeight/2 + 1;
+                pdf.text(`${rollWidth}"`, textX, textY, { align: 'center' });
+              }
+
+              currentX += sectionWidth;
+            });
+
+            // Calculate and draw waste section
+            const totalUsed = cutsInRoll.reduce((sum, roll) => sum + (roll.width || 0), 0);
+            const waste = planningWidth - totalUsed;
+            if (waste > 0) {
+              const wasteRatio = waste / planningWidth;
+              const wasteWidth = rectWidth * wasteRatio;
+              
+              pdf.setFillColor(239, 68, 68); // Red for waste
+              pdf.rect(currentX, yPosition, wasteWidth, rectHeight, 'F');
+              pdf.setDrawColor(255, 255, 255);
+              pdf.rect(currentX, yPosition, wasteWidth, rectHeight, 'S');
+              
+              if (wasteWidth > 15) {
+                pdf.setTextColor(255, 255, 255);
+                pdf.setFontSize(6);
+                pdf.text(`${waste.toFixed(1)}"`, currentX + wasteWidth/2, yPosition + rectHeight/2 + 1, { align: 'center' });
+              }
+            }
+
+            yPosition += rectHeight + 3;
+
+            // Add width indicator
+            pdf.setTextColor(100, 100, 100);
+            pdf.setFontSize(7);
+            pdf.text(`${planningWidth}" Total Width`, rectStartX + rectWidth/2, yPosition, { align: 'center' });
+            yPosition += 8;
+
+            // Enhanced statistics for this 118" roll
+            checkPageBreak(20);
+            const statsY = yPosition;
+            const statsBoxWidth = (rectWidth - 15) / 4;
+            const statsBoxHeight = 15;
+
+            // Add safety checks for calculations
+            const safeTotalUsed = totalUsed || 0;
+            const safeWaste = waste || 0;
+            const safeEfficiency = planningWidth > 0 ? ((safeTotalUsed / planningWidth) * 100) : 0;
+            const safeCutsCount = cutsInRoll ? cutsInRoll.length : 0;
+
+            // Used Width box
+            pdf.setDrawColor(60, 60, 60);
+            pdf.setLineWidth(0.5);
+            pdf.rect(rectStartX, statsY, statsBoxWidth, statsBoxHeight, 'S');
+            pdf.setTextColor(40, 40, 40);
+            pdf.setFontSize(10);
+            pdf.text(`${safeTotalUsed.toFixed(1)}"`, rectStartX + statsBoxWidth/2, statsY + 6, { align: 'center' });
+            pdf.setFontSize(7);
+            pdf.text("Used", rectStartX + statsBoxWidth/2, statsY + 12, { align: 'center' });
+
+            // Waste box
+            const wasteX = rectStartX + statsBoxWidth + 5;
+            pdf.rect(wasteX, statsY, statsBoxWidth, statsBoxHeight, 'S');
+            pdf.setFontSize(10);
+            pdf.text(`${safeWaste.toFixed(1)}"`, wasteX + statsBoxWidth/2, statsY + 6, { align: 'center' });
+            pdf.setFontSize(7);
+            pdf.text("Waste", wasteX + statsBoxWidth/2, statsY + 12, { align: 'center' });
+
+            // Efficiency box
+            const efficiencyX = wasteX + statsBoxWidth + 5;
+            pdf.rect(efficiencyX, statsY, statsBoxWidth, statsBoxHeight, 'S');
+            pdf.setFontSize(10);
+            pdf.text(`${safeEfficiency.toFixed(1)}%`, efficiencyX + statsBoxWidth/2, statsY + 6, { align: 'center' });
+            pdf.setFontSize(7);
+            pdf.text("Efficiency", efficiencyX + statsBoxWidth/2, statsY + 12, { align: 'center' });
+
+            // Cuts box
+            const cutsX = efficiencyX + statsBoxWidth + 5;
+            pdf.rect(cutsX, statsY, statsBoxWidth, statsBoxHeight, 'S');
+            pdf.setFontSize(10);
+            pdf.text(`${safeCutsCount}`, cutsX + statsBoxWidth/2, statsY + 6, { align: 'center' });
+            pdf.setFontSize(7);
+            pdf.text("Cuts", cutsX + statsBoxWidth/2, statsY + 12, { align: 'center' });
+
+            yPosition += statsBoxHeight + 15;
+          });
+
+          yPosition += 10; // Space between jumbos
+        });
+      } else {
+        // Fallback to traditional view if no jumbo details
+        pdf.text("Cut Rolls by Specification (Traditional View)", 20, yPosition);
+        yPosition += 15;
+
+        // Group cut rolls by specification (original logic)
+        const groupedRolls = planResult.cut_rolls_generated.reduce(
+          (groups, roll, index) => {
+            const key = `${roll.gsm}gsm, ${roll.bf}bf, ${roll.shade}`;
+            if (!groups[key]) {
+              groups[key] = [];
+            }
+            groups[key].push({ ...roll, originalIndex: index });
+            return groups;
+          },
+          {} as Record<string, Array<CutRoll & { originalIndex: number }>>
+        );
+
+        // Process traditional grouped rolls
+        Object.entries(groupedRolls).forEach(([specKey, rolls]) => {
         checkPageBreak(25);
 
         // Specification header
@@ -1103,7 +1304,10 @@ export default function PlanningPage() {
         });
 
         yPosition += 5;
-      });
+        });
+
+        yPosition += 5;
+      }
 
       // Pending Orders Section
       if (planResult.pending_orders.length > 0) {
@@ -1136,27 +1340,27 @@ export default function PlanningPage() {
       const summaryData = [
         [
           "Total Cut Rolls Generated",
-          planResult.summary.total_cut_rolls.toString(),
+          (planResult.summary?.total_cut_rolls || 0).toString(),
         ],
         [
           `Individual ${planningWidth}" Rolls Required`,
-          planResult.summary.total_individual_118_rolls.toString(),
+          (planResult.summary?.total_individual_118_rolls || 0).toString(),
         ],
         [
           "Jumbo Rolls Needed",
-          planResult.jumbo_rolls_needed.toString(),
+          (planResult.jumbo_rolls_needed || 0).toString(),
         ],
         [
           "Total Pending Orders",
-          planResult.summary.total_pending_orders.toString(),
+          (planResult.summary?.total_pending_orders || 0).toString(),
         ],
         [
           "Selected for Production", 
-          selectedCutRolls.length.toString()
+          (selectedCutRolls?.length || 0).toString()
         ],
         [
           "Material Efficiency",
-          `${calculateEfficiencyMetrics(planResult.cut_rolls_generated).averageEfficiency.toFixed(1)}%`
+          `${calculateEfficiencyMetrics(planResult.cut_rolls_generated || []).averageEfficiency.toFixed(1)}%`
         ],
       ];
 
@@ -1526,8 +1730,8 @@ export default function PlanningPage() {
         <TabsContent value="cut-rolls">
           {planResult && (
             <div className="space-y-6">
-              {/* Summary Cards - NEW FLOW */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              {/* Enhanced Summary Cards - NEW FLOW with Jumbo Hierarchy */}
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-2xl text-primary">
@@ -1541,9 +1745,23 @@ export default function PlanningPage() {
                     <CardTitle className="text-2xl text-blue-600">
                       {planResult.jumbo_rolls_needed}
                     </CardTitle>
-                    <CardDescription>
-                      Jumbo Rolls Needed (CORRECTED)
-                    </CardDescription>
+                    <CardDescription>Virtual Jumbos</CardDescription>
+                  </CardHeader>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-2xl text-cyan-600">
+                      {planResult.summary.complete_jumbos || 0}
+                    </CardTitle>
+                    <CardDescription>Complete Jumbos</CardDescription>
+                  </CardHeader>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-2xl text-yellow-600">
+                      {planResult.summary.partial_jumbos || 0}
+                    </CardTitle>
+                    <CardDescription>Partial Jumbos</CardDescription>
                   </CardHeader>
                 </Card>
                 <Card>
@@ -1551,9 +1769,7 @@ export default function PlanningPage() {
                     <CardTitle className="text-2xl text-green-600">
                       {calculateEfficiencyMetrics(planResult.cut_rolls_generated).averageEfficiency.toFixed(1)}%
                     </CardTitle>
-                    <CardDescription>
-                      Material Efficiency
-                    </CardDescription>
+                    <CardDescription>Material Efficiency</CardDescription>
                   </CardHeader>
                 </Card>
                 <Card>
@@ -1595,18 +1811,35 @@ export default function PlanningPage() {
                 </div>
               )}
 
-              {/* Cut Rolls Selection - Enhanced with Roll Numbers and Cutting Visualization */}
+              {/* Cut Rolls Selection - Enhanced with Jumbo Roll Hierarchy */}
               <Card>
                 <CardHeader>
                   <div className="flex justify-between items-center">
                     <div>
                       <CardTitle>Cut Rolls Available for Production</CardTitle>
                       <CardDescription>
-                        Select rolls to move to production phase - organized by
-                        paper specification and roll number
+                        {displayMode === 'jumbo' 
+                          ? 'Select rolls by jumbo roll hierarchy - Complete jumbo roll view'
+                          : 'Select rolls by paper specification and roll number - Traditional view'
+                        }
                       </CardDescription>
                     </div>
-                    <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant={displayMode === 'traditional' ? "default" : "outline"}
+                        onClick={() => setDisplayMode('traditional')}>
+                        Traditional View
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={displayMode === 'jumbo' ? "default" : "outline"}
+                        onClick={() => setDisplayMode('jumbo')}>
+                        Jumbo Hierarchy
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-3">
                       <div className="text-sm text-muted-foreground">
                         {selected118Rolls.length} of{" "}
                         {get118RollKeys().length}{" "}
@@ -1627,7 +1860,7 @@ export default function PlanningPage() {
                       {/* Show warning message when selection is invalid */}
                       {selected118Rolls.length > 0 && !isValid118RollSelection(selected118Rolls.length) && (
                         <div className="text-xs text-yellow-600">
-                          ⚠ Production disabled: Please select {planningWidth}" rolls in multiples of 3 to match jumbo roll constraints
+                           Production disabled: Please select {planningWidth}" rolls in multiples of 3 to match jumbo roll constraints
                         </div>
                       )}
                       <div className="flex flex-wrap gap-2">
@@ -1661,21 +1894,21 @@ export default function PlanningPage() {
                         </Button>
                       </div>
                     </div>
-                  </div>
                 </CardHeader>
                 <CardContent>
-                  {/* Group by paper specifications - NEW FLOW */}
-                  {(() => {
-                    const groupedRolls = groupCutRollsBySpec(planResult.cut_rolls_generated);
-                    const groupedWithIndex = Object.fromEntries(
-                      Object.entries(groupedRolls).map(([key, rolls]) => [
-                        key.replace(/-/g, ', '),
-                        rolls.map((roll, idx) => ({ 
-                          ...roll, 
-                          originalIndex: planResult.cut_rolls_generated.findIndex(r => r === roll)
-                        }))
-                      ])
-                    );
+                  {displayMode === 'traditional' ? (
+                    // Traditional view - Group by paper specifications
+                    (() => {
+                      const groupedRolls = groupCutRollsBySpec(planResult.cut_rolls_generated);
+                      const groupedWithIndex = Object.fromEntries(
+                        Object.entries(groupedRolls).map(([key, rolls]) => [
+                          key.replace(/-/g, ', '),
+                          rolls.map((roll, idx) => ({ 
+                            ...roll, 
+                            originalIndex: planResult.cut_rolls_generated.findIndex(r => r === roll)
+                          }))
+                        ])
+                      );
 
                     return Object.entries(groupedWithIndex).map(
                       ([specKey, rolls]) => {
@@ -2032,7 +2265,199 @@ export default function PlanningPage() {
                         );
                       }
                     );
-                  })()}
+                  })()
+                  ) : (
+                    // Enhanced Jumbo Hierarchy View
+                    <div className="space-y-8">
+                      {planResult.jumbo_roll_details && planResult.jumbo_roll_details.length > 0 ? (
+                        planResult.jumbo_roll_details.map((jumboDetail: JumboRollDetail) => (
+                          <div key={jumboDetail.jumbo_id} className="border rounded-lg p-6 bg-card">
+                            {/* Jumbo Roll Header */}
+                            <div className="flex justify-between items-center mb-6 pb-4 border-b">
+                              <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 bg-blue-600 text-white rounded-lg flex items-center justify-center text-lg font-bold">
+                                  📦
+                                </div>
+                                <div>
+                                  <h3 className="text-xl font-bold text-foreground">
+                                    Jumbo Roll {jumboDetail.jumbo_frontend_id}
+                                  </h3>
+                                  <p className="text-sm text-muted-foreground">
+                                    {jumboDetail.paper_spec} • {jumboDetail.roll_count} of 3 rolls • {jumboDetail.total_cuts} cuts
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <Badge 
+                                  variant={jumboDetail.is_complete ? "default" : "secondary"}
+                                  className="text-sm">
+                                  {jumboDetail.is_complete ? "Complete" : `${jumboDetail.roll_count}/3 Rolls`}
+                                </Badge>
+                                <div className="text-right">
+                                  <div className="text-lg font-semibold text-green-600">
+                                    {jumboDetail.efficiency_percentage}%
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">Efficiency</div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* 118" Rolls within this Jumbo */}
+                            <div className="grid gap-4">
+                              {(() => {
+                                // Get cut rolls for this jumbo
+                                const jumboRolls = planResult.cut_rolls_generated.filter(roll => 
+                                  roll.jumbo_roll_id === jumboDetail.jumbo_id
+                                );
+
+                                // Group by 118" roll (parent_118_roll_id)
+                                const roll118Groups = jumboRolls.reduce((groups, roll) => {
+                                  const key = roll.parent_118_roll_id || `roll-${roll.individual_roll_number || 0}`;
+                                  if (!groups[key]) {
+                                    groups[key] = [];
+                                  }
+                                  groups[key].push({
+                                    ...roll,
+                                    originalIndex: planResult.cut_rolls_generated.findIndex(r => r === roll)
+                                  });
+                                  return groups;
+                                }, {} as Record<string, Array<CutRoll & { originalIndex: number }>>);
+
+                                return Object.entries(roll118Groups).map(([roll118Id, cutsInRoll]) => (
+                                  <div key={roll118Id} className="bg-background border rounded-lg p-4">
+                                    <div className="flex justify-between items-center mb-3">
+                                      <div className="flex items-center gap-3">
+                                        <Checkbox
+                                          checked={cutsInRoll.every(roll => 
+                                            selectedCutRolls.includes(roll.originalIndex)
+                                          )}
+                                          onCheckedChange={(checked) => {
+                                            const indices = cutsInRoll.map(roll => roll.originalIndex);
+                                            if (checked) {
+                                              setSelectedCutRolls(prev => [...new Set([...prev, ...indices])]);
+                                            } else {
+                                              setSelectedCutRolls(prev => prev.filter(i => !indices.includes(i)));
+                                            }
+                                          }}
+                                        />
+                                        <div className="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                                          {cutsInRoll[0]?.roll_sequence || '?'}
+                                        </div>
+                                        <h4 className="text-lg font-semibold">
+                                          118" Roll #{cutsInRoll[0]?.individual_roll_number || 'Unknown'}
+                                        </h4>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Badge variant="outline">
+                                          {cutsInRoll.length} cuts
+                                        </Badge>
+                                        <Badge
+                                          variant={cutsInRoll.every(roll => selectedCutRolls.includes(roll.originalIndex)) 
+                                            ? "default" : "secondary"}>
+                                          {cutsInRoll.every(roll => selectedCutRolls.includes(roll.originalIndex)) 
+                                            ? "✓ Selected" : "Not Selected"}
+                                        </Badge>
+                                      </div>
+                                    </div>
+
+                                    {/* Visual cutting pattern */}
+                                    <div className="mb-4">
+                                      <div className="text-sm font-medium text-muted-foreground mb-2">
+                                        Cutting Pattern ({planningWidth}" Roll):
+                                      </div>
+                                      <div className="relative h-12 bg-muted rounded-lg border overflow-hidden">
+                                        {(() => {
+                                          let currentPosition = 0;
+                                          const totalUsed = cutsInRoll.reduce((sum, roll) => sum + roll.width, 0);
+                                          const waste = planningWidth - totalUsed;
+                                          
+                                          return (
+                                            <>
+                                              {cutsInRoll.map((roll, cutIndex) => {
+                                                const widthPercentage = (roll.width / planningWidth) * 100;
+                                                const leftPosition = (currentPosition / planningWidth) * 100;
+                                                currentPosition += roll.width;
+                                                const isSelected = selectedCutRolls.includes(roll.originalIndex);
+
+                                                return (
+                                                  <div
+                                                    key={cutIndex}
+                                                    className={`absolute h-full border-r-2 border-white ${
+                                                      isSelected
+                                                        ? "bg-gradient-to-r from-green-400 to-green-500"
+                                                        : "bg-gradient-to-r from-blue-400 to-blue-500"
+                                                    }`}
+                                                    style={{
+                                                      left: `${leftPosition}%`,
+                                                      width: `${widthPercentage}%`,
+                                                    }}>
+                                                    <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
+                                                      {roll.width}"
+                                                    </div>
+                                                  </div>
+                                                );
+                                              })}
+
+                                              {waste > 0 && (
+                                                <div
+                                                  className="absolute h-full bg-gradient-to-r from-red-400 to-red-500 border-l-2 border-white"
+                                                  style={{
+                                                    right: "0%",
+                                                    width: `${(waste / planningWidth) * 100}%`,
+                                                  }}>
+                                                  <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
+                                                    {waste.toFixed(1)}"
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </>
+                                          );
+                                        })()}
+                                      </div>
+                                    </div>
+
+                                    {/* Individual cut roll details */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                      {cutsInRoll.map((roll) => (
+                                        <div
+                                          key={roll.originalIndex}
+                                          className={`p-2 rounded border cursor-pointer transition-all ${
+                                            selectedCutRolls.includes(roll.originalIndex)
+                                              ? "bg-green-50 border-green-200"
+                                              : "bg-muted/30 border-border hover:bg-muted"
+                                          }`}
+                                          onClick={() => {
+                                            if (selectedCutRolls.includes(roll.originalIndex)) {
+                                              setSelectedCutRolls(prev => prev.filter(i => i !== roll.originalIndex));
+                                            } else {
+                                              setSelectedCutRolls(prev => [...prev, roll.originalIndex]);
+                                            }
+                                          }}>
+                                          <div className="flex items-center justify-between">
+                                            <div className="text-sm font-medium">
+                                              {roll.width}" cut
+                                            </div>
+                                            <Checkbox
+                                              checked={selectedCutRolls.includes(roll.originalIndex)}
+                                              onChange={() => {}}
+                                            />
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ));
+                              })()}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          No jumbo roll hierarchy data available
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>

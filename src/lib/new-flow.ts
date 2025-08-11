@@ -3,6 +3,7 @@
  * This file handles the new flow API calls and interfaces
  */
 
+import { UUID } from 'crypto';
 import { WORKFLOW_ENDPOINTS, CUTTING_ENDPOINTS, createRequestOptions } from './api-config';
 
 // NEW FLOW: Input interfaces
@@ -54,9 +55,30 @@ export interface CutRoll {
   order_id?: string;
   client_id?: string;
   paper_id?: string;
+  source_type?: string;
+  source_pending_id?: string | UUID; // For pending orders
+  
+  // Enhanced jumbo roll hierarchy fields
+  jumbo_roll_id?: string;
+  jumbo_roll_frontend_id?: string;
+  parent_118_roll_id?: string;
+  roll_sequence?: number; // Position within jumbo (1, 2, 3)
 }
 
 // InventoryRemaining interface removed - no more waste inventory creation
+
+// Enhanced jumbo roll detail interface
+export interface JumboRollDetail {
+  jumbo_id: string;
+  jumbo_frontend_id: string;
+  paper_spec: string;
+  roll_count: number;
+  total_cuts: number;
+  total_used_width: number;
+  efficiency_percentage: number;
+  is_complete: boolean;
+  roll_numbers: number[];
+}
 
 export interface OptimizationSummary {
   total_cut_rolls: number;
@@ -67,6 +89,11 @@ export interface OptimizationSummary {
   specification_groups_processed: number;
   high_trim_patterns: number;
   algorithm_note: string;
+  
+  // Enhanced jumbo roll statistics
+  complete_jumbos?: number;
+  partial_jumbos?: number;
+  jumbo_roll_width?: number;
 }
 
 // NEW FLOW: Main optimization result (updated - removed inventory_remaining)
@@ -75,6 +102,7 @@ export interface OptimizationResult {
   jumbo_rolls_needed: number; // CORRECTED calculation
   pending_orders: PendingOrder[];
   summary: OptimizationSummary;
+  jumbo_roll_details?: JumboRollDetail[]; // Enhanced jumbo hierarchy details
   high_trim_approved?: Array<{
     combo: number[];
     trim: number;
@@ -309,6 +337,43 @@ export const groupCutRollsBySpec = (cutRolls: CutRoll[]): Record<string, CutRoll
     groups[key].push(roll);
     return groups;
   }, {} as Record<string, CutRoll[]>);
+};
+
+/**
+ * Group cut rolls by jumbo roll hierarchy for enhanced display
+ */
+export const groupCutRollsByJumbo = (cutRolls: CutRoll[]): Record<string, Record<string, CutRoll[]>> => {
+  const jumboGroups: Record<string, Record<string, CutRoll[]>> = {};
+  
+  cutRolls.forEach(roll => {
+    if (roll.source !== 'cutting' || !roll.jumbo_roll_id) {
+      // Handle inventory rolls or rolls without jumbo hierarchy
+      const inventoryKey = 'inventory-items';
+      if (!jumboGroups[inventoryKey]) {
+        jumboGroups[inventoryKey] = {};
+      }
+      const specKey = `${roll.gsm}gsm-${roll.bf}bf-${roll.shade}`;
+      if (!jumboGroups[inventoryKey][specKey]) {
+        jumboGroups[inventoryKey][specKey] = [];
+      }
+      jumboGroups[inventoryKey][specKey].push(roll);
+      return;
+    }
+    
+    const jumboKey = roll.jumbo_roll_frontend_id || roll.jumbo_roll_id || 'unknown-jumbo';
+    if (!jumboGroups[jumboKey]) {
+      jumboGroups[jumboKey] = {};
+    }
+    
+    const roll118Key = roll.parent_118_roll_id || `roll-${roll.individual_roll_number || 0}`;
+    if (!jumboGroups[jumboKey][roll118Key]) {
+      jumboGroups[jumboKey][roll118Key] = [];
+    }
+    
+    jumboGroups[jumboKey][roll118Key].push(roll);
+  });
+  
+  return jumboGroups;
 };
 
 /**
