@@ -139,7 +139,7 @@ export const generateOrderPDF = (order: OrderPDFData, includeRates: boolean = tr
       fontStyle: 'bold',
       fontSize: 8
     },
-    columnStyles: columnStyles,
+    columnStyles: columnStyles as any,
     margin: { left: 10, right: 10 },
     didParseCell: function (data) {
       // Style the totals row

@@ -196,6 +196,13 @@ export default function PlanningPage() {
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [generatingBarcodePDF, setGeneratingBarcodePDF] = useState(false);
   const [productionStarted, setProductionStarted] = useState(false);
+  const [wastage, setWastage] = useState(1); // Default 1 inch wastage
+
+  // Calculate planning width from wastage
+  const planningWidth = useMemo(() => {
+    const calculated = 119 - wastage;
+    return Math.max(calculated, 50); // Ensure minimum width of 50 inches
+  }, [wastage]);
 
   // Helper functions for composite roll keys
   const generateRollKey = useCallback((gsm: number, bf: number, shade: string, rollNumber: number): string => {
@@ -478,12 +485,13 @@ export default function PlanningPage() {
         throw new Error("User not authenticated");
       }
 
-      // NEW FLOW: Use the 3-input/4-output workflow
+      // NEW FLOW: Use the 3-input/4-output workflow with dynamic width
       const request: WorkflowProcessRequest = {
         order_ids: selectedOrders,
         user_id: user_id,
         include_pending_orders: true,
-        include_available_inventory: true
+        include_available_inventory: true,
+        jumbo_roll_width: planningWidth // Use calculated width from wastage
       };
 
       const optimizationResult = await processMultipleOrders(request);
@@ -499,7 +507,7 @@ export default function PlanningPage() {
           "Select cut rolls for production",
           "Validate plan constraints and waste levels",
           "Start production with selected rolls",
-          `Procure ${optimizationResult.jumbo_rolls_needed} jumbo rolls (${optimizationResult.jumbo_rolls_needed * 3} individual 118" rolls)`
+          `Procure ${optimizationResult.jumbo_rolls_needed} jumbo rolls (${optimizationResult.jumbo_rolls_needed * 3} individual ${planningWidth}" rolls)`
         ]
       };
 
@@ -524,7 +532,7 @@ export default function PlanningPage() {
 
   const handleCreateProductionRecords = () => {
     if (selected118Rolls.length === 0) {
-      const errorMessage = "Please select at least one 118\" roll for production.";
+      const errorMessage = `Please select at least one ${planningWidth}\" roll for production.`;
       setError(errorMessage);
       toast.error(errorMessage);
       return;
@@ -532,7 +540,7 @@ export default function PlanningPage() {
     
     if (!isValid118RollSelection(selected118Rolls.length)) {
       const availableJumbos = getAvailableJumboRolls();
-      const errorMessage = `Please select 118" rolls in multiples of 3 to match jumbo roll constraints. Available options: ${Array.from({ length: availableJumbos }, (_, i) => (i + 1) * 3).join(', ')} rolls`;
+      const errorMessage = `Please select ${planningWidth}" rolls in multiples of 3 to match jumbo roll constraints. Available options: ${Array.from({ length: availableJumbos }, (_, i) => (i + 1) * 3).join(', ')} rolls`;
       setError(errorMessage);
       toast.error(errorMessage);
       return;
@@ -559,27 +567,65 @@ export default function PlanningPage() {
         throw new Error("User not authenticated");
       }
 
-      // Get plan ID from the plan result (from plans_created array)
-      console.log("🔍 DEBUG: Plan result structure:", planResult);
-      const planId = planResult?.plans_created?.[0];
-      console.log("🔍 DEBUG: Extracted plan ID:", planId);
-      
-      if (!planId) {
-        console.error("❌ ERROR: No plan ID found in plan result:", planResult);
-        throw new Error("No plan ID found. Please regenerate the plan.");
+      if(planResult == null ){
+        console.error("❌ ERROR: No plan result found");
+        throw new Error("No plan result found. Please regenerate the plan.");
       }
+
+      // NEW FLOW: Create plan during start production since generate plan is now read-only
+      console.log("🔍 DEBUG: Creating plan during production start (read-only workflow)");
+      
+      // Create a plan record first with actual optimization data
+      const planCreateRequest = {
+        name: `Production Plan - ${new Date().toISOString().split('T')[0]}`,
+        cut_pattern: planResult.cut_rolls_generated.map((roll, index) => ({
+          width: roll.width,
+          gsm: roll.gsm,
+          bf: roll.bf,
+          shade: roll.shade,
+          individual_roll_number: roll.individual_roll_number,
+          source: roll.source,
+          order_id: roll.order_id,
+          selected: selectedCutRolls.includes(index),
+          // CRITICAL: Include source tracking in cut_pattern
+          source_type: roll.source_type || 'regular_order',
+          source_pending_id: roll.source_pending_id || null
+        })),
+        expected_waste_percentage: 100 - calculateEfficiencyMetrics(planResult.cut_rolls_generated).averageEfficiency,
+        created_by_id: user_id,
+        order_ids: selectedOrders,
+        pending_orders: planResult.pending_orders || [] // Include pending orders from algorithm
+      };
+
+      // Create the plan
+      const planCreateResponse = await fetch(`${API_BASE_URL}/plans`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
+        body: JSON.stringify(planCreateRequest)
+      });
+
+      if (!planCreateResponse.ok) {
+        throw new Error('Failed to create plan for production');
+      }
+
+      const createdPlan = await planCreateResponse.json();
+      const planId = createdPlan.id;
+      console.log("✅ Created plan for production:", planId);
 
       // Validate 118" roll selection before proceeding
       if (!isValid118RollSelection(selected118Rolls.length)) {
         const availableJumbos = getAvailableJumboRolls();
         toast.error(
-          `Please select 118" rolls in multiples of 3 to match jumbo roll constraints. ` +
-          `Available options: ${Array.from({ length: availableJumbos }, (_, i) => (i + 1) * 3).join(', ')} 118" rolls`
+          `Please select ${planningWidth}" rolls in multiples of 3 to match jumbo roll constraints. ` +
+          `Available options: ${Array.from({ length: availableJumbos }, (_, i) => (i + 1) * 3).join(', ')} ${planningWidth}" rolls`
         );
         return;
       }
 
-      // NEW FLOW: Prepare cut roll selections for production start
+      // NEW FLOW: Prepare cut roll selections for production start with source tracking
       const selectedRolls = selectedCutRolls.map((index) => {
         const cutRoll = planResult!.cut_rolls_generated[index];
         
@@ -612,7 +658,10 @@ export default function PlanningPage() {
           shade: cutRoll.shade,
           individual_roll_number: cutRoll.individual_roll_number,
           trim_left: cutRoll.trim_left,
-          order_id: cutRoll.order_id
+          order_id: cutRoll.order_id,
+          // CRITICAL: Include source tracking from optimization algorithm
+          source_type: cutRoll.source_type || 'regular_order',
+          source_pending_id: cutRoll.source_pending_id || null
         };
       });
 
@@ -646,7 +695,10 @@ export default function PlanningPage() {
             shade: cutRoll.shade,
             individual_roll_number: cutRoll.individual_roll_number,
             trim_left: cutRoll.trim_left,
-            order_id: cutRoll.order_id
+            order_id: cutRoll.order_id,
+            // CRITICAL: Include source tracking from optimization algorithm
+            source_type: cutRoll.source_type || 'regular_order',
+            source_pending_id: cutRoll.source_pending_id || null
           };
         });
 
@@ -654,7 +706,8 @@ export default function PlanningPage() {
       const productionRequest = {
         selected_cut_rolls: selectedRolls,
         all_available_cuts: allAvailableCuts,
-        created_by_id: user_id
+        created_by_id: user_id,
+        jumbo_roll_width: planningWidth // Use calculated width from wastage
       };
 
       const response = await fetch(`${API_BASE_URL}/plans/${planId}/start-production`, {
@@ -862,10 +915,10 @@ export default function PlanningPage() {
           yPosition
         );
         yPosition += 8;
-        pdf.text(`Each jumbo roll contains 3 rolls of 118" width`, 20, yPosition);
+        pdf.text(`Each jumbo roll contains 3 rolls of ${planningWidth}" width`, 20, yPosition);
         yPosition += 8;
         pdf.text(
-          `Total 118" rolls produced: ${planResult.jumbo_rolls_needed * 3}`,
+          `Total ${planningWidth}" rolls produced: ${planResult.jumbo_rolls_needed * 3}`,
           20,
           yPosition
         );
@@ -937,7 +990,7 @@ export default function PlanningPage() {
           let currentX = rectStartX;
 
           rollsInNumber.forEach((roll, cutIndex) => {
-            const widthRatio = roll.width / 118;
+            const widthRatio = roll.width / planningWidth;
             const sectionWidth = rectWidth * widthRatio;
             const isSelected = selectedCutRolls.includes(roll.originalIndex);
 
@@ -968,12 +1021,12 @@ export default function PlanningPage() {
 
           // Calculate roll statistics for visualization
           const totalUsed = rollsInNumber.reduce((sum, roll) => sum + roll.width, 0);
-          const waste = 118 - totalUsed;
-          const efficiency = ((totalUsed / 118) * 100).toFixed(1);
+          const waste = planningWidth - totalUsed;
+          const efficiency = ((totalUsed / planningWidth) * 100).toFixed(1);
 
           // Draw waste section if any
           if (waste > 0) {
-            const wasteRatio = waste / 118;
+            const wasteRatio = waste / planningWidth;
             const wasteWidth = rectWidth * wasteRatio;
             
             pdf.setFillColor(239, 68, 68); // Red for waste
@@ -991,7 +1044,7 @@ export default function PlanningPage() {
           // Add 118" total indicator
           pdf.setTextColor(100, 100, 100);
           pdf.setFontSize(7);
-          pdf.text("118\" Total Width", rectStartX + rectWidth/2, yPosition, { align: 'center' });
+          pdf.text(`${planningWidth}\" Total Width`, rectStartX + rectWidth/2, yPosition, { align: 'center' });
           yPosition += 8;
 
           // Enhanced statistics boxes
@@ -1086,7 +1139,7 @@ export default function PlanningPage() {
           planResult.summary.total_cut_rolls.toString(),
         ],
         [
-          'Individual 118" Rolls Required',
+          `Individual ${planningWidth}" Rolls Required`,
           planResult.summary.total_individual_118_rolls.toString(),
         ],
         [
@@ -1295,7 +1348,7 @@ export default function PlanningPage() {
                     ) : (
                       <>
                         <Factory className="mr-2 h-4 w-4" />
-                        Start Production ({selected118Rolls.length} × 118" rolls)
+                        Start Production ({selected118Rolls.length} × {planningWidth}" rolls)
                       </>
                     )}
                   </Button>
@@ -1305,6 +1358,65 @@ export default function PlanningPage() {
           )}
         </div>
       </div>
+
+      {/* Waste-based Width Configuration */}
+      {!productionStarted && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Roll Width Configuration</CardTitle>
+            <CardDescription>
+              Enter wastage allowance to calculate planning width
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+              <div className="flex flex-col space-y-2">
+                <label htmlFor="wastage-input" className="text-sm font-medium">
+                  Enter Wastage (inches)
+                </label>
+                <input
+                  id="wastage-input"
+                  type="number"
+                  min="1"
+                  max="69"
+                  value={wastage}
+                  onChange={(e) => {
+                    const value = parseFloat(e.target.value);
+                    if (value >= 1 && value <= 69) {
+                      setWastage(value);
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="1.0"
+                />
+                <div className="text-xs text-muted-foreground">
+                  Range: 1-69 inches
+                </div>
+              </div>
+
+              <div className="flex flex-col space-y-2">
+                <label className="text-sm font-medium">Calculation</label>
+                <div className="text-lg font-mono bg-muted p-2 rounded-md">
+                  119 - {wastage} = {planningWidth}"
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Default Roll Width - Wastage
+                </div>
+              </div>
+
+              <div className="flex flex-col space-y-2">
+                <label className="text-sm font-medium">Planning Width</label>
+                <div className="text-2xl font-bold text-primary">
+                  {planningWidth} inches
+                </div>
+                <div className="text-sm text-green-600">
+                  ✓ Planning with width: {planningWidth} inches
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {error && (
         <Alert variant="destructive">
@@ -1498,7 +1610,7 @@ export default function PlanningPage() {
                       <div className="text-sm text-muted-foreground">
                         {selected118Rolls.length} of{" "}
                         {get118RollKeys().length}{" "}
-                        individual 118" rolls selected
+                        individual {planningWidth}" rolls selected
                         {selected118Rolls.length > 0 && (
                           <span className={`ml-2 px-2 py-1 rounded text-xs ${
                             isValid118RollSelection(selected118Rolls.length) 
@@ -1515,7 +1627,7 @@ export default function PlanningPage() {
                       {/* Show warning message when selection is invalid */}
                       {selected118Rolls.length > 0 && !isValid118RollSelection(selected118Rolls.length) && (
                         <div className="text-xs text-yellow-600">
-                          ⚠ Production disabled: Please select 118" rolls in multiples of 3 to match jumbo roll constraints
+                          ⚠ Production disabled: Please select {planningWidth}" rolls in multiples of 3 to match jumbo roll constraints
                         </div>
                       )}
                       <div className="flex flex-wrap gap-2">
@@ -1529,7 +1641,7 @@ export default function PlanningPage() {
                                 variant={selected118Rolls.length === jumboCount * 3 ? "default" : "outline"}
                                 onClick={() => selectJumboRolls(jumboCount)}
                                 className="text-xs">
-                                {jumboCount} Jumbo{jumboCount > 1 ? 's' : ''} ({jumboCount * 3} × 118" rolls)
+                                {jumboCount} Jumbo{jumboCount > 1 ? 's' : ''} ({jumboCount * 3} × {planningWidth}" rolls)
                               </Button>
                             ))}
                             <div className="w-px h-6 bg-border mx-1" />
@@ -1539,7 +1651,7 @@ export default function PlanningPage() {
                           size="sm"
                           variant="outline"
                           onClick={() => handleSelectAll118Rolls(true)}>
-                          ✓ Select All 118" Rolls
+                          ✓ Select All {planningWidth}" Rolls
                         </Button>
                         <Button
                           size="sm"
@@ -1713,10 +1825,10 @@ export default function PlanningPage() {
                                     {/* Visual Cutting Representation */}
                                     <div className="mb-4">
                                       <div className="text-sm font-medium text-muted-foreground mb-2">
-                                        Cutting Pattern (118&quot; Jumbo Roll):
+                                        Cutting Pattern ({planningWidth}&quot; Jumbo Roll):
                                       </div>
                                       <div className="relative h-12 bg-muted rounded-lg border overflow-hidden">
-                                        {/* Show how cuts are made from 118" roll */}
+                                        {/* Show how cuts are made from {planningWidth}" roll */}
                                         {(() => {
                                           let currentPosition = 0;
                                           const totalUsed =
@@ -1724,9 +1836,9 @@ export default function PlanningPage() {
                                               (sum, roll) => sum + roll.width,
                                               0
                                             );
-                                          const waste = 118 - totalUsed;
+                                          const waste = planningWidth - totalUsed;
                                           const wastePercentage =
-                                            (waste / 118) * 100;
+                                            (waste / planningWidth) * 100;
 
                                           return (
                                             <>
@@ -1734,9 +1846,9 @@ export default function PlanningPage() {
                                               {rollsInNumber.map(
                                                 (roll, cutIndex) => {
                                                   const widthPercentage =
-                                                    (roll.width / 118) * 100;
+                                                    (roll.width / planningWidth) * 100;
                                                   const leftPosition =
-                                                    (currentPosition / 118) *
+                                                    (currentPosition / planningWidth) *
                                                     100;
                                                   currentPosition += roll.width;
 
@@ -1777,9 +1889,9 @@ export default function PlanningPage() {
                                                 </div>
                                               )}
 
-                                              {/* 118" total indicator */}
+                                              {/* {planningWidth}" total indicator */}
                                               <div className="absolute -bottom-6 left-0 right-0 text-center text-xs text-slate-600 font-medium">
-                                                118&quot; Total Width
+                                                {planningWidth}&quot; Total Width
                                               </div>
                                             </>
                                           );
@@ -2147,7 +2259,7 @@ export default function PlanningPage() {
       <ConfirmationDialog
         isOpen={showConfirmDialog}
         title="Confirm Production Creation"
-        message={`Are you sure you want to move ${selected118Rolls.length} individual 118" roll(s) (containing ${selectedCutRolls.length} cut pieces) to production? This action will generate barcode labels and cannot be undone.`}
+        message={`Are you sure you want to move ${selected118Rolls.length} individual ${planningWidth}" roll(s) (containing ${selectedCutRolls.length} cut pieces) to production? This action will generate barcode labels and cannot be undone.`}
         onConfirm={createProductionRecords}
         onCancel={() => setShowConfirmDialog(false)}
         confirmText="Start Production"

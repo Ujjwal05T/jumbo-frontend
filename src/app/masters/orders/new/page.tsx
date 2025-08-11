@@ -226,7 +226,7 @@ export default function NewOrderPage() {
           toast.success('Order created and PDF downloaded successfully!');
         } else {
           // Fallback - create PDF with available data
-          const pdfData = {
+          const pdfData:any = {
             ...createdOrder,
             client: clients.find(c => c.id === formData.client_id),
             order_items: cleanOrderItems.map((item, index) => ({

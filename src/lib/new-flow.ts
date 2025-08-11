@@ -93,6 +93,7 @@ export interface WorkflowProcessRequest {
   user_id: string;
   include_pending_orders?: boolean;
   include_available_inventory?: boolean;
+  jumbo_roll_width?: number; // Dynamic roll width from wastage calculation
 }
 
 // NEW FLOW: Direct cutting request
