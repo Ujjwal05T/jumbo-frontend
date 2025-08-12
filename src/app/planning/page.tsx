@@ -7,7 +7,6 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { toast } from "sonner";
 import { 
   processMultipleOrders,
-  generateCuttingPlan,
   validateCuttingPlan,
   getWorkflowStatus,
   convertOrdersToRequirements,
@@ -18,7 +17,6 @@ import {
   getStatusBadgeVariant as getNewFlowStatusBadgeVariant,
   OptimizationResult,
   WorkflowProcessRequest,
-  CuttingPlanRequest,
   CutRoll,
   JumboRollDetail
 } from "@/lib/new-flow";
@@ -391,12 +389,7 @@ export default function PlanningPage() {
     );
   }, []);
 
-  const handleSelectAll = useCallback(
-    (checked: boolean) => {
-      setSelectedOrders(checked ? filteredOrders.map((order) => order.id) : []);
-    },
-    [filteredOrders]
-  );
+ 
 
   // Handler for selecting individual 118" rolls using composite keys - ALLOWS ANY SELECTION
   const handle118RollSelect = useCallback((gsm: number, bf: number, shade: string, rollNumber: number) => {
@@ -1660,13 +1653,7 @@ export default function PlanningPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-12">
-                        <Checkbox
-                          checked={
-                            selectedOrders.length > 0 &&
-                            selectedOrders.length === filteredOrders.length
-                          }
-                          onCheckedChange={handleSelectAll}
-                        />
+                       
                       </TableHead>
                       <TableHead>Order ID</TableHead>
                       <TableHead>Client</TableHead>
@@ -1880,12 +1867,7 @@ export default function PlanningPage() {
                             <div className="w-px h-6 bg-border mx-1" />
                           </>
                         )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleSelectAll118Rolls(true)}>
-                          ✓ Select All {planningWidth}" Rolls
-                        </Button>
+                        
                         <Button
                           size="sm"
                           variant="outline"
