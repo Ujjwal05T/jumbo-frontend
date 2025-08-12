@@ -43,6 +43,48 @@ import BarcodeDisplay from "@/components/BarcodeDisplay";
 import jsPDF from 'jspdf';
 import JsBarcode from 'jsbarcode';
 
+// Sequential transformation function to convert "INV-367" format to "JR-001", "JR-002", etc.
+const transformJumboId = (jumboFrontendId: string | undefined, allJumboIds: string[]): string => {
+  if (!jumboFrontendId) return "Unknown";
+  
+  // Create a sorted list of unique jumbo IDs to ensure consistent ordering
+  const uniqueJumboIds = [...new Set(allJumboIds.filter(id => id && id !== 'ungrouped'))].sort();
+  
+  // Find the index of this jumbo ID in the sorted list
+  const index = uniqueJumboIds.indexOf(jumboFrontendId);
+  
+  if (index >= 0) {
+    // Convert to JR-001, JR-002, etc. format
+    return `JR-${(index + 1).toString().padStart(3, '0')}`;
+  }
+  
+  // Fallback: return as-is if not found
+  return jumboFrontendId;
+};
+
+// Group cut rolls by jumbo roll with sequential display IDs
+const groupCutRollsByJumboWithSequential = (cutRolls: CutRollItem[]): Record<string, { displayId: string; rolls: CutRollItem[] }> => {
+  // Get all unique jumbo IDs first
+  const allJumboIds = cutRolls.map(item => item.jumbo_roll_frontend_id || 'ungrouped');
+  
+  const grouped: Record<string, { displayId: string; rolls: CutRollItem[] }> = {};
+  
+  cutRolls.forEach(item => {
+    const originalJumboId = item.jumbo_roll_frontend_id || 'ungrouped';
+    const transformedId = originalJumboId === 'ungrouped' ? 'Ungrouped Items' : transformJumboId(originalJumboId, allJumboIds);
+    
+    if (!grouped[originalJumboId]) {
+      grouped[originalJumboId] = {
+        displayId: transformedId,
+        rolls: []
+      };
+    }
+    grouped[originalJumboId].rolls.push(item);
+  });
+  
+  return grouped;
+};
+
 interface Plan {
   id: string;
   name: string;
@@ -100,6 +142,13 @@ interface CutRollItem {
   };
   client_name?: string;
   order_date?: string;
+  // Jumbo roll hierarchy fields
+  jumbo_roll_frontend_id?: string;
+  jumbo_roll_id?: string;
+  individual_roll_number?: number;
+  parent_jumbo_id?: string;
+  parent_118_roll_id?: string;
+  roll_sequence?: number;
 }
 
 interface User {
@@ -509,39 +558,43 @@ export default function PlanDetailsPage() {
             </table>
 
             ${filteredCutRolls.length > 0 ? `
-            <h3>Cut Rolls Details (${filteredCutRolls.length} items)</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>S.No</th>
-                  <th>Barcode</th>
-                  <th>Width</th>
-                  <th>Weight</th>
-                  <th>Paper Specs</th>
-                  <th>Status</th>
-                  <th>Location</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${filteredCutRolls.slice(0, 50).map((item, index) => `
-                  <tr>
-                    <td>${index + 1}</td>
-                    <td style="font-family: monospace; font-size: 12px;">${item.barcode_id || item.qr_code}</td>
-                    <td>${item.width_inches}"</td>
-                    <td>${item.weight_kg}kg</td>
-                    <td>${item.paper_specs ? `${item.paper_specs.gsm}gsm, BF:${item.paper_specs.bf}, ${item.paper_specs.shade}` : 'N/A'}</td>
-                    <td>${item.status.replace('_', ' ')}</td>
-                    <td>${item.location}</td>
-                  </tr>
-                `).join('')}
-                ${filteredCutRolls.length > 50 ? `
-                <tr>
-                  <td colspan="7" style="text-align: center; font-style: italic;">
-                    ... and ${filteredCutRolls.length - 50} more items
-                  </td>
-                </tr>` : ''}
-              </tbody>
-            </table>` : ''}
+            <h3>Cut Rolls Details (${filteredCutRolls.length} items grouped by jumbo rolls)</h3>
+            ${Object.entries(groupCutRollsByJumboWithSequential(filteredCutRolls)).map(([originalJumboId, jumboGroup]) => {
+              const { displayId: jumboDisplayName, rolls: jumboRolls } = jumboGroup;
+              
+              return `
+              <div style="margin-bottom: 25px; page-break-inside: avoid;">
+                <h4 style="color: #333; margin-bottom: 10px; padding: 8px; background: #f0f0f0; border-radius: 4px;">
+                  ${jumboDisplayName} (${jumboRolls.length} cut rolls - ${jumboRolls.reduce((sum, roll) => sum + roll.weight_kg, 0).toFixed(1)} kg)
+                </h4>
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">
+                  <thead>
+                    <tr style="background: #f8f9fa;">
+                      <th style="border: 1px solid #ddd; padding: 6px; text-align: left;">S.No</th>
+                      <th style="border: 1px solid #ddd; padding: 6px; text-align: left;">Barcode</th>
+                      <th style="border: 1px solid #ddd; padding: 6px; text-align: left;">Width</th>
+                      <th style="border: 1px solid #ddd; padding: 6px; text-align: left;">Weight</th>
+                      <th style="border: 1px solid #ddd; padding: 6px; text-align: left;">Paper Specs</th>
+                      <th style="border: 1px solid #ddd; padding: 6px; text-align: left;">Status</th>
+                      <th style="border: 1px solid #ddd; padding: 6px; text-align: left;">Location</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${jumboRolls.map((item, index) => `
+                      <tr>
+                        <td style="border: 1px solid #ddd; padding: 6px;">${index + 1}</td>
+                        <td style="border: 1px solid #ddd; padding: 6px; font-family: monospace; font-size: 11px;">${item.barcode_id || item.qr_code}</td>
+                        <td style="border: 1px solid #ddd; padding: 6px;">${item.width_inches}"</td>
+                        <td style="border: 1px solid #ddd; padding: 6px;">${item.weight_kg}kg</td>
+                        <td style="border: 1px solid #ddd; padding: 6px;">${item.paper_specs ? `${item.paper_specs.gsm}gsm, BF:${item.paper_specs.bf}, ${item.paper_specs.shade}` : 'N/A'}</td>
+                        <td style="border: 1px solid #ddd; padding: 6px;">${item.status.replace('_', ' ')}</td>
+                        <td style="border: 1px solid #ddd; padding: 6px;">${item.location}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>`;
+            }).join('')}` : ''}
           </div>` : ''}
 
           <div class="footer">
@@ -576,11 +629,14 @@ export default function PlanDetailsPage() {
       const pageWidth = doc.internal.pageSize.width;
       const pageHeight = doc.internal.pageSize.height;
       
+      // Group cut rolls by jumbo for organized PDF output
+      const jumboGroups = groupCutRollsByJumboWithSequential(filteredCutRolls);
+      
       // Single column layout configuration
       const marginX = 20;
       const marginY = 20;
       const labelWidth = pageWidth - (marginX * 2);
-      const itemsPerPage = 10; // More items per page since content is simpler
+      const itemsPerPage = 8; // Fewer items per page for grouping headers
       
       let yPosition = marginY;
       let itemCount = 0;
@@ -599,60 +655,93 @@ export default function PlanDetailsPage() {
       doc.text(`Total Items: ${filteredCutRolls.length}`, pageWidth / 2, yPosition, { align: 'center' });
       yPosition += 20;
       
-      filteredCutRolls.forEach((item, index) => {
-        // Check if we need a new page
-        if (itemCount >= itemsPerPage || yPosition > pageHeight - 60) {
+      // Process each jumbo group
+      Object.entries(jumboGroups).forEach(([originalJumboId, jumboGroup]) => {
+        const { displayId: jumboDisplayName, rolls: jumboRolls } = jumboGroup;
+        
+        // Check if we need a new page for jumbo header
+        if (itemCount >= itemsPerPage || yPosition > pageHeight - 100) {
           doc.addPage();
           pageCount++;
           yPosition = marginY;
           itemCount = 0;
         }
-
-        const barcodeValue = item.barcode_id || item.qr_code;
         
-        // Generate and add barcode image
-        try {
-          const canvas = generateBarcodeCanvas(barcodeValue);
-          const barcodeDataUrl = canvas.toDataURL('image/png');
-          
-          // Barcode at full width, centered
-          const barcodeWidth = labelWidth * 0.8; // 80% of available width
-          const barcodeHeight = 25;
-          const barcodeX = marginX + (labelWidth - barcodeWidth) / 2;
-          const barcodeY = yPosition;
-          
-          doc.addImage(barcodeDataUrl, 'PNG', barcodeX, barcodeY, barcodeWidth, barcodeHeight);
-          yPosition += barcodeHeight + 8;
-          
-        } catch (error) {
-          console.error('Error adding barcode:', error);
-          // Fallback: text representation
-          doc.setFontSize(12);
-          doc.setFont('courier', 'bold');
-          doc.text(`|||| ${barcodeValue} ||||`, pageWidth / 2, yPosition, { align: 'center' });
-          yPosition += 12;
-        }
+        // Jumbo roll header
+        doc.setFontSize(18);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(40, 40, 40);
+        doc.text(jumboDisplayName, pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 8;
+        
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 100, 100);
+        doc.text(`${jumboRolls.length} cut rolls - Total Weight: ${jumboRolls.reduce((sum, roll) => sum + roll.weight_kg, 0).toFixed(1)} kg`, pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 15;
+        
+        // Process each cut roll in this jumbo group
+        jumboRolls.forEach((item, index) => {
+          // Check if we need a new page for this item
+          if (itemCount >= itemsPerPage || yPosition > pageHeight - 80) {
+            doc.addPage();
+            pageCount++;
+            yPosition = marginY;
+            itemCount = 0;
+          }
 
-        // Paper specifications in single row (only if available)
-        if (item.paper_specs) {
+          const barcodeValue = item.barcode_id || item.qr_code;
+          
+          // Generate and add barcode image
+          try {
+            const canvas = generateBarcodeCanvas(barcodeValue);
+            const barcodeDataUrl = canvas.toDataURL('image/png');
+            
+            // Barcode at full width, centered
+            const barcodeWidth = labelWidth * 0.8; // 80% of available width
+            const barcodeHeight = 25;
+            const barcodeX = marginX + (labelWidth - barcodeWidth) / 2;
+            const barcodeY = yPosition;
+            
+            doc.addImage(barcodeDataUrl, 'PNG', barcodeX, barcodeY, barcodeWidth, barcodeHeight);
+            yPosition += barcodeHeight + 8;
+            
+          } catch (error) {
+            console.error('Error adding barcode:', error);
+            // Fallback: text representation
+            doc.setFontSize(12);
+            doc.setFont('courier', 'bold');
+            doc.setTextColor(0, 0, 0);
+            doc.text(`|||| ${barcodeValue} ||||`, pageWidth / 2, yPosition, { align: 'center' });
+            yPosition += 12;
+          }
+
+          // Paper specifications and dimensions (only if available)
           doc.setFontSize(10);
           doc.setFont('helvetica', 'normal');
-          doc.text(`${item.paper_specs.gsm}gsm, BF:${item.paper_specs.bf}, ${item.paper_specs.shade}`, pageWidth / 2, yPosition, { align: 'center' });
+          doc.setTextColor(60, 60, 60);
+          
+          let infoLine = `${item.width_inches}" x ${item.weight_kg}kg`;
+          if (item.paper_specs) {
+            infoLine += ` | ${item.paper_specs.gsm}gsm, BF:${item.paper_specs.bf}, ${item.paper_specs.shade}`;
+          }
+          
+          doc.text(infoLine, pageWidth / 2, yPosition, { align: 'center' });
           yPosition += 12;
-        } else {
-          // Small spacing if no paper specs
-          yPosition += 8;
-        }
 
-        // Separation line
-        if (index < filteredCutRolls.length - 1) {
-          doc.setDrawColor(150, 150, 150);
-          doc.setLineWidth(0.5);
-          doc.line(marginX + 20, yPosition, pageWidth - marginX - 20, yPosition);
-          yPosition += 15;
-        }
+          // Separation line (except for last item in group)
+          if (index < jumboRolls.length - 1) {
+            doc.setDrawColor(200, 200, 200);
+            doc.setLineWidth(0.3);
+            doc.line(marginX + 40, yPosition, pageWidth - marginX - 40, yPosition);
+            yPosition += 10;
+          }
 
-        itemCount++;
+          itemCount++;
+        });
+        
+        // Larger separation between jumbo groups
+        yPosition += 20;
       });
 
       // Add page numbers
@@ -661,6 +750,7 @@ export default function PlanDetailsPage() {
         doc.setPage(i);
         doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 100, 100);
         doc.text(`Page ${i} of ${totalPages}`, pageWidth - 20, pageHeight - 10, { align: 'right' });
       }
 
@@ -1210,13 +1300,13 @@ export default function PlanDetailsPage() {
               </CardContent>
             </Card>
 
-            {/* Cut Rolls Table */}
+            {/* Cut Rolls Table with Jumbo Roll Grouping */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle>Cut Rolls Details ({filteredCutRolls.length})</CardTitle>
-                    <CardDescription>Detailed information about all cut rolls in this plan</CardDescription>
+                    <CardDescription>Cut rolls grouped by jumbo rolls in this plan</CardDescription>
                   </div>
                   <div className="flex gap-3">
                     {filteredCutRolls.length > 0 && (
@@ -1267,94 +1357,115 @@ export default function PlanDetailsPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="border rounded-lg">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Barcode</TableHead>
-                        <TableHead>Dimensions</TableHead>
-                        <TableHead>Paper Specs</TableHead>
-                        <TableHead>Weight</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Location</TableHead>
-                        <TableHead>Client</TableHead>
-                        <TableHead>Created</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredCutRolls.length > 0 ? (
-                        filteredCutRolls.map((item) => (
-                          <TableRow key={item.inventory_id}>
-                            <TableCell>
-                              <div className="font-mono text-xs">{item.barcode_id || item.qr_code}</div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="font-medium">{item.width_inches}"</div>
-                            </TableCell>
-                            <TableCell>
-                              {item.paper_specs && (
-                                <div className="text-sm">
-                                  <div>{item.paper_specs.gsm}gsm</div>
-                                  <div className="text-xs text-muted-foreground">
-                                    BF: {item.paper_specs.bf}, {item.paper_specs.shade}
-                                  </div>
-                                </div>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <div className="font-medium">{item.weight_kg} kg</div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={getStatusBadgeVariant(item.status)} className="text-xs">
-                                {item.status.replace('_', ' ')}
+                {filteredCutRolls.length > 0 ? (
+                  <div className="space-y-6">
+                    {Object.entries(groupCutRollsByJumboWithSequential(filteredCutRolls)).map(([originalJumboId, jumboGroup]) => {
+                      const { displayId: jumboDisplayName, rolls: jumboRolls } = jumboGroup;
+                      
+                      return (
+                        <div key={originalJumboId} className="border rounded-lg p-4 bg-card">
+                          <div className="flex items-center justify-between mb-4 pb-3 border-b">
+                            <div className="flex items-center gap-2">
+                              <Package className="h-5 w-5 text-blue-500" />
+                              <h3 className="text-lg font-semibold">{jumboDisplayName}</h3>
+                              <Badge variant="outline" className="ml-2">
+                                {jumboRolls.length} cut {jumboRolls.length === 1 ? 'roll' : 'rolls'}
                               </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="text-sm flex items-center gap-1">
-                                <MapPin className="w-3 h-3" />
-                                {item.location}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="text-sm">
-                                {item.client_name || "Unknown Client"}
-                              </div>
-                              {item.order_date && (
-                                <div className="text-xs text-muted-foreground">
-                                  Order: {new Date(item.order_date).toLocaleDateString()}
-                                </div>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <div className="text-xs text-muted-foreground">
-                                {new Date(item.created_at).toLocaleDateString()}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleShowQRCode(item.barcode_id || item.qr_code)}
-                              >
-                                {item.barcode_id ? <ScanLine className="h-3 w-3" /> : <QrCode className="h-3 w-3" />}
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      ) : (
-                        <TableRow>
-                          <TableCell colSpan={9} className="h-24 text-center">
-                            {productionSummary.detailed_items.length === 0
-                              ? "No cut rolls found for this plan."
-                              : "No cut rolls match the current filters."
-                            }
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              Total Weight: {jumboRolls.reduce((sum, roll) => sum + roll.weight_kg, 0).toFixed(1)} kg
+                            </div>
+                          </div>
+                          
+                          <div className="border rounded-lg">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Barcode</TableHead>
+                                  <TableHead>Dimensions</TableHead>
+                                  <TableHead>Paper Specs</TableHead>
+                                  <TableHead>Weight</TableHead>
+                                  <TableHead>Status</TableHead>
+                                  <TableHead>Location</TableHead>
+                                  <TableHead>Client</TableHead>
+                                  <TableHead>Created</TableHead>
+                                  <TableHead>Actions</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {jumboRolls.map((item) => (
+                                  <TableRow key={item.inventory_id}>
+                                    <TableCell>
+                                      <div className="font-mono text-xs">{item.barcode_id || item.qr_code}</div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="font-medium">{item.width_inches}"</div>
+                                    </TableCell>
+                                    <TableCell>
+                                      {item.paper_specs && (
+                                        <div className="text-sm">
+                                          <div>{item.paper_specs.gsm}gsm</div>
+                                          <div className="text-xs text-muted-foreground">
+                                            BF: {item.paper_specs.bf}, {item.paper_specs.shade}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="font-medium">{item.weight_kg} kg</div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Badge variant={getStatusBadgeVariant(item.status)} className="text-xs">
+                                        {item.status.replace('_', ' ')}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="text-sm flex items-center gap-1">
+                                        <MapPin className="w-3 h-3" />
+                                        {item.location}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="text-sm">
+                                        {item.client_name || "Unknown Client"}
+                                      </div>
+                                      {item.order_date && (
+                                        <div className="text-xs text-muted-foreground">
+                                          Order: {new Date(item.order_date).toLocaleDateString()}
+                                        </div>
+                                      )}
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="text-xs text-muted-foreground">
+                                        {new Date(item.created_at).toLocaleDateString()}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => handleShowQRCode(item.barcode_id || item.qr_code)}
+                                      >
+                                        {item.barcode_id ? <ScanLine className="h-3 w-3" /> : <QrCode className="h-3 w-3" />}
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="border rounded-lg p-12 text-center">
+                    {productionSummary.detailed_items.length === 0
+                      ? "No cut rolls found for this plan."
+                      : "No cut rolls match the current filters."
+                    }
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

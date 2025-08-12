@@ -71,6 +71,8 @@ interface ProductionRecord {
   id: string;
   qr_code: string;
   barcode_id?: string;
+  jumbo_roll_id?: string;
+  jumbo_frontend_id?: string;
   width_inches: number;
   gsm: number;
   bf: number;
@@ -197,7 +199,7 @@ export default function PlanningPage() {
   const [generatingBarcodePDF, setGeneratingBarcodePDF] = useState(false);
   const [productionStarted, setProductionStarted] = useState(false);
   const [wastage, setWastage] = useState(1); // Default 1 inch wastage
-  const [displayMode, setDisplayMode] = useState<'traditional' | 'jumbo'>('traditional'); // Display mode toggle
+  const [displayMode, setDisplayMode] = useState<'traditional' | 'jumbo'>('jumbo'); // Display mode toggle
 
   // Calculate planning width from wastage
   const planningWidth = useMemo(() => {
@@ -722,29 +724,79 @@ export default function PlanningPage() {
 
       const result = await response.json();
 
-      // Create production records for UI display using ACTUAL backend-generated barcodes
-      const productionRecords = result.created_inventory_details?.map((inventory:any, index:any) => ({
-        id: inventory.id,
-        qr_code: inventory.qr_code,
-        barcode_id: inventory.barcode_id, // Use REAL barcode from backend
-        width_inches: inventory.width_inches,
-        gsm: selectedRolls[index]?.gsm || 0, // Get additional details from selected rolls
-        bf: selectedRolls[index]?.bf || 0,
-        shade: selectedRolls[index]?.shade || '',
-        status: inventory.status,
-        selected_at: inventory.created_at || new Date().toISOString()
-      })) || selectedRolls.map((roll, index) => ({
-        // Fallback to old method if created_inventory_details is not available
-        id: `inv_${Date.now()}_${index}`,
-        qr_code: roll.qr_code,
-        barcode_id: roll.barcode_id,
-        width_inches: roll.width_inches,
-        gsm: roll.gsm,
-        bf: roll.bf,
-        shade: roll.shade,
-        status: "cutting",
-        selected_at: new Date().toISOString()
-      }));
+      // Create production records using existing jumbo roll data with comprehensive matching
+      const productionRecords = result.created_inventory_details?.map((inventory: any, index: any) => {
+        const selectedRoll = selectedRolls[index];
+        const originalCutRoll = planResult!.cut_rolls_generated[selectedCutRolls[index]];
+        
+        console.log('🔍 DEBUG originalCutRoll:', originalCutRoll);
+        
+        let jumboRollId = 'Unknown';
+        let jumboFrontendId = 'Unknown';
+        
+        if (originalCutRoll && planResult!.jumbo_roll_details) {
+          // METHOD 1: Try to match by paper specification (most reliable)
+          const cutRollPaperSpec = `${originalCutRoll.gsm}gsm, ${originalCutRoll.bf}bf, ${originalCutRoll.shade}`;
+          
+          const matchingJumbo = planResult!.jumbo_roll_details.find(jumbo => 
+            jumbo && jumbo.paper_spec === cutRollPaperSpec
+          );
+          
+          if (matchingJumbo) {
+            jumboRollId = matchingJumbo.jumbo_id;
+            jumboFrontendId = matchingJumbo.jumbo_frontend_id;
+            console.log('✅ Found jumbo by paper spec:', { cutRollPaperSpec, jumboRollId, jumboFrontendId });
+          } else {
+            // METHOD 2: Try to match by jumbo_roll_id if paper spec matching fails
+            const belongsToJumbo = planResult!.jumbo_roll_details.find(jumbo => 
+              jumbo && jumbo.jumbo_id === originalCutRoll.jumbo_roll_id
+            );
+            
+            if (belongsToJumbo) {
+              jumboRollId = belongsToJumbo.jumbo_id;
+              jumboFrontendId = belongsToJumbo.jumbo_frontend_id;
+              console.log('✅ Found jumbo by jumbo_roll_id:', { jumboRollId, jumboFrontendId });
+            } else {
+              // METHOD 3: Fallback - use the first available jumbo of same paper type
+              const fallbackJumbo = planResult!.jumbo_roll_details.find(jumbo => 
+                jumbo && jumbo.paper_spec.includes(`${originalCutRoll.gsm}gsm`)
+              );
+              
+              if (fallbackJumbo) {
+                jumboRollId = fallbackJumbo.jumbo_id;
+                jumboFrontendId = fallbackJumbo.jumbo_frontend_id;
+                console.log('🔄 Using fallback jumbo:', { jumboRollId, jumboFrontendId });
+              } else {
+                console.log('❌ No matching jumbo found for:', { 
+                  cutRollPaperSpec, 
+                  jumbo_roll_id: originalCutRoll.jumbo_roll_id,
+                  availableJumbos: planResult!.jumbo_roll_details.map(j => ({ 
+                    id: j?.jumbo_id, 
+                    frontend_id: j?.jumbo_frontend_id, 
+                    paper_spec: j?.paper_spec 
+                  }))
+                });
+              }
+            }
+          }
+        }
+        
+        return {
+          id: inventory.id,
+          qr_code: inventory.qr_code,
+          barcode_id: inventory.barcode_id,
+          jumbo_roll_id: jumboRollId,
+          jumbo_frontend_id: jumboFrontendId,
+          width_inches: inventory.width_inches,
+          gsm: selectedRoll?.gsm || originalCutRoll?.gsm || 0,
+          bf: selectedRoll?.bf || originalCutRoll?.bf || 0,
+          shade: selectedRoll?.shade || originalCutRoll?.shade || '',
+          status: inventory.status,
+          selected_at: inventory.created_at || new Date().toISOString()
+        };
+      }) || [];
+
+      console.log('🔍 DEBUG Final production records:', productionRecords);
 
       setProductionRecords(productionRecords);
       setActiveTab("production");
@@ -1416,55 +1468,97 @@ export default function PlanningPage() {
       doc.text(`Total Items: ${productionRecords.length}`, pageWidth / 2, yPosition, { align: 'center' });
       yPosition += 20;
       
-      productionRecords.forEach((record, index) => {
-        // Check if we need a new page
-        if (itemCount >= itemsPerPage || yPosition > pageHeight - 60) {
+      // Group records by jumbo roll for PDF
+      const recordsByJumbo = productionRecords.reduce((groups, record) => {
+        const jumboId = record.jumbo_roll_id || record.jumbo_frontend_id || 'Unknown';
+        if (!groups[jumboId]) {
+          groups[jumboId] = [];
+        }
+        groups[jumboId].push(record);
+        return groups;
+      }, {} as Record<string, ProductionRecord[]>);
+
+      Object.entries(recordsByJumbo).forEach(([jumboId, records]) => {
+        // Check if we need a new page for jumbo header
+        if (itemCount >= itemsPerPage || yPosition > pageHeight - 80) {
           doc.addPage();
           pageCount++;
           yPosition = marginY;
           itemCount = 0;
         }
 
-        const barcodeValue = record.barcode_id || record.qr_code;
+        // Jumbo Roll Header in PDF
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(40, 40, 40);
+        doc.text(`Jumbo Roll: ${jumboId}`, pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 8;
         
-        // Generate and add barcode image
-        try {
-          const canvas = generateBarcodeCanvas(barcodeValue);
-          const barcodeDataUrl = canvas.toDataURL('image/png');
-          
-          // Barcode at full width, centered
-          const barcodeWidth = labelWidth * 0.8; // 80% of available width
-          const barcodeHeight = 25;
-          const barcodeX = marginX + (labelWidth - barcodeWidth) / 2;
-          const barcodeY = yPosition;
-          
-          doc.addImage(barcodeDataUrl, 'PNG', barcodeX, barcodeY, barcodeWidth, barcodeHeight);
-          yPosition += barcodeHeight + 8;
-          
-        } catch (error) {
-          console.error('Error adding barcode:', error);
-          // Fallback: text representation
-          doc.setFontSize(12);
-          doc.setFont('courier', 'bold');
-          doc.text(`|||| ${barcodeValue} ||||`, pageWidth / 2, yPosition, { align: 'center' });
-          yPosition += 12;
-        }
-
-        // Paper specifications in single row
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.text(`${record.gsm}gsm, BF:${record.bf}, ${record.shade}`, pageWidth / 2, yPosition, { align: 'center' });
-        yPosition += 12;
+        doc.setTextColor(100, 100, 100);
+        doc.text(`${records.length} cut rolls in this jumbo`, pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 15;
 
-        // Separation line
-        if (index < productionRecords.length - 1) {
-          doc.setDrawColor(150, 150, 150);
-          doc.setLineWidth(0.5);
-          doc.line(marginX + 20, yPosition, pageWidth - marginX - 20, yPosition);
-          yPosition += 15;
-        }
+        // Add separator line
+        doc.setDrawColor(200, 200, 200);
+        doc.setLineWidth(1);
+        doc.line(marginX, yPosition, pageWidth - marginX, yPosition);
+        yPosition += 10;
 
-        itemCount++;
+        // Process cut rolls under this jumbo
+        records.forEach((record, index) => {
+          // Check if we need a new page
+          if (itemCount >= itemsPerPage || yPosition > pageHeight - 60) {
+            doc.addPage();
+            pageCount++;
+            yPosition = marginY;
+            itemCount = 0;
+          }
+
+          const barcodeValue = record.barcode_id || record.qr_code;
+          
+          // Generate and add barcode image
+          try {
+            const canvas = generateBarcodeCanvas(barcodeValue);
+            const barcodeDataUrl = canvas.toDataURL('image/png');
+            
+            const barcodeWidth = labelWidth * 0.8;
+            const barcodeHeight = 25;
+            const barcodeX = marginX + (labelWidth - barcodeWidth) / 2;
+            const barcodeY = yPosition;
+            
+            doc.addImage(barcodeDataUrl, 'PNG', barcodeX, barcodeY, barcodeWidth, barcodeHeight);
+            yPosition += barcodeHeight + 8;
+            
+          } catch (error) {
+            console.error('Error adding barcode:', error);
+            doc.setFontSize(12);
+            doc.setFont('courier', 'bold');
+            doc.text(`|||| ${barcodeValue} ||||`, pageWidth / 2, yPosition, { align: 'center' });
+            yPosition += 12;
+          }
+
+          // Paper specifications
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(0, 0, 0);
+          doc.text(`${record.gsm}gsm, BF:${record.bf}, ${record.shade}`, pageWidth / 2, yPosition, { align: 'center' });
+          yPosition += 12;
+
+          // Separation line between cut rolls (not after last item in jumbo)
+          if (index < records.length - 1) {
+            doc.setDrawColor(150, 150, 150);
+            doc.setLineWidth(0.5);
+            doc.line(marginX + 20, yPosition, pageWidth - marginX - 20, yPosition);
+            yPosition += 10;
+          }
+
+          itemCount++;
+        });
+
+        // Extra space between jumbos
+        yPosition += 20;
       });
 
       // Add page numbers
@@ -1718,7 +1812,7 @@ export default function PlanningPage() {
           {planResult && (
             <div className="space-y-6">
               {/* Enhanced Summary Cards - NEW FLOW with Jumbo Hierarchy */}
-              <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-2xl text-primary">
@@ -1727,14 +1821,7 @@ export default function PlanningPage() {
                     <CardDescription>Total Cut Rolls</CardDescription>
                   </CardHeader>
                 </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-2xl text-blue-600">
-                      {planResult.jumbo_rolls_needed}
-                    </CardTitle>
-                    <CardDescription>Virtual Jumbos</CardDescription>
-                  </CardHeader>
-                </Card>
+                
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-2xl text-cyan-600">
@@ -2539,46 +2626,82 @@ export default function PlanningPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {productionRecords.map((record) => (
-                        <TableRow key={record.id}>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  setBarcodeModalLoading(true);
-                                  setSelectedBarcode(record.barcode_id || record.qr_code);
-                                  // Simulate loading time for barcode generation
-                                  setTimeout(
-                                    () => setBarcodeModalLoading(false),
-                                    300
-                                  );
-                                }}
-                                aria-label={`View barcode for ${record.barcode_id || record.qr_code}`}>
-                                <ScanLine className="h-4 w-4" />
-                              </Button>
-                              <code className="text-sm">{record.barcode_id || record.qr_code}</code>
-                            </div>
-                          </TableCell>
-                          <TableCell>{record.width_inches}&quot;</TableCell>
-                          <TableCell>
-                            {record.gsm}gsm, {record.bf}bf, {record.shade}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={getStatusBadgeVariant(record.status)}>
-                              {record.status.replace("_", " ")}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {record.actual_weight_kg || "-"}
-                          </TableCell>
-                          <TableCell>
-                            {new Date(record.selected_at).toLocaleString()}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {(() => {
+                        // Group production records by jumbo roll ID
+                        const recordsByJumbo = productionRecords.reduce((groups, record) => {
+                          const jumboId = record.jumbo_roll_id || record.jumbo_frontend_id || 'Unknown';
+                          if (!groups[jumboId]) {
+                            groups[jumboId] = [];
+                          }
+                          groups[jumboId].push(record);
+                          return groups;
+                        }, {} as Record<string, ProductionRecord[]>);
+
+                        const rows: React.ReactNode[] = [];
+
+                        // Create header row + cut rolls for each jumbo
+                        Object.entries(recordsByJumbo).forEach(([jumboId, records]) => {
+                          // Jumbo Roll Header Row
+                          rows.push(
+                            <TableRow key={`jumbo-${jumboId}`} className="bg-primary/5 border-b-2">
+                              <TableCell colSpan={6} className="py-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 bg-primary text-primary-foreground rounded-lg flex items-center justify-center text-sm font-bold">
+                                    
+                                  </div>
+                                  <div>
+                                    <div className="text-lg font-bold text-primary">
+                                      Jumbo Roll: {jumboId}
+                                    </div>
+                                    <div className="text-sm text-muted-foreground">
+                                      {records.length} cut rolls in this jumbo
+                                    </div>
+                                  </div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+
+                          // Cut Rolls under this Jumbo
+                          records.forEach((record) => {
+                            rows.push(
+                              <TableRow key={record.id} className="border-l-4 border-primary/20">
+                                <TableCell>
+                                  <div className="flex items-center gap-2 ml-4">
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => {
+                                        setBarcodeModalLoading(true);
+                                        setSelectedBarcode(record.barcode_id || record.qr_code);
+                                        setTimeout(() => setBarcodeModalLoading(false), 300);
+                                      }}
+                                      aria-label={`View barcode for ${record.barcode_id || record.qr_code}`}>
+                                      <ScanLine className="h-4 w-4" />
+                                    </Button>
+                                    <code className="text-sm">{record.barcode_id || record.qr_code}</code>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="pl-8">{record.width_inches}&quot;</TableCell>
+                                <TableCell className="pl-8">
+                                  {record.gsm}gsm, {record.bf}bf, {record.shade}
+                                </TableCell>
+                                <TableCell className="pl-8">
+                                  <Badge variant={getStatusBadgeVariant(record.status)}>
+                                    {record.status.replace("_", " ")}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="pl-8">{record.actual_weight_kg || "-"}</TableCell>
+                                <TableCell className="pl-8">
+                                  {new Date(record.selected_at).toLocaleString()}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          });
+                        });
+
+                        return rows;
+                      })()}
                     </TableBody>
                   </Table>
                 </CardContent>
