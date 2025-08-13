@@ -28,7 +28,8 @@ import {
   ChevronDown,
   ChevronRight,
   QrCode,
-  Truck
+  Truck,
+  BarChart3
 } from "lucide-react";
 import { getCurrentUser, logout } from "@/lib/auth";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -69,6 +70,11 @@ const navigation = [
     name: "QR Scanner",
     href: "/qr-scanner",
     icon: QrCode,
+  },
+  {
+    name: "Reports",
+    href: "/reports",
+    icon: BarChart3,
   },
 ];
 

@@ -859,11 +859,11 @@ export default function PlanDetailsPage() {
       doc.text(`Average Weight per Roll: ${productionSummary.production_summary.average_weight_per_roll.toFixed(1)} kg`, 20, yPosition);
       yPosition += 15;
 
-      // Cut Rolls from Cutting Pattern Data
+      // Combined Cutting Pattern with Jumbo Roll Numbers
       checkPageBreak(30);
       doc.setFontSize(16);
       doc.setTextColor(40, 40, 40);
-      doc.text("Cutting Pattern Visualization", 20, yPosition);
+      doc.text("Cutting Pattern with Jumbo Roll Mapping", 20, yPosition);
       yPosition += 15;
 
       // Parse cut_pattern data from plan
@@ -880,6 +880,9 @@ export default function PlanDetailsPage() {
         console.error('Error parsing cut_pattern:', error);
         cutPatternData = [];
       }
+
+      // Get jumbo roll mapping from production data
+      const jumboRollMapping = groupCutRollsByJumboWithSequential(productionSummary.detailed_items);
 
       if (cutPatternData.length === 0) {
         doc.setFontSize(12);
@@ -909,7 +912,52 @@ export default function PlanDetailsPage() {
           doc.text(specKey, 20, yPosition);
           yPosition += 10;
 
-          // Group by individual_roll_number (118" jumbo roll)
+          // Find corresponding jumbo roll ID from production data for this specification
+          let jumboDisplayId = "Unknown Jumbo";
+          let productionInfo = null;
+          
+          const matchingJumboEntry = Object.entries(jumboRollMapping).find(([originalId, jumboGroup]) => {
+            const { rolls: jumboRolls } = jumboGroup;
+            // Check if any roll in this jumbo has the same paper specs
+            return jumboRolls.some(roll => 
+              roll.paper_specs &&
+              roll.paper_specs.gsm === rolls[0]?.gsm &&
+              roll.paper_specs.bf === rolls[0]?.bf &&
+              roll.paper_specs.shade === rolls[0]?.shade
+            );
+          });
+
+          if (matchingJumboEntry) {
+            const [originalId, jumboGroup] = matchingJumboEntry;
+            jumboDisplayId = jumboGroup.displayId; // This will be "JR-001", "JR-002", etc.
+            const totalWeight = jumboGroup.rolls.reduce((sum, roll) => sum + roll.weight_kg, 0);
+            const cutCount = jumboGroup.rolls.length;
+            productionInfo = { totalWeight, cutCount };
+          }
+
+          // LEVEL 1: JUMBO ROLL HEADER (Main header with border)
+          checkPageBreak(35);
+          doc.setFillColor(240, 240, 240); // Light gray background
+          doc.rect(20, yPosition - 5, pageWidth - 40, 20, 'F'); // Background rectangle
+          doc.setDrawColor(100, 100, 100);
+          doc.setLineWidth(1);
+          doc.rect(20, yPosition - 5, pageWidth - 40, 20, 'S'); // Border
+          
+          doc.setFontSize(16);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(40, 40, 40);
+          doc.text(jumboDisplayId, 25, yPosition + 6); // Jumbo roll header
+          
+          // Add production info next to jumbo header
+          if (productionInfo) {
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(80, 80, 80);
+            doc.text(`Production: ${productionInfo.cutCount} cuts, ${productionInfo.totalWeight.toFixed(1)}kg`, pageWidth - 25, yPosition + 6, { align: 'right' });
+          }
+          yPosition += 25;
+
+          // Group by individual_roll_number (118" jumbo roll) within this jumbo
           const rollsByNumber = rolls.reduce((rollGroups:any, roll:any) => {
             const rollNum = roll.individual_roll_number || "No Roll #";
             if (!rollGroups[rollNum]) {
@@ -919,26 +967,29 @@ export default function PlanDetailsPage() {
             return rollGroups;
           }, {} as Record<string, Array<any>>);
 
+          // LEVEL 2: INDIVIDUAL 118" ROLL SUB-HEADERS + LEVEL 3: VISUAL PATTERNS
           Object.entries(rollsByNumber).forEach(([rollNumber, rollsInNumber]:[any,any]) => {
-            checkPageBreak(50);
+            checkPageBreak(80);
 
-            doc.setFontSize(12);
+            // LEVEL 2: Roll Sub-header (Roll #1, Roll #2, etc.)
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
             doc.setTextColor(60, 60, 60);
             const rollTitle = rollNumber === "No Roll #" ? "Unassigned Roll" : `Roll #${rollNumber}`;
-            doc.text(rollTitle, 25, yPosition);
-            yPosition += 8;
+            doc.text(rollTitle, 35, yPosition);
+            yPosition += 12;
 
-            // Visual cutting pattern representation
-            checkPageBreak(25);
+            // LEVEL 3: Visual cutting pattern representation
             doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
             doc.setTextColor(60, 60, 60);
-            doc.text("Cutting Pattern:", 30, yPosition);
+            doc.text("Cutting Pattern:", 40, yPosition);
             yPosition += 8;
 
             // Draw visual cutting representation using actual cut pattern data
-            const rectStartX = 30;
-            const rectWidth = pageWidth - 60;
-            const rectHeight = 12;
+            const rectStartX = 40;
+            const rectWidth = pageWidth - 80;
+            const rectHeight = 15; // Slightly taller for better visibility
             let currentX = rectStartX;
 
             // Calculate total used width from cut pattern data
@@ -950,7 +1001,7 @@ export default function PlanDetailsPage() {
               const widthRatio = (roll.width || 0) / 118;
               const sectionWidth = rectWidth * widthRatio;
 
-              // Set color based on source or other properties
+              // Set color based on source
               if (roll.source === 'inventory') {
                 doc.setFillColor(251, 191, 36); // Golden for inventory
               } else if (roll.source === 'cutting') {
@@ -1004,12 +1055,15 @@ export default function PlanDetailsPage() {
             doc.text("118\" Total Width", rectStartX + rectWidth/2, yPosition, { align: 'center' });
             yPosition += 8;
 
-            // Statistics for this roll
+            // Statistics for this roll with both cutting pattern and production data
             const efficiency = ((totalUsedWidth / 118) * 100);
             checkPageBreak(25);
             doc.setFontSize(8);
             doc.setTextColor(60, 60, 60);
-            doc.text(`Used: ${totalUsedWidth.toFixed(1)}"  |  Waste: ${waste.toFixed(1)}"  |  Efficiency: ${efficiency.toFixed(1)}%  |  Cuts: ${rollsInNumber.length}`, 30, yPosition);
+            
+            let statsLine = `Used: ${totalUsedWidth.toFixed(1)}"  |  Waste: ${waste.toFixed(1)}"  |  Efficiency: ${efficiency.toFixed(1)}%  |  Cuts: ${rollsInNumber.length}`;
+            
+            doc.text(statsLine, 30, yPosition);
             yPosition += 15;
           });
 

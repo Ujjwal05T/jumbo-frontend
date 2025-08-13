@@ -81,6 +81,14 @@ export const DASHBOARD_ENDPOINTS = {
   ALERTS: `${API_BASE_URL}/dashboard/alerts`,
 };
 
+// Reports endpoints
+export const REPORTS_ENDPOINTS = {
+  PAPER_WISE: `${API_BASE_URL}/reports/paper-wise`,
+  CLIENT_WISE: `${API_BASE_URL}/reports/client-wise`,
+  DATE_WISE: `${API_BASE_URL}/reports/date-wise`,
+  SUMMARY: `${API_BASE_URL}/reports/summary`,
+};
+
 /**
  * Helper function to create API request options
  */
