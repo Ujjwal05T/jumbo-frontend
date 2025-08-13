@@ -46,13 +46,13 @@ export default function LoginPage() {
       localStorage.setItem('user_id', data.id);
       localStorage.setItem('user_name', data.name);
       localStorage.setItem('user_role', data.role);
-      console.log('User ID stored:', data.id);
-      console.log('Username stored:', data.username);
-      console.log('User Name stored:', data.name);
-      console.log(localStorage.getItem('user_id'));
       
-      // Redirect to dashboard or previous page
+      // Redirect based on role
+    if (data.role?.toLowerCase() === 'planner') {
+      router.push('/weight-update');
+    } else {
       router.push('/dashboard');
+    }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {

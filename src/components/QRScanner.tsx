@@ -323,25 +323,7 @@ export default function QRScanner() {
       setLoading(false);
     }
   };
-  
-  const handleGenerateQR = async () => {
-    try {
-      setLoading(true);
-      const result = await generateQRCode(generateRequest);
-      
-      toast.success(`QR code generated: ${result.qr_code}`);
-      
-      // You could display the generated QR code here
-      
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to generate QR code';
-      toast.error(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-
+ 
   
   const exportScanHistory = () => {
     if (scanHistory.length === 0) {
@@ -408,10 +390,9 @@ export default function QRScanner() {
       )}
       
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="scan">Scan QR</TabsTrigger>
           <TabsTrigger value="update">Update Weight</TabsTrigger>
-          <TabsTrigger value="generate">Generate QR</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
         </TabsList>
         
@@ -477,38 +458,6 @@ export default function QRScanner() {
               </AlertDescription>
             </Alert>
           )}
-        </TabsContent>
-        
-        <TabsContent value="generate" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Generate QR Code</CardTitle>
-              <CardDescription>
-                Generate new QR codes for inventory items
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="inventory-id">Inventory ID (Optional)</Label>
-                  <Input
-                    id="inventory-id"
-                    value={generateRequest.inventory_id || ''}
-                    onChange={(e) => setGenerateRequest({ inventory_id: e.target.value || undefined })}
-                    placeholder="Leave empty to generate standalone QR code"
-                  />
-                </div>
-                
-                <Button onClick={handleGenerateQR} disabled={loading}>
-                  {loading ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating...</>
-                  ) : (
-                    <><Package className="mr-2 h-4 w-4" />Generate QR Code</>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
         </TabsContent>
         
         <TabsContent value="history" className="space-y-6">

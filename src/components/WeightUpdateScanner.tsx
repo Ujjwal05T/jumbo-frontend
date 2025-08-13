@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +17,9 @@ import {
   Loader2,
   RefreshCw,
   Package,
-  Search
+  Search,
+  LogOut,
+  User
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -242,14 +245,34 @@ export default function WeightUpdateScanner() {
   const [error, setError] = useState<string | null>(null);
   const [barcodeInput, setBarcodeInput] = useState('');
   const [scanResult, setScanResult] = useState<QRScanResult | null>(null);
+  const [userName, setUserName] = useState<string>('');
   const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
 
   useEffect(() => {
+    // Get user name from localStorage
+    const storedUserName = localStorage.getItem('user_name') || localStorage.getItem('username') || 'User';
+    setUserName(storedUserName);
+
     // Focus on barcode input when component mounts or resets
     if (barcodeInputRef.current && !scanResult) {
       barcodeInputRef.current.focus();
     }
   }, [scanResult]);
+
+  const handleLogout = () => {
+    // Clear localStorage
+    localStorage.removeItem('username');
+    localStorage.removeItem('user_id');
+    localStorage.removeItem('user_name');
+    localStorage.removeItem('user_role');
+    
+    // Show logout toast
+    toast.success('Logged out successfully');
+    
+    // Redirect to login page
+    router.push('/auth/login');
+  };
 
   const handleBarcodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -305,14 +328,33 @@ export default function WeightUpdateScanner() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-4xl mx-auto space-y-8">
-        {/* Header */}
-        <div className="text-center">
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
-            Weight Update Scanner
-          </h1>
-          <p className="text-lg text-gray-600">
-            Scan barcode to update roll weight
-          </p>
+        {/* Header with User Info and Logout */}
+        <div className="flex justify-between items-center">
+          <div className="text-center flex-1">
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+              Weight Update Scanner
+            </h1>
+            <p className="text-lg text-gray-600">
+              Scan barcode to update roll weight
+            </p>
+          </div>
+          
+          {/* User Info and Logout */}
+          <div className="flex items-center gap-4 ml-6">
+            <div className="flex items-center gap-2 text-gray-700">
+              <User className="h-5 w-5" />
+              <span className="text-sm font-medium">{userName}</span>
+            </div>
+            <Button
+              onClick={handleLogout}
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </Button>
+          </div>
         </div>
 
         {/* Error Alert */}

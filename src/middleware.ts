@@ -10,6 +10,10 @@ const protectedRoutes = [
   '/orders',
   '/inventory',
   '/cutting-plans',
+  '/planning',
+  '/masters',
+  '/reports',
+  '/weight-update', 
 ];
 
 // Define public routes that don't require authentication
