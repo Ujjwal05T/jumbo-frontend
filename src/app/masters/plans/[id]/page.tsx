@@ -54,8 +54,8 @@ const transformJumboId = (jumboFrontendId: string | undefined, allJumboIds: stri
   const index = uniqueJumboIds.indexOf(jumboFrontendId);
   
   if (index >= 0) {
-    // Convert to JR-001, JR-002, etc. format
-    return `JR-${(index + 1).toString().padStart(3, '0')}`;
+    // Convert to JR-00001, JR-00002, etc. format
+    return `JR-${(index + 1).toString().padStart(5, '0')}`;
   }
   
   // Fallback: return as-is if not found
