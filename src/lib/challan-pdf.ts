@@ -40,6 +40,14 @@ export interface ChallanData {
   po_number?: string;
   po_date?: string;
   state?: string;
+  vehicle_info?: {
+    vehicle_number?: string;
+    driver_name?: string;
+    driver_mobile?: string;
+    dispatch_date?: string;
+    dispatch_number?: string;
+    reference_number?: string;
+  };
 }
 
 /**
@@ -96,7 +104,7 @@ export const generateCashChallanPDF = (data: ChallanData): void => {
     doc.text('Date: ' + new Date(data.invoice_date).toLocaleDateString('en-GB'), 12, yPosition + 12);
     
     doc.text('Transport: ' + (data.transport_mode || 'By Road'), 80, yPosition + 6);
-    doc.text('Vehicle: ' + (data.vehicle_number || 'N/A'), 80, yPosition + 12);
+    doc.text('Vehicle: ' + (data.vehicle_info?.vehicle_number || data.vehicle_number || 'N/A'), 80, yPosition + 12);
     
     doc.text('PO NO: ' + (data.orders[0]?.frontend_id || 'N/A'), 140, yPosition + 6);
     doc.text('State: ' + (data.state || 'M.P'), 140, yPosition + 12);
@@ -135,9 +143,9 @@ export const generateCashChallanPDF = (data: ChallanData): void => {
 
     yPosition += 30;
 
-    // Items Table Header - Compact
+    // Items Table Header - Compact with GST columns
     const rowHeight = 10;
-    const colWidths = [12, 45, 18, 15, 20, 20, 25, 35];
+    const colWidths = [12, 40, 15, 15, 18, 18, 15, 15, 15, 20];
     let currentX = 10;
 
     // Draw table header
@@ -145,14 +153,12 @@ export const generateCashChallanPDF = (data: ChallanData): void => {
     doc.rect(10, yPosition, pageWidth - 20, rowHeight, 'F');
     doc.rect(10, yPosition, pageWidth - 20, rowHeight);
 
-    doc.setFontSize(7);
+    doc.setFontSize(6);
     doc.setFont('helvetica', 'bold');
     
-    const headers = ['S.No.', 'Description', 'UOM', 'QTY', 'Rate', 'Amount', 'Total', 'Order ID'];
+    const headers = ['S.No.', 'Description', 'UOM', 'QTY', 'Rate', 'Taxable', 'CGST', 'SGST', 'Tax Amt', 'Total'];
     headers.forEach((header, index) => {
-      // Truncate header if too long
-      const truncatedHeader = header.length > 8 ? header.substring(0, 8) : header;
-      doc.text(truncatedHeader, currentX + colWidths[index] / 2, yPosition + 6, { align: 'center' });
+      doc.text(header, currentX + colWidths[index] / 2, yPosition + 6, { align: 'center' });
       if (index < headers.length - 1) {
         doc.line(currentX + colWidths[index], yPosition, currentX + colWidths[index], yPosition + rowHeight);
       }
@@ -161,9 +167,12 @@ export const generateCashChallanPDF = (data: ChallanData): void => {
 
     yPosition += rowHeight;
     let itemNumber = 1;
-    let totalAmount = 0;
+    let totalTaxableAmount = 0;
+    let totalCGST = 0;
+    let totalSGST = 0;
+    let grandTotal = 0;
 
-    // Add items from all orders - Compact
+    // Add items from all orders - Compact with GST calculations
     data.orders.forEach(order => {
       order.order_items.forEach(item => {
         if (yPosition + rowHeight > pageHeight - 60) {
@@ -172,12 +181,21 @@ export const generateCashChallanPDF = (data: ChallanData): void => {
           yPosition = 20;
         }
 
+        // Calculate GST amounts
+        const taxableValue = item.amount;
+        const cgstRate = 6;
+        const sgstRate = 6;
+        const cgstAmount = (taxableValue * cgstRate) / 100;
+        const sgstAmount = (taxableValue * sgstRate) / 100;
+        const totalTaxAmount = cgstAmount + sgstAmount;
+        const totalItemAmount = taxableValue + cgstAmount + sgstAmount;
+
         // Draw row
         doc.rect(10, yPosition, pageWidth - 20, rowHeight);
         currentX = 10;
 
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(6);
+        doc.setFontSize(5);
 
         // S. No.
         doc.text(itemNumber.toString(), currentX + colWidths[0] / 2, yPosition + 6, { align: 'center' });
@@ -185,11 +203,11 @@ export const generateCashChallanPDF = (data: ChallanData): void => {
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
         // Description - Compact
-        const paperName = item.paper.name.substring(0, 12);
+        const paperName = item.paper.name.substring(0, 10);
         doc.setFont('helvetica', 'bold');
         doc.text(paperName, currentX + 1, yPosition + 3);
         doc.setFont('helvetica', 'normal');
-        doc.text(`G${item.paper.gsm} B${item.paper.bf}`, currentX + 1, yPosition + 7);
+        doc.text(`G${item.paper.gsm}`, currentX + 1, yPosition + 7);
         currentX += colWidths[1];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
@@ -210,47 +228,72 @@ export const generateCashChallanPDF = (data: ChallanData): void => {
         currentX += colWidths[4];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
-        // Amount
-        doc.text(item.amount.toFixed(0), currentX + colWidths[5] / 2, yPosition + 6, { align: 'center' });
+        // Taxable Value (previously Amount)
+        doc.text(taxableValue.toFixed(0), currentX + colWidths[5] / 2, yPosition + 6, { align: 'center' });
         currentX += colWidths[5];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
-        // Total
-        doc.text(item.amount.toFixed(0), currentX + colWidths[6] / 2, yPosition + 6, { align: 'center' });
+        // CGST (6%)
+        doc.text('6%', currentX + colWidths[6] / 2, yPosition + 6, { align: 'center' });
         currentX += colWidths[6];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
-        // Order ID - Truncated
-        const orderId = order.frontend_id;
-        doc.text(orderId, currentX + colWidths[7] / 2, yPosition + 6, { align: 'center' });
+        // SGST (6%)
+        doc.text('6%', currentX + colWidths[7] / 2, yPosition + 6, { align: 'center' });
+        currentX += colWidths[7];
+        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
-        totalAmount += item.amount;
+        // Tax Amount (CGST + SGST)
+        doc.text(totalTaxAmount.toFixed(0), currentX + colWidths[8] / 2, yPosition + 6, { align: 'center' });
+        currentX += colWidths[8];
+        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
+
+        // Total (Taxable + CGST + SGST)
+        doc.text(totalItemAmount.toFixed(0), currentX + colWidths[9] / 2, yPosition + 6, { align: 'center' });
+
+        // Update totals
+        totalTaxableAmount += taxableValue;
+        totalCGST += cgstAmount;
+        totalSGST += sgstAmount;
+        grandTotal += totalItemAmount;
         itemNumber++;
         yPosition += rowHeight;
       });
     });
 
-    // Totals Section - Compact
+    // Totals Section - Compact with GST breakdown
     yPosition += 5;
-    doc.rect(10, yPosition, pageWidth - 20, 30);
+    doc.rect(10, yPosition, pageWidth - 20, 40);
     
     // Amount in words (left side)
-    doc.rect(10, yPosition, (pageWidth - 20) * 0.65, 30);
+    doc.rect(10, yPosition, (pageWidth - 20) * 0.6, 40);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
-    doc.text('Total Amount in Words:', 12, yPosition + 8);
+    doc.text('Total Invoice Amount in Words:', 12, yPosition + 8);
 
-    // Amount summary (right side)
-    const summaryX = 10 + (pageWidth - 20) * 0.65;
-    doc.setFontSize(9);
-    doc.text('Total Amount:', summaryX + 3, yPosition + 10);
-    doc.text('Rs. '+ totalAmount.toFixed(2), summaryX + 35, yPosition + 10);
+    // Amount summary (right side) with GST breakdown
+    const summaryX = 10 + (pageWidth - 20) * 0.6;
+    doc.rect(summaryX, yPosition, (pageWidth - 20) * 0.4, 40);
+    
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Total Before Tax:', summaryX + 2, yPosition + 8);
+    doc.text('Rs. ' + totalTaxableAmount.toFixed(2), summaryX + 30, yPosition + 8);
+    
+    doc.text('CGST (6%):', summaryX + 2, yPosition + 16);
+    doc.text('Rs. ' + totalCGST.toFixed(2), summaryX + 30, yPosition + 16);
+    
+    doc.text('SGST (6%):', summaryX + 2, yPosition + 24);
+    doc.text('Rs. ' + totalSGST.toFixed(2), summaryX + 30, yPosition + 24);
+    
+    doc.text('Round Off:', summaryX + 2, yPosition + 32);
+    doc.text('Rs. 0.00', summaryX + 30, yPosition + 32);
     
     doc.setFont('helvetica', 'bold');
-    doc.text('GRAND TOTAL:', summaryX + 3, yPosition + 22);
-    doc.text('Rs. '+ totalAmount.toFixed(2), summaryX + 35, yPosition + 22);
+    doc.text('GRAND TOTAL:', summaryX + 2, yPosition + 38);
+    doc.text('Rs. ' + grandTotal.toFixed(2), summaryX + 30, yPosition + 38);
 
-    yPosition += 35;
+    yPosition += 45;
 
     // Footer Section - Compact
     doc.rect(10, yPosition, pageWidth - 20, 30);
@@ -339,19 +382,19 @@ export const generateBillInvoicePDF = (data: ChallanData): void => {
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
     
-    // Compact info layout
+    // Compact info layout - Same as Cash Challan but with "Tax Invoice" instead of "Cash Challan"
     doc.text('Tax Invoice: ' + (data.invoice_number || 'GST/25-26/001'), 12, yPosition + 6);
     doc.text('Date: ' + new Date(data.invoice_date).toLocaleDateString('en-GB'), 12, yPosition + 12);
     
     doc.text('Transport: ' + (data.transport_mode || 'By Road'), 80, yPosition + 6);
-    doc.text('Vehicle: ' + (data.vehicle_number || 'N/A'), 80, yPosition + 12);
+    doc.text('Vehicle: ' + (data.vehicle_info?.vehicle_number || data.vehicle_number || 'N/A'), 80, yPosition + 12);
     
     doc.text('PO NO: ' + (data.orders[0]?.frontend_id || 'N/A'), 140, yPosition + 6);
     doc.text('State: ' + (data.state || 'M.P'), 140, yPosition + 12);
 
     yPosition += 25;
 
-    // Client Details Section - Compact
+    // Client Details Section - Compact - Same as Cash Challan
     if (data.orders.length > 0) {
       const firstOrder = data.orders[0];
       const client = firstOrder.client;
@@ -362,28 +405,30 @@ export const generateBillInvoicePDF = (data: ChallanData): void => {
       doc.rect(10, yPosition, (pageWidth - 20) / 2, 25);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
-      doc.text('BILL TO CONSIGNEE', 12, yPosition + 6);
+      doc.text('BILL TO', 12, yPosition + 6);
       doc.setFont('helvetica', 'normal');
       doc.text('M/s. ' + client.company_name.substring(0, 25), 12, yPosition + 12);
       if (client.address) {
-        doc.text(client.address.substring(0, 40), 12, yPosition + 18);
+        const address = client.address.substring(0, 40);
+        doc.text(address, 12, yPosition + 18);
       }
 
       // Ship To section
       doc.setFont('helvetica', 'bold');
-      doc.text('(SHIP TO)', pageWidth / 2 + 12, yPosition + 6);
+      doc.text('CONSIGNEE (SHIP TO)', pageWidth / 2 + 12, yPosition + 6);
       doc.setFont('helvetica', 'normal');
       doc.text('M/s. ' + client.company_name.substring(0, 25), pageWidth / 2 + 12, yPosition + 12);
       if (client.address) {
-        doc.text(client.address.substring(0, 40), pageWidth / 2 + 12, yPosition + 18);
+        const address = client.address.substring(0, 40);
+        doc.text(address, pageWidth / 2 + 12, yPosition + 18);
       }
     }
 
     yPosition += 30;
 
-    // GST Items Table Header - Ultra compact
-    const rowHeight = 12;
-    const colWidths = [8, 28, 12, 8, 10, 10, 8, 15, 8, 10, 8, 10, 15];
+    // Items Table Header - Exact same as Cash Challan
+    const rowHeight = 10;
+    const colWidths = [12, 40, 15, 15, 18, 18, 15, 15, 15, 20];
     let currentX = 10;
 
     // Draw table header
@@ -394,9 +439,9 @@ export const generateBillInvoicePDF = (data: ChallanData): void => {
     doc.setFontSize(6);
     doc.setFont('helvetica', 'bold');
     
-    const headers = ['S.No', 'Description', 'HSN', 'UOM', 'QTY', 'Rate', 'Disc', 'Taxable', 'CGST%', 'CGST₹', 'SGST%', 'SGST₹', 'Total'];
+    const headers = ['S.No.', 'Description', 'UOM', 'QTY', 'Rate', 'Taxable', 'CGST', 'SGST', 'Tax Amt', 'Total'];
     headers.forEach((header, index) => {
-      doc.text(header, currentX + colWidths[index] / 2, yPosition + 7, { align: 'center' });
+      doc.text(header, currentX + colWidths[index] / 2, yPosition + 6, { align: 'center' });
       if (index < headers.length - 1) {
         doc.line(currentX + colWidths[index], yPosition, currentX + colWidths[index], yPosition + rowHeight);
       }
@@ -405,25 +450,27 @@ export const generateBillInvoicePDF = (data: ChallanData): void => {
 
     yPosition += rowHeight;
     let itemNumber = 1;
-    let totalTaxableValue = 0;
+    let totalTaxableAmount = 0;
     let totalCGST = 0;
     let totalSGST = 0;
     let grandTotal = 0;
 
-    // Add items from all orders - Ultra compact
+    // Add items from all orders - Exact same as Cash Challan
     data.orders.forEach(order => {
       order.order_items.forEach(item => {
-        if (yPosition + rowHeight > pageHeight - 70) {
+        if (yPosition + rowHeight > pageHeight - 60) {
+          // Start new page if needed
           doc.addPage();
           yPosition = 20;
         }
 
-        // Calculate tax
+        // Calculate GST amounts
         const taxableValue = item.amount;
         const cgstRate = 6;
         const sgstRate = 6;
         const cgstAmount = (taxableValue * cgstRate) / 100;
         const sgstAmount = (taxableValue * sgstRate) / 100;
+        const totalTaxAmount = cgstAmount + sgstAmount;
         const totalItemAmount = taxableValue + cgstAmount + sgstAmount;
 
         // Draw row
@@ -434,75 +481,61 @@ export const generateBillInvoicePDF = (data: ChallanData): void => {
         doc.setFontSize(5);
 
         // S. No.
-        doc.text(itemNumber.toString(), currentX + colWidths[0] / 2, yPosition + 7, { align: 'center' });
+        doc.text(itemNumber.toString(), currentX + colWidths[0] / 2, yPosition + 6, { align: 'center' });
         currentX += colWidths[0];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
-        // Description - Very compact
-        const paperName = item.paper.name.substring(0, 8);
+        // Description - Compact
+        const paperName = item.paper.name.substring(0, 10);
         doc.setFont('helvetica', 'bold');
-        doc.text(paperName, currentX + 1, yPosition + 4);
+        doc.text(paperName, currentX + 1, yPosition + 3);
         doc.setFont('helvetica', 'normal');
-        doc.text(`G${item.paper.gsm}`, currentX + 1, yPosition + 8);
+        doc.text(`G${item.paper.gsm}`, currentX + 1, yPosition + 7);
         currentX += colWidths[1];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
-        // HSN/SAC
-        doc.text('4804', currentX + colWidths[2] / 2, yPosition + 7, { align: 'center' });
-        currentX += colWidths[2];
-        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
-
         // UOM
-        doc.text('KGS', currentX + colWidths[3] / 2, yPosition + 7, { align: 'center' });
-        currentX += colWidths[3];
+        doc.text('KGS', currentX + colWidths[2] / 2, yPosition + 6, { align: 'center' });
+        currentX += colWidths[2];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
         // QTY
         const qty = item.quantity_kg || (item.quantity_rolls * 50);
-        doc.text(qty.toString(), currentX + colWidths[4] / 2, yPosition + 7, { align: 'center' });
-        currentX += colWidths[4];
+        doc.text(qty.toString(), currentX + colWidths[3] / 2, yPosition + 6, { align: 'center' });
+        currentX += colWidths[3];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
         // Rate
         const rate = item.rate || (item.amount / qty);
-        doc.text(rate.toFixed(1), currentX + colWidths[5] / 2, yPosition + 7, { align: 'center' });
+        doc.text(rate.toFixed(1), currentX + colWidths[4] / 2, yPosition + 6, { align: 'center' });
+        currentX += colWidths[4];
+        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
+
+        // Taxable Value (previously Amount)
+        doc.text(taxableValue.toFixed(0), currentX + colWidths[5] / 2, yPosition + 6, { align: 'center' });
         currentX += colWidths[5];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
-        // Discount
-        doc.text('0', currentX + colWidths[6] / 2, yPosition + 7, { align: 'center' });
+        // CGST (6%)
+        doc.text('6%', currentX + colWidths[6] / 2, yPosition + 6, { align: 'center' });
         currentX += colWidths[6];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
-        // Taxable Value
-        doc.text(taxableValue.toFixed(0), currentX + colWidths[7] / 2, yPosition + 7, { align: 'center' });
+        // SGST (6%)
+        doc.text('6%', currentX + colWidths[7] / 2, yPosition + 6, { align: 'center' });
         currentX += colWidths[7];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
-        // CGST Rate
-        doc.text('6%', currentX + colWidths[8] / 2, yPosition + 7, { align: 'center' });
+        // Tax Amount (CGST + SGST)
+        doc.text(totalTaxAmount.toFixed(0), currentX + colWidths[8] / 2, yPosition + 6, { align: 'center' });
         currentX += colWidths[8];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
-        // CGST Amount
-        doc.text(cgstAmount.toFixed(0), currentX + colWidths[9] / 2, yPosition + 7, { align: 'center' });
-        currentX += colWidths[9];
-        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
+        // Total (Taxable + CGST + SGST)
+        doc.text(totalItemAmount.toFixed(0), currentX + colWidths[9] / 2, yPosition + 6, { align: 'center' });
 
-        // SGST Rate
-        doc.text('6%', currentX + colWidths[10] / 2, yPosition + 7, { align: 'center' });
-        currentX += colWidths[10];
-        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
-
-        // SGST Amount
-        doc.text(sgstAmount.toFixed(0), currentX + colWidths[11] / 2, yPosition + 7, { align: 'center' });
-        currentX += colWidths[11];
-        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
-
-        // Total
-        doc.text(totalItemAmount.toFixed(0), currentX + colWidths[12] / 2, yPosition + 7, { align: 'center' });
-
-        totalTaxableValue += taxableValue;
+        // Update totals
+        totalTaxableAmount += taxableValue;
         totalCGST += cgstAmount;
         totalSGST += sgstAmount;
         grandTotal += totalItemAmount;
@@ -511,69 +544,68 @@ export const generateBillInvoicePDF = (data: ChallanData): void => {
       });
     });
 
-    // Totals Section - Compact
+    // Totals Section - Exact same as Cash Challan
     yPosition += 5;
-    doc.rect(10, yPosition, pageWidth - 20, 35);
+    doc.rect(10, yPosition, pageWidth - 20, 40);
     
     // Amount in words (left side)
-    doc.rect(10, yPosition, (pageWidth - 20) * 0.6, 35);
+    doc.rect(10, yPosition, (pageWidth - 20) * 0.6, 40);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
     doc.text('Total Invoice Amount in Words:', 12, yPosition + 8);
-    
-    // Amount summary (right side)
+
+    // Amount summary (right side) with GST breakdown
     const summaryX = 10 + (pageWidth - 20) * 0.6;
-    doc.rect(summaryX, yPosition, (pageWidth - 20) * 0.4, 35);
+    doc.rect(summaryX, yPosition, (pageWidth - 20) * 0.4, 40);
     
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
-    doc.text('Total Before Tax:', summaryX + 2, yPosition + 6);
-    doc.text('₹' + totalTaxableValue.toFixed(2), summaryX + 30, yPosition + 6);
+    doc.text('Total Before Tax:', summaryX + 2, yPosition + 8);
+    doc.text('Rs. ' + totalTaxableAmount.toFixed(2), summaryX + 30, yPosition + 8);
     
-    doc.text('CGST (6%):', summaryX + 2, yPosition + 12);
-    doc.text('₹' + totalCGST.toFixed(2), summaryX + 30, yPosition + 12);
+    doc.text('CGST (6%):', summaryX + 2, yPosition + 16);
+    doc.text('Rs. ' + totalCGST.toFixed(2), summaryX + 30, yPosition + 16);
     
-    doc.text('SGST (6%):', summaryX + 2, yPosition + 18);
-    doc.text('₹' + totalSGST.toFixed(2), summaryX + 30, yPosition + 18);
+    doc.text('SGST (6%):', summaryX + 2, yPosition + 24);
+    doc.text('Rs. ' + totalSGST.toFixed(2), summaryX + 30, yPosition + 24);
     
-    doc.text('ROUND Off:', summaryX + 2, yPosition + 24);
-    doc.text('₹0.00', summaryX + 30, yPosition + 24);
+    doc.text('Round Off:', summaryX + 2, yPosition + 32);
+    doc.text('Rs. 0.00', summaryX + 30, yPosition + 32);
     
     doc.setFont('helvetica', 'bold');
-    doc.text('GRAND TOTAL:', summaryX + 2, yPosition + 32);
-    doc.text('₹' + grandTotal.toFixed(2), summaryX + 30, yPosition + 32);
+    doc.text('GRAND TOTAL:', summaryX + 2, yPosition + 38);
+    doc.text('Rs. ' + grandTotal.toFixed(2), summaryX + 30, yPosition + 38);
 
-    yPosition += 40;
+    yPosition += 45;
 
-    // Footer Section - Compact
+    // Footer Section - Exact same as Cash Challan
     doc.rect(10, yPosition, pageWidth - 20, 30);
     
-    // Bank Details
-    doc.rect(10, yPosition, (pageWidth - 20) / 3, 30);
+    // Combined Bank Details and Terms
+    doc.rect(10, yPosition, (pageWidth - 80)*2 / 3, 30);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
     doc.text('Bank Details:', 12, yPosition + 6);
     doc.setFont('helvetica', 'normal');
     doc.text('A/c: 657105601626', 12, yPosition + 12);
     doc.text('IFSC: ICIC0006571', 12, yPosition + 18);
-
-    // Terms
-    const termsX = 10 + (pageWidth - 20) / 3;
-    doc.rect(termsX, yPosition, (pageWidth - 20) / 3, 30);
+    
     doc.setFont('helvetica', 'bold');
-    doc.text('Terms & Conditions', termsX + 3, yPosition + 6);
+    doc.text('Terms & Conditions:', 12, yPosition + 24);
     doc.setFont('helvetica', 'normal');
-    doc.text('Payment Terms Days', termsX + 3, yPosition + 12);
-    doc.text('GST no Reverse Charges', termsX + 3, yPosition + 18);
+    doc.text('Payment on delivery', 12, yPosition + 28);
 
-    // Signature
+    doc.text('Common Seal', 108, yPosition + 25);
+
+    // Signature - Exact same as Cash Challan
     const signX = 10 + (pageWidth - 20) * 2 / 3;
     doc.rect(signX, yPosition, (pageWidth - 20) / 3, 30);
     doc.setFont('helvetica', 'bold');
-    doc.text('For SATGURU PAPER', signX + 3, yPosition + 12);
-    doc.text('Common Seal', signX + 3, yPosition + 25);
+    doc.text('Certified that the particulars given above are true', signX + 3, yPosition + 6);
+    doc.text('and correct.', signX + 3, yPosition + 10);
+    doc.text('For SATGURU PAPER PVT. LTD.', signX + 13, yPosition + 14);
 
-    // Save the PDF
+    // Save the PDF - Different filename for tax invoice
     const fileName = `tax_invoice_${data.invoice_number || 'GST001'}_${new Date().toISOString().split('T')[0]}.pdf`;
     doc.save(fileName);
 
@@ -586,16 +618,24 @@ export const generateBillInvoicePDF = (data: ChallanData): void => {
 /**
  * Convert selected orders to challan data format
  */
-export const convertOrdersToChallanData = (orders: any[], type: 'cash' | 'bill'): ChallanData => {
+export const convertOrdersToChallanData = (orders: any[], type: 'cash' | 'bill', dispatchInfo?: any): ChallanData => {
   return {
     type,
     orders,
     invoice_number: type === 'cash' ? 'CASH/25-26/001' : 'GST/25-26/001',
     invoice_date: new Date().toISOString(),
-    vehicle_number: '',
+    vehicle_number: dispatchInfo?.vehicle_number || '',
     transport_mode: 'By Road',
     po_number: '',
     po_date: new Date().toISOString(),
-    state: 'M.P'
+    state: 'M.P',
+    vehicle_info: dispatchInfo ? {
+      vehicle_number: dispatchInfo.vehicle_number,
+      driver_name: dispatchInfo.driver_name,
+      driver_mobile: dispatchInfo.driver_mobile,
+      dispatch_date: dispatchInfo.dispatch_date,
+      dispatch_number: dispatchInfo.dispatch_number,
+      reference_number: dispatchInfo.reference_number
+    } : undefined
   };
 };

@@ -1,5 +1,5 @@
 /**
- * Challan page - Manage payment slips, cash challans, and bills
+ * Challan page - Manage packing slips, cash challans, and bills
  */
 "use client";
 
@@ -182,7 +182,7 @@ interface DispatchStats {
 }
 
 export default function ChallanPage() {
-  const [activeTab, setActiveTab] = useState("payment-slip");
+  const [activeTab, setActiveTab] = useState("packing-slip");
   const [dispatches, setDispatches] = useState<DispatchRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -212,13 +212,16 @@ export default function ChallanPage() {
   const [cashSelectedClient, setCashSelectedClient] = useState("all");
   const [cashOrders, setCashOrders] = useState<any[]>([]);
   const [cashOrdersLoading, setCashOrdersLoading] = useState(false);
-  const [cashSelectedOrders, setCashSelectedOrders] = useState<string[]>([]);
 
   // Bill tab state
   const [billSelectedClient, setBillSelectedClient] = useState("all");
   const [billOrders, setBillOrders] = useState<any[]>([]);
   const [billOrdersLoading, setBillOrdersLoading] = useState(false);
-  const [billSelectedOrders, setBillSelectedOrders] = useState<string[]>([]);
+  
+  // Bill amount modal state
+  const [billAmountModalOpen, setBillAmountModalOpen] = useState(false);
+  const [selectedOrderForBill, setSelectedOrderForBill] = useState<any>(null);
+  const [billInvoiceAmount, setBillInvoiceAmount] = useState<string>("");
 
   const loadDispatches = async () => {
     try {
@@ -379,10 +382,8 @@ export default function ChallanPage() {
     if (clientId === 'all') {
       if (tabType === 'cash') {
         setCashOrders([]);
-        setCashSelectedOrders([]);
       } else {
         setBillOrders([]);
-        setBillSelectedOrders([]);
       }
       return;
     }
@@ -390,10 +391,8 @@ export default function ChallanPage() {
     try {
       if (tabType === 'cash') {
         setCashOrdersLoading(true);
-        setCashSelectedOrders([]);
       } else {
         setBillOrdersLoading(true);
-        setBillSelectedOrders([]);
       }
 
       const response = await fetch(`${API_BASE_URL}/orders?client_id=${clientId}`, {
@@ -423,19 +422,19 @@ export default function ChallanPage() {
 
   useEffect(() => {
     loadClients(); // Load clients for all tabs
-    if (activeTab === "payment-slip") {
+    if (activeTab === "packing-slip") {
       loadStats();
     }
   }, [activeTab]);
 
   useEffect(() => {
-    if (activeTab === "payment-slip") {
+    if (activeTab === "packing-slip") {
       loadDispatches();
     }
   }, [currentPage, statusFilter, clientFilter, fromDate, toDate, searchTerm, activeTab]);
 
   useEffect(() => {
-    if (activeTab === "payment-slip") {
+    if (activeTab === "packing-slip") {
       loadStats();
     }
   }, [fromDate, toDate, activeTab]);
@@ -499,20 +498,29 @@ export default function ChallanPage() {
   };
 
   // PDF generation handlers
-  const handleGenerateCashChallan = async () => {
+  const handleGenerateCashChallan = async (order: any) => {
     try {
-      if (cashSelectedOrders.length === 0) {
-        toast.error("Please select orders to generate cash challan");
-        return;
+
+      // Fetch dispatch information for the order
+      let dispatchInfo = null;
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/reports/order/${order.id}/challan-with-dispatch`,
+          {
+            headers: { 'ngrok-skip-browser-warning': 'true' }
+          }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          dispatchInfo = data.data.dispatch;
+          console.log("Fetched dispatch info:", dispatchInfo);
+        }
+      } catch (err) {
+        console.warn("Could not fetch dispatch info:", err);
       }
 
-      // Get selected orders data
-      const selectedOrdersData = cashOrders.filter(order => 
-        cashSelectedOrders.includes(order.id)
-      );
-
-      // Convert to challan data format
-      const challanData = convertOrdersToChallanData(selectedOrdersData, 'cash');
+      // Convert to challan data format with dispatch info
+      const challanData = convertOrdersToChallanData([order], 'cash', dispatchInfo);
       
       // Generate PDF
       generateCashChallanPDF(challanData);
@@ -526,37 +534,98 @@ export default function ChallanPage() {
 
   const handleGenerateBillInvoice = async () => {
     try {
-      if (billSelectedOrders.length === 0) {
-        toast.error("Please select orders to generate bill/invoice");
+      if (!selectedOrderForBill) {
+        toast.error("No order selected");
         return;
       }
 
-      // Get selected orders data
-      const selectedOrdersData = billOrders.filter(order => 
-        billSelectedOrders.includes(order.id)
-      );
+      if (!billInvoiceAmount || parseFloat(billInvoiceAmount) <= 0) {
+        toast.error("Please enter a valid invoice amount");
+        return;
+      }
 
-      // Convert to challan data format
-      const challanData = convertOrdersToChallanData(selectedOrdersData, 'bill');
+      const targetFinalAmount = parseFloat(billInvoiceAmount);
+      
+      // Calculate taxable amount from final amount (remove 12% GST: 6% CGST + 6% SGST)
+      const gstRate = 0.12; // 12% total GST
+      const targetTaxableAmount = targetFinalAmount / (1 + gstRate);
+      
+      // Adjust the single order's amounts
+      const orderItemsOriginalAmount = selectedOrderForBill.order_items.reduce((sum: number, item: any) => sum + item.amount, 0);
+      
+      const adjustedOrderItems = selectedOrderForBill.order_items.map((item: any) => {
+        const itemRatio = item.amount / orderItemsOriginalAmount;
+        const adjustedTaxableAmount = targetTaxableAmount * itemRatio;
+        
+        // Calculate new rate based on adjusted amount and original quantity
+        const originalQuantity = item.quantity_kg || (item.quantity_rolls * 50); // Use kg if available, else estimate from rolls
+        const adjustedRate = originalQuantity > 0 ? adjustedTaxableAmount / originalQuantity : 0;
+        
+        return {
+          ...item,
+          amount: adjustedTaxableAmount,
+          rate: adjustedRate,
+          // Keep original quantities unchanged
+          quantity_rolls: item.quantity_rolls,
+          quantity_kg: item.quantity_kg
+        };
+      });
+      
+      const adjustedOrder = {
+        ...selectedOrderForBill,
+        order_items: adjustedOrderItems
+      };
+
+      // Fetch dispatch information for the order
+      let dispatchInfo = null;
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/reports/order/${selectedOrderForBill.id}/challan-with-dispatch`,
+          {
+            headers: { 'ngrok-skip-browser-warning': 'true' }
+          }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          dispatchInfo = data.data.dispatch;
+          console.log("Fetched dispatch info:", dispatchInfo);
+        }
+      } catch (err) {
+        console.warn("Could not fetch dispatch info:", err);
+      }
+
+      // Convert to challan data format with dispatch info using adjusted amounts
+      const challanData = convertOrdersToChallanData([adjustedOrder], 'bill', dispatchInfo);
       
       // Generate PDF
       generateBillInvoicePDF(challanData);
       
       toast.success("GST Tax Invoice PDF generated successfully");
+      
+      // Close modal and reset state
+      setBillAmountModalOpen(false);
+      setSelectedOrderForBill(null);
+      setBillInvoiceAmount("");
     } catch (error) {
       console.error("Error generating tax invoice PDF:", error);
       toast.error("Failed to generate tax invoice PDF");
     }
   };
 
-  const renderPaymentSlipTab = () => (
+  const handleOpenBillAmountModal = (order: any) => {
+    setSelectedOrderForBill(order);
+    setBillInvoiceAmount("");
+    setBillAmountModalOpen(true);
+  };
+
+  const renderPackingSlipTab = () => (
     <div className="space-y-6">
       {/* Stats Cards */}
       {stats && (
         <div className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Payment Slips</CardTitle>
+              <CardTitle className="text-sm font-medium">Total Packing Slips</CardTitle>
               <Receipt className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -613,7 +682,7 @@ export default function ChallanPage() {
             Filters & Search
           </CardTitle>
           <CardDescription>
-            Filter payment slip records by date range, status, client, or search terms
+            Filter packing slip records by date range, status, client, or search terms
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -710,14 +779,14 @@ export default function ChallanPage() {
         </CardContent>
       </Card>
 
-      {/* Payment Slip Records Table */}
+      {/* Packing Slip Records Table */}
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
             <div>
-              <CardTitle>Payment Slip Records</CardTitle>
+              <CardTitle>Packing Slip Records</CardTitle>
               <CardDescription>
-                {totalCount} payment slip records found
+                {totalCount} packing slip records found
               </CardDescription>
             </div>
             <Button onClick={loadDispatches} variant="outline" size="sm">
@@ -748,7 +817,7 @@ export default function ChallanPage() {
                     <TableCell colSpan={9} className="h-24 text-center">
                       <div className="flex items-center justify-center">
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Loading payment slip records...
+                        Loading packing slip records...
                       </div>
                     </TableCell>
                   </TableRow>
@@ -873,7 +942,7 @@ export default function ChallanPage() {
                     <TableCell colSpan={9} className="h-24 text-center">
                       <div className="text-center py-4">
                         <div className="text-muted-foreground">
-                          <p className="font-medium">No payment slip records found</p>
+                          <p className="font-medium">No packing slip records found</p>
                           <p className="text-sm">Try adjusting your filters or search terms</p>
                         </div>
                       </div>
@@ -962,18 +1031,9 @@ export default function ChallanPage() {
               <div>
                 <CardTitle>Orders for Selected Client</CardTitle>
                 <CardDescription>
-                  Select orders to generate cash challan PDF
+                  Generate cash challan PDF for individual orders
                 </CardDescription>
               </div>
-              {cashSelectedOrders.length > 0 && (
-                <Button 
-                  className="bg-green-600 hover:bg-green-700" 
-                  onClick={handleGenerateCashChallan}
-                >
-                  <FileText className="mr-2 h-4 w-4" />
-                  Generate Cash Challan ({cashSelectedOrders.length} orders)
-                </Button>
-              )}
             </div>
           </CardHeader>
           <CardContent>
@@ -987,18 +1047,6 @@ export default function ChallanPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[50px]">
-                        <Checkbox
-                          checked={cashSelectedOrders.length === cashOrders.length && cashOrders.length > 0}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setCashSelectedOrders(cashOrders.map(order => order.id));
-                            } else {
-                              setCashSelectedOrders([]);
-                            }
-                          }}
-                        />
-                      </TableHead>
                       <TableHead>Order ID</TableHead>
                       <TableHead>Client</TableHead>
                       <TableHead>Papers</TableHead>
@@ -1007,23 +1055,12 @@ export default function ChallanPage() {
                       <TableHead>Total Amount</TableHead>
                       <TableHead>Payment</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {cashOrders.map((order) => (
                       <TableRow key={order.id}>
-                        <TableCell>
-                          <Checkbox
-                            checked={cashSelectedOrders.includes(order.id)}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                setCashSelectedOrders(prev => [...prev, order.id]);
-                              } else {
-                                setCashSelectedOrders(prev => prev.filter(id => id !== order.id));
-                              }
-                            }}
-                          />
-                        </TableCell>
                         <TableCell className="font-mono text-sm font-medium">
                           {order.frontend_id || 'Generating...'}
                         </TableCell>
@@ -1070,6 +1107,16 @@ export default function ChallanPage() {
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline">{order.status}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            className="bg-green-600 hover:bg-green-700"
+                            onClick={() => handleGenerateCashChallan(order)}
+                          >
+                            <FileText className="w-4 h-4 mr-1" />
+                            Generate
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1155,18 +1202,10 @@ export default function ChallanPage() {
               <div>
                 <CardTitle>Orders for Selected Client</CardTitle>
                 <CardDescription>
-                  Select orders to generate bill/invoice PDF
+                  Generate bill/invoice PDF for individual orders
                 </CardDescription>
               </div>
-              {billSelectedOrders.length > 0 && (
-                <Button 
-                  className="bg-blue-600 hover:bg-blue-700" 
-                  onClick={handleGenerateBillInvoice}
-                >
-                  <FileText className="mr-2 h-4 w-4" />
-                  Generate Bill/Invoice ({billSelectedOrders.length} orders)
-                </Button>
-              )}
+              
             </div>
           </CardHeader>
           <CardContent>
@@ -1180,18 +1219,6 @@ export default function ChallanPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[50px]">
-                        <Checkbox
-                          checked={billSelectedOrders.length === billOrders.length && billOrders.length > 0}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setBillSelectedOrders(billOrders.map(order => order.id));
-                            } else {
-                              setBillSelectedOrders([]);
-                            }
-                          }}
-                        />
-                      </TableHead>
                       <TableHead>Order ID</TableHead>
                       <TableHead>Client</TableHead>
                       <TableHead>Papers</TableHead>
@@ -1200,23 +1227,12 @@ export default function ChallanPage() {
                       <TableHead>Total Amount</TableHead>
                       <TableHead>Payment</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {billOrders.map((order) => (
                       <TableRow key={order.id}>
-                        <TableCell>
-                          <Checkbox
-                            checked={billSelectedOrders.includes(order.id)}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                setBillSelectedOrders(prev => [...prev, order.id]);
-                              } else {
-                                setBillSelectedOrders(prev => prev.filter(id => id !== order.id));
-                              }
-                            }}
-                          />
-                        </TableCell>
                         <TableCell className="font-mono text-sm font-medium">
                           {order.frontend_id || 'Generating...'}
                         </TableCell>
@@ -1264,6 +1280,16 @@ export default function ChallanPage() {
                         <TableCell>
                           <Badge variant="outline">{order.status}</Badge>
                         </TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            className="bg-blue-600 hover:bg-blue-700"
+                            onClick={() => handleOpenBillAmountModal(order)}
+                          >
+                            <FileText className="w-4 h-4 mr-1" />
+                            Generate
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1301,6 +1327,46 @@ export default function ChallanPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Amount Input Modal */}
+      <Dialog open={billAmountModalOpen} onOpenChange={setBillAmountModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enter Invoice Amount</DialogTitle>
+            <DialogDescription>
+              Enter the total amount for the invoice (including GST)
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Enter amount to generate Invoice</label>
+              <Input
+                type="number"
+                placeholder="Enter invoice amount (e.g., 50000)"
+                value={billInvoiceAmount}
+                onChange={(e) => setBillInvoiceAmount(e.target.value)}
+                className="mt-2"
+                min="0"
+                step="0.01"
+              />
+            </div>
+            {selectedOrderForBill && (
+              <div className="text-sm text-muted-foreground">
+                <div>Original Total: ₹{getTotalAmount(selectedOrderForBill).toFixed(2)}</div>
+                <div>Order: {selectedOrderForBill.frontend_id || 'Generating...'}</div>
+              </div>
+            )}
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setBillAmountModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleGenerateBillInvoice}>
+                Generate Invoice
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 
@@ -1315,7 +1381,7 @@ export default function ChallanPage() {
               Challan Management
             </h1>
             <p className="text-muted-foreground">
-              Manage payment slips, cash challans, and billing records
+              Manage packing slips, cash challans, and billing records
             </p>
           </div>
           <Button onClick={() => window.location.href = '/dispatch'} variant="outline">
@@ -1327,9 +1393,9 @@ export default function ChallanPage() {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="payment-slip" className="flex items-center gap-2">
+            <TabsTrigger value="packing-slip" className="flex items-center gap-2">
               <Receipt className="w-4 h-4" />
-              Payment Slip
+              Packing Slip
             </TabsTrigger>
             <TabsTrigger value="cash" className="flex items-center gap-2">
               <Banknote className="w-4 h-4" />
@@ -1341,8 +1407,8 @@ export default function ChallanPage() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="payment-slip">
-            {renderPaymentSlipTab()}
+          <TabsContent value="packing-slip">
+            {renderPackingSlipTab()}
           </TabsContent>
 
           <TabsContent value="cash">
@@ -1355,24 +1421,24 @@ export default function ChallanPage() {
         </Tabs>
       </div>
 
-      {/* Dispatch Details Modal - Only for Payment Slip tab */}
-      {activeTab === "payment-slip" && (
+      {/* Dispatch Details Modal - Only for Packing Slip tab */}
+      {activeTab === "packing-slip" && (
         <Dialog open={detailsModalOpen} onOpenChange={setDetailsModalOpen}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <FileText className="w-5 h-5" />
-                Payment Slip Details
+                Packing Slip Details
               </DialogTitle>
               <DialogDescription>
-                Complete information for payment slip record
+                Complete information for packing slip record
               </DialogDescription>
             </DialogHeader>
             
             {detailsLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="mr-2 h-6 w-6 animate-spin" />
-                Loading payment slip details...
+                Loading packing slip details...
               </div>
             ) : selectedDispatch && (
               <div className="space-y-6">
@@ -1380,7 +1446,7 @@ export default function ChallanPage() {
                 <div className="grid grid-cols-2 gap-6">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-lg">Payment Slip Information</CardTitle>
+                      <CardTitle className="text-lg">Packing Slip Information</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <div>
