@@ -100,7 +100,7 @@ export const generateCashChallanPDF = (data: ChallanData): void => {
     doc.setFont('helvetica', 'bold');
     
     // Compact info layout
-    doc.text('Cash Challan: ' + (data.invoice_number || 'CASH/25-26/001'), 12, yPosition + 6);
+    doc.text('Challan: ' + (data.invoice_number || 'CASH/25-26/001'), 12, yPosition + 6);
     doc.text('Date: ' + new Date(data.invoice_date).toLocaleDateString('en-GB'), 12, yPosition + 12);
     
     doc.text('Transport: ' + (data.transport_mode || 'By Road'), 80, yPosition + 6);
@@ -153,7 +153,7 @@ export const generateCashChallanPDF = (data: ChallanData): void => {
     doc.rect(10, yPosition, pageWidth - 20, rowHeight, 'F');
     doc.rect(10, yPosition, pageWidth - 20, rowHeight);
 
-    doc.setFontSize(6);
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
     
     const headers = ['S.No.', 'Description', 'UOM', 'QTY', 'Rate', 'Taxable', 'CGST', 'SGST', 'Tax Amt', 'Total'];
@@ -195,7 +195,7 @@ export const generateCashChallanPDF = (data: ChallanData): void => {
         currentX = 10;
 
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(5);
+        doc.setFontSize(8);
 
         // S. No.
         doc.text(itemNumber.toString(), currentX + colWidths[0] / 2, yPosition + 6, { align: 'center' });
@@ -296,12 +296,12 @@ export const generateCashChallanPDF = (data: ChallanData): void => {
     yPosition += 45;
 
     // Footer Section - Compact
-    doc.rect(10, yPosition, pageWidth - 20, 30);
+    doc.rect(10, yPosition, pageWidth - 20, 35);
     
     // Combined Bank Details and Terms
-    doc.rect(10, yPosition, (pageWidth - 80)*2 / 3, 30);
+    doc.rect(10, yPosition, (pageWidth - 80)*2 / 3, 35);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7);
+    doc.setFontSize(8);
     doc.text('Bank Details:', 12, yPosition + 6);
     doc.setFont('helvetica', 'normal');
     doc.text('A/c: 657105601626', 12, yPosition + 12);
@@ -316,10 +316,10 @@ export const generateCashChallanPDF = (data: ChallanData): void => {
 
     // Signature
     const signX = 10 + (pageWidth - 20) * 2 / 3;
-    doc.rect(signX, yPosition, (pageWidth - 20) / 3, 30);
+    doc.rect(signX, yPosition, (pageWidth - 20) / 3, 35);
     doc.setFont('helvetica', 'bold');
-    doc.text('Certified that the particulars given above are true', signX + 3, yPosition + 6);
-    doc.text('and correct.', signX + 3, yPosition + 10);
+    doc.text('Certified that the particulars given above are', signX + 3, yPosition + 6);
+    doc.text('true and correct.', signX + 3, yPosition + 10);
     doc.text('For SATGURU PAPER PVT. LTD.', signX + 13, yPosition + 14);
     
 
@@ -436,7 +436,7 @@ export const generateBillInvoicePDF = (data: ChallanData): void => {
     doc.rect(10, yPosition, pageWidth - 20, rowHeight, 'F');
     doc.rect(10, yPosition, pageWidth - 20, rowHeight);
 
-    doc.setFontSize(6);
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
     
     const headers = ['S.No.', 'Description', 'UOM', 'QTY', 'Rate', 'Taxable', 'CGST', 'SGST', 'Tax Amt', 'Total'];
@@ -478,7 +478,7 @@ export const generateBillInvoicePDF = (data: ChallanData): void => {
         currentX = 10;
 
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(5);
+        doc.setFontSize(8);
 
         // S. No.
         doc.text(itemNumber.toString(), currentX + colWidths[0] / 2, yPosition + 6, { align: 'center' });
@@ -579,12 +579,12 @@ export const generateBillInvoicePDF = (data: ChallanData): void => {
     yPosition += 45;
 
     // Footer Section - Exact same as Cash Challan
-    doc.rect(10, yPosition, pageWidth - 20, 30);
+    doc.rect(10, yPosition, pageWidth - 20, 35);
     
     // Combined Bank Details and Terms
-    doc.rect(10, yPosition, (pageWidth - 80)*2 / 3, 30);
+    doc.rect(10, yPosition, (pageWidth - 80)*2 / 3, 35);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7);
+    doc.setFontSize(8);
     doc.text('Bank Details:', 12, yPosition + 6);
     doc.setFont('helvetica', 'normal');
     doc.text('A/c: 657105601626', 12, yPosition + 12);
@@ -599,10 +599,10 @@ export const generateBillInvoicePDF = (data: ChallanData): void => {
 
     // Signature - Exact same as Cash Challan
     const signX = 10 + (pageWidth - 20) * 2 / 3;
-    doc.rect(signX, yPosition, (pageWidth - 20) / 3, 30);
+    doc.rect(signX, yPosition, (pageWidth - 20) / 3, 35);
     doc.setFont('helvetica', 'bold');
-    doc.text('Certified that the particulars given above are true', signX + 3, yPosition + 6);
-    doc.text('and correct.', signX + 3, yPosition + 10);
+    doc.text('Certified that the particulars given above are ', signX + 3, yPosition + 6);
+    doc.text('true and correct.', signX + 3, yPosition + 10);
     doc.text('For SATGURU PAPER PVT. LTD.', signX + 13, yPosition + 14);
 
     // Save the PDF - Different filename for tax invoice

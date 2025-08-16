@@ -27,6 +27,13 @@ type PaperReport = {
   total_value: number;
   unique_clients: number;
   avg_order_value: number;
+  // Completion metrics
+  completed_orders: number;
+  pending_orders: number;
+  completion_rate: number;
+  total_quantity_fulfilled: number;
+  fulfillment_rate: number;
+  partially_completed_items: number;
 };
 
 type ClientReport = {
@@ -42,6 +49,13 @@ type ClientReport = {
   avg_order_value: number;
   last_order_date: string;
   first_order_date: string;
+  // Completion metrics
+  completed_orders: number;
+  pending_orders: number;
+  completion_rate: number;
+  total_quantity_fulfilled: number;
+  fulfillment_rate: number;
+  partially_completed_items: number;
 };
 
 type DateReport = {
@@ -53,6 +67,13 @@ type DateReport = {
   unique_clients: number;
   unique_papers: number;
   avg_order_value: number;
+  // Completion metrics
+  completed_orders: number;
+  pending_orders: number;
+  completion_rate: number;
+  total_quantity_fulfilled: number;
+  fulfillment_rate: number;
+  partially_completed_items: number;
 };
 
 type ViewMode = 'grid' | 'chart';
@@ -239,17 +260,11 @@ export default function ReportsPage() {
     {
       accessorKey: 'paper_name',
       header: 'Paper Name',
-      size: 200,
-    },
-    {
-      accessorKey: 'gsm',
-      header: 'GSM',
-      size: 80,
-    },
-    {
-      accessorKey: 'shade',
-      header: 'Shade',
-      size: 100,
+      size: 250,
+      Cell: ({ row }) => {
+        const data = row.original;
+        return `${data.paper_name} (${data.gsm}GSM, ${data.bf}BF, ${data.shade})`;
+      },
     },
     {
       accessorKey: 'total_orders',
@@ -278,6 +293,11 @@ export default function ReportsPage() {
       header: 'Avg Order Value',
       size: 140,
       Cell: ({ cell }) => `₹${cell.getValue<number>().toLocaleString()}`,
+    },
+    {
+      accessorKey: 'completed_orders',
+      header: 'Completed',
+      size: 100,
     },
   ], []);
 
@@ -323,6 +343,23 @@ export default function ReportsPage() {
         return date ? new Date(date).toLocaleDateString() : 'N/A';
       },
     },
+    {
+      accessorKey: 'completed_orders',
+      header: 'Completed',
+      size: 100,
+    },
+    {
+      accessorKey: 'completion_rate',
+      header: 'Completion %',
+      size: 120,
+      Cell: ({ cell }) => `${cell.getValue<number>().toFixed(1)}%`,
+    },
+    {
+      accessorKey: 'fulfillment_rate',
+      header: 'Fulfillment %',
+      size: 120,
+      Cell: ({ cell }) => `${cell.getValue<number>().toFixed(1)}%`,
+    },
   ], []);
 
   const dateColumns = useMemo<MRT_ColumnDef<DateReport>[]>(() => [
@@ -367,6 +404,23 @@ export default function ReportsPage() {
       header: 'Avg Order Value',
       size: 140,
       Cell: ({ cell }) => `₹${cell.getValue<number>().toLocaleString()}`,
+    },
+    {
+      accessorKey: 'completed_orders',
+      header: 'Completed',
+      size: 100,
+    },
+    {
+      accessorKey: 'completion_rate',
+      header: 'Completion %',
+      size: 120,
+      Cell: ({ cell }) => `${cell.getValue<number>().toFixed(1)}%`,
+    },
+    {
+      accessorKey: 'fulfillment_rate',
+      header: 'Fulfillment %',
+      size: 120,
+      Cell: ({ cell }) => `${cell.getValue<number>().toFixed(1)}%`,
     },
   ], []);
 
@@ -723,7 +777,7 @@ export default function ReportsPage() {
 
             {/* Paper Details Summary (when a specific paper is selected) */}
             {selectedPaper && selectedPaper !== 'all' && selectedPaper !== '' && paperData.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
@@ -777,6 +831,19 @@ export default function ReportsPage() {
                     </p>
                   </CardContent>
                 </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Order Completion</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{paperData[0]?.completion_rate.toFixed(1)}%</div>
+                    <p className="text-xs text-muted-foreground">
+                      {paperData[0]?.completed_orders || 0} / {paperData[0]?.total_orders || 0} completed
+                    </p>
+                  </CardContent>
+                </Card>
               </div>
             )}
 
@@ -813,6 +880,20 @@ export default function ReportsPage() {
                         </ResponsiveContainer>
                       </div>
                       <div>
+                        <h3 className="text-lg font-semibold mb-4">Completion Rate by Paper</h3>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <BarChart data={paperData.slice(0, 10)}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="paper_name" angle={-45} textAnchor="end" height={100} />
+                            <YAxis domain={[0, 100]} />
+                            <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}%`, 'Completion Rate']} />
+                            <Bar dataKey="completion_rate" fill="#82ca9d" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div>
                         <h3 className="text-lg font-semibold mb-4">Orders Distribution</h3>
                         <ResponsiveContainer width="100%" height={300}>
                           <PieChart>
@@ -829,6 +910,35 @@ export default function ReportsPage() {
                               {paperData.map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                               ))}
+                            </Pie>
+                            <Tooltip />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold mb-4">Order Status Distribution</h3>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <PieChart>
+                            <Pie
+                              data={[
+                                {
+                                  name: 'Completed',
+                                  value: paperData.reduce((sum, item) => sum + item.completed_orders, 0),
+                                  fill: '#00C49F'
+                                },
+                                {
+                                  name: 'Pending',
+                                  value: paperData.reduce((sum, item) => sum + item.pending_orders, 0),
+                                  fill: '#FF8042'
+                                }
+                              ]}
+                              cx="50%"
+                              cy="50%"
+                              labelLine={false}
+                              label={({ name, percent }) => `${name} (${(percent! * 100).toFixed(0)}%)`}
+                              outerRadius={80}
+                              dataKey="value"
+                            >
                             </Pie>
                             <Tooltip />
                           </PieChart>
@@ -895,7 +1005,7 @@ export default function ReportsPage() {
 
             {/* Client Details Summary (when a specific client is selected) */}
             {selectedClient && selectedClient !== 'all' && selectedClient !== '' && clientData.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
@@ -952,6 +1062,19 @@ export default function ReportsPage() {
                     </p>
                   </CardContent>
                 </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Order Completion</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{clientData[0]?.completion_rate.toFixed(1)}%</div>
+                    <p className="text-xs text-muted-foreground">
+                      {clientData[0]?.completed_orders || 0} / {clientData[0]?.total_orders || 0} completed
+                    </p>
+                  </CardContent>
+                </Card>
               </div>
             )}
 
@@ -988,6 +1111,20 @@ export default function ReportsPage() {
                         </ResponsiveContainer>
                       </div>
                       <div>
+                        <h3 className="text-lg font-semibold mb-4">Completion Rate by Client</h3>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <BarChart data={clientData.slice(0, 10)}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="client_name" angle={-45} textAnchor="end" height={100} />
+                            <YAxis domain={[0, 100]} />
+                            <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}%`, 'Completion Rate']} />
+                            <Bar dataKey="completion_rate" fill="#ff7300" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div>
                         <h3 className="text-lg font-semibold mb-4">Orders by Client</h3>
                         <ResponsiveContainer width="100%" height={300}>
                           <PieChart>
@@ -1004,6 +1141,35 @@ export default function ReportsPage() {
                               {clientData.map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                               ))}
+                            </Pie>
+                            <Tooltip />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold mb-4">Client Order Status Distribution</h3>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <PieChart>
+                            <Pie
+                              data={[
+                                {
+                                  name: 'Completed',
+                                  value: clientData.reduce((sum, item) => sum + item.completed_orders, 0),
+                                  fill: '#00C49F'
+                                },
+                                {
+                                  name: 'Pending',
+                                  value: clientData.reduce((sum, item) => sum + item.pending_orders, 0),
+                                  fill: '#FF8042'
+                                }
+                              ]}
+                              cx="50%"
+                              cy="50%"
+                              labelLine={false}
+                              label={({ name, percent }) => `${name} (${(percent! * 100).toFixed(0)}%)`}
+                              outerRadius={80}
+                              dataKey="value"
+                            >
                             </Pie>
                             <Tooltip />
                           </PieChart>
@@ -1077,7 +1243,7 @@ export default function ReportsPage() {
 
             {/* Date Analysis Summary Cards */}
             {dateData.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Total Periods</CardTitle>
@@ -1138,6 +1304,24 @@ export default function ReportsPage() {
                     </p>
                   </CardContent>
                 </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Avg Completion Rate</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {dateData.length > 0 ? 
+                        (dateData.reduce((sum, item) => sum + item.completion_rate, 0) / dateData.length).toFixed(1) :
+                        0
+                      }%
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Average across all periods
+                    </p>
+                  </CardContent>
+                </Card>
               </div>
             )}
 
@@ -1158,28 +1342,52 @@ export default function ReportsPage() {
                   <MaterialReactTable table={dateTable} />
                 ) : (
                   <div className="space-y-6">
-                    <div>
-                      <h3 className="text-lg font-semibold mb-4">Trends Over Time</h3>
-                      <ResponsiveContainer width="100%" height={400}>
-                        <LineChart data={dateData}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis 
-                            dataKey="date_period" 
-                            tickFormatter={(date) => new Date(date).toLocaleDateString()}
-                          />
-                          <YAxis yAxisId="left" />
-                          <YAxis yAxisId="right" orientation="right" />
-                          <Tooltip 
-                            labelFormatter={(date) => new Date(date).toLocaleDateString()}
-                            formatter={(value, name) => [
-                              name === 'total_value' ? `₹${Number(value).toLocaleString()}` : value,
-                              name === 'total_value' ? 'Total Value' : 'Orders'
-                            ]}
-                          />
-                          <Line yAxisId="left" type="monotone" dataKey="total_orders" stroke="#8884d8" strokeWidth={2} />
-                          <Line yAxisId="right" type="monotone" dataKey="total_value" stroke="#82ca9d" strokeWidth={2} />
-                        </LineChart>
-                      </ResponsiveContainer>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div>
+                        <h3 className="text-lg font-semibold mb-4">Value & Orders Trends</h3>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <LineChart data={dateData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis 
+                              dataKey="date_period" 
+                              tickFormatter={(date) => new Date(date).toLocaleDateString()}
+                            />
+                            <YAxis yAxisId="left" />
+                            <YAxis yAxisId="right" orientation="right" />
+                            <Tooltip 
+                              labelFormatter={(date) => new Date(date).toLocaleDateString()}
+                              formatter={(value, name) => [
+                                name === 'total_value' ? `₹${Number(value).toLocaleString()}` : value,
+                                name === 'total_value' ? 'Total Value' : 'Orders'
+                              ]}
+                            />
+                            <Line yAxisId="left" type="monotone" dataKey="total_orders" stroke="#8884d8" strokeWidth={2} />
+                            <Line yAxisId="right" type="monotone" dataKey="total_value" stroke="#82ca9d" strokeWidth={2} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold mb-4">Completion Rate Trends</h3>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <LineChart data={dateData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis 
+                              dataKey="date_period" 
+                              tickFormatter={(date) => new Date(date).toLocaleDateString()}
+                            />
+                            <YAxis domain={[0, 100]} />
+                            <Tooltip 
+                              labelFormatter={(date) => new Date(date).toLocaleDateString()}
+                              formatter={(value, name) => [
+                                `${Number(value).toFixed(1)}%`,
+                                name === 'completion_rate' ? 'Completion Rate' : 'Fulfillment Rate'
+                              ]}
+                            />
+                            <Line type="monotone" dataKey="completion_rate" stroke="#ff7300" strokeWidth={2} />
+                            <Line type="monotone" dataKey="fulfillment_rate" stroke="#8884d8" strokeWidth={2} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
                     </div>
                   </div>
                 )}
