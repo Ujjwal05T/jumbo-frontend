@@ -559,7 +559,20 @@ export default function PlanDetailsPage() {
 
             ${filteredCutRolls.length > 0 ? `
             <h3>Cut Rolls Details (${filteredCutRolls.length} items grouped by jumbo rolls)</h3>
-            ${Object.entries(groupCutRollsByJumboWithSequential(filteredCutRolls)).map(([originalJumboId, jumboGroup]) => {
+            ${Object.entries(groupCutRollsByJumboWithSequential(filteredCutRolls))
+              .sort(([aId, aGroup], [bId, bGroup]) => {
+                const aDisplayId = aGroup.displayId;
+                const bDisplayId = bGroup.displayId;
+                
+                if (aDisplayId === 'Ungrouped Items') return 1;
+                if (bDisplayId === 'Ungrouped Items') return -1;
+                
+                const aNum = parseInt(aDisplayId.replace('JR-', '')) || 0;
+                const bNum = parseInt(bDisplayId.replace('JR-', '')) || 0;
+                
+                return aNum - bNum;
+              })
+              .map(([originalJumboId, jumboGroup]) => {
               const { displayId: jumboDisplayName, rolls: jumboRolls } = jumboGroup;
               
               return `
@@ -580,7 +593,21 @@ export default function PlanDetailsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    ${jumboRolls.map((item, index) => `
+                    ${jumboRolls
+                      .sort((a, b) => {
+                        const aRollNum = a.individual_roll_number || 999;
+                        const bRollNum = b.individual_roll_number || 999;
+                        if (aRollNum !== bRollNum) return aRollNum - bRollNum;
+                        
+                        if (a.width_inches !== b.width_inches) {
+                          return a.width_inches - b.width_inches;
+                        }
+                        
+                        const aCode = a.barcode_id || a.qr_code;
+                        const bCode = b.barcode_id || b.qr_code;
+                        return aCode.localeCompare(bCode);
+                      })
+                      .map((item, index) => `
                       <tr>
                         <td style="border: 1px solid #ddd; padding: 6px;">${index + 1}</td>
                         <td style="border: 1px solid #ddd; padding: 6px; font-family: monospace; font-size: 11px;">${item.barcode_id || item.qr_code}</td>
@@ -632,6 +659,20 @@ export default function PlanDetailsPage() {
       // Group cut rolls by jumbo for organized PDF output
       const jumboGroups = groupCutRollsByJumboWithSequential(filteredCutRolls);
       
+      // Sort jumbo groups for consistent PDF ordering
+      const sortedJumboEntries = Object.entries(jumboGroups).sort(([aId, aGroup], [bId, bGroup]) => {
+        const aDisplayId = aGroup.displayId;
+        const bDisplayId = bGroup.displayId;
+        
+        if (aDisplayId === 'Ungrouped Items') return 1;
+        if (bDisplayId === 'Ungrouped Items') return -1;
+        
+        const aNum = parseInt(aDisplayId.replace('JR-', '')) || 0;
+        const bNum = parseInt(bDisplayId.replace('JR-', '')) || 0;
+        
+        return aNum - bNum;
+      });
+      
       // Single column layout configuration
       const marginX = 20;
       const marginY = 20;
@@ -655,8 +696,8 @@ export default function PlanDetailsPage() {
       doc.text(`Total Items: ${filteredCutRolls.length}`, pageWidth / 2, yPosition, { align: 'center' });
       yPosition += 20;
       
-      // Process each jumbo group
-      Object.entries(jumboGroups).forEach(([originalJumboId, jumboGroup]) => {
+      // Process each jumbo group in sorted order
+      sortedJumboEntries.forEach(([originalJumboId, jumboGroup]) => {
         const { displayId: jumboDisplayName, rolls: jumboRolls } = jumboGroup;
         
         // Check if we need a new page for jumbo header
@@ -680,8 +721,22 @@ export default function PlanDetailsPage() {
         doc.text(`${jumboRolls.length} cut rolls - Total Weight: ${jumboRolls.reduce((sum, roll) => sum + roll.weight_kg, 0).toFixed(1)} kg`, pageWidth / 2, yPosition, { align: 'center' });
         yPosition += 15;
         
-        // Process each cut roll in this jumbo group
-        jumboRolls.forEach((item, index) => {
+        // Sort cut rolls within this jumbo group and process them
+        jumboRolls
+          .sort((a, b) => {
+            const aRollNum = a.individual_roll_number || 999;
+            const bRollNum = b.individual_roll_number || 999;
+            if (aRollNum !== bRollNum) return aRollNum - bRollNum;
+            
+            if (a.width_inches !== b.width_inches) {
+              return a.width_inches - b.width_inches;
+            }
+            
+            const aCode = a.barcode_id || a.qr_code;
+            const bCode = b.barcode_id || b.qr_code;
+            return aCode.localeCompare(bCode);
+          })
+          .forEach((item, index) => {
           // Check if we need a new page for this item
           if (itemCount >= itemsPerPage || yPosition > pageHeight - 80) {
             doc.addPage();
@@ -952,10 +1007,22 @@ export default function PlanDetailsPage() {
     yPosition += 12;
 
     if (filteredCutRolls.length > 0) {
-      // Group by jumbo rolls
+      // Group by jumbo rolls and sort them
       const jumboGroups = groupCutRollsByJumboWithSequential(filteredCutRolls);
+      const sortedJumboEntries = Object.entries(jumboGroups).sort(([aId, aGroup], [bId, bGroup]) => {
+        const aDisplayId = aGroup.displayId;
+        const bDisplayId = bGroup.displayId;
+        
+        if (aDisplayId === 'Ungrouped Items') return 1;
+        if (bDisplayId === 'Ungrouped Items') return -1;
+        
+        const aNum = parseInt(aDisplayId.replace('JR-', '')) || 0;
+        const bNum = parseInt(bDisplayId.replace('JR-', '')) || 0;
+        
+        return aNum - bNum;
+      });
       
-      Object.entries(jumboGroups).forEach(([originalJumboId, jumboGroup]) => {
+      sortedJumboEntries.forEach(([originalJumboId, jumboGroup]) => {
         const { displayId: jumboDisplayName, rolls: jumboRolls } = jumboGroup;
         
         // Jumbo group header with paper specs
@@ -1000,11 +1067,25 @@ export default function PlanDetailsPage() {
         });
         yPosition += 10;
 
-        // Roll data rows
+        // Roll data rows - sort the rolls first
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(60, 60, 60);
         
-        jumboRolls.forEach((roll, rollIndex) => {
+        jumboRolls
+          .sort((a, b) => {
+            const aRollNum = a.individual_roll_number || 999;
+            const bRollNum = b.individual_roll_number || 999;
+            if (aRollNum !== bRollNum) return aRollNum - bRollNum;
+            
+            if (a.width_inches !== b.width_inches) {
+              return a.width_inches - b.width_inches;
+            }
+            
+            const aCode = a.barcode_id || a.qr_code;
+            const bCode = b.barcode_id || b.qr_code;
+            return aCode.localeCompare(bCode);
+          })
+          .forEach((roll, rollIndex) => {
           checkPageBreak(8);
           
           if (rollIndex % 2 === 1) {
@@ -1205,8 +1286,20 @@ export default function PlanDetailsPage() {
         cutPatternData = [];
       }
 
-      // Get jumbo roll mapping from production data
+      // Get jumbo roll mapping from production data and sort it
       const jumboRollMapping = groupCutRollsByJumboWithSequential(productionSummary.detailed_items);
+      const sortedJumboMappingEntries = Object.entries(jumboRollMapping).sort(([aId, aGroup], [bId, bGroup]) => {
+        const aDisplayId = aGroup.displayId;
+        const bDisplayId = bGroup.displayId;
+        
+        if (aDisplayId === 'Ungrouped Items') return 1;
+        if (bDisplayId === 'Ungrouped Items') return -1;
+        
+        const aNum = parseInt(aDisplayId.replace('JR-', '')) || 0;
+        const bNum = parseInt(bDisplayId.replace('JR-', '')) || 0;
+        
+        return aNum - bNum;
+      });
 
       if (cutPatternData.length === 0) {
         doc.setFontSize(12);
@@ -1240,7 +1333,7 @@ export default function PlanDetailsPage() {
           let jumboDisplayId = "Unknown Jumbo";
           let productionInfo = null;
           
-          const matchingJumboEntry = Object.entries(jumboRollMapping).find(([originalId, jumboGroup]) => {
+          const matchingJumboEntry = sortedJumboMappingEntries.find(([originalId, jumboGroup]) => {
             const { rolls: jumboRolls } = jumboGroup;
             // Check if any roll in this jumbo has the same paper specs
             return jumboRolls.some(roll => 
@@ -1737,7 +1830,23 @@ export default function PlanDetailsPage() {
               <CardContent>
                 {filteredCutRolls.length > 0 ? (
                   <div className="space-y-6">
-                    {Object.entries(groupCutRollsByJumboWithSequential(filteredCutRolls)).map(([originalJumboId, jumboGroup]) => {
+                    {Object.entries(groupCutRollsByJumboWithSequential(filteredCutRolls))
+                      .sort(([aId, aGroup], [bId, bGroup]) => {
+                        // Sort by jumbo display ID (JR-00001, JR-00002, etc.)
+                        const aDisplayId = aGroup.displayId;
+                        const bDisplayId = bGroup.displayId;
+                        
+                        // Handle "Ungrouped Items" - always put at end
+                        if (aDisplayId === 'Ungrouped Items') return 1;
+                        if (bDisplayId === 'Ungrouped Items') return -1;
+                        
+                        // Extract numeric part from JR-00001 format for proper sorting
+                        const aNum = parseInt(aDisplayId.replace('JR-', '')) || 0;
+                        const bNum = parseInt(bDisplayId.replace('JR-', '')) || 0;
+                        
+                        return aNum - bNum;
+                      })
+                      .map(([originalJumboId, jumboGroup]) => {
                       const { displayId: jumboDisplayName, rolls: jumboRolls } = jumboGroup;
                       
                       return (
@@ -1770,7 +1879,29 @@ export default function PlanDetailsPage() {
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {jumboRolls.map((item) => (
+                                {jumboRolls
+                                  .sort((a, b) => {
+                                    // Sort cut rolls within each jumbo by:
+                                    // 1. Individual roll number (if available)
+                                    // 2. Width (ascending)  
+                                    // 3. Barcode/QR code (alphabetically)
+                                    
+                                    // First by individual_roll_number
+                                    const aRollNum = a.individual_roll_number || 999;
+                                    const bRollNum = b.individual_roll_number || 999;
+                                    if (aRollNum !== bRollNum) return aRollNum - bRollNum;
+                                    
+                                    // Then by width
+                                    if (a.width_inches !== b.width_inches) {
+                                      return a.width_inches - b.width_inches;
+                                    }
+                                    
+                                    // Finally by barcode/QR code
+                                    const aCode = a.barcode_id || a.qr_code;
+                                    const bCode = b.barcode_id || b.qr_code;
+                                    return aCode.localeCompare(bCode);
+                                  })
+                                  .map((item) => (
                                   <TableRow key={item.inventory_id}>
                                     <TableCell>
                                       <div className="font-mono text-xs">{item.barcode_id || item.qr_code}</div>

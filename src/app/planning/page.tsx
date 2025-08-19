@@ -335,52 +335,72 @@ export default function PlanningPage() {
     return Array.from(rollKeys).sort();
   }, [planResult, getRollKeyFromCutRoll]);
 
-  // Helper function to get unique 118" roll numbers (for backward compatibility)
-  const get118RollNumbers = useCallback(() => {
-    if (!planResult) return [];
-    const rollNumbers = new Set<number>();
-    planResult.cut_rolls_generated.forEach(roll => {
-      if (roll.individual_roll_number) {
-        rollNumbers.add(roll.individual_roll_number);
-      }
-    });
-    return Array.from(rollNumbers).sort((a, b) => a - b);
+  // Helper function to get available jumbo roll count (only complete jumbos with exactly 3 x 118" rolls)
+  const getAvailableJumboRolls = useCallback(() => {
+    // Only count complete jumbos (exactly 3 x 118" rolls)
+    if (!planResult?.jumbo_roll_details) {
+      return 0;
+    }
+    
+    const completeJumbos = planResult.jumbo_roll_details.filter(jumbo => 
+      jumbo && jumbo.is_complete && jumbo.roll_count === 3
+    );
+    
+    return completeJumbos.length;
   }, [planResult]);
 
-  // Helper function to check if 118" roll selection is valid (multiples of 3)
+  // Helper function to check if selection is valid (only complete jumbos with exactly 3 x 118" rolls)
   const isValid118RollSelection = useCallback(
     (selectedRollCount: number) => {
-      return selectedRollCount === 0 || selectedRollCount % 3 === 0;
+      if (selectedRollCount === 0) return true;
+      
+      // Must be multiple of 3 AND must correspond to complete jumbos only
+      if (selectedRollCount % 3 !== 0) return false;
+      
+      const requestedJumbos = selectedRollCount / 3;
+      const availableCompleteJumbos = getAvailableJumboRolls();
+      
+      return requestedJumbos <= availableCompleteJumbos;
     },
-    []
+    [getAvailableJumboRolls]
   );
 
-  // Helper function to get available jumbo roll count (based on 118" rolls)
-  const getAvailableJumboRolls = useCallback(() => {
-    const rollKeys = get118RollKeys();
-    return Math.floor(rollKeys.length / 3);
-  }, [get118RollKeys]);
-
-  // Helper function to select specific number of jumbo rolls (3 x 118" rolls each)
+  // Helper function to select specific number of COMPLETE jumbo rolls (exactly 3 x 118" rolls each)
   const selectJumboRolls = useCallback(
     (jumboCount: number) => {
-      const rollKeys = get118RollKeys();
-      const rollsToSelect = jumboCount * 3;
-      const selectedRollKeys = rollKeys.slice(0, rollsToSelect);
-      setSelected118Rolls(selectedRollKeys);
+      if (!planResult?.jumbo_roll_details) return;
       
-      // Also update selectedCutRolls to match the 118" roll selection
-      if (!planResult) return;
+      // Get only complete jumbos (exactly 3 x 118" rolls)
+      const completeJumbos = planResult.jumbo_roll_details.filter(jumbo => 
+        jumbo && jumbo.is_complete && jumbo.roll_count === 3
+      ).slice(0, jumboCount); // Select only the requested number of complete jumbos
+      
+      if (completeJumbos.length < jumboCount) {
+        console.warn(`Only ${completeJumbos.length} complete jumbos available, requested ${jumboCount}`);
+        return;
+      }
+      
+      // Get roll keys for the selected complete jumbos
+      const selectedRollKeysSet = new Set<string>();
       const cutRollIndices: number[] = [];
-      planResult.cut_rolls_generated.forEach((roll, index) => {
-        const rollKey = getRollKeyFromCutRoll(roll);
-        if (rollKey && selectedRollKeys.includes(rollKey)) {
-          cutRollIndices.push(index);
-        }
+      
+      completeJumbos.forEach(jumbo => {
+        // Find cut rolls belonging to this complete jumbo
+        planResult.cut_rolls_generated.forEach((roll, index) => {
+          if (roll.jumbo_roll_id === jumbo.jumbo_id) {
+            const rollKey = getRollKeyFromCutRoll(roll);
+            if (rollKey) {
+              selectedRollKeysSet.add(rollKey); // Use Set to avoid duplicates
+              cutRollIndices.push(index);
+            }
+          }
+        });
       });
+      
+      setSelected118Rolls(Array.from(selectedRollKeysSet));
       setSelectedCutRolls(cutRollIndices);
     },
-    [get118RollKeys, planResult, getRollKeyFromCutRoll]
+    [planResult, getRollKeyFromCutRoll]
   );
 
   const handleOrderSelect = useCallback((orderId: string) => {
@@ -393,78 +413,9 @@ export default function PlanningPage() {
 
  
 
-  // Handler for selecting individual 118" rolls using composite keys - ALLOWS ANY SELECTION
-  const handle118RollSelect = useCallback((gsm: number, bf: number, shade: string, rollNumber: number) => {
-    const rollKey = generateRollKey(gsm, bf, shade, rollNumber);
-    
-    setSelected118Rolls((prev) => {
-      const newSelection = prev.includes(rollKey) 
-        ? prev.filter((r) => r !== rollKey) 
-        : [...prev, rollKey].sort();
-      
-      // Always allow the selection - no restrictions during selection
-      // Update selectedCutRolls to match the 118" roll selection
-      if (planResult) {
-        const cutRollIndices: number[] = [];
-        planResult.cut_rolls_generated.forEach((roll, index) => {
-          const cutRollKey = getRollKeyFromCutRoll(roll);
-          if (cutRollKey && newSelection.includes(cutRollKey)) {
-            cutRollIndices.push(index);
-          }
-        });
-        setSelectedCutRolls(cutRollIndices);
-      }
-      
-      return newSelection;
-    });
-  }, [planResult, generateRollKey, getRollKeyFromCutRoll]);
+  // REMOVED: Individual roll selection handlers - only jumbo-based selection now
 
-  // Legacy handler for backward compatibility with roll numbers
-  const handle118RollSelectByNumber = useCallback((rollNumber: number) => {
-    // This should ideally not be used - we want to select by composite keys
-    // Find the first cut roll with this roll number and use its specification
-    if (!planResult) return;
-    const cutRoll = planResult.cut_rolls_generated.find(roll => 
-      roll.individual_roll_number === rollNumber
-    );
-    if (cutRoll) {
-      handle118RollSelect(cutRoll.gsm, cutRoll.bf, cutRoll.shade, rollNumber);
-    }
-  }, [planResult, handle118RollSelect]);
-
-  // Legacy handler for individual cut pieces (kept for backward compatibility but discouraged)
-  const handleCutRollSelect = useCallback((index: number) => {
-    // This should ideally not be used - we want to select by 118" rolls
-    if (!planResult) return;
-    const cutRoll = planResult.cut_rolls_generated[index];
-    if (cutRoll.individual_roll_number) {
-      handle118RollSelect(cutRoll.gsm, cutRoll.bf, cutRoll.shade, cutRoll.individual_roll_number);
-    }
-  }, [planResult, handle118RollSelect]);
-
-  const handleSelectAll118Rolls = useCallback(
-    (checked: boolean) => {
-      const rollKeys = get118RollKeys();
-      
-      // Select ALL available 118" rolls, not just complete jumbos
-      const selectedRollKeys = checked ? rollKeys : [];
-      
-      setSelected118Rolls(selectedRollKeys);
-      
-      // Update selectedCutRolls to match
-      if (planResult) {
-        const cutRollIndices: number[] = [];
-        planResult.cut_rolls_generated.forEach((roll, index) => {
-          const cutRollKey = getRollKeyFromCutRoll(roll);
-          if (cutRollKey && selectedRollKeys.includes(cutRollKey)) {
-            cutRollIndices.push(index);
-          }
-        });
-        setSelectedCutRolls(cutRollIndices);
-      }
-    },
-    [get118RollKeys, planResult, getRollKeyFromCutRoll]
-  );
+  // REMOVED: handleSelectAll118Rolls - only jumbo selection buttons now
 
   const generatePlan = async () => {
     if (selectedOrders.length === 0) {
@@ -538,7 +489,7 @@ export default function PlanningPage() {
     
     if (!isValid118RollSelection(selected118Rolls.length)) {
       const availableJumbos = getAvailableJumboRolls();
-      const errorMessage = `Please select ${planningWidth}" rolls in multiples of 3 to match jumbo roll constraints. Available options: ${Array.from({ length: availableJumbos }, (_, i) => (i + 1) * 3).join(', ')} rolls`;
+      const errorMessage = `Please select complete jumbo rolls only (exactly 3 x 118" rolls each). Available: ${availableJumbos} complete jumbo${availableJumbos !== 1 ? 's' : ''}`;
       setError(errorMessage);
       toast.error(errorMessage);
       return;
@@ -617,8 +568,8 @@ export default function PlanningPage() {
       if (!isValid118RollSelection(selected118Rolls.length)) {
         const availableJumbos = getAvailableJumboRolls();
         toast.error(
-          `Please select ${planningWidth}" rolls in multiples of 3 to match jumbo roll constraints. ` +
-          `Available options: ${Array.from({ length: availableJumbos }, (_, i) => (i + 1) * 3).join(', ')} ${planningWidth}" rolls`
+          `Please select complete jumbo rolls only (exactly 3 x 118" rolls each). ` +
+          `Available: ${availableJumbos} complete jumbo${availableJumbos !== 1 ? 's' : ''}`
         );
         return;
       }
@@ -862,22 +813,7 @@ export default function PlanningPage() {
     setExpandedRollSets(newExpanded);
   };
 
-  const handleRollSetSelection = (
-    specKey: string,
-    rollNumber: string,
-    rollsInNumber: Array<CutRoll & { originalIndex: number }>
-  ) => {
-    // Get the 118" roll number from the first roll in the set
-    const roll118Number = parseInt(rollNumber);
-    if (isNaN(roll118Number)) return; // Skip if no valid roll number
-    
-    // Get specification details from the first roll in the set
-    const firstRoll = rollsInNumber[0];
-    if (!firstRoll) return;
-    
-    // Use the handle118RollSelect function with composite key
-    handle118RollSelect(firstRoll.gsm, firstRoll.bf, firstRoll.shade, roll118Number);
-  };
+  // REMOVED: handleRollSetSelection - only jumbo-level selection now
 
   const generatePDF = async () => {
     if (!planResult) {
@@ -1893,9 +1829,12 @@ export default function PlanningPage() {
                       <CardTitle>Cut Rolls Available for Production</CardTitle>
                       <CardDescription>
                         {displayMode === 'jumbo' 
-                          ? 'Select rolls by jumbo roll hierarchy - Complete jumbo roll view'
+                          ? 'Select complete jumbo rolls only (exactly 3 x 118" rolls each)'
                           : 'Select rolls by paper specification and roll number - Traditional view'
                         }
+                        <div className="text-xs text-blue-600 mt-1">
+                          ℹ️ Only complete jumbos available for selection. Partial jumbos are excluded.
+                        </div>
                       </CardDescription>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1915,9 +1854,10 @@ export default function PlanningPage() {
                   </div>
                   <div className="flex flex-col gap-3">
                       <div className="text-sm text-muted-foreground">
-                        {selected118Rolls.length} of{" "}
-                        {get118RollKeys().length}{" "}
-                        individual {planningWidth}" rolls selected
+                        {selected118Rolls.length > 0 && selected118Rolls.length % 3 === 0 
+                          ? `${selected118Rolls.length / 3} of ${getAvailableJumboRolls()} complete jumbo rolls selected`
+                          : `${selectedCutRolls.length} cut rolls selected from ${selected118Rolls.length} x 118" rolls`
+                        }
                         {selected118Rolls.length > 0 && (
                           <span className={`ml-2 px-2 py-1 rounded text-xs ${
                             isValid118RollSelection(selected118Rolls.length) 
@@ -1925,8 +1865,8 @@ export default function PlanningPage() {
                               : 'bg-yellow-100 text-yellow-700'
                           }`}>
                             {isValid118RollSelection(selected118Rolls.length) 
-                              ? `✓ ${selected118Rolls.length / 3} jumbo roll${selected118Rolls.length / 3 > 1 ? 's' : ''} (${selectedCutRolls.length} cut pieces)` 
-                              : `⚠ Need multiples of 3 (currently ${selected118Rolls.length} rolls)`
+                              ? `✓ ${selected118Rolls.length / 3} complete jumbo${selected118Rolls.length / 3 > 1 ? 's' : ''} (${selectedCutRolls.length} cut pieces)` 
+                              : `⚠ Invalid selection: ${selected118Rolls.length} x 118" rolls (need multiples of 3 from complete jumbos)`
                             }
                           </span>
                         )}
@@ -1934,7 +1874,7 @@ export default function PlanningPage() {
                       {/* Show warning message when selection is invalid */}
                       {selected118Rolls.length > 0 && !isValid118RollSelection(selected118Rolls.length) && (
                         <div className="text-xs text-yellow-600">
-                           Production disabled: Please select {planningWidth}" rolls in multiples of 3 to match jumbo roll constraints
+                           Production disabled: Please select complete jumbo rolls only (exactly 3 x 118" rolls each)
                         </div>
                       )}
                       <div className="flex flex-wrap gap-2">
@@ -1958,8 +1898,11 @@ export default function PlanningPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleSelectAll118Rolls(false)}>
-                          ✗ Select None
+                          onClick={() => {
+                            setSelected118Rolls([]);
+                            setSelectedCutRolls([]);
+                          }}>
+                          ✗ Clear Selection
                         </Button>
                       </div>
                     </div>
@@ -2005,27 +1948,7 @@ export default function PlanningPage() {
                             {/* Specification Header */}
                             <div className="flex justify-between items-center mb-4 pb-3 border-b">
                               <div className="flex items-center gap-4">
-                                <Checkbox
-                                  checked={rolls.every((roll) =>
-                                    selectedCutRolls.includes(
-                                      roll.originalIndex
-                                    )
-                                  )}
-                                  onCheckedChange={(checked) => {
-                                    const indices = rolls.map(
-                                      (roll) => roll.originalIndex
-                                    );
-                                    if (checked) {
-                                      setSelectedCutRolls((prev) => [
-                                        ...new Set([...prev, ...indices]),
-                                      ]);
-                                    } else {
-                                      setSelectedCutRolls((prev) =>
-                                        prev.filter((i) => !indices.includes(i))
-                                      );
-                                    }
-                                  }}
-                                />
+                                
                                 <h3 className="text-xl font-bold text-foreground">
                                   {specKey}
                                 </h3>
@@ -2065,13 +1988,10 @@ export default function PlanningPage() {
                                             const rollKey = generateRollKey(firstRoll.gsm, firstRoll.bf, firstRoll.shade, roll118Number);
                                             return selected118Rolls.includes(rollKey);
                                           })()}
-                                          onCheckedChange={() =>
-                                            handleRollSetSelection(
-                                              specKey,
-                                              rollNumber,
-                                              rollsInNumber
-                                            )
-                                          }
+                                          disabled={true}
+                                          onCheckedChange={() => {
+                                            // Individual roll set selection disabled - use jumbo buttons instead
+                                          }}
                                         />
                                         <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-bold">
                                           {rollNumber === "No Roll #"
@@ -2274,16 +2194,15 @@ export default function PlanningPage() {
                                                 ? "bg-primary/10 border-primary"
                                                 : "bg-muted/50 border-border hover:bg-muted"
                                             }`}
-                                            onClick={() =>
-                                              handleCutRollSelect(
-                                                roll.originalIndex
-                                              )
-                                            }>
+                                            onClick={() => {
+                                              // Individual cut roll selection disabled - use jumbo buttons instead
+                                            }}>
                                             <div className="flex items-center gap-3">
                                               <Checkbox
                                                 checked={selectedCutRolls.includes(
                                                   roll.originalIndex
                                                 )}
+                                                disabled={true}
                                                 onChange={() => {}}
                                               />
                                               <div className="flex items-center gap-3">
@@ -2400,13 +2319,9 @@ export default function PlanningPage() {
                                           checked={cutsInRoll.every(roll => 
                                             selectedCutRolls.includes(roll.originalIndex)
                                           )}
-                                          onCheckedChange={(checked) => {
-                                            const indices = cutsInRoll.map(roll => roll.originalIndex);
-                                            if (checked) {
-                                              setSelectedCutRolls(prev => [...new Set([...prev, ...indices])]);
-                                            } else {
-                                              setSelectedCutRolls(prev => prev.filter(i => !indices.includes(i)));
-                                            }
+                                          disabled={true}
+                                          onCheckedChange={() => {
+                                            // Individual 118" roll selection disabled - use jumbo buttons instead
                                           }}
                                         />
                                         <div className="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
@@ -2496,11 +2411,7 @@ export default function PlanningPage() {
                                               : "bg-muted/30 border-border hover:bg-muted"
                                           }`}
                                           onClick={() => {
-                                            if (selectedCutRolls.includes(roll.originalIndex)) {
-                                              setSelectedCutRolls(prev => prev.filter(i => i !== roll.originalIndex));
-                                            } else {
-                                              setSelectedCutRolls(prev => [...prev, roll.originalIndex]);
-                                            }
+                                            // Individual cut selection disabled - use jumbo buttons instead
                                           }}>
                                           <div className="flex items-center justify-between">
                                             <div className="text-sm font-medium">
@@ -2508,6 +2419,7 @@ export default function PlanningPage() {
                                             </div>
                                             <Checkbox
                                               checked={selectedCutRolls.includes(roll.originalIndex)}
+                                              disabled={true}
                                               onChange={() => {}}
                                             />
                                           </div>

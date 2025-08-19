@@ -26,6 +26,15 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { 
   Clock, 
   Search, 
@@ -37,7 +46,6 @@ import {
   Calendar,
   DollarSign,
   Package,
-  Play,
   Settings,
   Target
 } from "lucide-react";
@@ -68,23 +76,10 @@ interface PendingOrderItem {
   frontend_id?: string; // Human-readable ID for display
 }
 
-interface OptimizationResult {
+interface SuggestionResult {
   status: string;
-  remaining_pending: any[];
-  roll_combinations: Array<{
-    combination_id: string;
-    paper_specs: {
-      gsm: number;
-      bf: number;
-      shade: string;
-    };
-    rolls: Array<{
-      width: number;
-      quantity: number;
-    }>;
-    total_width: number;
-    trim: number;
-  }>;
+  target_width: number;
+  wastage: number;
   roll_suggestions: Array<{
     suggestion_id: string;
     paper_specs: {
@@ -94,17 +89,11 @@ interface OptimizationResult {
     };
     existing_width: number;
     needed_width: number;
-    possible_combinations: Array<{
-      rolls: number[];
-      total_width: number;
-      trim: number;
-    }>;
     description: string;
   }>;
   summary: {
     total_pending_input: number;
-    combinations_found: number;
-    remaining_pending: number;
+    unique_widths: number;
     suggested_rolls: number;
   };
 }
@@ -115,11 +104,12 @@ export default function PendingOrderItemsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Optimization preview state
-  const [showOptimization, setShowOptimization] = useState(false);
-  const [optimizationResult, setOptimizationResult] = useState<OptimizationResult | null>(null);
-  const [optimizationLoading, setOptimizationLoading] = useState(false);
-  const [selectedCombinations, setSelectedCombinations] = useState<Set<string>>(new Set());
+  // Roll suggestions state
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionResult, setSuggestionResult] = useState<SuggestionResult | null>(null);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [showWastageDialog, setShowWastageDialog] = useState(false);
+  const [wastageInput, setWastageInput] = useState<string>("");
 
   // Fetch pending order items from API
   useEffect(() => {
@@ -241,76 +231,44 @@ export default function PendingOrderItemsPage() {
     handleUpdateStatus(itemId, 'cancelled');
   };
 
-  // Optimization preview functions
-  const handleOptimizePreview = async () => {
-    try {
-      setOptimizationLoading(true);
-      const response = await fetch(`${MASTER_ENDPOINTS.PENDING_ORDERS}/optimize-preview`, createRequestOptions('POST'));
-      
-      if (!response.ok) {
-        throw new Error(`Optimization failed: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      setOptimizationResult(result);
-      setShowOptimization(true);
-      const actualCombinations = result.roll_combinations?.length || 0;
-      toast.success(`Found ${actualCombinations} possible combinations`);
-    } catch (error) {
-      toast.error('Failed to run optimization preview');
-      console.error('Optimization error:', error);
-    } finally {
-      setOptimizationLoading(false);
-    }
+  // Roll suggestions functions
+  const handleGetSuggestions = () => {
+    setWastageInput("");
+    setShowWastageDialog(true);
   };
 
-  const handleToggleCombination = (combinationId: string) => {
-    const newSelected = new Set(selectedCombinations);
-    if (newSelected.has(combinationId)) {
-      newSelected.delete(combinationId);
-    } else {
-      newSelected.add(combinationId);
-    }
-    setSelectedCombinations(newSelected);
-  };
-
-  const handleAcceptCombinations = async () => {
-    if (selectedCombinations.size === 0) {
-      toast.error('Please select at least one combination');
-      return;
-    }
-
-    if (selectedCombinations.size % 3 !== 0) {
-      toast.error('Only multiple of 3 rolls can be selected');
+  const handleWastageSubmit = async () => {
+    const wastage = parseFloat(wastageInput);
+    if (isNaN(wastage) || wastage < 0) {
+      toast.error('Please enter a valid wastage value');
       return;
     }
 
     try {
-      const selectedCombos = optimizationResult?.roll_combinations.filter(combo => 
-        selectedCombinations.has(combo.combination_id)
-      ) || [];
-
-      const response = await fetch(`${MASTER_ENDPOINTS.PENDING_ORDERS}/accept-combinations`, 
-        createRequestOptions('POST', selectedCombos)
+      setSuggestionsLoading(true);
+      setShowWastageDialog(false);
+      
+      const response = await fetch(`${MASTER_ENDPOINTS.PENDING_ORDERS}/roll-suggestions`, 
+        createRequestOptions('POST', { wastage })
       );
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        const errorMessage = errorData?.detail || `Failed to accept combinations: ${response.status}`;
-        throw new Error(errorMessage);
-      }
-
-      const result = await response.json();
-      toast.success(`Created plan: ${result.plan_name}`);
       
-      // Refresh pending items
-      window.location.reload();
+      if (!response.ok) {
+        throw new Error(`Failed to get suggestions: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      setSuggestionResult(result);
+      setShowSuggestions(true);
+      const suggestionsCount = result.roll_suggestions?.length || 0;
+      toast.success(`Generated ${suggestionsCount} roll suggestions for ${result.target_width}" rolls`);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to accept combinations';
-      toast.error(errorMessage);
-      console.error('Accept combinations error:', error);
+      toast.error('Failed to get roll suggestions');
+      console.error('Suggestions error:', error);
+    } finally {
+      setSuggestionsLoading(false);
     }
   };
+
 
   return (
     <DashboardLayout>
@@ -330,29 +288,12 @@ export default function PendingOrderItemsPage() {
             <Button 
               variant="outline" 
               className="gap-2"
-              onClick={handleOptimizePreview}
-              disabled={optimizationLoading || displayItems.length === 0}
+              onClick={handleGetSuggestions}
+              disabled={suggestionsLoading || displayItems.length === 0}
             >
               <Target className="w-4 h-4" />
-              {optimizationLoading ? 'Optimizing...' : 'Optimize Preview'}
+              {suggestionsLoading ? 'Loading...' : 'Get Suggestions'}
             </Button>
-            <Button variant="outline" className="gap-2">
-              <Play className="w-4 h-4" />
-              Process All
-            </Button>
-            {showOptimization && selectedCombinations.size > 0 && (
-              <Button 
-                className="gap-2"
-                onClick={handleAcceptCombinations}
-                disabled={selectedCombinations.size % 3 !== 0}
-              >
-                <CheckCircle className="w-4 h-4" />
-                Accept Selected ({selectedCombinations.size})
-                {selectedCombinations.size % 3 !== 0 && (
-                  <span className="text-xs ml-1">(Must be multiple of 3)</span>
-                )}
-              </Button>
-            )}
           </div>
         </div>
 
@@ -408,166 +349,88 @@ export default function PendingOrderItemsPage() {
           </Card>
         </div>
 
-        {/* Optimization Preview Results */}
-        {showOptimization && optimizationResult && (
+        {/* Wastage Input Dialog */}
+        <Dialog open={showWastageDialog} onOpenChange={setShowWastageDialog}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Enter Wastage</DialogTitle>
+              <DialogDescription>
+                Enter the wastage amount to subtract from 119 inches for roll suggestions.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="wastage" className="text-right">
+                  Wastage (inches)
+                </Label>
+                <Input
+                  id="wastage"
+                  type="number"
+                  min="0"
+                  max="50"
+                  value={wastageInput}
+                  onChange={(e) => setWastageInput(e.target.value)}
+                  className="col-span-3"
+                />
+              </div>
+              {wastageInput && !isNaN(parseFloat(wastageInput)) && (
+                <div className="text-sm text-muted-foreground text-center">
+                  Target width: {119 - parseFloat(wastageInput)}" (119 - {wastageInput})
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowWastageDialog(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleWastageSubmit}>
+                Get Suggestions
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Roll Suggestions Results */}
+        {showSuggestions && suggestionResult && (
           <div className="space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Settings className="w-5 h-5" />
-                  Optimization Preview Results
+                  Roll Suggestions
                 </CardTitle>
                 <CardDescription>
-                  Found {optimizationResult.summary.combinations_found} possible roll combinations. 
-                  Select combinations to create a plan.
+                  Suggestions for completing {suggestionResult.target_width}" rolls (119" - {suggestionResult.wastage}" wastage)
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {/* Summary Stats */}
-                <div className="grid gap-4 md:grid-cols-4 mb-6">
+                <div className="grid gap-4 md:grid-cols-3 mb-6">
                   <div className="text-center p-4 bg-blue-50 rounded-lg">
-                    <div className="text-2xl font-bold text-blue-600">{optimizationResult.summary.combinations_found}</div>
-                    <div className="text-sm text-blue-800">Combinations Found</div>
+                    <div className="text-2xl font-bold text-blue-600">{suggestionResult.target_width}"</div>
+                    <div className="text-sm text-blue-800">Target Width</div>
                   </div>
                   <div className="text-center p-4 bg-green-50 rounded-lg">
-                    <div className="text-2xl font-bold text-green-600">{optimizationResult.summary.total_pending_input - optimizationResult.summary.remaining_pending}</div>
-                    <div className="text-sm text-green-800">Orders Resolved</div>
-                  </div>
-                  <div className="text-center p-4 bg-yellow-50 rounded-lg">
-                    <div className="text-2xl font-bold text-yellow-600">{optimizationResult.summary.remaining_pending}</div>
-                    <div className="text-sm text-yellow-800">Still Pending</div>
+                    <div className="text-2xl font-bold text-green-600">{suggestionResult.summary.unique_widths}</div>
+                    <div className="text-sm text-green-800">Unique Widths</div>
                   </div>
                   <div className="text-center p-4 bg-purple-50 rounded-lg">
-                    <div className="text-2xl font-bold text-purple-600">{optimizationResult.summary.suggested_rolls}</div>
-                    <div className="text-sm text-purple-800">Roll Suggestions</div>
+                    <div className="text-2xl font-bold text-purple-600">{suggestionResult.summary.suggested_rolls}</div>
+                    <div className="text-sm text-purple-800">Suggestions</div>
                   </div>
                 </div>
 
-                {/* Roll Combinations */}
-                {optimizationResult.roll_combinations.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold">Available Roll Combinations</h3>
-                      <div className="flex items-center gap-1">
-                        <Checkbox 
-                          checked={selectedCombinations.size === optimizationResult.roll_combinations.length}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setSelectedCombinations(new Set(optimizationResult.roll_combinations.map(c => c.combination_id)));
-                            } else {
-                              setSelectedCombinations(new Set());
-                            }
-                          }}
-                        />
-                        <span className="text-sm font-medium">Select All</span>
-                      </div>
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {optimizationResult.roll_combinations.map((combo) => (
-                        <Card 
-                          key={combo.combination_id} 
-                          className={`cursor-pointer transition-colors ${
-                            selectedCombinations.has(combo.combination_id) 
-                              ? 'ring-2 ring-blue-500 bg-blue-50' 
-                              : 'hover:bg-gray-50'
-                          }`}
-                          onClick={() => handleToggleCombination(combo.combination_id)}
-                        >
-                          <CardHeader className="pb-1">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <Checkbox 
-                                  checked={selectedCombinations.has(combo.combination_id)}
-                                  onCheckedChange={(checked) => {
-                                    handleToggleCombination(combo.combination_id);
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                                <CardTitle className="text-base">
-                                  {combo.paper_specs.shade} {combo.paper_specs.gsm}GSM BF: {combo.paper_specs.bf}
-                                </CardTitle>
-                              </div>
-                              <Badge className={combo.trim <= 6 ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}>
-                                {combo.trim}" trim
-                              </Badge>
-                            </div>
-                          </CardHeader>
-                          <CardContent className="pt-0">
-                            <div className="space-y-2">
-                              {/* Visual Cutting Pattern */}
-                              <div>
-                                <div className="text-sm font-medium text-muted-foreground mb-2">
-                                  Cutting Pattern (118" Jumbo Roll):
-                                </div>
-                                <div className="relative h-12 bg-muted rounded-lg border overflow-hidden">
-                                  {(() => {
-                                    let currentPosition = 0;
-                                    const waste = 118 - combo.total_width;
-                                    const wastePercentage = (waste / 118) * 100;
-
-                                    return (
-                                      <>
-                                        {/* Cut sections */}
-                                        {combo.rolls.map((roll, idx) => {
-                                          const widthPercentage = (roll.width / 118) * 100;
-                                          const leftPosition = (currentPosition / 118) * 100;
-                                          currentPosition += roll.width;
-
-                                          return (
-                                            <div
-                                              key={idx}
-                                              className="absolute h-full border-r-2 border-white bg-gradient-to-r from-blue-400 to-blue-500"
-                                              style={{
-                                                left: `${leftPosition}%`,
-                                                width: `${widthPercentage}%`,
-                                              }}>
-                                              <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
-                                                {roll.width}"
-                                              </div>
-                                            </div>
-                                          );
-                                        })}
-
-                                        {/* Waste section */}
-                                        {waste > 0 && (
-                                          <div
-                                            className="absolute h-full bg-gradient-to-r from-red-400 to-red-500 border-l-2 border-white"
-                                            style={{
-                                              right: "0%",
-                                              width: `${wastePercentage}%`,
-                                            }}>
-                                            <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
-                                              Waste: {waste.toFixed(1)}"
-                                            </div>
-                                          </div>
-                                        )}
-                                      </>
-                                    );
-                                  })()}
-                                </div>
-                              </div>
-                              <div className="text-sm">
-                                <span className="font-medium">Total: {combo.total_width}" / 118"</span>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* Roll Suggestions */}
-                {optimizationResult.roll_suggestions.length > 0 && (
-                  <div className="space-y-4 mt-6">
-                    <h3 className="text-lg font-semibold">Roll Suggestions for Remaining Items</h3>
+                {suggestionResult.roll_suggestions.length > 0 && (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold">Roll Completion Suggestions</h3>
                     <div className="space-y-3">
-                      {optimizationResult.roll_suggestions.map((suggestion) => (
+                      {suggestionResult.roll_suggestions.map((suggestion) => (
                         <Card key={suggestion.suggestion_id} className="bg-gray-50">
                           <CardContent className="pt-4">
                             <div className="space-y-4">
                               <div className="font-medium">
-                                {suggestion.paper_specs.shade} {suggestion.paper_specs.gsm}GSM Paper
+                                {suggestion.paper_specs.shade} {suggestion.paper_specs.gsm}GSM Paper (BF: {suggestion.paper_specs.bf})
                               </div>
                               <div className="text-sm font-medium">
                                 {suggestion.description}
@@ -576,14 +439,15 @@ export default function PendingOrderItemsPage() {
                               {/* Visual Pattern for Available/Required */}
                               <div>
                                 <div className="text-sm font-medium text-muted-foreground mb-2">
-                                  118" Roll Completion Pattern:
+                                  {suggestionResult.target_width}" Roll Completion Pattern:
                                 </div>
                                 <div className="relative h-12 bg-muted rounded-lg border overflow-hidden">
                                   {(() => {
                                     const availableWidth = suggestion.existing_width;
                                     const requiredWidth = suggestion.needed_width;
-                                    const availablePercentage = (availableWidth / 118) * 100;
-                                    const requiredPercentage = (requiredWidth / 118) * 100;
+                                    const targetWidth = suggestionResult.target_width;
+                                    const availablePercentage = (availableWidth / targetWidth) * 100;
+                                    const requiredPercentage = (requiredWidth / targetWidth) * 100;
 
                                     return (
                                       <>
@@ -626,24 +490,15 @@ export default function PendingOrderItemsPage() {
                 <div className="flex gap-2 mt-6">
                   <Button 
                     variant="outline" 
-                    onClick={() => {
-                      setShowOptimization(false);
-                      setSelectedCombinations(new Set());
-                    }}
+                    onClick={() => setShowSuggestions(false)}
                   >
-                    Close Preview
+                    Close Suggestions
                   </Button>
                   <Button 
-                    onClick={() => setSelectedCombinations(new Set(optimizationResult.roll_combinations.map(c => c.combination_id)))}
-                    variant="outline"
+                    variant="outline" 
+                    onClick={handleGetSuggestions}
                   >
-                    Select All
-                  </Button>
-                  <Button 
-                    onClick={() => setSelectedCombinations(new Set())}
-                    variant="outline"
-                  >
-                    Clear Selection
+                    New Suggestions
                   </Button>
                 </div>
               </CardContent>
