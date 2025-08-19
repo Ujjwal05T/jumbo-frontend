@@ -762,6 +762,330 @@ export default function PlanDetailsPage() {
     }
   };
 
+ const exportProductionSummaryToPDF = () => {
+  try {
+    if (!plan || !productionSummary) {
+      toast.error('Production data not available for export');
+      return;
+    }
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 15;
+    let yPosition = margin;
+
+    // Helper function to check if we need a new page
+    const checkPageBreak = (height:any) => {
+      if (yPosition + height > pageHeight - margin) {
+        doc.addPage();
+        yPosition = margin;
+      }
+    };
+
+    // Title
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(40, 40, 40);
+    doc.text("Production Summary", pageWidth / 2, yPosition, { align: 'center' });
+    yPosition += 15;
+
+    // Plan name and date
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(80, 80, 80);
+    doc.text(`Plan: ${plan.name}`, pageWidth / 2, yPosition, { align: 'center' });
+    yPosition += 8;
+    doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth / 2, yPosition, { align: 'center' });
+    yPosition += 20;
+
+    // Production Summary Section
+    checkPageBreak(50);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(40, 40, 40);
+    doc.text("Summary", margin, yPosition);
+    yPosition += 12;
+
+    // Summary stats in grid format
+    const summaryData = [
+      [`Total Cut Rolls: ${productionSummary.production_summary.total_cut_rolls}`, `Total Weight: ${productionSummary.production_summary.total_weight_kg} kg`],
+      [`Average Weight: ${productionSummary.production_summary.average_weight_per_roll.toFixed(1)} kg/roll`, `Paper Types: ${productionSummary.production_summary.paper_specifications.length}`]
+    ];
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(60, 60, 60);
+    
+    summaryData.forEach(row => {
+      doc.text(row[0], margin + 5, yPosition);
+      doc.text(row[1], pageWidth / 2 + 5, yPosition);
+      yPosition += 8;
+    });
+    yPosition += 10;
+
+    // Status Breakdown Section
+    checkPageBreak(80);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(40, 40, 40);
+    doc.text("Status Breakdown", margin, yPosition);
+    yPosition += 12;
+
+    // FIXED: Render table header FIRST, before the data
+    const statusTableHeaders = ['Status', 'Count', 'Weight (kg)', 'Widths'];
+    const colWidths = [40, 25, 35, 80];
+
+    // Table header with borders
+    doc.setFillColor(248, 249, 250);
+    doc.rect(margin, yPosition - 2, pageWidth - (margin * 2), 12, 'F');
+    doc.setDrawColor(100, 100, 100);
+    doc.setLineWidth(0.5);
+    doc.rect(margin, yPosition - 2, pageWidth - (margin * 2), 12, 'S');
+    
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(40, 40, 40);
+    
+    // Add column separators for header
+    let colX = margin;
+    for (let i = 0; i < colWidths.length - 1; i++) {
+      colX += colWidths[i];
+      doc.line(colX, yPosition - 2, colX, yPosition + 10);
+    }
+    
+    let xPos = margin + 3;
+    statusTableHeaders.forEach((header, index) => {
+      doc.text(header, xPos, yPosition + 6);
+      xPos += colWidths[index];
+    });
+    yPosition += 12;
+
+    // NOW render the status breakdown table data
+    const statusTableData = Object.entries(productionSummary.production_summary.status_breakdown).map(([status, data]) => {
+      const uniqueWidths = [...new Set(data.widths)];
+      const widthsText = uniqueWidths.join('", ') + '"';
+      
+      // For PDF, we'll handle text wrapping manually
+      const maxCharsPerLine = 40; // Adjust based on column width
+      const wrapText = (text:any, maxChars:any) => {
+        const words = text.split(' ');
+        const lines = [];
+        let currentLine = '';
+        
+        for (const word of words) {
+          if ((currentLine + word).length <= maxChars) {
+            currentLine += (currentLine ? ' ' : '') + word;
+          } else {
+            if (currentLine) lines.push(currentLine);
+            currentLine = word;
+          }
+        }
+        if (currentLine) lines.push(currentLine);
+        return lines;
+      };
+      
+      // For display purposes, we'll use the wrapped version
+      const wrappedWidths = wrapText(widthsText, maxCharsPerLine);
+      
+      return [
+        status.replace('_', ' '),
+        data.count.toString(),
+        data.total_weight.toFixed(1),
+        wrappedWidths // This will be an array of lines
+      ];
+    });
+
+    // Table rows with borders
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(60, 60, 60);
+    
+    statusTableData.forEach((row, index) => {
+      // Calculate row height based on wrapped text
+      const widthsLines = Array.isArray(row[3]) ? row[3] : [row[3]];
+      const rowHeight = Math.max(10, widthsLines.length * 6 + 4); // Dynamic height
+      
+      checkPageBreak(rowHeight);
+      
+      if (index % 2 === 1) {
+        doc.setFillColor(252, 252, 252);
+        doc.rect(margin, yPosition - 2, pageWidth - (margin * 2), rowHeight, 'F');
+      }
+      
+      // Row border
+      doc.setDrawColor(100, 100, 100);
+      doc.setLineWidth(0.3);
+      doc.rect(margin, yPosition - 2, pageWidth - (margin * 2), rowHeight, 'S');
+
+      // Column separators
+      let colX = margin;
+      for (let i = 0; i < colWidths.length - 1; i++) {
+        colX += colWidths[i];
+        doc.line(colX, yPosition - 2, colX, yPosition + rowHeight - 2);
+      }
+      
+      // Render cell content
+      let xPos = margin + 3;
+      row.forEach((cell, cellIndex) => {
+        if (cellIndex === 3 && Array.isArray(cell)) {
+          // Handle wrapped widths text
+          cell.forEach((line, lineIndex) => {
+            doc.text(line, xPos, yPosition + 5 + (lineIndex * 6));
+          });
+        } else {
+          doc.text(typeof cell === 'string' ? cell : cell.toString(), xPos, yPosition + 5);
+        }
+        xPos += colWidths[cellIndex];
+      });
+      
+      yPosition += rowHeight;
+    });
+
+    yPosition += 15;
+
+    // Cut Rolls Table Section
+    checkPageBreak(50);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(40, 40, 40);
+    doc.text(`Cut Rolls Details (${filteredCutRolls.length} items)`, margin, yPosition);
+    yPosition += 12;
+
+    if (filteredCutRolls.length > 0) {
+      // Group by jumbo rolls
+      const jumboGroups = groupCutRollsByJumboWithSequential(filteredCutRolls);
+      
+      Object.entries(jumboGroups).forEach(([originalJumboId, jumboGroup]) => {
+        const { displayId: jumboDisplayName, rolls: jumboRolls } = jumboGroup;
+        
+        // Jumbo group header with paper specs
+        checkPageBreak(30);
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(40, 40, 40);
+        
+        // Get paper specs from first roll (since all rolls in jumbo have same specs)
+        const paperSpecs = jumboRolls[0]?.paper_specs 
+          ? `(${jumboRolls[0].paper_specs.gsm}gsm, BF:${jumboRolls[0].paper_specs.bf}, ${jumboRolls[0].paper_specs.shade})`
+          : '';
+        
+        doc.text(`${jumboDisplayName} ${paperSpecs} - ${jumboRolls.length} rolls`, margin, yPosition);
+        yPosition += 10;
+
+        // Table headers for cut rolls
+        const rollTableHeaders = ['Barcode', 'Width', 'Status', 'Client', 'Weight'];
+        const rollColWidths = [45, 20, 30, 35, 30];
+
+        doc.setFillColor(248, 249, 250);
+        doc.rect(margin, yPosition - 2, pageWidth - (margin * 2), 10, 'F');
+        doc.setDrawColor(100, 100, 100);
+        doc.setLineWidth(0.5);
+        doc.rect(margin, yPosition - 2, pageWidth - (margin * 2), 10, 'S');
+        
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(40, 40, 40);
+        
+        // Add column separators
+        let colX = margin;
+        for (let i = 0; i < rollColWidths.length - 1; i++) {
+          colX += rollColWidths[i];
+          doc.line(colX, yPosition - 2, colX, yPosition + 8);
+        }
+        
+        let xPos = margin + 2;
+        rollTableHeaders.forEach((header, index) => {
+          doc.text(header, xPos, yPosition + 5);
+          xPos += rollColWidths[index];
+        });
+        yPosition += 10;
+
+        // Roll data rows
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(60, 60, 60);
+        
+        jumboRolls.forEach((roll, rollIndex) => {
+          checkPageBreak(8);
+          
+          if (rollIndex % 2 === 1) {
+            doc.setFillColor(252, 252, 252);
+            doc.rect(margin, yPosition - 1, pageWidth - (margin * 2), 8, 'F');
+          }
+
+          // Row border
+          doc.setDrawColor(100, 100, 100);
+          doc.setLineWidth(0.3);
+          doc.rect(margin, yPosition - 1, pageWidth - (margin * 2), 8, 'S');
+          
+          // Column separators
+          let colX = margin;
+          for (let i = 0; i < rollColWidths.length - 1; i++) {
+            colX += rollColWidths[i];
+            doc.line(colX, yPosition - 1, colX, yPosition + 7);
+          }
+
+          const rollData = [
+            roll.barcode_id || roll.qr_code,
+            `${roll.width_inches}"`,
+            roll.status.replace('_', ' '),
+            roll.client_name || 'Unknown',
+            roll.weight_kg === 0 ? '' : `${roll.weight_kg}kg`
+          ];
+
+          let xPos = margin + 2;
+          rollData.forEach((cell, cellIndex) => {
+            // Truncate long text to fit column width
+            let displayText = cell;
+            if (cellIndex === 0 && cell.length > 15) { // Barcode column
+              displayText = cell.substring(0, 12) + '...';
+            } else if (cellIndex === 3 && cell.length > 25) { // Client column
+              displayText = cell.substring(0, 9) + '...';
+            }
+            
+            doc.setFontSize(7);
+            doc.text(displayText, xPos, yPosition + 4);
+            xPos += rollColWidths[cellIndex];
+          });
+          yPosition += 8;
+        });
+        
+        yPosition += 8; // Space between jumbo groups
+      });
+    } else {
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.text("No cut rolls found", margin, yPosition);
+    }
+
+    // Add page numbers
+    const totalPages = doc.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, pageHeight - 8, { align: 'right' });
+    }
+
+    // Print the PDF directly
+    const pdfBlob = doc.output('blob');
+    const pdfUrl = URL.createObjectURL(pdfBlob);
+    
+    const printWindow = window.open(pdfUrl);
+    if (printWindow) {
+      printWindow.addEventListener('load', () => {
+        printWindow.print();
+      });
+      toast.success('Printing production summary...');
+    } else {
+      toast.error('Unable to open print window. Please check your browser settings.');
+    }
+  } catch (error) {
+    console.error('Error exporting production summary PDF:', error);
+    toast.error('Failed to export production summary PDF');
+  }
+};
+
   const exportPlanDetailsToPDF = () => {
     try {
       if (!plan || !productionSummary) {
@@ -1164,7 +1488,7 @@ export default function PlanDetailsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={printPlanDetails}
+                  onClick={exportProductionSummaryToPDF}
                 >
                   <Printer className="mr-2 h-4 w-4" />
                   Print
@@ -1440,7 +1764,6 @@ export default function PlanDetailsPage() {
                                   <TableHead>Paper Specs</TableHead>
                                   <TableHead>Weight</TableHead>
                                   <TableHead>Status</TableHead>
-                                  <TableHead>Location</TableHead>
                                   <TableHead>Client</TableHead>
                                   <TableHead>Created</TableHead>
                                   <TableHead>Actions</TableHead>
@@ -1472,12 +1795,6 @@ export default function PlanDetailsPage() {
                                       <Badge variant={getStatusBadgeVariant(item.status)} className="text-xs">
                                         {item.status.replace('_', ' ')}
                                       </Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                      <div className="text-sm flex items-center gap-1">
-                                        <MapPin className="w-3 h-3" />
-                                        {item.location}
-                                      </div>
                                     </TableCell>
                                     <TableCell>
                                       <div className="text-sm">

@@ -179,7 +179,18 @@ export default function ReportsPage() {
         // Filter data if a specific paper is selected
         let filteredData = result.data;
         if (selectedPaper && selectedPaper !== 'all' && selectedPaper !== '') {
-          filteredData = result.data.filter((item: PaperReport) => item.paper_name === selectedPaper);
+          try {
+            const selectedPaperObj = JSON.parse(selectedPaper);
+            filteredData = result.data.filter((item: PaperReport) => 
+              item.paper_name === selectedPaperObj.name &&
+              item.gsm === selectedPaperObj.gsm &&
+              item.bf === selectedPaperObj.bf &&
+              item.shade === selectedPaperObj.shade
+            );
+          } catch (error) {
+            // Fallback to name-only filtering for backward compatibility
+            filteredData = result.data.filter((item: PaperReport) => item.paper_name === selectedPaper);
+          }
         }
         setPaperData(filteredData);
       }
@@ -747,8 +758,8 @@ export default function ReportsPage() {
                           <SelectItem value="none" disabled>No papers found</SelectItem>
                         ) : (
                           availablePapers.map((paper) => (
-                            <SelectItem key={paper.id} value={paper.name}>
-                              {paper.name} - {paper.gsm}GSM
+                            <SelectItem key={paper.id} value={JSON.stringify({name: paper.name, gsm: paper.gsm, bf: paper.bf, shade: paper.shade})}>
+                              {paper.name} - {paper.gsm}GSM - {paper.bf}BF - {paper.shade}
                             </SelectItem>
                           ))
                         )}
@@ -852,12 +863,26 @@ export default function ReportsPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Package className="h-5 w-5" />
-                  {selectedPaper ? `${selectedPaper} Analysis` : 'Paper-wise Analysis'}
+                  {selectedPaper && selectedPaper !== 'all' && selectedPaper !== '' ? 
+                    (() => {
+                      try {
+                        const paperObj = JSON.parse(selectedPaper);
+                        return `${paperObj.name} Analysis`;
+                      } catch {
+                        return `${selectedPaper} Analysis`;
+                      }
+                    })() : 'Paper-wise Analysis'}
                 </CardTitle>
                 <CardDescription>
-                  {selectedPaper 
-                    ? `Detailed analytics for ${selectedPaper}` 
-                    : 'Analysis of orders grouped by paper types and specifications'
+                  {selectedPaper && selectedPaper !== 'all' && selectedPaper !== '' ? 
+                    (() => {
+                      try {
+                        const paperObj = JSON.parse(selectedPaper);
+                        return `Detailed analytics for ${paperObj.name} (${paperObj.gsm}GSM, ${paperObj.bf}BF, ${paperObj.shade})`;
+                      } catch {
+                        return `Detailed analytics for ${selectedPaper}`;
+                      }
+                    })() : 'Analysis of orders grouped by paper types and specifications'
                   }
                 </CardDescription>
               </CardHeader>
