@@ -228,6 +228,22 @@ export default function PlanningPage() {
     return generateRollKey(cutRoll.gsm, cutRoll.bf, cutRoll.shade, cutRoll.individual_roll_number);
   }, [generateRollKey]);
 
+  // Helper function to check if a jumbo roll is selected
+  const isJumboRollSelected = useCallback((jumboDetail: JumboRollDetail): boolean => {
+    if (!planResult?.cut_rolls_generated) return false;
+    
+    // Get all cut rolls for this jumbo
+    const jumboRolls = planResult.cut_rolls_generated.filter(roll => 
+      roll.jumbo_roll_id === jumboDetail.jumbo_id
+    );
+    
+    // Check if any 118" roll from this jumbo is selected
+    return jumboRolls.some(roll => {
+      const rollKey = getRollKeyFromCutRoll(roll);
+      return rollKey && selected118Rolls.includes(rollKey);
+    });
+  }, [planResult, selected118Rolls, getRollKeyFromCutRoll]);
+
   // Helper function to generate barcode as canvas
   const generateBarcodeCanvas = (value: string): HTMLCanvasElement => {
     const canvas = document.createElement('canvas');
@@ -1564,9 +1580,13 @@ export default function PlanningPage() {
                     )}
                   </Button>
                   <Button
-                    variant="secondary"
                     onClick={handleCreateProductionRecords}
-                    disabled={creatingProduction || selected118Rolls.length === 0 || !isValid118RollSelection(selected118Rolls.length)}>
+                    disabled={creatingProduction || selected118Rolls.length === 0 || !isValid118RollSelection(selected118Rolls.length)}
+                    className={`transition-all duration-200 font-semibold ${
+                      creatingProduction || selected118Rolls.length === 0 || !isValid118RollSelection(selected118Rolls.length)
+                        ? "bg-gray-200 text-gray-400 cursor-not-allowed border-gray-200 hover:bg-gray-200 hover:text-gray-400"
+                        : "bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700 shadow-lg hover:shadow-xl transform hover:scale-105"
+                    }`}>
                     {creatingProduction ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -2258,8 +2278,17 @@ export default function PlanningPage() {
                     // Enhanced Jumbo Hierarchy View
                     <div className="space-y-8">
                       {planResult.jumbo_roll_details && planResult.jumbo_roll_details.length > 0 ? (
-                        planResult.jumbo_roll_details.map((jumboDetail: JumboRollDetail) => (
-                          <div key={jumboDetail.jumbo_id} className="border rounded-lg p-6 bg-card">
+                        planResult.jumbo_roll_details.map((jumboDetail: JumboRollDetail) => {
+                          const isSelected = isJumboRollSelected(jumboDetail);
+                          return (
+                          <div 
+                            key={jumboDetail.jumbo_id} 
+                            className={`rounded-lg p-6 bg-card transition-all duration-200 ${
+                              isSelected 
+                                ? "border-2 border-green-500 shadow-lg shadow-green-500/20" 
+                                : "border border-gray-200"
+                            }`}
+                          >
                             {/* Jumbo Roll Header */}
                             <div className="flex justify-between items-center mb-6 pb-4 border-b">
                               <div className="flex items-center gap-4">
@@ -2431,7 +2460,8 @@ export default function PlanningPage() {
                               })()}
                             </div>
                           </div>
-                        ))
+                          );
+                        })
                       ) : (
                         <div className="text-center py-8 text-muted-foreground">
                           No jumbo roll hierarchy data available
