@@ -281,24 +281,6 @@ export default function PlanDetailsPage() {
     }
   };
 
-  const updatePlanStatus = async (status: string) => {
-    try {
-      const response = await fetch(PRODUCTION_ENDPOINTS.PLAN_STATUS(planId), createRequestOptions('PUT', { status }));
-
-      if (!response.ok) {
-        throw new Error('Failed to update plan status');
-      }
-
-      await loadPlanDetails(); // Refresh the plan data
-      toast.success("Plan status updated successfully!");
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update plan status';
-      setError(errorMessage);
-      toast.error(errorMessage);
-      console.error(err);
-    }
-  };
-
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
       case 'planned': return 'outline';
@@ -1365,8 +1347,8 @@ export default function PlanDetailsPage() {
             doc.text("Cutting Pattern:", 40, yPosition);
             yPosition += 8;
 
-            // Sort rolls by roll_sequence for proper visual order
-            const sortedRolls = rollsInNumber.sort((a:any, b:any) => (a.roll_sequence || 0) - (b.roll_sequence || 0));
+            // Sort rolls by width_inches for organized display (smallest to largest)
+            const sortedRolls = rollsInNumber.sort((a:any, b:any) => (a.width_inches || 0) - (b.width_inches || 0));
 
             // Draw visual cutting representation using production data
             const rectStartX = 40;
@@ -1571,24 +1553,7 @@ export default function PlanDetailsPage() {
                 </Button>
               </>
             )}
-            {plan.status === 'planned' && (
-              <Button
-                onClick={() => updatePlanStatus('in_progress')}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                <Play className="mr-2 h-4 w-4" />
-                Start Plan
-              </Button>
-            )}
-            {plan.status === 'in_progress' && (
-              <Button
-                onClick={() => updatePlanStatus('completed')}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                <CheckCircle className="mr-2 h-4 w-4" />
-                Complete Plan
-              </Button>
-            )}
+            
           </div>
         </div>
 

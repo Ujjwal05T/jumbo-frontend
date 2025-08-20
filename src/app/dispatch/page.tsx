@@ -76,7 +76,6 @@ import { API_BASE_URL } from "@/lib/api-config";
 type ItemType = "warehouse" | "pending";
 
 export default function DispatchPage() {
-  const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [warehouseItems, setWarehouseItems] = useState<any[]>([]);
@@ -94,13 +93,10 @@ export default function DispatchPage() {
   const [successModalOpen, setSuccessModalOpen] = useState(false);
   const [dispatchResult, setDispatchResult] = useState<any>(null);
 
-  // New state for client-order selection
+  // Client selection state
   const [clients, setClients] = useState<any[]>([]);
-  const [orders, setOrders] = useState<any[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>("none");
-  const [selectedOrderId, setSelectedOrderId] = useState<string>("none");
   const [clientsLoading, setClientsLoading] = useState(false);
-  const [ordersLoading, setOrdersLoading] = useState(false);
 
   // Load clients on page load
   const loadClients = async () => {
@@ -120,28 +116,6 @@ export default function DispatchPage() {
     }
   };
 
-  // Load orders for selected client
-  const loadOrders = async (clientId: string) => {
-    if (!clientId) {
-      setOrders([]);
-      return;
-    }
-    
-    try {
-      setOrdersLoading(true);
-      const response = await fetch(`${API_BASE_URL}/orders?client_id=${clientId}`, {
-        headers: { 'ngrok-skip-browser-warning': 'true' }
-      });
-      if (!response.ok) throw new Error('Failed to load orders');
-      const data = await response.json();
-      setOrders(data || []);
-    } catch (err) {
-      console.error('Error loading orders:', err);
-      toast.error('Failed to load orders');
-    } finally {
-      setOrdersLoading(false);
-    }
-  };
 
   // Load warehouse items with optional filtering
   const loadData = async () => {
@@ -160,7 +134,6 @@ export default function DispatchPage() {
       // Build query parameters for filtering
       const params = new URLSearchParams();
       if (selectedClientId && selectedClientId !== "none") params.append('client_id', selectedClientId);
-      if (selectedOrderId && selectedOrderId !== "none") params.append('order_id', selectedOrderId);
       
       const queryString = params.toString();
       const url = `${API_BASE_URL}/dispatch/warehouse-items?${queryString}`;
@@ -190,32 +163,12 @@ export default function DispatchPage() {
     loadData(); // Load warehouse items based on initial state (will be empty since no client selected)
   }, []);
 
-  // Load orders when client changes
-  useEffect(() => {
-    if (selectedClientId && selectedClientId !== "none") {
-      loadOrders(selectedClientId);
-      setSelectedOrderId("none"); // Reset order selection when client changes
-    } else {
-      setOrders([]);
-      setSelectedOrderId("none");
-    }
-  }, [selectedClientId]);
-
-  // Reload warehouse items when client or order filter changes
+  // Reload warehouse items when client filter changes
   useEffect(() => {
     loadData();
-  }, [selectedClientId, selectedOrderId]);
+  }, [selectedClientId]);
 
-  const filteredItems = warehouseItems.filter((item: any) => {
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      item.qr_code?.toLowerCase().includes(searchLower) ||
-      item.barcode_id?.toLowerCase().includes(searchLower) ||
-      item.paper_spec?.toLowerCase().includes(searchLower) ||
-      item.location?.toLowerCase().includes(searchLower) ||
-      item.created_by?.toLowerCase().includes(searchLower)
-    );
-  });
+  const filteredItems = warehouseItems;
 
   const handleCompleteItems = (itemIds: string[]) => {
     // Get selected items data for dispatch form
@@ -227,9 +180,8 @@ export default function DispatchPage() {
     setDispatchFormOpen(true);
   };
 
-  // Get selected client and order info for dispatch form
+  // Get selected client info for dispatch form
   const selectedClient = selectedClientId && selectedClientId !== "none" ? clients.find(c => c.id === selectedClientId) : null;
-  const selectedOrder = selectedOrderId && selectedOrderId !== "none" ? orders.find(o => o.id === selectedOrderId) : null;
 
   const handleDispatchConfirm = async (formData: any) => {
     try {
@@ -377,46 +329,65 @@ export default function DispatchPage() {
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-              <Truck className="w-8 h-8 text-primary" />
-              Dispatch Management
-            </h1>
-            <p className="text-muted-foreground">
-              Manage order items ready for dispatch and track delivery status
-            </p>
-          </div>
+          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+            <Truck className="w-8 h-8 text-primary" />
+            Dispatch Management
+          </h1>
           <Button
             onClick={() => window.location.href = '/dispatch/history'}
             variant="outline"
           >
             <History className="w-4 h-4 mr-2" />
-            View Dispatch History
+            View History
           </Button>
         </div>
 
-        {/* Barcode Scanner */}
+        {/* Client Selection & Barcode Scanner */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Scan className="w-5 h-5" />
-              Barcode Scanner
-            </CardTitle>
-            <CardDescription>
-              Scan barcode to select items for dispatch. Selected client filter applies.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-4 items-end">
-              <div className="flex-1 space-y-2">
-                <label className="text-sm font-medium">Scan or Enter Barcode</label>
+          <CardContent className="pt-3">
+            <div className="grid grid-cols-1 sm:flex sm:flex-row sm:justify-between gap-4">
+              {/* Client Selection */}
+              <div className="space-y-2 max-w-xs sm:w-full">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <User className="w-4 h-4" />
+                  Client
+                </label>
+                <Select 
+                  value={selectedClientId} 
+                  onValueChange={(value) => {
+                    setSelectedClientId(value);
+                    setSelectedItems([]);
+                  }}
+                  disabled={clientsLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={clientsLoading ? "Loading..." : "Select client"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Select Client</SelectItem>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.company_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Barcode Scanner */}
+              <div className="md:col-span-2 space-y-2 sm:h-20  max-w-xl sm:w-full">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <Scan className="w-4 h-4" />
+                  Scan Barcode
+                </label>
                 <div className="flex gap-2">
                   <Input
                     value={barcodeInput}
                     onChange={(e) => setBarcodeInput(e.target.value)}
-                    placeholder="Scan barcode or enter manually (e.g., CR_00001)"
+                    placeholder="Scan or enter barcode (e.g., CR_00001)"
                     onKeyDown={(e) => e.key === 'Enter' && handleBarcodeSubmit()}
-                    className="font-mono"
+                    className="font-mono py-1"
+                    disabled={selectedClientId === "none"}
                   />
                   <Button 
                     onClick={handleBarcodeSubmit}
@@ -430,126 +401,25 @@ export default function DispatchPage() {
                   </Button>
                 </div>
                 {selectedClientId === "none" && (
-                  <p className="text-sm text-orange-600">
-                    Please select a client first to enable barcode scanning
-                  </p>
+                  <p className="text-xs text-orange-600">Select a client first</p>
                 )}
               </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">{selectedItems.length}</div>
-                <div className="text-xs text-muted-foreground">Selected</div>
-              </div>
-              {selectedItems.length > 0 && (
-                <Button 
-                  variant="outline" 
-                  onClick={clearSelectedItems}
-                  size="sm"
-                >
-                  <X className="w-4 h-4 mr-1" />
-                  Clear
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
 
-        {/* Client and Order Selection */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="w-5 h-5" />
-              Filter by Client & Order
-            </CardTitle>
-            <CardDescription>
-              Select a client and order to view specific warehouse items ready for dispatch
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Client Selection */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Client</label>
-                <Select 
-                  value={selectedClientId} 
-                  onValueChange={(value) => {
-                    setSelectedClientId(value);
-                    setSelectedItems([]); // Clear selected items when filter changes
-                  }}
-                  disabled={clientsLoading}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={clientsLoading ? "Loading clients..." : "Select client"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Select Client</SelectItem>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.company_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Order Selection */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Order</label>
-                <Select 
-                  value={selectedOrderId} 
-                  onValueChange={(value) => {
-                    setSelectedOrderId(value);
-                    setSelectedItems([]); // Clear selected items when filter changes
-                  }}
-                  disabled={ordersLoading || !selectedClientId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={
-                      !selectedClientId ? "Select client first" :
-                      ordersLoading ? "Loading orders..." : 
-                      "Select order (optional)"
-                    } />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Select Order</SelectItem>
-                    {orders.map((order) => (
-                      <SelectItem key={order.id} value={order.id}>
-                        Order #{order.frontend_id || order.id.slice(0, 8)} - {order.status}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Filter Status */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Current Filter</label>
-                <div className="p-2 bg-muted rounded-md text-sm">
-                  {selectedClientId === "none" && (
-                    <span className="text-muted-foreground">Please select a client to view warehouse items</span>
-                  )}
-                  {selectedClientId !== "none" && selectedOrderId === "none" && (
-                    <div className="flex items-center gap-1">
-                      <Badge variant="secondary">
-                        Client: {clients.find(c => c.id === selectedClientId)?.company_name}
-                      </Badge>
-                      <span className="text-muted-foreground ml-2">All orders for this client</span>
-                    </div>
-                  )}
-                  {selectedClientId !== "none" && selectedOrderId !== "none" && (
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-1">
-                        <Badge variant="secondary">
-                          Client: {clients.find(c => c.id === selectedClientId)?.company_name}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Badge variant="outline">
-                          Order: #{orders.find(o => o.id === selectedOrderId)?.frontend_id}
-                        </Badge>
-                      </div>
-                    </div>
-                  )}
+              {/* Actions */}
+              <div className="flex items-center gap-2">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-600">{selectedItems.length}</div>
+                  <div className="text-xs text-muted-foreground">Selected</div>
                 </div>
+                {selectedItems.length > 0 && (
+                  <Button 
+                    variant="outline" 
+                    onClick={clearSelectedItems}
+                    size="sm"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                )}
               </div>
             </div>
           </CardContent>
@@ -559,55 +429,54 @@ export default function DispatchPage() {
         <div className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Items</CardTitle>
+              <CardTitle className="text-sm font-medium">Available Items</CardTitle>
               <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{totalItems}</div>
+              <div className="text-2xl font-bold">{warehouseItemsCount}</div>
               <p className="text-xs text-muted-foreground">
-                Total items in system
+                Ready for dispatch
               </p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Ready for Dispatch
-              </CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Selected Items</CardTitle>
+              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-blue-600">
-                {warehouseItemsCount}
+                {selectedItems.length}
               </div>
-              <p className="text-xs text-muted-foreground">Cut rolls ready</p>
+              <p className="text-xs text-muted-foreground">Items to dispatch</p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending Orders</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Total Weight</CardTitle>
+              <Package className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">
+                {warehouseItems
+                  .filter(item => selectedItems.includes(item.inventory_id))
+                  .reduce((sum, item) => sum + (item.weight_kg || 0), 0)
+                  .toFixed(1)}kg
+              </div>
+              <p className="text-xs text-muted-foreground">Selected weight</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Heavy Rolls</CardTitle>
+              <AlertCircle className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-orange-600">
                 {warehouseItems.filter(item => item.weight_kg > 10).length}
               </div>
               <p className="text-xs text-muted-foreground">
-                Heavy rolls ({'>'}10kg)
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Filtered Items</CardTitle>
-              <Search className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                {filteredItems.length}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Matching search
+                {'>'}10kg rolls
               </p>
             </CardContent>
           </Card>
@@ -623,29 +492,16 @@ export default function DispatchPage() {
                   Manage order items ready for dispatch and delivery
                 </CardDescription>
               </div>
-              <div className="flex items-center gap-4">
-                {selectedItems.length > 0 && (
-                  <Button 
-                    onClick={handleBulkDispatch}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    <Truck className="mr-2 h-4 w-4" />
-                    Dispatch {selectedItems.length} Items
-                  </Button>
-                )}
-                <div className="w-64">
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      type="search"
-                      placeholder="Search orders..."
-                      className="pl-8"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
+              {selectedItems.length > 0 && (
+                <Button 
+                  onClick={handleBulkDispatch}
+                  className="bg-green-600 hover:bg-green-700 text-white shadow-lg"
+                  size="lg"
+                >
+                  <Truck className="mr-2 h-5 w-5" />
+                  Dispatch {selectedItems.length} Items
+                </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent>
@@ -796,11 +652,6 @@ export default function DispatchPage() {
                           <div className="text-center py-4">
                             <div className="text-muted-foreground">
                               <p className="font-medium">No cut rolls ready for dispatch</p>
-                              <p className="text-sm">
-                                {selectedOrderId !== "none" 
-                                  ? "No items found for the selected client and order" 
-                                  : "No items found for the selected client"}
-                              </p>
                             </div>
                           </div>
                         )}
@@ -830,7 +681,7 @@ export default function DispatchPage() {
         onConfirmDispatch={handleDispatchConfirm}
         loading={dispatchLoading}
         preSelectedClient={selectedClient}
-        preSelectedOrder={selectedOrder}
+        preSelectedOrder={null}
       />
 
       {/* Success Modal */}

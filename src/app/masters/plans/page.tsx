@@ -146,24 +146,6 @@ export default function PlansPage() {
     return users.find(user => user.id === userId) || null;
   };
 
-  const updatePlanStatus = async (planId: string, status: string) => {
-    try {
-      const response = await fetch(PRODUCTION_ENDPOINTS.PLAN_STATUS(planId), createRequestOptions('PUT', { status }));
-
-      if (!response.ok) {
-        throw new Error('Failed to update plan status');
-      }
-
-      await loadPlans(); // Refresh the list
-      toast.success("Plan status updated successfully!");
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update plan status';
-      setError(errorMessage);
-      toast.error(errorMessage);
-      console.error(err);
-    }
-  };
-
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
       case 'planned': return 'outline';
@@ -509,26 +491,7 @@ export default function PlansPage() {
                               <Eye className="h-3 w-3 mr-1" />
                               View Details
                             </Button>
-                            {plan.status === 'planned' && (
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                onClick={() => updatePlanStatus(plan.id, 'in_progress')}
-                              >
-                                <Play className="h-3 w-3 mr-1" />
-                                Start
-                              </Button>
-                            )}
-                            {plan.status === 'in_progress' && (
-                              <Button
-                                size="sm"
-                                variant="default"
-                                onClick={() => updatePlanStatus(plan.id, 'completed')}
-                              >
-                                <CheckCircle className="h-3 w-3 mr-1" />
-                                Complete
-                              </Button>
-                            )}
+                            
                           </div>
                         </TableCell>
                       </TableRow>

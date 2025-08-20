@@ -25,7 +25,6 @@ import {
   ArrowRight,
   Factory,
   Scissors,
-  AlertTriangle,
   Activity,
   BarChart3,
   Zap
@@ -85,20 +84,11 @@ interface RecentActivity {
   icon: string;
 }
 
-interface DashboardAlert {
-  id: string;
-  type: "info" | "warning" | "error";
-  title: string;
-  message: string;
-  action: string;
-  link: string;
-}
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [activities, setActivities] = useState<RecentActivity[]>([]);
-  const [alerts, setAlerts] = useState<DashboardAlert[]>([]);
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const router = useRouter();
 
@@ -122,12 +112,6 @@ export default function DashboardPage() {
         setActivities(activitiesData.activities);
       }
       
-      // Fetch alerts
-      const alertsResponse = await fetch(DASHBOARD_ENDPOINTS.ALERTS, createRequestOptions('GET'));
-      if (alertsResponse.ok) {
-        const alertsData = await alertsResponse.json();
-        setAlerts(alertsData.alerts);
-      }
       
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -274,18 +258,6 @@ export default function DashboardPage() {
     }
   };
 
-  const getAlertBadge = (type: string) => {
-    switch (type) {
-      case "error":
-        return <Badge variant="destructive">Critical</Badge>;
-      case "warning":
-        return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">Warning</Badge>;
-      case "info":
-        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Info</Badge>;
-      default:
-        return <Badge variant="secondary">{type}</Badge>;
-    }
-  };
 
   const getColorClasses = (color: string) => {
     switch (color) {
@@ -331,41 +303,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Alerts Section */}
-        {alerts.length > 0 && (
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-yellow-500" />
-              System Alerts
-            </h2>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {alerts.map((alert) => (
-                <Card key={alert.id} className={`border-l-4 ${
-                  alert.type === 'error' ? 'border-l-red-500' : 
-                  alert.type === 'warning' ? 'border-l-yellow-500' : 
-                  'border-l-blue-500'
-                }`}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-base">{alert.title}</CardTitle>
-                      {getAlertBadge(alert.type)}
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground mb-3">{alert.message}</p>
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={() => router.push(alert.link)}
-                    >
-                      {alert.action}
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Stats Cards */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

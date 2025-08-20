@@ -391,7 +391,9 @@ export default function OrderMasterPage() {
                                   onClick={() => router.push(`/masters/orders/${order.id}`)}
                                 >
                                   <Eye className="mr-2 h-4 w-4" />
+                                  <div className="mr-2"> 
                                   View Details
+                                  </div>
                                 </DropdownMenuItem>
                                 {order.status === 'created' && (
                                   <>
@@ -409,35 +411,6 @@ export default function OrderMasterPage() {
                                       Delete Order
                                     </DropdownMenuItem>
                                   </>
-                                )}
-                                <DropdownMenuSeparator />
-                                <DropdownMenuLabel>Update Status</DropdownMenuLabel>
-                                {order.status !== 'created' && (
-                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'created')}>
-                                    <Clock className="mr-2 h-4 w-4" />
-                                    Set as Created
-                                  </DropdownMenuItem>
-                                )}
-                                {order.status !== 'in_process' && (
-                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'in_process')}>
-                                    <Truck className="mr-2 h-4 w-4" />
-                                    Mark as In Process
-                                  </DropdownMenuItem>
-                                )}
-                                {order.status !== 'completed' && (
-                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'completed')}>
-                                    <CheckCircle className="mr-2 h-4 w-4" />
-                                    Mark as Completed
-                                  </DropdownMenuItem>
-                                )}
-                                {order.status !== 'cancelled' && (
-                                  <DropdownMenuItem 
-                                    className="text-red-600"
-                                    onClick={() => handleStatusChange(order.id, 'cancelled')}
-                                  >
-                                    <XCircle className="mr-2 h-4 w-4" />
-                                    Cancel Order
-                                  </DropdownMenuItem>
                                 )}
                               </DropdownMenuContent>
                             </DropdownMenu>

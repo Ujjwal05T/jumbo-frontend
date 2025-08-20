@@ -15,7 +15,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { 
   Loader2, 
   AlertCircle, 
@@ -104,20 +103,6 @@ export default function OrderDetailsPage() {
       console.error(err);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleStatusChange = async (newStatus: Order['status']) => {
-    if (!order) return;
-    
-    try {
-      await updateOrderStatus(order.id, newStatus);
-      await loadOrderDetails(); // Refresh the order data
-      toast.success("Order status updated successfully!");
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update order status';
-      toast.error(errorMessage);
-      console.error(err);
     }
   };
 
@@ -284,36 +269,7 @@ export default function OrderDetailsPage() {
               <Download className="mr-2 h-4 w-4" />
               PDF without Rates
             </Button>
-            {order.status !== 'completed' && order.status !== 'cancelled' && (
-              <>
-                {order.status === 'created' && (
-                  <Button
-                    onClick={() => handleStatusChange('in_process')}
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    <Truck className="mr-2 h-4 w-4" />
-                    Start Processing
-                  </Button>
-                )}
-                {order.status === 'in_process' && (
-                  <Button
-                    onClick={() => handleStatusChange('completed')}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    Mark Complete
-                  </Button>
-                )}
-                <Button
-                  variant="outline"
-                  onClick={() => handleStatusChange('cancelled')}
-                  className="text-red-600 border-red-600 hover:bg-red-50"
-                >
-                  <XCircle className="mr-2 h-4 w-4" />
-                  Cancel Order
-                </Button>
-              </>
-            )}
+            
           </div>
         </div>
 
