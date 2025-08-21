@@ -4,6 +4,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import jsPDF from "jspdf";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { MASTER_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
@@ -20,12 +21,6 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
-} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -38,16 +33,13 @@ import { Label } from "@/components/ui/label";
 import { 
   Clock, 
   Search, 
-  MoreHorizontal, 
-  CheckCircle, 
-  XCircle, 
-  Eye,
   AlertTriangle,
   Calendar,
   DollarSign,
   Package,
   Settings,
-  Target
+  Target,
+  FileDown
 } from "lucide-react";
 
 interface PendingOrderItem {
@@ -206,30 +198,6 @@ export default function PendingOrderItemsPage() {
     displayItems.reduce((sum, item) => sum + getDaysWaiting(item.created_at), 0) / displayItems.length
   ) : 0;
 
-  // Action handlers
-  const handleUpdateStatus = async (itemId: string, newStatus: string) => {
-    try {
-      const response = await fetch(`${MASTER_ENDPOINTS.PENDING_ORDERS}/${itemId}`, createRequestOptions('PUT', { status: newStatus }));
-
-      if (response.ok) {
-        // Refresh the data
-        const updatedItems = pendingItems.map(item => 
-          item.id === itemId ? { ...item, status: newStatus as "pending" | "in_production" | "resolved" | "cancelled" } : item
-        );
-        setPendingItems(updatedItems);
-      }
-    } catch (error) {
-      console.error('Failed to update status:', error);
-    }
-  };
-
-  const handleMoveToProduction = (itemId: string) => {
-    handleUpdateStatus(itemId, 'in_production');
-  };
-
-  const handleCancelItem = (itemId: string) => {
-    handleUpdateStatus(itemId, 'cancelled');
-  };
 
   // Roll suggestions functions
   const handleGetSuggestions = () => {
@@ -269,6 +237,81 @@ export default function PendingOrderItemsPage() {
     }
   };
 
+  const handlePrintPDF = () => {
+    if (!suggestionResult) return;
+
+    const pdf = new jsPDF();
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const margin = 20;
+    let yPosition = 30;
+
+    pdf.setFontSize(20);
+    pdf.text('Roll Suggestions Report', margin, yPosition);
+    
+    yPosition += 15;
+    pdf.setFontSize(12);
+    pdf.text(`Target Width: ${suggestionResult.target_width}" (119" - ${suggestionResult.wastage}" wastage)`, margin, yPosition);
+    
+    yPosition += 10;
+    pdf.text(`Generated on: ${new Date().toLocaleDateString()}`, margin, yPosition);
+    
+    yPosition += 20;
+    pdf.setFontSize(16);
+    pdf.text('Summary Statistics', margin, yPosition);
+    
+    yPosition += 15;
+    pdf.setFontSize(12);
+    pdf.text(`Target Width: ${suggestionResult.target_width}"`, margin, yPosition);
+    yPosition += 8;
+    pdf.text(`Unique Widths: ${suggestionResult.summary.unique_widths}`, margin, yPosition);
+    yPosition += 8;
+    pdf.text(`Suggested Rolls: ${suggestionResult.summary.suggested_rolls}`, margin, yPosition);
+    
+    yPosition += 20;
+    pdf.setFontSize(16);
+    pdf.text('Roll Completion Suggestions', margin, yPosition);
+    yPosition += 10;
+
+    suggestionResult.roll_suggestions.forEach((suggestion, index) => {
+      if (yPosition > 250) {
+        pdf.addPage();
+        yPosition = 30;
+      }
+      
+      yPosition += 15;
+      pdf.setFontSize(14);
+      pdf.text(`${index + 1}. ${suggestion.paper_specs.shade} ${suggestion.paper_specs.gsm}GSM Paper (BF: ${suggestion.paper_specs.bf})`, margin, yPosition);
+      
+      yPosition += 10;
+      pdf.setFontSize(11);
+      pdf.text(suggestion.description, margin, yPosition);
+      
+      yPosition += 10;
+      pdf.text(`Available: ${suggestion.existing_width}" | Required: ${suggestion.needed_width}"`, margin, yPosition);
+      
+      const barWidth = pageWidth - (2 * margin);
+      const barHeight = 12;
+      const barY = yPosition + 5;
+      
+      const availablePercentage = (suggestion.existing_width / suggestionResult.target_width);
+      const requiredPercentage = (suggestion.needed_width / suggestionResult.target_width);
+      
+      pdf.setFillColor(34, 197, 94);
+      pdf.rect(margin, barY, barWidth * availablePercentage, barHeight, 'F');
+      
+      pdf.setFillColor(251, 146, 60);
+      pdf.rect(margin + (barWidth * availablePercentage), barY, barWidth * requiredPercentage, barHeight, 'F');
+      
+      pdf.setDrawColor(0);
+      pdf.rect(margin, barY, barWidth, barHeight);
+      
+      yPosition += 25;
+    });
+
+    pdf.save(`roll-suggestions-${suggestionResult.target_width}inch-${new Date().toISOString().split('T')[0]}.pdf`);
+    toast.success('PDF downloaded successfully');
+  };
+
 
   return (
     <DashboardLayout>
@@ -294,6 +337,16 @@ export default function PendingOrderItemsPage() {
               <Target className="w-4 h-4" />
               {suggestionsLoading ? 'Loading...' : 'Get Suggestions'}
             </Button>
+            {suggestionResult && (
+              <Button 
+                variant="outline" 
+                className="gap-2"
+                onClick={handlePrintPDF}
+              >
+                <FileDown className="w-4 h-4" />
+                Print PDF
+              </Button>
+            )}
           </div>
         </div>
 
@@ -543,7 +596,6 @@ export default function PendingOrderItemsPage() {
                     <TableHead>Status</TableHead>
                     <TableHead>Reason</TableHead>
                     <TableHead>Wait Time</TableHead>
-                    <TableHead className="w-[70px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -583,39 +635,6 @@ export default function PendingOrderItemsPage() {
                         <Badge className={daysWaiting >= 5 ? "bg-red-100 text-red-800" : daysWaiting >= 3 ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-800"}>
                           {daysWaiting} days
                         </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
-                              <Eye className="mr-2 h-4 w-4" />
-                              View Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              className="text-green-600"
-                              onClick={() => handleMoveToProduction(item.id)}
-                            >
-                              <CheckCircle className="mr-2 h-4 w-4" />
-                              Move to Production
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Package className="mr-2 h-4 w-4" />
-                              Update Status
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              className="text-red-600"
-                              onClick={() => handleCancelItem(item.id)}
-                            >
-                              <XCircle className="mr-2 h-4 w-4" />
-                              Cancel Item
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                     );

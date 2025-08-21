@@ -339,296 +339,9 @@ export default function PlanDetailsPage() {
     return canvas;
   };
 
-  // Print Function
-  const printPlanDetails = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast.error('Unable to open print window. Please check your browser settings.');
-      return;
-    }
-
-    const printContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Plan Details - ${plan?.name || 'Unnamed Plan'}</title>
-          <style>
-            body { 
-              font-family: Arial, sans-serif; 
-              margin: 20px; 
-              font-size: 14px; 
-              line-height: 1.4;
-            }
-            .header { 
-              text-align: center; 
-              margin-bottom: 30px; 
-              border-bottom: 2px solid #333;
-              padding-bottom: 15px;
-            }
-            .header h1 { 
-              margin: 0; 
-              font-size: 24px; 
-              color: #333; 
-            }
-            .header p { 
-              margin: 5px 0; 
-              color: #666; 
-            }
-            .section { 
-              margin-bottom: 25px; 
-            }
-            .section h2 { 
-              font-size: 18px; 
-              color: #333; 
-              border-bottom: 1px solid #ccc;
-              padding-bottom: 5px;
-            }
-            .info-grid { 
-              display: grid; 
-              grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
-              gap: 15px; 
-              margin-bottom: 20px; 
-            }
-            .info-item { 
-              padding: 10px; 
-              background: #f8f9fa; 
-              border-radius: 5px;
-            }
-            .info-item label { 
-              font-weight: bold; 
-              color: #555; 
-              font-size: 12px;
-              text-transform: uppercase;
-            }
-            .info-item value { 
-              display: block; 
-              font-size: 16px; 
-              color: #333; 
-              margin-top: 3px;
-            }
-            .stats-grid {
-              display: grid;
-              grid-template-columns: repeat(4, 1fr);
-              gap: 15px;
-              margin: 20px 0;
-            }
-            .stat-card {
-              text-align: center;
-              padding: 15px;
-              background: #f8f9fa;
-              border-radius: 5px;
-              border: 1px solid #e9ecef;
-            }
-            .stat-value {
-              font-size: 24px;
-              font-weight: bold;
-              color: #333;
-            }
-            .stat-label {
-              font-size: 12px;
-              color: #666;
-              margin-top: 5px;
-            }
-            table { 
-              width: 100%; 
-              border-collapse: collapse; 
-              margin: 15px 0;
-            }
-            th, td { 
-              border: 1px solid #ddd; 
-              padding: 8px; 
-              text-align: left; 
-            }
-            th { 
-              background-color: #f8f9fa; 
-              font-weight: bold;
-            }
-            .footer {
-              margin-top: 30px;
-              text-align: center;
-              font-size: 12px;
-              color: #666;
-              border-top: 1px solid #ccc;
-              padding-top: 15px;
-            }
-            @media print {
-              body { margin: 0; }
-              .header, .section { page-break-inside: avoid; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>${plan?.name || 'Plan Details'}</h1>
-            <p>Production Planning Report</p>
-            <p>Generated on: ${new Date().toLocaleString()}</p>
-          </div>
-
-          <div class="section">
-            <h2>Plan Information</h2>
-            <div class="info-grid">
-              <div class="info-item">
-                <label>Status</label>
-                <value>${plan?.status.replace('_', ' ') || 'Unknown'}</value>
-              </div>
-              <div class="info-item">
-                <label>Expected Waste</label>
-                <value>${plan?.expected_waste_percentage || 0}%</value>
-              </div>
-              ${plan?.actual_waste_percentage ? `
-              <div class="info-item">
-                <label>Actual Waste</label>
-                <value>${plan.actual_waste_percentage}%</value>
-              </div>` : ''}
-              <div class="info-item">
-                <label>Created</label>
-                <value>${plan?.created_at ? new Date(plan.created_at).toLocaleString() : 'Unknown'}</value>
-              </div>
-              <div class="info-item">
-                <label>Created By</label>
-                <value>${(() => {
-                  const user = getUserById(plan?.created_by_id || '');
-                  return user?.name || plan?.created_by?.name || 'Unknown';
-                })()}</value>
-              </div>
-            </div>
-          </div>
-
-          ${productionSummary ? `
-          <div class="section">
-            <h2>Production Summary</h2>
-            <div class="stats-grid">
-              <div class="stat-card">
-                <div class="stat-value">${productionSummary.production_summary.total_cut_rolls}</div>
-                <div class="stat-label">Total Rolls</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-value">${productionSummary.production_summary.total_weight_kg}kg</div>
-                <div class="stat-label">Total Weight</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-value">${productionSummary.production_summary.average_weight_per_roll.toFixed(1)}kg</div>
-                <div class="stat-label">Avg Weight per Roll</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-value">${productionSummary.production_summary.paper_specifications.length}</div>
-                <div class="stat-label">Paper Types</div>
-              </div>
-            </div>
-
-            <h3>Status Breakdown</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>Status</th>
-                  <th>Count</th>
-                  <th>Weight (kg)</th>
-                  <th>Widths</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${Object.entries(productionSummary.production_summary.status_breakdown)
-                  .map(([status, data]) => `
-                    <tr>
-                      <td>${status.replace('_', ' ')}</td>
-                      <td>${data.count}</td>
-                      <td>${data.total_weight.toFixed(1)}</td>
-                      <td>${[...new Set(data.widths)].join('", ')}"</td>
-                    </tr>
-                  `).join('')}
-              </tbody>
-            </table>
-
-            ${filteredCutRolls.length > 0 ? `
-            <h3>Cut Rolls Details (${filteredCutRolls.length} items grouped by jumbo rolls)</h3>
-            ${Object.entries(groupCutRollsByJumboWithSequential(filteredCutRolls))
-              .sort(([aId, aGroup], [bId, bGroup]) => {
-                const aDisplayId = aGroup.displayId;
-                const bDisplayId = bGroup.displayId;
-                
-                if (aDisplayId === 'Ungrouped Items') return 1;
-                if (bDisplayId === 'Ungrouped Items') return -1;
-                
-                const aNum = parseInt(aDisplayId.replace('JR-', '')) || 0;
-                const bNum = parseInt(bDisplayId.replace('JR-', '')) || 0;
-                
-                return aNum - bNum;
-              })
-              .map(([originalJumboId, jumboGroup]) => {
-              const { displayId: jumboDisplayName, rolls: jumboRolls } = jumboGroup;
-              
-              return `
-              <div style="margin-bottom: 25px; page-break-inside: avoid;">
-                <h4 style="color: #333; margin-bottom: 10px; padding: 8px; background: #f0f0f0; border-radius: 4px;">
-                  ${jumboDisplayName} (${jumboRolls.length} cut rolls - ${jumboRolls.reduce((sum, roll) => sum + roll.weight_kg, 0).toFixed(1)} kg)
-                </h4>
-                <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">
-                  <thead>
-                    <tr style="background: #f8f9fa;">
-                      <th style="border: 1px solid #ddd; padding: 6px; text-align: left;">S.No</th>
-                      <th style="border: 1px solid #ddd; padding: 6px; text-align: left;">Barcode</th>
-                      <th style="border: 1px solid #ddd; padding: 6px; text-align: left;">Width</th>
-                      <th style="border: 1px solid #ddd; padding: 6px; text-align: left;">Weight</th>
-                      <th style="border: 1px solid #ddd; padding: 6px; text-align: left;">Paper Specs</th>
-                      <th style="border: 1px solid #ddd; padding: 6px; text-align: left;">Status</th>
-                      <th style="border: 1px solid #ddd; padding: 6px; text-align: left;">Location</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${jumboRolls
-                      .sort((a, b) => {
-                        const aRollNum = a.individual_roll_number || 999;
-                        const bRollNum = b.individual_roll_number || 999;
-                        if (aRollNum !== bRollNum) return aRollNum - bRollNum;
-                        
-                        if (a.width_inches !== b.width_inches) {
-                          return a.width_inches - b.width_inches;
-                        }
-                        
-                        const aCode = a.barcode_id || a.qr_code;
-                        const bCode = b.barcode_id || b.qr_code;
-                        return aCode.localeCompare(bCode);
-                      })
-                      .map((item, index) => `
-                      <tr>
-                        <td style="border: 1px solid #ddd; padding: 6px;">${index + 1}</td>
-                        <td style="border: 1px solid #ddd; padding: 6px; font-family: monospace; font-size: 11px;">${item.barcode_id || item.qr_code}</td>
-                        <td style="border: 1px solid #ddd; padding: 6px;">${item.width_inches}"</td>
-                        <td style="border: 1px solid #ddd; padding: 6px;">${item.weight_kg}kg</td>
-                        <td style="border: 1px solid #ddd; padding: 6px;">${item.paper_specs ? `${item.paper_specs.gsm}gsm, BF:${item.paper_specs.bf}, ${item.paper_specs.shade}` : 'N/A'}</td>
-                        <td style="border: 1px solid #ddd; padding: 6px;">${item.status.replace('_', ' ')}</td>
-                        <td style="border: 1px solid #ddd; padding: 6px;">${item.location}</td>
-                      </tr>
-                    `).join('')}
-                  </tbody>
-                </table>
-              </div>`;
-            }).join('')}` : ''}
-          </div>` : ''}
-
-          <div class="footer">
-            <p>This document was generated from the Production Planning System</p>
-            <p>Plan ID: ${planId}</p>
-          </div>
-        </body>
-      </html>
-    `;
-
-    printWindow.document.write(printContent);
-    printWindow.document.close();
-    
-    // Wait for content to load before printing
-    printWindow.addEventListener('load', () => {
-      printWindow.print();
-      printWindow.close();
-    });
-
-    toast.success('Print preview opened');
-  };
-
   // PDF Export Functions
   const exportBarcodesToPDF = () => {
-    try {
+      try {
       if (!productionSummary || filteredCutRolls.length === 0) {
         toast.error('No cut rolls available for export');
         return;
@@ -1169,90 +882,34 @@ export default function PlanDetailsPage() {
         }
       };
 
-      // Title
-      doc.setFontSize(20);
-      doc.setTextColor(40, 40, 40);
-      doc.text("Production Planning Report", 20, yPosition);
-      yPosition += 15;
 
       // Plan Information
       doc.setFontSize(14);
       doc.text(`Plan: ${plan.name || 'Unnamed Plan'}`, 20, yPosition);
       yPosition += 8;
 
-      doc.setFontSize(10);
-      doc.setTextColor(100, 100, 100);
-      doc.text(`Generated on: ${new Date().toLocaleString()}`, 20, yPosition);
-      yPosition += 5;
-      doc.text(`Status: ${plan.status}`, 20, yPosition);
-      yPosition += 5;
-      doc.text(`Expected Waste: ${plan.expected_waste_percentage}%`, 20, yPosition);
-      yPosition += 5;
-      if (plan.actual_waste_percentage) {
-        doc.text(`Actual Waste: ${plan.actual_waste_percentage}%`, 20, yPosition);
-        yPosition += 5;
-      }
-      doc.text(`Created: ${new Date(plan.created_at).toLocaleString()}`, 20, yPosition);
-      yPosition += 5;
-      const user = getUserById(plan.created_by_id);
-      doc.text(`Created By: ${user?.name || plan.created_by?.name || 'Unknown'} (@${user?.username || plan.created_by?.username || 'unknown'})`, 20, yPosition);
-      yPosition += 15;
 
-      // Legend
+      // Cut Rolls Status Summary
       checkPageBreak(30);
-      doc.setFontSize(12);
+      doc.setFontSize(14);
       doc.setTextColor(40, 40, 40);
-      doc.text("Color Legend:", 20, yPosition);
-      yPosition += 8;
-
-      const legendItems = [
-        { color: [251, 191, 36], text: "Available" },
-        { color: [59, 130, 246], text: "Cutting" },
-        { color: [34, 197, 94], text: "Allocated" },
-        { color: [99, 102, 241], text: "Other Status" },
-        { color: [239, 68, 68], text: "Waste Material" }
-      ];
-
-      legendItems.forEach((item, index) => {
-        const legendX = 20 + (index * 52); // Reduced spacing to fit 5 items
-        
-        // Draw color box
-        doc.setFillColor(item.color[0], item.color[1], item.color[2]);
-        doc.rect(legendX, yPosition - 3, 8, 6, 'F');
-        doc.setDrawColor(0, 0, 0);
-        doc.setLineWidth(0.2);
-        doc.rect(legendX, yPosition - 3, 8, 6, 'S');
-        
-        // Add text
-        doc.setFontSize(8);
-        doc.setTextColor(60, 60, 60);
-        doc.text(item.text, legendX + 10, yPosition);
-      });
-
-      yPosition += 15;
-
-      // Production Summary
-      checkPageBreak(30);
-      doc.setFontSize(16);
-      doc.setTextColor(40, 40, 40);
-      doc.text("Production Summary", 20, yPosition);
+      doc.text('Cut Rolls Summary:', 20, yPosition);
       yPosition += 15;
 
       doc.setFontSize(12);
       doc.setTextColor(60, 60, 60);
       doc.text(`Total Cut Rolls: ${productionSummary.production_summary.total_cut_rolls}`, 20, yPosition);
       yPosition += 8;
-      doc.text(`Total Weight: ${productionSummary.production_summary.total_weight_kg} kg`, 20, yPosition);
+      doc.text(`Total Weight: `, 20, yPosition);
       yPosition += 8;
-      doc.text(`Average Weight per Roll: ${productionSummary.production_summary.average_weight_per_roll.toFixed(1)} kg`, 20, yPosition);
-      yPosition += 15;
+      doc.text(`Expected Waste: ${plan.expected_waste_percentage}%`, 20, yPosition);
+      yPosition += 8;
 
-      // Combined Cutting Pattern with Jumbo Roll Numbers (Reconstructed from Production Data)
-      checkPageBreak(30);
-      doc.setFontSize(16);
-      doc.setTextColor(40, 40, 40);
-      doc.text("Cutting Pattern with Jumbo Roll Mapping", 20, yPosition);
-      yPosition += 15;
+      Object.entries(productionSummary.production_summary.status_breakdown).forEach(([status, data]) => {
+        doc.text(`${status}: ${data.count} rolls (${data.total_weight.toFixed(1)} kg)`, 20, yPosition);
+        yPosition += 6;
+      });
+      yPosition += 10;
 
       // Use production data directly - group by jumbo rolls first
       const jumboRollMapping = groupCutRollsByJumboWithSequential(productionSummary.detailed_items);
@@ -1276,8 +933,14 @@ export default function PlanDetailsPage() {
         yPosition += 15;
       } else {
         // Process each jumbo roll
-        sortedJumboMappingEntries.forEach(([originalJumboId, jumboGroup]) => {
+        sortedJumboMappingEntries.forEach(([originalJumboId, jumboGroup], index) => {
           const { displayId: jumboDisplayId, rolls: jumboRolls } = jumboGroup;
+          
+          // Add new page for each jumbo roll (except the first one)
+          if (index > -1) {
+            doc.addPage();
+            yPosition = 20;
+          }
           
           // Get paper specification from first roll (all rolls in jumbo have same specs)
           const paperSpecs = jumboRolls[0]?.paper_specs;
@@ -1366,14 +1029,10 @@ export default function PlanDetailsPage() {
               const sectionWidth = rectWidth * widthRatio;
 
               // Set color based on status (since we don't have source data)
-              if (roll.status === 'available') {
-                doc.setFillColor(251, 191, 36); // Golden for available (inventory-like)
-              } else if (roll.status === 'cutting') {
-                doc.setFillColor(59, 130, 246); // Blue for cutting
-              } else if (roll.status === 'allocated') {
-                doc.setFillColor(34, 197, 94); // Green for allocated
+              if (roll.status === 'cutting') {
+                doc.setFillColor(189, 189, 189); // Golden for available (inventory-like)
               } else {
-                doc.setFillColor(99, 102, 241); // Default purple
+                doc.setFillColor(115, 114, 114); // Default purple
               }
 
               // Draw rectangle for this cut
@@ -1386,7 +1045,7 @@ export default function PlanDetailsPage() {
 
               // Add width text inside the rectangle
               if (sectionWidth > 15) { // Only add text if section is wide enough
-                doc.setTextColor(255, 255, 255);
+                doc.setTextColor(0, 0, 0);
                 doc.setFontSize(7);
                 const textX = currentX + sectionWidth/2;
                 const textY = yPosition + rectHeight/2 + 1;
@@ -1437,20 +1096,7 @@ export default function PlanDetailsPage() {
         });
       }
 
-      // Cut Rolls Status Summary
-      checkPageBreak(30);
-      doc.setFontSize(16);
-      doc.setTextColor(40, 40, 40);
-      doc.text('Cut Rolls Status Summary', 20, yPosition);
-      yPosition += 15;
-
-      doc.setFontSize(12);
-      doc.setTextColor(60, 60, 60);
-      Object.entries(productionSummary.production_summary.status_breakdown).forEach(([status, data]) => {
-        doc.text(`${status}: ${data.count} rolls (${data.total_weight.toFixed(1)} kg)`, 20, yPosition);
-        yPosition += 6;
-      });
-
+      
       doc.save(`plan-details-${plan.name || 'plan'}-${new Date().toISOString().split('T')[0]}.pdf`);
       toast.success('Plan details exported to PDF successfully!');
     } catch (error) {

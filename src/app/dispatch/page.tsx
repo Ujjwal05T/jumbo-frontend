@@ -304,25 +304,9 @@ export default function DispatchPage() {
     );
   };
 
-  const getPriorityBadge = (priority: string) => {
-    switch (priority) {
-      case "urgent":
-        return <Badge variant="destructive">Urgent</Badge>;
-      case "high":
-        return (
-          <Badge className="bg-red-100 text-red-800 hover:bg-red-100">
-            High
-          </Badge>
-        );
-      case "normal":
-        return <Badge variant="outline">Normal</Badge>;
-      default:
-        return <Badge variant="outline">{priority}</Badge>;
-    }
-  };
+  
 
   const warehouseItemsCount = warehouseItems.length;
-  const totalItems = warehouseItemsCount;
 
   return (
     <DashboardLayout>
