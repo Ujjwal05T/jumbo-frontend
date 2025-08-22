@@ -26,6 +26,7 @@ export const MASTER_ENDPOINTS = {
   ORDERS: `${API_BASE_URL}/orders`,
   PENDING_ORDERS: `${API_BASE_URL}/pending-order-items`,
   PLANS: `${API_BASE_URL}/plans`,
+  PLAN_ORDER_ITEMS: (planId: string) => `${API_BASE_URL}/plans/${planId}/order-items`,
 };
 
 // Production endpoints - Updated for new flow

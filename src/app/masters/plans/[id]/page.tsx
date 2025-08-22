@@ -157,6 +157,18 @@ interface User {
   username: string;
 }
 
+interface PlanOrderItem {
+  id: string;
+  quantity_rolls: number;
+  width_inches: number;
+  paper_specs: {
+    gsm: number;
+    bf: number;
+    shade: string;
+  };
+  estimated_weight_kg: number;
+}
+
 export default function PlanDetailsPage() {
   const router = useRouter();
   const params = useParams();
@@ -164,9 +176,11 @@ export default function PlanDetailsPage() {
 
   const [plan, setPlan] = useState<Plan | null>(null);
   const [productionSummary, setProductionSummary] = useState<ProductionSummary | null>(null);
+  const [planOrderItems, setPlanOrderItems] = useState<PlanOrderItem[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingSummary, setLoadingSummary] = useState(false);
+  const [loadingOrderItems, setLoadingOrderItems] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedQRCode, setSelectedQRCode] = useState<string | null>(null);
   
@@ -182,6 +196,7 @@ export default function PlanDetailsPage() {
     if (planId) {
       loadPlanDetails();
       loadProductionSummary();
+      loadPlanOrderItems();
     }
   }, [planId]);
 
@@ -243,6 +258,30 @@ export default function PlanDetailsPage() {
     }
   };
 
+  const loadPlanOrderItems = async () => {
+    try {
+      setLoadingOrderItems(true);
+      
+      const response = await fetch(MASTER_ENDPOINTS.PLAN_ORDER_ITEMS(planId), createRequestOptions('GET'));
+      
+      if (!response.ok) {
+        console.warn('Failed to load plan order items:', response.status);
+        setPlanOrderItems([]);
+        return;
+      }
+      
+      const data = await response.json();
+      setPlanOrderItems(Array.isArray(data) ? data : []);
+      
+      console.log('Loaded plan order items:', data);
+    } catch (err) {
+      console.error('Error loading plan order items:', err);
+      setPlanOrderItems([]);
+    } finally {
+      setLoadingOrderItems(false);
+    }
+  };
+
   const loadUsers = async () => {
     try {
       const response = await fetch(MASTER_ENDPOINTS.USERS, createRequestOptions('GET'));
@@ -257,6 +296,13 @@ export default function PlanDetailsPage() {
 
   const getUserById = (userId: string): User | null => {
     return users.find(user => user.id === userId) || null;
+  };
+
+  // Calculate total input weight from plan order items
+  const getTotalInputWeight = (): number => {
+    return planOrderItems.reduce((total, item) => {
+      return total + (item.estimated_weight_kg * item.quantity_rolls);
+    }, 0);
   };
 
   const createSampleData = async () => {
@@ -887,7 +933,64 @@ export default function PlanDetailsPage() {
       doc.setFontSize(14);
       doc.text(`Plan: ${plan.name || 'Unnamed Plan'}`, 20, yPosition);
       yPosition += 8;
+      
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Status: ${plan.status}`, 20, yPosition);
+      yPosition += 5;
+      doc.text(`Expected Waste: ${plan.expected_waste_percentage}%`, 20, yPosition);
+      yPosition += 5;
+      doc.text(`Created: ${new Date(plan.created_at).toLocaleString()}`, 20, yPosition);
+      yPosition += 5;
+      const user = getUserById(plan.created_by_id);
+      doc.text(`Created By: ${user?.name || plan.created_by?.name || 'Unknown'}`, 20, yPosition);
+      yPosition += 15;
 
+      // Extract unique clients and paper specs from production data
+      const uniqueClients = [...new Set(productionSummary.detailed_items
+        .map(item => item.client_name)
+        .filter(client => client && client !== 'Unknown Client'))];
+      
+      const uniquePaperSpecs = [...new Set(productionSummary.detailed_items
+        .filter(item => item.paper_specs)
+        .map(item => `${item.paper_specs!.gsm}gsm, BF:${item.paper_specs!.bf}, ${item.paper_specs!.shade}`))];
+
+      // Clients Section
+      if (uniqueClients.length > 0) {
+        checkPageBreak(30);
+        doc.setFontSize(12);
+        doc.setTextColor(40, 40, 40);
+        doc.text('Clients:', 20, yPosition);
+        yPosition += 10;
+        
+        doc.setFontSize(10);
+        doc.setTextColor(60, 60, 60);
+        uniqueClients.forEach((client, index) => {
+          doc.text(`• ${client}`, 25, yPosition);
+          yPosition += 6;
+          if ((index + 1) % 15 === 0) checkPageBreak(20); // Check page break every 15 clients
+        });
+        yPosition += 8;
+      }
+
+      // Paper Specifications Section with Roll Counts
+      if (productionSummary.production_summary.paper_specifications.length > 0) {
+        checkPageBreak(30);
+        doc.setFontSize(12);
+        doc.setTextColor(40, 40, 40);
+        doc.text('Paper Specifications:', 20, yPosition);
+        yPosition += 10;
+        
+        doc.setFontSize(10);
+        doc.setTextColor(60, 60, 60);
+        productionSummary.production_summary.paper_specifications.forEach((spec, index) => {
+          const specText = `• ${spec.gsm}gsm, BF:${spec.bf}, ${spec.shade} - ${spec.roll_count} rolls`;
+          doc.text(specText, 25, yPosition);
+          yPosition += 6;
+          if ((index + 1) % 15 === 0) checkPageBreak(20); // Check page break every 15 specs
+        });
+        yPosition += 8;
+      }
 
       // Cut Rolls Status Summary
       checkPageBreak(30);
@@ -1280,7 +1383,7 @@ export default function PlanDetailsPage() {
         ) : productionSummary ? (
           <div className="space-y-6">
             {/* Production Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <Card>
                 <CardContent className="p-6">
                   <div className="flex items-center gap-2 mb-2">
@@ -1319,6 +1422,18 @@ export default function PlanDetailsPage() {
                   </div>
                   <p className="text-3xl font-bold">{productionSummary.production_summary.paper_specifications.length}</p>
                   <p className="text-xs text-muted-foreground mt-1">different specs</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Weight className="h-5 w-5 text-purple-500" />
+                    <span className="text-sm font-medium">Input Weight</span>
+                  </div>
+                  <p className="text-3xl font-bold">
+                    {loadingOrderItems ? '...' : getTotalInputWeight().toFixed(1)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">kg order items</p>
                 </CardContent>
               </Card>
             </div>

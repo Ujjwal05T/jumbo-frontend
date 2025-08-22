@@ -183,6 +183,7 @@ export default function PlanningPage() {
   );
   const [selectedCutRolls, setSelectedCutRolls] = useState<number[]>([]); // Individual cut piece indices
   const [selected118Rolls, setSelected118Rolls] = useState<string[]>([]); // 118" roll composite keys (spec-rollNumber)
+  const [selectedJumboRolls, setSelectedJumboRolls] = useState<string[]>([]); // Individual jumbo roll composite keys
   const [productionRecords, setProductionRecords] = useState<
     ProductionRecord[]
   >([]);
@@ -415,6 +416,10 @@ export default function PlanningPage() {
       
       setSelected118Rolls(Array.from(selectedRollKeysSet));
       setSelectedCutRolls(cutRollIndices);
+      
+      // Sync with individual jumbo checkbox state
+      const selectedJumboKeys = completeJumbos.map(jumbo => `jumbo-${jumbo.jumbo_id}`);
+      setSelectedJumboRolls(selectedJumboKeys);
     },
     [planResult, getRollKeyFromCutRoll]
   );
@@ -426,6 +431,36 @@ export default function PlanningPage() {
         : [...prev, orderId]
     );
   }, []);
+
+  // Handler for individual jumbo roll checkbox selection
+  const handleJumboRollSelect = useCallback((jumboDetail: JumboRollDetail) => {
+    if (!planResult?.cut_rolls_generated) return;
+
+    const jumboKey = `jumbo-${jumboDetail.jumbo_id}`;
+    
+    // Get all 118" roll keys for this jumbo
+    const jumboRolls = planResult.cut_rolls_generated.filter(roll => 
+      roll.jumbo_roll_id === jumboDetail.jumbo_id
+    );
+    const jumboRollKeys = jumboRolls.map(roll => getRollKeyFromCutRoll(roll)).filter(Boolean) as string[];
+    const jumboRollIndices = jumboRolls.map((_, index) => 
+      planResult.cut_rolls_generated.findIndex(roll => roll.jumbo_roll_id === jumboDetail.jumbo_id) + index
+    );
+
+    const isCurrentlySelected = selectedJumboRolls.includes(jumboKey);
+    
+    if (isCurrentlySelected) {
+      // Deselect this jumbo
+      setSelectedJumboRolls(prev => prev.filter(key => key !== jumboKey));
+      setSelected118Rolls(prev => prev.filter(key => !jumboRollKeys.includes(key)));
+      setSelectedCutRolls(prev => prev.filter(index => !jumboRollIndices.includes(index)));
+    } else {
+      // Select this jumbo
+      setSelectedJumboRolls(prev => [...prev, jumboKey]);
+      setSelected118Rolls(prev => [...new Set([...prev, ...jumboRollKeys])]);
+      setSelectedCutRolls(prev => [...new Set([...prev, ...jumboRollIndices])]);
+    }
+  }, [planResult, selectedJumboRolls, getRollKeyFromCutRoll]);
 
  
 
@@ -1921,6 +1956,7 @@ export default function PlanningPage() {
                           onClick={() => {
                             setSelected118Rolls([]);
                             setSelectedCutRolls([]);
+                            setSelectedJumboRolls([]);
                           }}>
                           ✗ Clear Selection
                         </Button>
@@ -2292,6 +2328,11 @@ export default function PlanningPage() {
                             {/* Jumbo Roll Header */}
                             <div className="flex justify-between items-center mb-6 pb-4 border-b">
                               <div className="flex items-center gap-4">
+                                <Checkbox
+                                  checked={selectedJumboRolls.includes(`jumbo-${jumboDetail.jumbo_id}`)}
+                                  onCheckedChange={() => handleJumboRollSelect(jumboDetail)}
+                                  className="w-5 h-5"
+                                />
                                 <div className="w-12 h-12 bg-blue-600 text-white rounded-lg flex items-center justify-center text-lg font-bold">
                                   📦
                                 </div>
