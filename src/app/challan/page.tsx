@@ -79,7 +79,8 @@ import { generatePackingSlipPDF, convertDispatchToPackingSlip } from "@/lib/pack
 import { 
   generateCashChallanPDF, 
   generateBillInvoicePDF, 
-  convertOrdersToChallanData 
+  convertOrdersToChallanData,
+  convertDispatchToChallanData 
 } from "@/lib/challan-pdf";
 
 interface DispatchRecord {
@@ -210,17 +211,17 @@ export default function ChallanPage() {
 
   // Cash tab state
   const [cashSelectedClient, setCashSelectedClient] = useState("all");
-  const [cashOrders, setCashOrders] = useState<any[]>([]);
-  const [cashOrdersLoading, setCashOrdersLoading] = useState(false);
+  const [cashDispatches, setCashDispatches] = useState<DispatchRecord[]>([]);
+  const [cashDispatchesLoading, setCashDispatchesLoading] = useState(false);
 
   // Bill tab state
   const [billSelectedClient, setBillSelectedClient] = useState("all");
-  const [billOrders, setBillOrders] = useState<any[]>([]);
-  const [billOrdersLoading, setBillOrdersLoading] = useState(false);
+  const [billDispatches, setBillDispatches] = useState<DispatchRecord[]>([]);
+  const [billDispatchesLoading, setBillDispatchesLoading] = useState(false);
   
   // Bill amount modal state
   const [billAmountModalOpen, setBillAmountModalOpen] = useState(false);
-  const [selectedOrderForBill, setSelectedOrderForBill] = useState<any>(null);
+  const [selectedDispatchForBill, setSelectedDispatchForBill] = useState<DispatchRecord | null>(null);
   const [billInvoiceAmount, setBillInvoiceAmount] = useState<string>("");
 
   const loadDispatches = async () => {
@@ -378,44 +379,50 @@ export default function ChallanPage() {
     }
   };
 
-  const loadOrdersForClient = async (clientId: string, tabType: 'cash' | 'bill') => {
+  const loadDispatchesForClient = async (clientId: string, tabType: 'cash' | 'bill') => {
     if (clientId === 'all') {
       if (tabType === 'cash') {
-        setCashOrders([]);
+        setCashDispatches([]);
       } else {
-        setBillOrders([]);
+        setBillDispatches([]);
       }
       return;
     }
 
     try {
       if (tabType === 'cash') {
-        setCashOrdersLoading(true);
+        setCashDispatchesLoading(true);
       } else {
-        setBillOrdersLoading(true);
+        setBillDispatchesLoading(true);
       }
 
-      const response = await fetch(`${API_BASE_URL}/orders?client_id=${clientId}`, {
+      // Load dispatches for the selected client with payment type filter
+      const params = new URLSearchParams();
+      params.append('client_id', clientId);
+      params.append('payment_type', tabType);
+      params.append('skip', '0');
+      params.append('limit', '100'); // Load more records for client-specific view
+
+      const response = await fetch(`${API_BASE_URL}/dispatch/history?${params.toString()}`, {
         headers: { 'ngrok-skip-browser-warning': 'true' }
       });
 
-      if (!response.ok) throw new Error('Failed to load orders');
+      if (!response.ok) throw new Error('Failed to load dispatches');
       const data = await response.json();
-      console.log(data)
       
       if (tabType === 'cash') {
-        setCashOrders(data || []);
+        setCashDispatches(data.dispatches || []);
       } else {
-        setBillOrders(data || []);
+        setBillDispatches(data.dispatches || []);
       }
     } catch (err) {
-      console.error(`Error loading orders for ${tabType}:`, err);
-      toast.error(`Failed to load orders for client`);
+      console.error(`Error loading dispatches for ${tabType}:`, err);
+      toast.error(`Failed to load dispatches for client`);
     } finally {
       if (tabType === 'cash') {
-        setCashOrdersLoading(false);
+        setCashDispatchesLoading(false);
       } else {
-        setBillOrdersLoading(false);
+        setBillDispatchesLoading(false);
       }
     }
   };
@@ -441,13 +448,13 @@ export default function ChallanPage() {
 
   useEffect(() => {
     if (cashSelectedClient !== 'all') {
-      loadOrdersForClient(cashSelectedClient, 'cash');
+      loadDispatchesForClient(cashSelectedClient, 'cash');
     }
   }, [cashSelectedClient]);
 
   useEffect(() => {
     if (billSelectedClient !== 'all') {
-      loadOrdersForClient(billSelectedClient, 'bill');
+      loadDispatchesForClient(billSelectedClient, 'bill');
     }
   }, [billSelectedClient]);
 
@@ -498,29 +505,19 @@ export default function ChallanPage() {
   };
 
   // PDF generation handlers
-  const handleGenerateCashChallan = async (order: any) => {
+  const handleGenerateCashChallan = async (dispatch: DispatchRecord) => {
     try {
+      // Fetch full dispatch details with items
+      const response = await fetch(`${API_BASE_URL}/dispatch/${dispatch.id}/details`, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      });
 
-      // Fetch dispatch information for the order
-      let dispatchInfo = null;
-      try {
-        const response = await fetch(
-          `${API_BASE_URL}/reports/order/${order.id}/challan-with-dispatch`,
-          {
-            headers: { 'ngrok-skip-browser-warning': 'true' }
-          }
-        );
-        if (response.ok) {
-          const data = await response.json();
-          dispatchInfo = data.data.dispatch;
-          console.log("Fetched dispatch info:", dispatchInfo);
-        }
-      } catch (err) {
-        console.warn("Could not fetch dispatch info:", err);
-      }
-
-      // Convert to challan data format with dispatch info
-      const challanData = convertOrdersToChallanData([order], 'cash', dispatchInfo);
+      if (!response.ok) throw new Error('Failed to fetch dispatch details');
+      
+      const dispatchDetails = await response.json();
+      
+      // Convert dispatch to challan data format
+      const challanData = convertDispatchToChallanData(dispatchDetails, 'cash');
       
       // Generate PDF
       generateCashChallanPDF(challanData);
@@ -534,8 +531,8 @@ export default function ChallanPage() {
 
   const handleGenerateBillInvoice = async () => {
     try {
-      if (!selectedOrderForBill) {
-        toast.error("No order selected");
+      if (!selectedDispatchForBill) {
+        toast.error("No dispatch selected");
         return;
       }
 
@@ -544,58 +541,18 @@ export default function ChallanPage() {
         return;
       }
 
+      // Fetch full dispatch details with items
+      const response = await fetch(`${API_BASE_URL}/dispatch/${selectedDispatchForBill.id}/details`, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch dispatch details');
+      
+      const dispatchDetails = await response.json();
       const targetFinalAmount = parseFloat(billInvoiceAmount);
       
-      // Calculate taxable amount from final amount (remove 12% GST: 6% CGST + 6% SGST)
-      const gstRate = 0.12; // 12% total GST
-      const targetTaxableAmount = targetFinalAmount / (1 + gstRate);
-      
-      // Adjust the single order's amounts
-      const orderItemsOriginalAmount = selectedOrderForBill.order_items.reduce((sum: number, item: any) => sum + item.amount, 0);
-      
-      const adjustedOrderItems = selectedOrderForBill.order_items.map((item: any) => {
-        const itemRatio = item.amount / orderItemsOriginalAmount;
-        const adjustedTaxableAmount = targetTaxableAmount * itemRatio;
-        
-        // Calculate new rate based on adjusted amount and original quantity
-        const originalQuantity = item.quantity_kg || (item.quantity_rolls * 50); // Use kg if available, else estimate from rolls
-        const adjustedRate = originalQuantity > 0 ? adjustedTaxableAmount / originalQuantity : 0;
-        
-        return {
-          ...item,
-          amount: adjustedTaxableAmount,
-          rate: adjustedRate,
-          // Keep original quantities unchanged
-          quantity_rolls: item.quantity_rolls,
-          quantity_kg: item.quantity_kg
-        };
-      });
-      
-      const adjustedOrder = {
-        ...selectedOrderForBill,
-        order_items: adjustedOrderItems
-      };
-
-      // Fetch dispatch information for the order
-      let dispatchInfo = null;
-      try {
-        const response = await fetch(
-          `${API_BASE_URL}/reports/order/${selectedOrderForBill.id}/challan-with-dispatch`,
-          {
-            headers: { 'ngrok-skip-browser-warning': 'true' }
-          }
-        );
-        if (response.ok) {
-          const data = await response.json();
-          dispatchInfo = data.data.dispatch;
-          console.log("Fetched dispatch info:", dispatchInfo);
-        }
-      } catch (err) {
-        console.warn("Could not fetch dispatch info:", err);
-      }
-
-      // Convert to challan data format with dispatch info using adjusted amounts
-      const challanData = convertOrdersToChallanData([adjustedOrder], 'bill', dispatchInfo);
+      // Convert dispatch to challan data format with custom amount
+      const challanData = convertDispatchToChallanData(dispatchDetails, 'bill', targetFinalAmount);
       
       // Generate PDF
       generateBillInvoicePDF(challanData);
@@ -604,7 +561,7 @@ export default function ChallanPage() {
       
       // Close modal and reset state
       setBillAmountModalOpen(false);
-      setSelectedOrderForBill(null);
+      setSelectedDispatchForBill(null);
       setBillInvoiceAmount("");
     } catch (error) {
       console.error("Error generating tax invoice PDF:", error);
@@ -612,8 +569,8 @@ export default function ChallanPage() {
     }
   };
 
-  const handleOpenBillAmountModal = (order: any) => {
-    setSelectedOrderForBill(order);
+  const handleOpenBillAmountModal = (dispatch: DispatchRecord) => {
+    setSelectedDispatchForBill(dispatch);
     setBillInvoiceAmount("");
     setBillAmountModalOpen(true);
   };
@@ -1023,96 +980,103 @@ export default function ChallanPage() {
         </CardContent>
       </Card>
 
-      {/* Orders Table */}
+      {/* Dispatches Table */}
       {cashSelectedClient !== 'all' && (
         <Card>
           <CardHeader>
             <div className="flex justify-between items-center">
               <div>
-                <CardTitle>Orders for Selected Client</CardTitle>
+                <CardTitle>Cash Dispatches for Selected Client</CardTitle>
                 <CardDescription>
-                  Generate cash challan PDF for individual orders
+                  Generate cash challan PDF for individual dispatches
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            {cashOrdersLoading ? (
+            {cashDispatchesLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="mr-2 h-6 w-6 animate-spin" />
-                Loading orders...
+                Loading dispatches...
               </div>
-            ) : cashOrders.length > 0 ? (
+            ) : cashDispatches.length > 0 ? (
               <div className="rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Order ID</TableHead>
+                      <TableHead>Dispatch #</TableHead>
+                      <TableHead>Date</TableHead>
                       <TableHead>Client</TableHead>
-                      <TableHead>Papers</TableHead>
-                      <TableHead>Widths</TableHead>
+                      <TableHead>Vehicle & Driver</TableHead>
                       <TableHead>Items</TableHead>
-                      <TableHead>Total Amount</TableHead>
-                      <TableHead>Payment</TableHead>
+                      <TableHead>Weight</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {cashOrders.map((order) => (
-                      <TableRow key={order.id}>
-                        <TableCell className="font-mono text-sm font-medium">
-                          {order.frontend_id || 'Generating...'}
-                        </TableCell>
+                    {cashDispatches.map((dispatch) => (
+                      <TableRow key={dispatch.id}>
                         <TableCell>
-                          <div className="font-medium max-w-32 truncate" title={order.client?.company_name || 'N/A'}>
-                            {order.client?.company_name || 'N/A'}
-                          </div>
-                          <div className="text-xs text-muted-foreground max-w-32 truncate" title={order.client?.contact_person || 'N/A'}>
-                            {order.client?.contact_person || 'N/A'}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-medium text-xs max-w-32 truncate" title={getOrderPapers(order)}>
-                            {getOrderPapers(order)}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {order.order_items?.length || 0} different papers
+                          <div className="space-y-1">
+                            <div className="font-medium">{dispatch.dispatch_number}</div>
+                            {dispatch.reference_number && (
+                              <div className="text-xs text-muted-foreground">
+                                Ref: {dispatch.reference_number}
+                              </div>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="text-sm max-w-24 truncate" title={getOrderWidths(order)}>
-                            {getOrderWidths(order)}
+                          <div className="space-y-1">
+                            <div className="font-medium">
+                              {new Date(dispatch.dispatch_date).toLocaleDateString()}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {new Date(dispatch.dispatch_date).toLocaleTimeString()}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="font-medium">{dispatch.client.company_name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {dispatch.client.contact_person}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="font-medium flex items-center gap-1">
+                              <Truck className="w-3 h-3" />
+                              {dispatch.vehicle_number}
+                            </div>
+                            <div className="text-xs text-muted-foreground flex items-center gap-1">
+                              <User className="w-3 h-3" />
+                              {dispatch.driver_name}
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="text-center">
-                            <div className="font-medium">{order.order_items?.length || 0}</div>
+                            <div className="font-medium">{dispatch.total_items}</div>
                             <div className="text-xs text-muted-foreground">items</div>
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="font-medium">₹{getTotalAmount(order).toFixed(2)}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {getTotalQuantity(order)} rolls total
+                          <div className="text-center">
+                            <div className="font-medium">{dispatch.total_weight_kg.toFixed(1)}kg</div>
+                            <div className="text-xs text-muted-foreground">total</div>
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="text-sm capitalize">{order.payment_type}</div>
-                          {order.delivery_date && (
-                            <div className="text-xs text-muted-foreground">
-                              Due: {new Date(order.delivery_date).toLocaleDateString()}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{order.status}</Badge>
+                          {getStatusBadge(dispatch.status)}
                         </TableCell>
                         <TableCell>
                           <Button
                             size="sm"
                             className="bg-green-600 hover:bg-green-700"
-                            onClick={() => handleGenerateCashChallan(order)}
+                            onClick={() => handleGenerateCashChallan(dispatch)}
                           >
                             <FileText className="w-4 h-4 mr-1" />
                             Generate
@@ -1127,10 +1091,10 @@ export default function ChallanPage() {
               <div className="text-center py-8">
                 <Package className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
                 <h3 className="text-lg font-medium text-muted-foreground mb-2">
-                  No Orders Found
+                  No Cash Dispatches Found
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  This client doesn't have any orders yet.
+                  This client doesn't have any cash dispatches yet.
                 </p>
               </div>
             )}
@@ -1149,7 +1113,7 @@ export default function ChallanPage() {
                 Select Client
               </h3>
               <p className="text-sm text-muted-foreground">
-                Choose a client to view their orders and generate cash challans
+                Choose a client to view their cash dispatches and generate cash challans
               </p>
             </div>
           </CardContent>
@@ -1194,97 +1158,104 @@ export default function ChallanPage() {
         </CardContent>
       </Card>
 
-      {/* Orders Table */}
+      {/* Dispatches Table */}
       {billSelectedClient !== 'all' && (
         <Card>
           <CardHeader>
             <div className="flex justify-between items-center">
               <div>
-                <CardTitle>Orders for Selected Client</CardTitle>
+                <CardTitle>Bill Dispatches for Selected Client</CardTitle>
                 <CardDescription>
-                  Generate bill/invoice PDF for individual orders
+                  Generate bill/invoice PDF for individual dispatches
                 </CardDescription>
               </div>
               
             </div>
           </CardHeader>
           <CardContent>
-            {billOrdersLoading ? (
+            {billDispatchesLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="mr-2 h-6 w-6 animate-spin" />
-                Loading orders...
+                Loading dispatches...
               </div>
-            ) : billOrders.length > 0 ? (
+            ) : billDispatches.length > 0 ? (
               <div className="rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Order ID</TableHead>
+                      <TableHead>Dispatch #</TableHead>
+                      <TableHead>Date</TableHead>
                       <TableHead>Client</TableHead>
-                      <TableHead>Papers</TableHead>
-                      <TableHead>Widths</TableHead>
+                      <TableHead>Vehicle & Driver</TableHead>
                       <TableHead>Items</TableHead>
-                      <TableHead>Total Amount</TableHead>
-                      <TableHead>Payment</TableHead>
+                      <TableHead>Weight</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {billOrders.map((order) => (
-                      <TableRow key={order.id}>
-                        <TableCell className="font-mono text-sm font-medium">
-                          {order.frontend_id || 'Generating...'}
-                        </TableCell>
+                    {billDispatches.map((dispatch) => (
+                      <TableRow key={dispatch.id}>
                         <TableCell>
-                          <div className="font-medium max-w-32 truncate" title={order.client?.company_name || 'N/A'}>
-                            {order.client?.company_name || 'N/A'}
-                          </div>
-                          <div className="text-xs text-muted-foreground max-w-32 truncate" title={order.client?.contact_person || 'N/A'}>
-                            {order.client?.contact_person || 'N/A'}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-medium text-xs max-w-32 truncate" title={getOrderPapers(order)}>
-                            {getOrderPapers(order)}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {order.order_items?.length || 0} different papers
+                          <div className="space-y-1">
+                            <div className="font-medium">{dispatch.dispatch_number}</div>
+                            {dispatch.reference_number && (
+                              <div className="text-xs text-muted-foreground">
+                                Ref: {dispatch.reference_number}
+                              </div>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="text-sm max-w-24 truncate" title={getOrderWidths(order)}>
-                            {getOrderWidths(order)}
+                          <div className="space-y-1">
+                            <div className="font-medium">
+                              {new Date(dispatch.dispatch_date).toLocaleDateString()}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {new Date(dispatch.dispatch_date).toLocaleTimeString()}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="font-medium">{dispatch.client.company_name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {dispatch.client.contact_person}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="font-medium flex items-center gap-1">
+                              <Truck className="w-3 h-3" />
+                              {dispatch.vehicle_number}
+                            </div>
+                            <div className="text-xs text-muted-foreground flex items-center gap-1">
+                              <User className="w-3 h-3" />
+                              {dispatch.driver_name}
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="text-center">
-                            <div className="font-medium">{order.order_items?.length || 0}</div>
+                            <div className="font-medium">{dispatch.total_items}</div>
                             <div className="text-xs text-muted-foreground">items</div>
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="font-medium">₹{getTotalAmount(order).toFixed(2)}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {getTotalQuantity(order)} rolls total
+                          <div className="text-center">
+                            <div className="font-medium">{dispatch.total_weight_kg.toFixed(1)}kg</div>
+                            <div className="text-xs text-muted-foreground">total</div>
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="text-sm capitalize">{order.payment_type}</div>
-                          {order.delivery_date && (
-                            <div className="text-xs text-muted-foreground">
-                              Due: {new Date(order.delivery_date).toLocaleDateString()}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{order.status}</Badge>
+                          {getStatusBadge(dispatch.status)}
                         </TableCell>
                         <TableCell>
                           <Button
                             size="sm"
                             className="bg-blue-600 hover:bg-blue-700"
-                            onClick={() => handleOpenBillAmountModal(order)}
+                            onClick={() => handleOpenBillAmountModal(dispatch)}
                           >
                             <FileText className="w-4 h-4 mr-1" />
                             Generate
@@ -1299,10 +1270,10 @@ export default function ChallanPage() {
               <div className="text-center py-8">
                 <Package className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
                 <h3 className="text-lg font-medium text-muted-foreground mb-2">
-                  No Orders Found
+                  No Bill Dispatches Found
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  This client doesn't have any orders yet.
+                  This client doesn't have any bill dispatches yet.
                 </p>
               </div>
             )}
@@ -1321,7 +1292,7 @@ export default function ChallanPage() {
                 Select Client
               </h3>
               <p className="text-sm text-muted-foreground">
-                Choose a client to view their orders and generate bills/invoices
+                Choose a client to view their bill dispatches and generate bills/invoices
               </p>
             </div>
           </CardContent>
@@ -1350,10 +1321,11 @@ export default function ChallanPage() {
                 step="0.01"
               />
             </div>
-            {selectedOrderForBill && (
+            {selectedDispatchForBill && (
               <div className="text-sm text-muted-foreground">
-                <div>Original Total: ₹{getTotalAmount(selectedOrderForBill).toFixed(2)}</div>
-                <div>Order: {selectedOrderForBill.frontend_id || 'Generating...'}</div>
+                <div>Dispatch: {selectedDispatchForBill.dispatch_number}</div>
+                <div>Client: {selectedDispatchForBill.client.company_name}</div>
+                <div>Items: {selectedDispatchForBill.total_items} | Weight: {selectedDispatchForBill.total_weight_kg.toFixed(1)}kg</div>
               </div>
             )}
             <div className="flex justify-end space-x-2">

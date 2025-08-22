@@ -203,12 +203,9 @@ export const generateCashChallanPDF = (data: ChallanData): void => {
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
         // Description - Compact
-        const paperName = item.paper.name.substring(0, 10);
+        const paperName = item.paper.name;
         doc.setFont('helvetica', 'bold');
         doc.text(paperName, currentX + 1, yPosition + 3);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`G${item.paper.gsm}`, currentX + 1, yPosition + 7);
-        currentX += colWidths[1];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
         // UOM
@@ -638,4 +635,125 @@ export const convertOrdersToChallanData = (orders: any[], type: 'cash' | 'bill',
       reference_number: dispatchInfo.reference_number
     } : undefined
   };
+};
+
+export function convertDispatchToChallanData(
+  dispatchDetails: any, 
+  type: 'cash' | 'bill', 
+  customAmount?: number
+): ChallanData {
+  const items = dispatchDetails.items || [];
+
+  // Group dispatch items by paper specifications for proper display
+  const paperGroups = items.reduce((groups: any, item: any) => {
+    if (!item.paper_spec) return groups;
+    
+    // Parse paper_specs string format: "180gsm, 18.00bf, Golden"
+    const specsString = item.paper_spec.toString();
+    const parts = specsString.split(', ');
+
+    if (parts.length < 3) return groups;
+    
+    const gsm = parseInt(parts[0].replace('gsm', ''));
+    const bf = parseFloat(parts[1].replace('bf', ''));
+    const shade = parts[2];
+    
+    const key = `${gsm}_${bf}_${shade}`;
+    
+    if (!groups[key]) {
+      groups[key] = {
+        paper: {
+          name: `${gsm}GSM ${bf}BF ${shade}`,
+          gsm: gsm,
+          bf: bf,
+          shade: shade
+        },
+        items: [],
+        totalRolls: 0,
+        totalWeight: 0,
+        totalWidth: 0
+      };
+    }
+    
+    groups[key].items.push(item);
+    groups[key].totalRolls += 1;
+    groups[key].totalWeight += item.weight_kg || 0;
+    groups[key].totalWidth += item.width_inches || 0;
+    
+    return groups;
+  }, {});
+  
+  // Create order items from grouped paper specifications
+  const orderItems = Object.values(paperGroups).map((group: any) => {
+    const avgWidth = group.totalWidth / group.totalRolls;
+    const groupAmount = customAmount 
+      ? (customAmount / 1.12) * (group.totalWeight / dispatchDetails.total_weight_kg)
+      : group.totalWeight * 50;
+    
+    return {
+      id: `${dispatchDetails.id}_${group.paper.gsm}_${group.paper.bf}_${group.paper.shade}`,
+      paper: group.paper,
+      width_inches: avgWidth,
+      quantity_rolls: group.totalRolls,
+      rate: customAmount ? (groupAmount / group.totalWeight) : 50,
+      amount: groupAmount,
+      quantity_kg: group.totalWeight
+    };
+  });
+  
+  // Fallback for dispatches without proper item data
+  if (orderItems.length === 0) {
+    orderItems.push({
+      id: dispatchDetails.id,
+      paper: {
+        name: 'Paper Products',
+        gsm: 0,
+        bf: 0,
+        shade: 'Mixed'
+      },
+      width_inches: 0,
+      quantity_rolls: dispatchDetails.total_items,
+      rate: customAmount ? (customAmount / (1.12 * dispatchDetails.total_weight_kg)) : 50,
+      amount: customAmount ? (customAmount / 1.12) : (dispatchDetails.total_weight_kg * 50),
+      quantity_kg: dispatchDetails.total_weight_kg
+    });
+  }
+  
+  // Create order item with proper paper specifications
+  const orderItem: ChallanOrderItem = {
+    id: dispatchDetails.id,
+    frontend_id: dispatchDetails.dispatch_number,
+    order_items: orderItems,
+    client: {
+      company_name: dispatchDetails.client.company_name,
+      contact_person: dispatchDetails.client.contact_person,
+      address: dispatchDetails.client.address,
+      phone: dispatchDetails.client.mobile,
+      email: dispatchDetails.client.email,
+      gst_number: dispatchDetails.client.gst_number
+    },
+    payment_type: dispatchDetails.payment_type,
+    delivery_date: dispatchDetails.dispatch_date,
+    created_at: dispatchDetails.created_at
+  };
+
+  const challanData: ChallanData = {
+    type: type,
+    orders: [orderItem],
+    invoice_number: `INV-${dispatchDetails.dispatch_number}`,
+    invoice_date: new Date().toISOString().split('T')[0],
+    vehicle_number: dispatchDetails.vehicle_number,
+    transport_mode: 'By Road',
+    state: 'Gujarat',
+    vehicle_info: {
+      vehicle_number: dispatchDetails.vehicle_number,
+      driver_name: dispatchDetails.driver_name,
+      driver_mobile: dispatchDetails.driver_mobile,
+      dispatch_date: dispatchDetails.dispatch_date,
+      dispatch_number: dispatchDetails.dispatch_number,
+      reference_number: dispatchDetails.reference_number
+    }
+  };
+
+  return challanData;
 };

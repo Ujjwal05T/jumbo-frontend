@@ -339,12 +339,17 @@ export default function NewOrderPage() {
           const widthInches =
             parseFloat(updatedItem.width_inches as string) || 0;
           const rate = parseFloat(updatedItem.rate as string) || 0;
+          
+          // Get GSM from selected paper
+          const selectedPaper = papers.find(p => p.id === updatedItem.paper_id);
+          const gsm = selectedPaper?.gsm || 100; // Default to 100 GSM if not found
 
           if (field === "quantity_rolls" && value && widthInches) {
             const quantityRolls = parseInt(value, 10);
             updatedItem.quantity_kg = calculateQuantityKg(
               widthInches,
-              quantityRolls
+              quantityRolls,
+              gsm
             ).toString();
             if (rate) {
               updatedItem.amount = calculateAmount(
@@ -356,7 +361,8 @@ export default function NewOrderPage() {
             const quantityKg = parseFloat(value);
             updatedItem.quantity_rolls = calculateQuantityRolls(
               widthInches,
-              quantityKg
+              quantityKg,
+              gsm
             ).toString();
             if (rate) {
               updatedItem.amount = calculateAmount(quantityKg, rate).toFixed(2);
@@ -367,7 +373,27 @@ export default function NewOrderPage() {
             if (quantityRolls) {
               updatedItem.quantity_kg = calculateQuantityKg(
                 widthInches,
-                quantityRolls
+                quantityRolls,
+                gsm
+              ).toString();
+              if (rate) {
+                updatedItem.amount = calculateAmount(
+                  parseFloat(updatedItem.quantity_kg as string),
+                  rate
+                ).toFixed(2);
+              }
+            }
+          } else if (field === "paper_id" && value) {
+            // Recalculate weight when paper is changed (GSM changes)
+            const quantityRolls = parseInt(updatedItem.quantity_rolls as string, 10) || 0;
+            const newSelectedPaper = papers.find(p => p.id === value);
+            const newGsm = newSelectedPaper?.gsm || 100;
+            
+            if (quantityRolls && widthInches) {
+              updatedItem.quantity_kg = calculateQuantityKg(
+                widthInches,
+                quantityRolls,
+                newGsm
               ).toString();
               if (rate) {
                 updatedItem.amount = calculateAmount(

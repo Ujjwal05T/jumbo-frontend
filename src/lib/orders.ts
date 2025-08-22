@@ -70,14 +70,25 @@ export interface CreateOrderData {
   order_items: CreateOrderItemData[]; // Properly typed order items
 }
 
-// Helper functions for calculations
-export const calculateQuantityKg = (widthInches: number, quantityRolls: number): number => {
-  return widthInches * quantityRolls * 13;
+// Helper function to get weight multiplier based on GSM
+export const getWeightMultiplier = (gsm: number): number => {
+  if (gsm <= 70) return 10;
+  if (gsm <= 80) return 11;
+  if (gsm <= 100) return 12.7;
+  if (gsm <= 120) return 13;
+  return 13.3; // 140 gsm and above
 };
 
-export const calculateQuantityRolls = (widthInches: number, quantityKg: number): number => {
+// Helper functions for calculations using GSM-based weight multipliers
+export const calculateQuantityKg = (widthInches: number, quantityRolls: number, gsm: number): number => {
+  const weightMultiplier = getWeightMultiplier(gsm);
+  return widthInches * quantityRolls * weightMultiplier;
+};
+
+export const calculateQuantityRolls = (widthInches: number, quantityKg: number, gsm: number): number => {
   if (widthInches <= 0) return 0;
-  return Math.round(quantityKg / (widthInches * 13));
+  const weightMultiplier = getWeightMultiplier(gsm);
+  return Math.round(quantityKg / (widthInches * weightMultiplier));
 };
 
 export const calculateAmount = (quantityKg: number, rate: number): number => {

@@ -298,11 +298,51 @@ export default function PlanDetailsPage() {
     return users.find(user => user.id === userId) || null;
   };
 
-  // Calculate total input weight from plan order items
+  // Helper function to get weight multiplier based on GSM
+  const getWeightMultiplier = (gsm: number): number => {
+    if (gsm <= 70) return 10;
+    if (gsm <= 80) return 11;
+    if (gsm <= 100) return 12.7;
+    if (gsm <= 120) return 13;
+    return 13.3; // 140 gsm and above
+  };
+
+  // Calculate total input weight using GSM-based formula (same as PDF)
   const getTotalInputWeight = (): number => {
-    return planOrderItems.reduce((total, item) => {
-      return total + (item.estimated_weight_kg * item.quantity_rolls);
-    }, 0);
+    if (!productionSummary?.detailed_items) return 0;
+    
+    let totalWeight = 0;
+    
+    // Group by paper specifications and calculate weight
+    const specGroups = productionSummary.detailed_items.reduce((groups: any, item: any) => {
+      if (!item.paper_specs) return groups;
+      
+      const key = `${item.paper_specs.gsm}_${item.paper_specs.bf}_${item.paper_specs.shade}`;
+      if (!groups[key]) {
+        groups[key] = {
+          gsm: item.paper_specs.gsm,
+          widths: {}
+        };
+      }
+      
+      const width = item.width_inches;
+      if (!groups[key].widths[width]) {
+        groups[key].widths[width] = 0;
+      }
+      groups[key].widths[width] += 1;
+      
+      return groups;
+    }, {});
+    
+    // Calculate total weight using the same formula: weightMultiplier × width × quantity
+    Object.values(specGroups).forEach((group: any) => {
+      const weightMultiplier = getWeightMultiplier(group.gsm);
+      Object.entries(group.widths).forEach(([width, quantity]: [string, any]) => {
+        totalWeight += weightMultiplier * parseFloat(width) * quantity;
+      });
+    });
+    
+    return totalWeight;
   };
 
   const createSampleData = async () => {
@@ -973,7 +1013,16 @@ export default function PlanDetailsPage() {
         yPosition += 8;
       }
 
-      // Paper Specifications Section with Roll Counts
+      // Helper function to get weight multiplier based on GSM
+      const getWeightMultiplier = (gsm: number): number => {
+        if (gsm <= 70) return 10;
+        if (gsm <= 80) return 11;
+        if (gsm <= 100) return 12.7;
+        if (gsm <= 120) return 13;
+        return 13.3; // 140 gsm and above
+      };
+
+      // Paper Specifications Section with Roll Counts and Weights
       if (productionSummary.production_summary.paper_specifications.length > 0) {
         checkPageBreak(30);
         doc.setFontSize(12);
@@ -983,11 +1032,62 @@ export default function PlanDetailsPage() {
         
         doc.setFontSize(10);
         doc.setTextColor(60, 60, 60);
-        productionSummary.production_summary.paper_specifications.forEach((spec, index) => {
-          const specText = `• ${spec.gsm}gsm, BF:${spec.bf}, ${spec.shade} - ${spec.roll_count} rolls`;
+        
+        // Group specifications by paper type (GSM, BF, Shade) and calculate total weight
+        const specGroups = productionSummary.production_summary.paper_specifications.reduce((groups: any, spec: any) => {
+          const key = `${spec.gsm}gsm, BF:${spec.bf}, ${spec.shade}`;
+          if (!groups[key]) {
+            groups[key] = {
+              gsm: spec.gsm,
+              bf: spec.bf,
+              shade: spec.shade,
+              details: []
+            };
+          }
+          groups[key].details.push(spec);
+          return groups;
+        }, {});
+
+        Object.entries(specGroups).forEach(([specKey, specGroup]: [string, any], index) => {
+          const weightMultiplier = getWeightMultiplier(specGroup.gsm);
+          
+          // Calculate total weight for this specification
+          let totalWeight = 0;
+          let totalRolls = 0;
+          
+          // Get width and quantity details from detailed_items
+          const specItems = productionSummary.detailed_items.filter((item: any) => 
+            item.paper_specs && 
+            item.paper_specs.gsm === specGroup.gsm &&
+            item.paper_specs.bf === specGroup.bf &&
+            item.paper_specs.shade === specGroup.shade
+          );
+          
+          // Group by width to calculate weight properly
+          const widthGroups = specItems.reduce((widthMap: any, item: any) => {
+            const width = item.width_inches;
+            if (!widthMap[width]) {
+              widthMap[width] = 0;
+            }
+            widthMap[width] += 1; // Count rolls for this width
+            return widthMap;
+          }, {});
+          
+          // Calculate total weight: weightMultiplier × width × quantity for each width
+          Object.entries(widthGroups).forEach(([width, quantity]: [string, any]) => {
+            totalWeight += weightMultiplier * parseFloat(width) * quantity;
+            totalRolls += quantity;
+          });
+          
+          // Format width details for display
+          const widthDetails = Object.entries(widthGroups)
+            .map(([width, qty]) => `${width}"×${qty}`)
+            .join(', ');
+          
+          const specText = `• ${specKey} - ${totalRolls} rolls (${widthDetails}) - Weight: ${totalWeight.toFixed(1)}kg`;
           doc.text(specText, 25, yPosition);
           yPosition += 6;
-          if ((index + 1) % 15 === 0) checkPageBreak(20); // Check page break every 15 specs
+          if ((index + 1) % 12 === 0) checkPageBreak(20); // Check page break every 12 specs (reduced due to longer text)
         });
         yPosition += 8;
       }
@@ -1431,9 +1531,9 @@ export default function PlanDetailsPage() {
                     <span className="text-sm font-medium">Input Weight</span>
                   </div>
                   <p className="text-3xl font-bold">
-                    {loadingOrderItems ? '...' : getTotalInputWeight().toFixed(1)}
+                    {loadingSummary || !productionSummary ? '...' : getTotalInputWeight().toFixed(1)}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">kg order items</p>
+                  <p className="text-xs text-muted-foreground mt-1">kg calculated</p>
                 </CardContent>
               </Card>
             </div>

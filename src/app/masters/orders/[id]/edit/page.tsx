@@ -153,17 +153,37 @@ export default function EditOrderPage() {
     if (field === "paper_id") {
       const paper = papers.find((p) => p.id === value);
       if (paper) {
-        // Reset calculations when paper changes
-        updated[index].quantity_kg = 0;
-        updated[index].quantity_rolls = 0;
-        updated[index].amount = 0;
+        // Recalculate weight when paper changes (GSM changes) if we have rolls and width
+        const existingRolls = updated[index].quantity_rolls;
+        const existingWidth = updated[index].width_inches;
+        const existingRate = updated[index].rate;
+        
+        if (existingRolls > 0 && existingWidth > 0) {
+          updated[index].quantity_kg = calculateQuantityKg(
+            existingWidth,
+            existingRolls,
+            paper.gsm
+          );
+          if (existingRate > 0) {
+            updated[index].amount = calculateAmount(
+              updated[index].quantity_kg,
+              existingRate
+            );
+          }
+        } else {
+          // Reset calculations when paper changes and no existing data
+          updated[index].quantity_kg = 0;
+          updated[index].quantity_rolls = 0;
+          updated[index].amount = 0;
+        }
       }
     } else if (field === "quantity_rolls") {
       const paper = papers.find((p) => p.id === updated[index].paper_id);
       if (paper && updated[index].quantity_rolls > 0 && updated[index].width_inches > 0) {
         updated[index].quantity_kg = calculateQuantityKg(
           updated[index].width_inches,
-          updated[index].quantity_rolls
+          updated[index].quantity_rolls,
+          paper.gsm
         );
         updated[index].amount = calculateAmount(
           updated[index].quantity_kg,
@@ -175,7 +195,8 @@ export default function EditOrderPage() {
       if (paper && updated[index].quantity_kg > 0 && updated[index].width_inches > 0) {
         updated[index].quantity_rolls = calculateQuantityRolls(
           updated[index].width_inches,
-          updated[index].quantity_kg
+          updated[index].quantity_kg,
+          paper.gsm
         );
         updated[index].amount = calculateAmount(
           updated[index].quantity_kg,
@@ -187,7 +208,8 @@ export default function EditOrderPage() {
       if (paper && updated[index].quantity_kg > 0 && updated[index].width_inches > 0) {
         updated[index].quantity_rolls = calculateQuantityRolls(
           updated[index].width_inches,
-          updated[index].quantity_kg
+          updated[index].quantity_kg,
+          paper.gsm
         );
         updated[index].amount = calculateAmount(
           updated[index].quantity_kg,
