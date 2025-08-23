@@ -7,6 +7,7 @@ import { PRODUCTION_ENDPOINTS, STATUS_ENDPOINTS, DISPATCH_ENDPOINTS, createReque
 export interface ProductionStartRequest {
   plan_id: string;
   selected_cut_rolls: CutRollSelection[];
+  wastage_data?: WastageData[];
   user_id: string;
 }
 
@@ -20,6 +21,18 @@ export interface CutRollSelection {
   client_id?: string;
   individual_roll_number?: number;
   trim_left?: number;
+}
+
+export interface WastageData {
+  width_inches: number;
+  paper_id: string;
+  gsm: number;
+  bf: number;
+  shade: string;
+  individual_roll_number?: number;
+  source_plan_id: string;
+  source_jumbo_roll_id?: string;
+  notes?: string;
 }
 
 export interface ProductionStartResponse {
@@ -82,6 +95,7 @@ export async function startProduction(request: ProductionStartRequest): Promise<
     PRODUCTION_ENDPOINTS.START_PRODUCTION(request.plan_id),
     createRequestOptions('POST', {
       selected_cut_rolls: request.selected_cut_rolls,
+      wastage_data: request.wastage_data || [],
       user_id: request.user_id
     })
   );

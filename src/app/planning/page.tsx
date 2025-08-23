@@ -20,6 +20,12 @@ import {
   CutRoll,
   JumboRollDetail
 } from "@/lib/new-flow";
+import { 
+  calculateWastageFromCutRolls, 
+  formatWastageSummary, 
+  validateWastageData,
+  WastageCalculationResult 
+} from "@/lib/wastage-calculator";
 // Removed old production imports - now using direct API calls
 import { Button } from "@/components/ui/button";
 import {
@@ -184,6 +190,7 @@ export default function PlanningPage() {
   const [selectedCutRolls, setSelectedCutRolls] = useState<number[]>([]); // Individual cut piece indices
   const [selected118Rolls, setSelected118Rolls] = useState<string[]>([]); // 118" roll composite keys (spec-rollNumber)
   const [selectedJumboRolls, setSelectedJumboRolls] = useState<string[]>([]); // Individual jumbo roll composite keys
+  const [wastageCalculation, setWastageCalculation] = useState<WastageCalculationResult | null>(null);
   const [productionRecords, setProductionRecords] = useState<
     ProductionRecord[]
   >([]);
@@ -201,12 +208,25 @@ export default function PlanningPage() {
   const [productionStarted, setProductionStarted] = useState(false);
   const [wastage, setWastage] = useState(1); // Default 1 inch wastage
   const [displayMode, setDisplayMode] = useState<'traditional' | 'jumbo'>('jumbo'); // Display mode toggle
+  const [planId, setPlanId] = useState<string | null>(null); // Current plan ID for wastage tracking
 
   // Calculate planning width from wastage
   const planningWidth = useMemo(() => {
     const calculated = 119 - wastage;
     return Math.max(calculated, 50); // Ensure minimum width of 50 inches
   }, [wastage]);
+
+  // Calculate wastage whenever cut rolls selection changes
+  useEffect(() => {
+    if (planResult && selectedCutRolls.length > 0 && planId) {
+      const selectedCutRollsForWastage = selectedCutRolls.map(index => planResult.cut_rolls_generated[index]);
+      const calculation = calculateWastageFromCutRolls(selectedCutRollsForWastage, planId);
+      setWastageCalculation(calculation);
+      console.log("🗑️ WASTAGE PREVIEW:", formatWastageSummary(calculation));
+    } else {
+      setWastageCalculation(null);
+    }
+  }, [selectedCutRolls, planResult, planId]);
 
   // Helper functions for composite roll keys
   const generateRollKey = useCallback((gsm: number, bf: number, shade: string, rollNumber: number): string => {
@@ -612,8 +632,9 @@ export default function PlanningPage() {
       }
 
       const createdPlan = await planCreateResponse.json();
-      const planId = createdPlan.id;
-      console.log("✅ Created plan for production:", planId);
+      const currentPlanId = createdPlan.id;
+      setPlanId(currentPlanId); // Store plan ID in state for wastage tracking
+      console.log("✅ Created plan for production:", currentPlanId);
 
       // Validate 118" roll selection before proceeding
       if (!isValid118RollSelection(selected118Rolls.length)) {
@@ -702,15 +723,36 @@ export default function PlanningPage() {
           };
         });
 
+      // Calculate wastage from selected cut rolls (>= 9 inches only)
+      console.log("🗑️ CALCULATING WASTAGE: Processing selected cut rolls for wastage >= 9 inches");
+      const selectedCutRollsForWastage = selectedCutRolls.map(index => planResult!.cut_rolls_generated[index]);
+      const wastageCalculation = calculateWastageFromCutRolls(selectedCutRollsForWastage, currentPlanId);
+      
+      // Validate wastage data before sending
+      const wastageValidation = validateWastageData(wastageCalculation.wastageItems);
+      if (!wastageValidation.valid) {
+        console.warn("⚠️ WASTAGE VALIDATION: Some wastage items failed validation:", wastageValidation.errors);
+        toast.warning(`Wastage validation issues: ${wastageValidation.errors.join(", ")}`);
+      }
+      
+      console.log("🗑️ WASTAGE SUMMARY:", formatWastageSummary(wastageCalculation));
+      if (wastageCalculation.totalWastageCount > 0) {
+        toast.info(`Will create ${wastageCalculation.totalWastageCount} wastage inventory items`);
+      }
+
       // Call the new backend endpoint for starting production with comprehensive status updates
       const productionRequest = {
         selected_cut_rolls: selectedRolls,
         all_available_cuts: allAvailableCuts,
+        wastage_data: wastageCalculation.wastageItems, // Include wastage data
         created_by_id: user_id,
         jumbo_roll_width: planningWidth // Use calculated width from wastage
       };
 
-      const response = await fetch(`${API_BASE_URL}/plans/${planId}/start-production`, {
+      console.log("🚀 PRODUCTION REQUEST:", productionRequest);
+      console.log("🗑️ WASTAGE DATA BEING SENT:", wastageCalculation.wastageItems);
+
+      const response = await fetch(`${API_BASE_URL}/plans/${currentPlanId}/start-production`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -725,6 +767,8 @@ export default function PlanningPage() {
       }
 
       const result = await response.json();
+      console.log("🔍 BACKEND RESPONSE:", result);
+      console.log("🗑️ WASTAGE CREATED:", result.summary?.wastage_items_created || 0);
 
       // Create production records using existing jumbo roll data with comprehensive matching
       const productionRecords = result.created_inventory_details?.map((inventory: any, index: any) => {
@@ -804,7 +848,7 @@ export default function PlanningPage() {
       setActiveTab("production");
       setProductionStarted(true); // Mark production as started
       
-      // Show comprehensive success message with pending items info
+      // Show comprehensive success message with pending items info and wastage
       let successMessage = `Production started successfully! Updated ${result.summary.orders_updated} orders, ${result.summary.order_items_updated} order items`;
       if (result.summary.pending_items_created > 0) {
         successMessage += `, and created ${result.summary.pending_items_created} pending items from unselected rolls`;
@@ -812,12 +856,15 @@ export default function PlanningPage() {
       if (result.summary.pending_orders_updated > 0) {
         successMessage += `, and updated ${result.summary.pending_orders_updated} pending orders`;
       }
+      if (result.summary.wastage_items_created > 0) {
+        successMessage += `, and created ${result.summary.wastage_items_created} wastage inventory items`;
+      }
       successMessage += '.';
       
       toast.success(successMessage);
 
       console.log("✅ Production started successfully with comprehensive status updates:", {
-        planId,
+        planId: currentPlanId,
         updatedOrders: result.summary.orders_updated,
         updatedOrderItems: result.summary.order_items_updated,
         updatedPendingOrders: result.summary.pending_orders_updated,

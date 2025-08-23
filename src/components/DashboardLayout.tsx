@@ -30,7 +30,8 @@ import {
   QrCode,
   Truck,
   BarChart3,
-  Receipt
+  Receipt,
+  Recycle
 } from "lucide-react";
 import { getCurrentUser, logout } from "@/lib/auth";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -61,6 +62,11 @@ const navigation = [
     name: "Planning",
     href: "/planning",
     icon: Scissors,
+  },
+  {
+    name: "Wastage",
+    href: "/wastage",
+    icon: Recycle,
   },
   {
     name: "Dispatch",
