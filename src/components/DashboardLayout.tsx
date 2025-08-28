@@ -63,11 +63,11 @@ const navigation = [
     href: "/planning",
     icon: Scissors,
   },
-  {
-    name: "Wastage",
-    href: "/wastage",
-    icon: Recycle,
-  },
+  // {
+  //   name: "Inventory",
+  //   href: "/wastage",
+  //   icon: Recycle,
+  // },
   {
     name: "Dispatch",
     href: "/dispatch",

@@ -44,6 +44,27 @@ import { Paper, fetchPapers, deletePaper } from "@/lib/papers";
 import { PaperForm } from "@/components/PaperForm";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
+const HighlightText = ({ text, searchTerm }: { text: string; searchTerm: string }) => {
+  if (!searchTerm.trim()) return <span>{text}</span>;
+  
+  const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  const parts = text.split(regex);
+  
+  return (
+    <span>
+      {parts.map((part, index) => 
+        regex.test(part) ? (
+          <span key={index} className="bg-yellow-200 text-yellow-900 px-1 rounded">
+            {part}
+          </span>
+        ) : (
+          <span key={index}>{part}</span>
+        )
+      )}
+    </span>
+  );
+};
+
 export default function PaperMasterPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [papers, setPapers] = useState<Paper[]>([]);
@@ -106,7 +127,9 @@ export default function PaperMasterPage() {
     (paper) =>
       paper.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       paper.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      paper.shade.toLowerCase().includes(searchTerm.toLowerCase())
+      paper.shade.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      paper.gsm.toString().includes(searchTerm.toLowerCase()) ||
+      paper.bf.toString().includes(searchTerm.toLowerCase())
   );
 
   const getStatusBadge = (status: string) => {
@@ -187,7 +210,7 @@ export default function PaperMasterPage() {
               <div className="relative flex-1">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search papers by name, type, or shade..."
+                  placeholder="Search papers by name, type, shade, GSM, or BF..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-8"
@@ -227,13 +250,19 @@ export default function PaperMasterPage() {
                             {paper.frontend_id || 'Generating...'}
                           </TableCell>
                           <TableCell className="font-medium">
-                            {paper.name}
+                            <HighlightText text={paper.name} searchTerm={searchTerm} />
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline">{paper.type}</Badge>
+                            <Badge variant="outline">
+                              <HighlightText text={paper.type} searchTerm={searchTerm} />
+                            </Badge>
                           </TableCell>
-                          <TableCell>{paper.gsm}</TableCell>
-                          <TableCell>{paper.bf}</TableCell>
+                          <TableCell>
+                            <HighlightText text={paper.gsm.toString()} searchTerm={searchTerm} />
+                          </TableCell>
+                          <TableCell>
+                            <HighlightText text={paper.bf.toString()} searchTerm={searchTerm} />
+                          </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <div
@@ -243,7 +272,9 @@ export default function PaperMasterPage() {
                                 }}
                                 title={paper.shade}
                               />
-                              <span>{paper.shade}</span>
+                              <span>
+                                <HighlightText text={paper.shade} searchTerm={searchTerm} />
+                              </span>
                             </div>
                           </TableCell>
                           <TableCell>{getStatusBadge(paper.status)}</TableCell>

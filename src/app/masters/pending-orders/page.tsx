@@ -68,25 +68,46 @@ interface PendingOrderItem {
   frontend_id?: string; // Human-readable ID for display
 }
 
+interface JumboRollSuggestion {
+  suggestion_id: string;
+  paper_specs: {
+    gsm: number;
+    bf: number;
+    shade: string;
+  };
+  jumbo_number: number;
+  target_width: number;
+  rolls: Array<{
+    roll_number: number;
+    target_width: number;
+    actual_width: number;
+    waste: number;
+    display_as: 'waste' | 'needed';
+    needed_width?: number;
+    uses_existing: boolean;
+    widths: number[];
+    used_widths: Record<string, number>;
+    description: string;
+  }>;
+  summary: {
+    total_rolls: number;
+    using_existing: number;
+    new_rolls_needed: number;
+    total_waste: number;
+    avg_waste: number;
+  };
+}
+
 interface SuggestionResult {
   status: string;
   target_width: number;
   wastage: number;
-  roll_suggestions: Array<{
-    suggestion_id: string;
-    paper_specs: {
-      gsm: number;
-      bf: number;
-      shade: string;
-    };
-    existing_width: number;
-    needed_width: number;
-    description: string;
-  }>;
+  jumbo_suggestions: JumboRollSuggestion[];
   summary: {
     total_pending_input: number;
-    unique_widths: number;
-    suggested_rolls: number;
+    spec_groups_processed: number;
+    jumbo_rolls_suggested: number;
+    total_rolls_suggested: number;
   };
 }
 
@@ -225,12 +246,29 @@ export default function PendingOrderItemsPage() {
       }
       
       const result = await response.json();
-      setSuggestionResult(result);
-      setShowSuggestions(true);
-      const suggestionsCount = result.roll_suggestions?.length || 0;
-      toast.success(`Generated ${suggestionsCount} roll suggestions for ${result.target_width}" rolls`);
+      
+      // Check if the result is valid
+      if (result.status === 'success' && result.jumbo_suggestions) {
+        setSuggestionResult(result);
+        setShowSuggestions(true);
+        const jumboCount = result.jumbo_suggestions?.length || 0;
+        const totalRolls = result.summary?.total_rolls_suggested || 0;
+        
+        if (jumboCount > 0) {
+          toast.success(`Generated ${jumboCount} jumbo roll suggestions with ${totalRolls} individual rolls for ${result.target_width}" target width`);
+        } else {
+          toast.info('No jumbo roll suggestions could be generated with the current pending items');
+        }
+      } else if (result.status === 'no_pending_orders') {
+        toast.info('No pending orders found to generate suggestions from');
+        setSuggestionResult(result);
+        setShowSuggestions(true);
+      } else {
+        throw new Error(result.message || 'Unknown error occurred');
+      }
     } catch (error) {
-      toast.error('Failed to get roll suggestions');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get roll suggestions';
+      toast.error(`Error: ${errorMessage}`);
       console.error('Suggestions error:', error);
     } finally {
       setSuggestionsLoading(false);
@@ -263,53 +301,193 @@ export default function PendingOrderItemsPage() {
     pdf.setFontSize(12);
     pdf.text(`Target Width: ${suggestionResult.target_width}"`, margin, yPosition);
     yPosition += 8;
-    pdf.text(`Unique Widths: ${suggestionResult.summary.unique_widths}`, margin, yPosition);
+    pdf.text(`Spec Groups Processed: ${suggestionResult.summary.spec_groups_processed}`, margin, yPosition);
     yPosition += 8;
-    pdf.text(`Suggested Rolls: ${suggestionResult.summary.suggested_rolls}`, margin, yPosition);
+    pdf.text(`Jumbo Rolls Suggested: ${suggestionResult.summary.jumbo_rolls_suggested}`, margin, yPosition);
+    yPosition += 8;
+    pdf.text(`Total Rolls: ${suggestionResult.summary.total_rolls_suggested}`, margin, yPosition);
     
     yPosition += 20;
     pdf.setFontSize(16);
-    pdf.text('Roll Completion Suggestions', margin, yPosition);
+    pdf.text('Jumbo Roll Suggestions', margin, yPosition);
     yPosition += 10;
 
-    suggestionResult.roll_suggestions.forEach((suggestion, index) => {
-      if (yPosition > 250) {
+    suggestionResult.jumbo_suggestions.forEach((jumbo, jumboIndex) => {
+      if (yPosition > 220) {
         pdf.addPage();
         yPosition = 30;
       }
       
       yPosition += 15;
       pdf.setFontSize(14);
-      pdf.text(`${index + 1}. ${suggestion.paper_specs.shade} ${suggestion.paper_specs.gsm}GSM Paper (BF: ${suggestion.paper_specs.bf})`, margin, yPosition);
+      pdf.text(`Jumbo ${jumbo.jumbo_number}: ${jumbo.paper_specs.shade} ${jumbo.paper_specs.gsm}GSM (BF: ${jumbo.paper_specs.bf})`, margin, yPosition);
       
       yPosition += 10;
       pdf.setFontSize(11);
-      pdf.text(suggestion.description, margin, yPosition);
+      pdf.text(`${jumbo.summary.using_existing} using existing + ${jumbo.summary.new_rolls_needed} new rolls | Avg waste: ${jumbo.summary.avg_waste}"`, margin, yPosition);
       
-      yPosition += 10;
-      pdf.text(`Available: ${suggestion.existing_width}" | Required: ${suggestion.needed_width}"`, margin, yPosition);
+      // Show each roll in the jumbo
+      jumbo.rolls.forEach((roll, rollIndex) => {
+        if (yPosition > 250) {
+          pdf.addPage();
+          yPosition = 30;
+        }
+        
+        yPosition += 12;
+        pdf.setFontSize(10);
+        const rollColor = roll.uses_existing ? '[EXISTING]' : '[NEW]';
+        pdf.text(`  Roll ${roll.roll_number}: ${rollColor} ${roll.description}`, margin + 10, yPosition);
+        
+        if (roll.uses_existing && roll.widths.length > 3) {
+          yPosition += 8;
+          pdf.setFontSize(8);
+          pdf.text(`    (${roll.widths.length} pieces total)`, margin + 15, yPosition);
+        }
+      });
       
-      const barWidth = pageWidth - (2 * margin);
-      const barHeight = 12;
-      const barY = yPosition + 5;
-      
-      const availablePercentage = (suggestion.existing_width / suggestionResult.target_width);
-      const requiredPercentage = (suggestion.needed_width / suggestionResult.target_width);
-      
-      pdf.setFillColor(34, 197, 94);
-      pdf.rect(margin, barY, barWidth * availablePercentage, barHeight, 'F');
-      
-      pdf.setFillColor(251, 146, 60);
-      pdf.rect(margin + (barWidth * availablePercentage), barY, barWidth * requiredPercentage, barHeight, 'F');
-      
-      pdf.setDrawColor(0);
-      pdf.rect(margin, barY, barWidth, barHeight);
-      
-      yPosition += 25;
+      yPosition += 15;
     });
 
     pdf.save(`roll-suggestions-${suggestionResult.target_width}inch-${new Date().toISOString().split('T')[0]}.pdf`);
     toast.success('PDF downloaded successfully');
+  };
+
+  const handlePrintTablePDF = () => {
+    const pdf = new jsPDF();
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const margin = 20;
+    let yPosition = 30;
+
+    // Header
+    pdf.setFontSize(20);
+    pdf.text('Pending Order Items Report', margin, yPosition);
+    
+    yPosition += 15;
+    pdf.setFontSize(12);
+    pdf.text(`Generated on: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, margin, yPosition);
+    pdf.text(`Total Items: ${filteredItems.length}`, pageWidth - margin - 50, yPosition);
+    
+    yPosition += 20;
+    
+    // Summary Statistics
+    pdf.setFontSize(16);
+    pdf.text('Summary Statistics', margin, yPosition);
+    yPosition += 15;
+    
+    pdf.setFontSize(11);
+    pdf.text(`• Total Pending Items: ${displayItems.length}`, margin, yPosition);
+    yPosition += 8;
+    pdf.text(`• High Priority Items (3+ days): ${highPriorityItems}`, margin, yPosition);
+    yPosition += 8;
+    pdf.text(`• Average Wait Time: ${averageWaitTime} days`, margin, yPosition);
+    yPosition += 8;
+    pdf.text(`• Total Quantity: ${totalPendingQuantity.toLocaleString()} rolls`, margin, yPosition);
+    yPosition += 20;
+
+    // Table Header
+    pdf.setFontSize(16);
+    pdf.text('Pending Items Details', margin, yPosition);
+    yPosition += 15;
+
+    // Table column setup
+    const colWidths = [25, 40, 35, 20, 25, 35, 20];
+    const colHeaders = ['ID', 'Paper Spec', 'Client', 'Qty', 'Status', 'Reason', 'Days'];
+    
+    // Draw table header
+    pdf.setFillColor(230, 230, 230);
+    pdf.rect(margin, yPosition - 5, pageWidth - 2 * margin, 10, 'F');
+    
+    pdf.setFontSize(9);
+    pdf.setTextColor(0, 0, 0);
+    
+    let xPos = margin + 2;
+    colHeaders.forEach((header, index) => {
+      pdf.text(header, xPos, yPosition);
+      xPos += colWidths[index];
+    });
+    
+    yPosition += 15;
+
+    // Table rows
+    filteredItems.forEach((item, index) => {
+      // Check if we need a new page
+      if (yPosition > 250) {
+        pdf.addPage();
+        yPosition = 30;
+        
+        // Redraw header on new page
+        pdf.setFillColor(230, 230, 230);
+        pdf.rect(margin, yPosition - 5, pageWidth - 2 * margin, 10, 'F');
+        
+        xPos = margin + 2;
+        colHeaders.forEach((header, hIndex) => {
+          pdf.text(header, xPos, yPosition);
+          xPos += colWidths[hIndex];
+        });
+        
+        yPosition += 15;
+      }
+
+      // Alternate row background
+      if (index % 2 === 0) {
+        pdf.setFillColor(248, 248, 248);
+        pdf.rect(margin, yPosition - 5, pageWidth - 2 * margin, 10, 'F');
+      }
+
+      pdf.setFontSize(8);
+      xPos = margin + 2;
+
+      // Pending ID
+      const displayId = item.frontend_id || item.id.substring(0, 8);
+      pdf.text(displayId, xPos, yPosition);
+      xPos += colWidths[0];
+
+      // Paper Specification
+      const paperSpec = `${item.width_inches}" x ${item.shade}\nGSM:${item.gsm} BF:${item.bf}`;
+      const specLines = paperSpec.split('\n');
+      pdf.text(specLines[0], xPos, yPosition - 2);
+      pdf.text(specLines[1], xPos, yPosition + 3);
+      xPos += colWidths[1];
+
+      // Client
+      const clientName = item.original_order?.client?.company_name || 'N/A';
+      const truncatedClient = clientName.length > 15 ? clientName.substring(0, 15) + '...' : clientName;
+      pdf.text(truncatedClient, xPos, yPosition);
+      xPos += colWidths[2];
+
+      // Quantity
+      pdf.text(`${item.quantity_pending}`, xPos, yPosition);
+      xPos += colWidths[3];
+
+      // Status
+      pdf.text(item.status, xPos, yPosition);
+      xPos += colWidths[4];
+
+      // Reason
+      const reasonText = item.reason.replace(/_/g, ' ');
+      const truncatedReason = reasonText.length > 12 ? reasonText.substring(0, 12) + '...' : reasonText;
+      pdf.text(truncatedReason, xPos, yPosition);
+      xPos += colWidths[5];
+
+      // Days waiting
+      const daysWaiting = getDaysWaiting(item.created_at);
+      pdf.text(`${daysWaiting}`, xPos, yPosition);
+
+      yPosition += 12;
+    });
+
+    // Footer
+    const totalPages = pdf.internal.pages.length - 1;
+    for (let i = 1; i <= totalPages; i++) {
+      pdf.setPage(i);
+      pdf.setFontSize(8);
+      pdf.setTextColor(100, 100, 100);
+      pdf.text(`Page ${i} of ${totalPages}`, pageWidth - margin - 20, pdf.internal.pageSize.getHeight() - 10);
+      pdf.text('JumboReel App - Pending Orders Report', margin, pdf.internal.pageSize.getHeight() - 10);
+    }
+
+    pdf.save(`pending-orders-report-${new Date().toISOString().split('T')[0]}.pdf`);
+    toast.success('Pending orders PDF downloaded successfully');
   };
 
 
@@ -331,11 +509,20 @@ export default function PendingOrderItemsPage() {
             <Button 
               variant="outline" 
               className="gap-2"
+              onClick={handlePrintTablePDF}
+              disabled={displayItems.length === 0}
+            >
+              <FileDown className="w-4 h-4" />
+              Print Table PDF
+            </Button>
+            <Button 
+              variant="outline" 
+              className="gap-2"
               onClick={handleGetSuggestions}
               disabled={suggestionsLoading || displayItems.length === 0}
             >
               <Target className="w-4 h-4" />
-              {suggestionsLoading ? 'Loading...' : 'Get Suggestions'}
+              {suggestionsLoading ? 'Generating...' : 'Get Jumbo Suggestions'}
             </Button>
             {suggestionResult && (
               <Button 
@@ -344,7 +531,7 @@ export default function PendingOrderItemsPage() {
                 onClick={handlePrintPDF}
               >
                 <FileDown className="w-4 h-4" />
-                Print PDF
+                Print Suggestions PDF
               </Button>
             )}
           </div>
@@ -406,9 +593,9 @@ export default function PendingOrderItemsPage() {
         <Dialog open={showWastageDialog} onOpenChange={setShowWastageDialog}>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>Enter Wastage</DialogTitle>
+              <DialogTitle>Enter Wastage for Jumbo Roll Suggestions</DialogTitle>
               <DialogDescription>
-                Enter the wastage amount to subtract from 119 inches for roll suggestions.
+                Enter the wastage amount to subtract from 119 inches. The system will create suggestions using unlimited pieces per roll to minimize waste.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -437,7 +624,7 @@ export default function PendingOrderItemsPage() {
                 Cancel
               </Button>
               <Button onClick={handleWastageSubmit}>
-                Get Suggestions
+                Generate Jumbo Suggestions
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -458,78 +645,167 @@ export default function PendingOrderItemsPage() {
               </CardHeader>
               <CardContent>
                 {/* Summary Stats */}
-                <div className="grid gap-4 md:grid-cols-3 mb-6">
+                <div className="grid gap-4 md:grid-cols-4 mb-6">
                   <div className="text-center p-4 bg-blue-50 rounded-lg">
                     <div className="text-2xl font-bold text-blue-600">{suggestionResult.target_width}"</div>
                     <div className="text-sm text-blue-800">Target Width</div>
                   </div>
                   <div className="text-center p-4 bg-green-50 rounded-lg">
-                    <div className="text-2xl font-bold text-green-600">{suggestionResult.summary.unique_widths}</div>
-                    <div className="text-sm text-green-800">Unique Widths</div>
+                    <div className="text-2xl font-bold text-green-600">{suggestionResult.summary.jumbo_rolls_suggested}</div>
+                    <div className="text-sm text-green-800">Jumbo Rolls</div>
                   </div>
                   <div className="text-center p-4 bg-purple-50 rounded-lg">
-                    <div className="text-2xl font-bold text-purple-600">{suggestionResult.summary.suggested_rolls}</div>
-                    <div className="text-sm text-purple-800">Suggestions</div>
+                    <div className="text-2xl font-bold text-purple-600">{suggestionResult.summary.total_rolls_suggested}</div>
+                    <div className="text-sm text-purple-800">Total Rolls</div>
+                  </div>
+                  <div className="text-center p-4 bg-orange-50 rounded-lg">
+                    <div className="text-2xl font-bold text-orange-600">{suggestionResult.summary.spec_groups_processed}</div>
+                    <div className="text-sm text-orange-800">Paper Specs</div>
                   </div>
                 </div>
 
-                {/* Roll Suggestions */}
-                {suggestionResult.roll_suggestions.length > 0 && (
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold">Roll Completion Suggestions</h3>
-                    <div className="space-y-3">
-                      {suggestionResult.roll_suggestions.map((suggestion) => (
-                        <Card key={suggestion.suggestion_id} className="bg-gray-50">
-                          <CardContent className="pt-4">
-                            <div className="space-y-4">
-                              <div className="font-medium">
-                                {suggestion.paper_specs.shade} {suggestion.paper_specs.gsm}GSM Paper (BF: {suggestion.paper_specs.bf})
-                              </div>
-                              <div className="text-sm font-medium">
-                                {suggestion.description}
-                              </div>
-                              
-                              {/* Visual Pattern for Available/Required */}
+                {/* Jumbo Roll Suggestions */}
+                {suggestionResult.jumbo_suggestions && suggestionResult.jumbo_suggestions.length > 0 ? (
+                  <div className="space-y-6">
+                    <h3 className="text-lg font-semibold">Jumbo Roll Suggestions</h3>
+                    <div className="space-y-6">
+                      {suggestionResult.jumbo_suggestions.map((jumbo) => (
+                        <Card key={jumbo.suggestion_id} className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200">
+                          <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
                               <div>
-                                <div className="text-sm font-medium text-muted-foreground mb-2">
-                                  {suggestionResult.target_width}" Roll Completion Pattern:
+                                <CardTitle className="text-lg">
+                                  Jumbo Roll #{jumbo.jumbo_number} - {jumbo.paper_specs.shade} {jumbo.paper_specs.gsm}GSM
+                                </CardTitle>
+                                <CardDescription>
+                                  BF: {jumbo.paper_specs.bf} | Target: {jumbo.target_width}" per roll
+                                </CardDescription>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm text-muted-foreground">
+                                  {jumbo.summary.using_existing} existing + {jumbo.summary.new_rolls_needed} new
                                 </div>
-                                <div className="relative h-12 bg-muted rounded-lg border overflow-hidden">
-                                  {(() => {
-                                    const availableWidth = suggestion.existing_width;
-                                    const requiredWidth = suggestion.needed_width;
-                                    const targetWidth = suggestionResult.target_width;
-                                    const availablePercentage = (availableWidth / targetWidth) * 100;
-                                    const requiredPercentage = (requiredWidth / targetWidth) * 100;
-
-                                    return (
-                                      <>
-                                        {/* Available section (green) */}
-                                        <div
-                                          className="absolute h-full border-r-2 border-white bg-gradient-to-r from-green-400 to-green-500"
-                                          style={{
-                                            left: "0%",
-                                            width: `${availablePercentage}%`,
-                                          }}>
-                                          <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
-                                            Available: {availableWidth}"
+                                <div className="text-sm text-muted-foreground">
+                                  Avg {jumbo.summary.avg_waste <= 5 ? 'waste' : 'needed'}: {jumbo.summary.avg_waste}"
+                                </div>
+                              </div>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            {/* Individual Rolls in this Jumbo */}
+                            <div className="grid gap-3">
+                              {jumbo.rolls.map((roll, rollIndex) => (
+                                <div key={rollIndex} className={`p-4 rounded-lg border-2 ${
+                                  roll.uses_existing 
+                                    ? 'bg-green-50 border-green-200' 
+                                    : 'bg-orange-50 border-orange-200'
+                                }`}>
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="font-medium">
+                                      Roll #{roll.roll_number} ({roll.uses_existing ? 'Using Existing' : 'New Roll Needed'})
+                                    </div>
+                                    <Badge className={roll.uses_existing ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'}>
+                                      {roll.display_as === 'waste' 
+                                        ? `Waste: ${roll.waste.toFixed(1)}"` 
+                                        : `Need: ${(roll.needed_width || roll.waste).toFixed(1)}"`}
+                                    </Badge>
+                                  </div>
+                                  
+                                  <div className="text-sm text-muted-foreground mb-3">
+                                    {roll.description}
+                                  </div>
+                                  
+                                  {/* Visual representation of the roll */}
+                                  <div className="relative h-8 bg-muted rounded border overflow-hidden">
+                                    {(() => {
+                                      const actualPercentage = (roll.actual_width / jumbo.target_width) * 100;
+                                      const remainingPercentage = ((roll.needed_width || roll.waste) / jumbo.target_width) * 100;
+                                      const isWaste = roll.display_as === 'waste';
+                                      
+                                      return (
+                                        <>
+                                          {/* Actual width section */}
+                                          <div
+                                            className={`absolute h-full ${
+                                              roll.uses_existing 
+                                                ? 'bg-gradient-to-r from-green-400 to-green-500' 
+                                                : 'bg-gradient-to-r from-blue-400 to-blue-500'
+                                            }`}
+                                            style={{
+                                              left: "0%",
+                                              width: `${actualPercentage}%`,
+                                            }}>
+                                            <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
+                                              {roll.actual_width.toFixed(1)}"
+                                            </div>
                                           </div>
-                                        </div>
-
-                                        {/* Required section (orange) */}
-                                        <div
-                                          className="absolute h-full bg-gradient-to-r from-orange-400 to-orange-500 border-l-2 border-white"
-                                          style={{
-                                            left: `${availablePercentage}%`,
-                                            width: `${requiredPercentage}%`,
-                                          }}>
-                                          <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
-                                            Required: {requiredWidth}"
-                                          </div>
-                                        </div>
-                                      </>
-                                    );
-                                  })()}
+                                          
+                                          {/* Remaining section - waste or needed */}
+                                          {(roll.waste > 0 || roll.needed_width) && (
+                                            <div
+                                              className={`absolute h-full border-l-2 border-white ${
+                                                isWaste 
+                                                  ? 'bg-gradient-to-r from-gray-300 to-gray-400'
+                                                  : 'bg-gradient-to-r from-orange-300 to-orange-400'
+                                              }`}
+                                              style={{
+                                                left: `${actualPercentage}%`,
+                                                width: `${remainingPercentage}%`,
+                                              }}>
+                                              <div className={`absolute inset-0 flex items-center justify-center text-xs font-bold ${
+                                                isWaste ? 'text-gray-700' : 'text-orange-700'
+                                              }`}>
+                                                {isWaste 
+                                                  ? `${roll.waste.toFixed(1)}" waste`
+                                                  : `${(roll.needed_width || roll.waste).toFixed(1)}" needed`
+                                                }
+                                              </div>
+                                            </div>
+                                          )}
+                                        </>
+                                      );
+                                    })()}
+                                  </div>
+                                  
+                                  {roll.uses_existing && (
+                                    <div className="mt-2 text-xs text-green-700">
+                                      <div className="font-medium mb-1">Pieces used from pending:</div>
+                                      <div className="flex flex-wrap gap-1">
+                                        {roll.widths.map((width, idx) => (
+                                          <span key={idx} className="inline-block px-2 py-1 bg-green-100 rounded text-xs">
+                                            {width}"
+                                          </span>
+                                        ))}
+                                      </div>
+                                      <div className="mt-1 text-xs text-green-600">
+                                        Total pieces: {roll.widths.length}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                            
+                            {/* Jumbo Summary */}
+                            <div className="pt-3 border-t border-blue-200">
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                                <div>
+                                  <div className="text-lg font-bold text-blue-600">{jumbo.summary.total_rolls}</div>
+                                  <div className="text-xs text-blue-800">Total Rolls</div>
+                                </div>
+                                <div>
+                                  <div className="text-lg font-bold text-green-600">{jumbo.summary.using_existing}</div>
+                                  <div className="text-xs text-green-800">Using Existing</div>
+                                </div>
+                                <div>
+                                  <div className="text-lg font-bold text-orange-600">{jumbo.summary.new_rolls_needed}</div>
+                                  <div className="text-xs text-orange-800">New Needed</div>
+                                </div>
+                                <div>
+                                  <div className="text-lg font-bold text-gray-600">{jumbo.summary.total_waste.toFixed(1)}"</div>
+                                  <div className="text-xs text-gray-800">
+                                    {jumbo.summary.avg_waste <= 5 ? 'Total Waste' : 'Total Needed'}
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -537,6 +813,25 @@ export default function PendingOrderItemsPage() {
                         </Card>
                       ))}
                     </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 bg-gray-50 rounded-lg">
+                    <Package className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-semibold text-muted-foreground mb-2">
+                      {suggestionResult.status === 'no_pending_orders' 
+                        ? 'No Pending Orders Found' 
+                        : 'No Suggestions Generated'}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {suggestionResult.status === 'no_pending_orders'
+                        ? 'There are no pending order items to create suggestions from.'
+                        : 'Unable to generate jumbo roll suggestions with the current pending items and target width.'}
+                    </p>
+                    {suggestionResult.status !== 'no_pending_orders' && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Try adjusting the wastage value for different target widths.
+                      </p>
+                    )}
                   </div>
                 )}
 

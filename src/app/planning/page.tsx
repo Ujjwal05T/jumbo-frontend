@@ -339,6 +339,21 @@ export default function PlanningPage() {
     }));
   }, [filteredOrders]);
 
+  // Calculate total quantity of selected orders
+  const totalSelectedQuantity = useMemo(() => {
+    return selectedOrders.reduce((total, orderId) => {
+      const order = orders.find(o => o.id === orderId);
+      if (!order) return total;
+      return total + (order.order_items?.reduce(
+        (itemTotal, item) => itemTotal + item.quantity_rolls,
+        0
+      ) || 0);
+    }, 0);
+  }, [selectedOrders, orders]);
+
+  // Check if total quantity exceeds limit
+  const exceedsQuantityLimit = totalSelectedQuantity > 250;
+
   useEffect(() => {
     const loadOrders = async () => {
       try {
@@ -1633,7 +1648,7 @@ export default function PlanningPage() {
               <Button
                 variant="default"
                 onClick={generatePlan}
-                disabled={generating || selectedOrders.length === 0}>
+                disabled={generating || selectedOrders.length === 0 || exceedsQuantityLimit}>
                 {generating ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1745,6 +1760,13 @@ export default function PlanningPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Quantity Limit Warning */}
+      {exceedsQuantityLimit && selectedOrders.length > 0 && (
+        <div className="text-red-600 text-sm font-medium">
+          ⚠️ Cannot generate plan: Total selected quantity ({totalSelectedQuantity} rolls) exceeds the maximum limit of 250 rolls.
+        </div>
       )}
 
       {error && (
@@ -1935,7 +1957,7 @@ export default function PlanningPage() {
                           : 'Select rolls by paper specification and roll number - Traditional view'
                         }
                         <div className="text-xs text-blue-600 mt-1">
-                          ℹ️ Only complete jumbos available for selection. Partial jumbos are excluded.
+                           Only complete jumbos available for selection. Partial jumbos are excluded.
                         </div>
                       </CardDescription>
                     </div>

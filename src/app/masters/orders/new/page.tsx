@@ -558,11 +558,13 @@ export default function NewOrderPage() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {papers.map((paper) => (
-                              <SelectItem key={paper.id} value={paper.id}>
-                                {paper.name} ({paper.gsm}gsm, {paper.bf}bf, {paper.shade})
-                              </SelectItem>
-                            ))}
+                            {papers
+                              .sort((a, b) => a.gsm - b.gsm)
+                              .map((paper) => (
+                                <SelectItem key={paper.id} value={paper.id}>
+                                  {paper.gsm}gsm, {paper.bf}bf, {paper.shade}
+                                </SelectItem>
+                              ))}
                           </SelectContent>
                         </Select>
                       </div>

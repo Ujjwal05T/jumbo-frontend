@@ -34,11 +34,13 @@ export const generateOrderPDF = (order: OrderPDFData, includeRates: boolean = tr
   doc.text(`Date: ${new Date(order.created_at).toLocaleDateString()}`, 120, 20);
   doc.text(`${order.payment_type.toUpperCase()}`, 170, 20);
   
-  // Priority (Line 2) - limit to 2 rows
+  // Priority (Line 2)
   doc.text(`Priority: ${order.priority || 'Normal'}`, 20, 35);
-  doc.text(`Client: ${order.client?.company_name || 'N/A'}`, 80, 35);
+  
+  // Client (Line 3) - moved to new row to prevent overflow
+  doc.text(`Client: ${order.client?.company_name || 'N/A'}`, 20, 50);
   if (order.client?.contact_person) {
-    doc.text(`Contact: ${order.client.contact_person}`, 140, 35);
+    doc.text(`Contact: ${order.client.contact_person}`, 120, 50);
   }
   
   // Calculate totals
@@ -126,7 +128,7 @@ export const generateOrderPDF = (order: OrderPDFData, includeRates: boolean = tr
   autoTable(doc, {
     head: [headers],
     body: tableData,
-    startY: 50,
+    startY: 65,
     styles: {
       fontSize: 9,
       cellPadding: 2,
