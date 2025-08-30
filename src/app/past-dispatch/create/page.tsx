@@ -110,14 +110,33 @@ export default function CreatePastDispatchPage() {
   };
 
   const addDispatchItem = () => {
+    // Get the last item for prefilling
+    const lastItem = dispatchItems[dispatchItems.length - 1];
+    
+    // Function to increment frontend_id
+    const getIncrementedFrontendId = (lastFrontendId: string): string => {
+      if (!lastFrontendId.trim()) return "";
+      
+      // Extract number from the end of the string (e.g., "ABC123" -> 123)
+      const match = lastFrontendId.match(/^(.*)(\d+)$/);
+      if (match) {
+        const prefix = match[1];
+        const number = parseInt(match[2]);
+        return `${prefix}${number + 1}`;
+      } else {
+        // If no number found, append "1" to the string
+        return `${lastFrontendId}1`;
+      }
+    };
+    
     setDispatchItems([
       ...dispatchItems,
       {
-        frontend_id: "",
+        frontend_id: getIncrementedFrontendId(lastItem.frontend_id),
         width_inches: "",
         weight_kg: "",
-        rate: "",
-        paper_spec: ""
+        rate: lastItem.rate, // Copy rate from last item
+        paper_spec: lastItem.paper_spec // Copy paper_spec from last item
       }
     ]);
   };
@@ -407,20 +426,12 @@ export default function CreatePastDispatchPage() {
             {/* Status Indicator */}
             {!isDispatchRecordComplete() && (
               <Card className="border-yellow-200 bg-yellow-50">
-                <CardContent className="p-4">
+                <CardContent className="p-1">
                   <div className="flex items-center gap-2 text-yellow-800">
                     <Settings className="h-4 w-4" />
                     <span className="text-sm font-medium">
-                      Complete dispatch details to save the record
+                      Complete dispatch details to save the record (use Fill Dispatch Details button below)
                     </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowDispatchDetailsModal(true)}
-                      className="ml-auto"
-                    >
-                      Fill Details
-                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -517,8 +528,22 @@ export default function CreatePastDispatchPage() {
               </CardContent>
             </Card>
 
+            {/* Fill Details Button - Below Dispatch Items */}
+            
+
             {/* Action Buttons */}
             <div className="flex justify-end gap-4">
+              {!isDispatchRecordComplete() && (
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => setShowDispatchDetailsModal(true)}
+                  className="flex items-center gap-2 "
+                >
+                  <Settings className="h-5 w-5" />
+                  Fill Dispatch Details
+                </Button>
+            )}
               <Button onClick={addDispatchItem} variant="outline" disabled={saving}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Item

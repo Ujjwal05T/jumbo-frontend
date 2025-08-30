@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { MASTER_ENDPOINTS, PRODUCTION_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
 import jsPDF from 'jspdf';
+import JsBarcode from 'jsbarcode';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -16,7 +17,8 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, AlertCircle, Eye, Play, CheckCircle, Factory, Search, Filter, Download, FileText } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Loader2, AlertCircle, Eye, Play, CheckCircle, Factory, Search, Filter, Download, FileText, MoreVertical, Printer, ScanLine } from "lucide-react";
 
 interface Plan {
   id: string;
@@ -44,6 +46,54 @@ interface User {
   id: string;
   name: string;
   username: string;
+}
+
+interface CutRollItem {
+  inventory_id: string;
+  width_inches: number;
+  weight_kg: number;
+  status: string;
+  location: string;
+  qr_code: string;
+  barcode_id?: string;
+  created_at: string;
+  paper_specs?: {
+    gsm: number;
+    bf: number;
+    shade: string;
+  };
+  client_name?: string;
+  order_date?: string;
+  jumbo_roll_frontend_id?: string;
+  jumbo_roll_id?: string;
+  individual_roll_number?: number;
+  parent_jumbo_id?: string;
+  parent_118_roll_id?: string;
+  roll_sequence?: number;
+}
+
+interface ProductionSummary {
+  plan_id: string;
+  plan_name: string;
+  plan_status: string;
+  executed_at?: string;
+  production_summary: {
+    total_cut_rolls: number;
+    total_weight_kg: number;
+    average_weight_per_roll: number;
+    status_breakdown: Record<string, {
+      count: number;
+      total_weight: number;
+      widths: number[];
+    }>;
+    paper_specifications: {
+      gsm: number;
+      bf: number;
+      shade: string;
+      roll_count: number;
+    }[];
+  };
+  detailed_items: CutRollItem[];
 }
 
 export default function PlansPage() {
@@ -169,6 +219,635 @@ export default function PlansPage() {
   const handleViewPlan = (plan: Plan) => {
     // Navigate to the dedicated plan details page
     router.push(`/masters/plans/${plan.id}`);
+  };
+
+  const loadProductionData = async (planId: string): Promise<ProductionSummary | null> => {
+    try {
+      const response = await fetch(PRODUCTION_ENDPOINTS.CUT_ROLLS_PLAN(planId), createRequestOptions('GET'));
+      if (!response.ok) {
+        throw new Error(`Failed to load production data: ${response.status}`);
+      }
+      const data = await response.json();
+      return data;
+    } catch (err) {
+      console.error('Error loading production data:', err);
+      return null;
+    }
+  };
+
+  // Helper function to generate barcode canvas
+  const generateBarcodeCanvas = (value: string): HTMLCanvasElement => {
+    const canvas = document.createElement('canvas');
+    try {
+      JsBarcode(canvas, value, {
+        format: "CODE128",
+        width: 2,
+        height: 60,
+        displayValue: true,
+        fontSize: 12,
+        textAlign: "center",
+        textPosition: "bottom"
+      });
+    } catch (error) {
+      console.error('Error generating barcode:', error);
+      canvas.width = 200;
+      canvas.height = 80;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'black';
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(value, canvas.width / 2, canvas.height / 2);
+      }
+    }
+    return canvas;
+  };
+
+  // Helper function to get weight multiplier based on GSM (copied from plan details)
+  const getWeightMultiplier = (gsm: number): number => {
+    if (gsm <= 70) return 10;
+    if (gsm <= 80) return 11;
+    if (gsm <= 100) return 12.7;
+    if (gsm <= 120) return 13;
+    return 13.3; // 140 gsm and above
+  };
+
+  // Sequential transformation function (copied from plan details)
+  const transformJumboId = (jumboFrontendId: string | undefined, allJumboIds: string[]): string => {
+    if (!jumboFrontendId) return "Unknown";
+    
+    const uniqueJumboIds = [...new Set(allJumboIds.filter(id => id && id !== 'ungrouped'))].sort();
+    const index = uniqueJumboIds.indexOf(jumboFrontendId);
+    
+    if (index >= 0) {
+      return `JR-${(index + 1).toString().padStart(5, '0')}`;
+    }
+    
+    return jumboFrontendId;
+  };
+
+  // Group cut rolls by jumbo roll (copied from plan details)
+  const groupCutRollsByJumboWithSequential = (cutRolls: CutRollItem[]): Record<string, { displayId: string; rolls: CutRollItem[] }> => {
+    const allJumboIds = cutRolls.map(item => item.jumbo_roll_frontend_id || 'ungrouped');
+    const grouped: Record<string, { displayId: string; rolls: CutRollItem[] }> = {};
+    
+    cutRolls.forEach(item => {
+      const originalJumboId = item.jumbo_roll_frontend_id || 'ungrouped';
+      const transformedId = originalJumboId === 'ungrouped' ? 'Ungrouped Items' : transformJumboId(originalJumboId, allJumboIds);
+      
+      if (!grouped[originalJumboId]) {
+        grouped[originalJumboId] = {
+          displayId: transformedId,
+          rolls: []
+        };
+      }
+      grouped[originalJumboId].rolls.push(item);
+    });
+    
+    return grouped;
+  };
+
+  const handleDownloadReport = async (plan: Plan) => {
+    try {
+      toast.loading('Preparing report download...', { id: `report-${plan.id}` });
+      
+      const productionSummary = await loadProductionData(plan.id);
+      if (!productionSummary) {
+        toast.error('No production data available for this plan', { id: `report-${plan.id}` });
+        return;
+      }
+
+      // EXACT copy of exportPlanDetailsToPDF from plan details page
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      let yPosition = 20;
+
+      // Helper function to check if we need a new page
+      const checkPageBreak = (height: number) => {
+        if (yPosition + height > pageHeight - 20) {
+          doc.addPage();
+          yPosition = 20;
+        }
+      };
+
+      // Plan Information
+      doc.setFontSize(14);
+      doc.text(`Plan: ${plan.name || 'Unnamed Plan'}`, 20, yPosition);
+      yPosition += 8;
+      
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Status: ${plan.status}`, 20, yPosition);
+      yPosition += 5;
+      doc.text(`Expected Waste: ${plan.expected_waste_percentage}%`, 20, yPosition);
+      yPosition += 5;
+      doc.text(`Created: ${new Date(plan.created_at).toLocaleString()}`, 20, yPosition);
+      yPosition += 5;
+      const user = getUserById(plan.created_by_id);
+      doc.text(`Created By: ${user?.name || 'Unknown'}`, 20, yPosition);
+      yPosition += 15;
+
+      // Extract unique clients and paper specs from production data
+      const uniqueClients = [...new Set(productionSummary.detailed_items
+        .map(item => item.client_name)
+        .filter(client => client && client !== 'Unknown Client'))];
+      
+      const uniquePaperSpecs = [...new Set(productionSummary.detailed_items
+        .filter(item => item.paper_specs)
+        .map(item => `${item.paper_specs!.gsm}gsm, BF:${item.paper_specs!.bf}, ${item.paper_specs!.shade}`))];
+
+      // Clients Section
+      if (uniqueClients.length > 0) {
+        checkPageBreak(30);
+        doc.setFontSize(12);
+        doc.setTextColor(40, 40, 40);
+        doc.text('Clients:', 20, yPosition);
+        yPosition += 10;
+        
+        doc.setFontSize(10);
+        doc.setTextColor(60, 60, 60);
+        uniqueClients.forEach((client, index) => {
+          doc.text(`• ${client}`, 25, yPosition);
+          yPosition += 6;
+          if ((index + 1) % 15 === 0) checkPageBreak(20);
+        });
+        yPosition += 8;
+      }
+
+      // Paper Specifications Section with Roll Counts and Weights
+      if (productionSummary.production_summary.paper_specifications.length > 0) {
+        checkPageBreak(30);
+        doc.setFontSize(12);
+        doc.setTextColor(40, 40, 40);
+        doc.text('Paper Specifications:', 20, yPosition);
+        yPosition += 10;
+        
+        doc.setFontSize(10);
+        doc.setTextColor(60, 60, 60);
+        
+        // Group specifications by paper type
+        const specGroups = productionSummary.production_summary.paper_specifications.reduce((groups: any, spec: any) => {
+          const key = `${spec.gsm}gsm, BF:${spec.bf}, ${spec.shade}`;
+          if (!groups[key]) {
+            groups[key] = {
+              gsm: spec.gsm,
+              bf: spec.bf,
+              shade: spec.shade,
+              details: []
+            };
+          }
+          groups[key].details.push(spec);
+          return groups;
+        }, {});
+
+        // Helper function to wrap text for PDF
+        const wrapText = (text: string, maxWidth: number, fontSize: number): string[] => {
+          doc.setFontSize(fontSize);
+          const words = text.split(' ');
+          const lines: string[] = [];
+          let currentLine = '';
+
+          for (const word of words) {
+            const testLine = currentLine + (currentLine ? ' ' : '') + word;
+            const textWidth = doc.getTextWidth(testLine);
+            
+            if (textWidth > maxWidth && currentLine !== '') {
+              lines.push(currentLine);
+              currentLine = word;
+            } else {
+              currentLine = testLine;
+            }
+          }
+          
+          if (currentLine) {
+            lines.push(currentLine);
+          }
+          
+          return lines;
+        };
+
+        Object.entries(specGroups).forEach(([specKey, specGroup]: [string, any], index) => {
+          const weightMultiplier = getWeightMultiplier(specGroup.gsm);
+          
+          let totalWeight = 0;
+          let totalRolls = 0;
+          
+          const specItems = productionSummary.detailed_items.filter((item: any) => 
+            item.paper_specs && 
+            item.paper_specs.gsm === specGroup.gsm &&
+            item.paper_specs.bf === specGroup.bf &&
+            item.paper_specs.shade === specGroup.shade
+          );
+          
+          const widthGroups = specItems.reduce((widthMap: any, item: any) => {
+            const width = item.width_inches;
+            if (!widthMap[width]) {
+              widthMap[width] = 0;
+            }
+            widthMap[width] += 1;
+            return widthMap;
+          }, {});
+          
+          Object.entries(widthGroups).forEach(([width, quantity]: [string, any]) => {
+            totalWeight += weightMultiplier * parseFloat(width) * quantity;
+            totalRolls += quantity;
+          });
+          
+          const widthDetails = Object.entries(widthGroups)
+            .map(([width, qty]) => `${width}"×${qty}`)
+            .join(', ');
+          
+          const specText = `• ${specKey} - ${totalRolls} rolls (${widthDetails}) - Weight: ${totalWeight.toFixed(1)}kg`;
+          
+          const maxLineWidth = pageWidth - 50;
+          const wrappedLines = wrapText(specText, maxLineWidth, 10);
+          
+          checkPageBreak(wrappedLines.length * 6 + 2);
+          
+          wrappedLines.forEach((line, lineIndex) => {
+            const xPos = lineIndex === 0 ? 25 : 30;
+            doc.text(line, xPos, yPosition);
+            yPosition += 6;
+          });
+          
+          yPosition += 2;
+        });
+        yPosition += 8;
+      }
+
+      // Cut Rolls Status Summary
+      checkPageBreak(30);
+      doc.setFontSize(14);
+      doc.setTextColor(40, 40, 40);
+      doc.text('Cut Rolls Summary:', 20, yPosition);
+      yPosition += 15;
+
+      doc.setFontSize(12);
+      doc.setTextColor(60, 60, 60);
+      doc.text(`Total Cut Rolls: ${productionSummary.production_summary.total_cut_rolls}`, 20, yPosition);
+      yPosition += 8;
+      doc.text(`Total Weight: ${productionSummary.production_summary.total_weight_kg} kg`, 20, yPosition);
+      yPosition += 8;
+      doc.text(`Expected Waste: ${plan.expected_waste_percentage}%`, 20, yPosition);
+      yPosition += 8;
+
+      Object.entries(productionSummary.production_summary.status_breakdown).forEach(([status, data]) => {
+        doc.text(`${status}: ${data.count} rolls (${data.total_weight.toFixed(1)} kg)`, 20, yPosition);
+        yPosition += 6;
+      });
+      yPosition += 10;
+
+      // Use production data directly - group by jumbo rolls first
+      const jumboRollMapping = groupCutRollsByJumboWithSequential(productionSummary.detailed_items);
+      const sortedJumboMappingEntries = Object.entries(jumboRollMapping).sort(([aId, aGroup], [bId, bGroup]) => {
+        const aDisplayId = aGroup.displayId;
+        const bDisplayId = bGroup.displayId;
+        
+        if (aDisplayId === 'Ungrouped Items') return 1;
+        if (bDisplayId === 'Ungrouped Items') return -1;
+        
+        const aNum = parseInt(aDisplayId.replace('JR-', '')) || 0;
+        const bNum = parseInt(bDisplayId.replace('JR-', '')) || 0;
+        
+        return aNum - bNum;
+      });
+
+      if (sortedJumboMappingEntries.length === 0) {
+        doc.setFontSize(12);
+        doc.setTextColor(100, 100, 100);
+        doc.text("No production data available for cutting pattern", 20, yPosition);
+        yPosition += 15;
+      } else {
+        // Process each jumbo roll
+        sortedJumboMappingEntries.forEach(([originalJumboId, jumboGroup], index) => {
+          const { displayId: jumboDisplayId, rolls: jumboRolls } = jumboGroup;
+          
+          if (index > -1) {
+            doc.addPage();
+            yPosition = 20;
+          }
+          
+          const paperSpecs = jumboRolls[0]?.paper_specs;
+          const specKey = paperSpecs 
+            ? `${paperSpecs.gsm}gsm, ${paperSpecs.bf}bf, ${paperSpecs.shade}`
+            : 'Unknown Specification';
+          
+          checkPageBreak(25);
+
+          doc.setFontSize(14);
+          doc.setTextColor(40, 40, 40);
+          doc.text(specKey, 20, yPosition);
+          yPosition += 10;
+
+          const totalWeight = jumboRolls.reduce((sum, roll) => sum + roll.weight_kg, 0);
+          const cutCount = jumboRolls.length;
+          const productionInfo = { totalWeight, cutCount };
+
+          checkPageBreak(35);
+          doc.setFillColor(240, 240, 240);
+          doc.rect(20, yPosition - 5, pageWidth - 40, 20, 'F');
+          doc.setDrawColor(100, 100, 100);
+          doc.setLineWidth(1);
+          doc.rect(20, yPosition - 5, pageWidth - 40, 20, 'S');
+          
+          doc.setFontSize(16);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(40, 40, 40);
+          doc.text(jumboDisplayId, 25, yPosition + 6);
+          
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(80, 80, 80);
+          doc.text(`Production: ${productionInfo.cutCount} cuts, ${productionInfo.totalWeight.toFixed(1)}kg`, pageWidth - 25, yPosition + 6, { align: 'right' });
+          yPosition += 25;
+
+          const rollsByNumber = jumboRolls.reduce((rollGroups: any, roll: CutRollItem) => {
+            const rollNum = roll.individual_roll_number || "No Roll #";
+            if (!rollGroups[rollNum]) {
+              rollGroups[rollNum] = [];
+            }
+            rollGroups[rollNum].push(roll);
+            return rollGroups;
+          }, {} as Record<string, CutRollItem[]>);
+
+          Object.entries(rollsByNumber).forEach(([rollNumber, rollsInNumber]:[any, any]) => {
+            checkPageBreak(80);
+
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(60, 60, 60);
+            const rollTitle = rollNumber === "No Roll #" ? "Unassigned Roll" : `Roll #${rollNumber}`;
+            doc.text(rollTitle, 35, yPosition);
+            yPosition += 12;
+
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(60, 60, 60);
+            doc.text("Cutting Pattern:", 40, yPosition);
+            yPosition += 8;
+
+            const sortedRolls = rollsInNumber.sort((a:any, b:any) => (a.width_inches || 0) - (b.width_inches || 0));
+
+            const rectStartX = 40;
+            const rectWidth = pageWidth - 80;
+            const rectHeight = 15;
+            let currentX = rectStartX;
+
+            const totalUsedWidth = sortedRolls.reduce((sum:number, roll:any) => sum + (roll.width_inches || 0), 0);
+            const waste = 118 - totalUsedWidth;
+
+            sortedRolls.forEach((roll:any, rollIndex:number) => {
+              const widthRatio = (roll.width_inches || 0) / 118;
+              const sectionWidth = rectWidth * widthRatio;
+
+              if (roll.status === 'cutting') {
+                doc.setFillColor(189, 189, 189);
+              } else {
+                doc.setFillColor(115, 114, 114);
+              }
+
+              doc.rect(currentX, yPosition, sectionWidth, rectHeight, 'F');
+              
+              doc.setDrawColor(255, 255, 255);
+              doc.setLineWidth(0.5);
+              doc.rect(currentX, yPosition, sectionWidth, rectHeight, 'S');
+
+              if (sectionWidth > 15) {
+                doc.setTextColor(0, 0, 0);
+                doc.setFontSize(7);
+                const textX = currentX + sectionWidth/2;
+                const textY = yPosition + rectHeight/2 + 1;
+                doc.text(`${roll.width_inches}"`, textX, textY, { align: 'center' });
+              }
+
+              currentX += sectionWidth;
+            });
+
+            if (waste > 0) {
+              const wasteRatio = waste / 118;
+              const wasteWidth = rectWidth * wasteRatio;
+              
+              doc.setFillColor(239, 68, 68);
+              doc.rect(currentX, yPosition, wasteWidth, rectHeight, 'F');
+              doc.setDrawColor(255, 255, 255);
+              doc.rect(currentX, yPosition, wasteWidth, rectHeight, 'S');
+              
+              if (wasteWidth > 20) {
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(6);
+                doc.text(`Waste: ${waste.toFixed(1)}"`, currentX + wasteWidth/2, yPosition + rectHeight/2 + 1, { align: 'center' });
+              }
+            }
+
+            yPosition += rectHeight + 3;
+
+            doc.setTextColor(100, 100, 100);
+            doc.setFontSize(7);
+            doc.text("118\" Total Width", rectStartX + rectWidth/2, yPosition, { align: 'center' });
+            yPosition += 8;
+
+            const efficiency = ((totalUsedWidth / 118) * 100);
+            checkPageBreak(25);
+            doc.setFontSize(8);
+            doc.setTextColor(60, 60, 60);
+            
+            let statsLine = `Used: ${totalUsedWidth.toFixed(1)}"  |  Waste: ${waste.toFixed(1)}"  |  Efficiency: ${efficiency.toFixed(1)}%  |  Cuts: ${sortedRolls.length}`;
+            
+            doc.text(statsLine, 30, yPosition);
+            yPosition += 15;
+          });
+
+          yPosition += 10;
+        });
+      }
+      
+      doc.save(`plan-details-${plan.name || 'plan'}-${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success('Plan details exported to PDF successfully!', { id: `report-${plan.id}` });
+    } catch (error) {
+      console.error('Error downloading report:', error);
+      toast.error('Failed to download report', { id: `report-${plan.id}` });
+    }
+  };
+
+  const handlePrintLabels = async (plan: Plan) => {
+    try {
+      toast.loading('Preparing labels...', { id: `labels-${plan.id}` });
+      
+      const productionSummary = await loadProductionData(plan.id);
+      if (!productionSummary || !productionSummary.detailed_items.length) {
+        toast.error('No cut rolls available for label printing', { id: `labels-${plan.id}` });
+        return;
+      }
+
+      // EXACT copy of exportBarcodesToPDF from plan details page
+      const filteredCutRolls = productionSummary.detailed_items; // Use all items for consistency
+      
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.width;
+      const pageHeight = doc.internal.pageSize.height;
+      
+      // Group cut rolls by jumbo for organized PDF output
+      const jumboGroups = groupCutRollsByJumboWithSequential(filteredCutRolls);
+      
+      // Sort jumbo groups for consistent PDF ordering
+      const sortedJumboEntries = Object.entries(jumboGroups).sort(([aId, aGroup], [bId, bGroup]) => {
+        const aDisplayId = aGroup.displayId;
+        const bDisplayId = bGroup.displayId;
+        
+        if (aDisplayId === 'Ungrouped Items') return 1;
+        if (bDisplayId === 'Ungrouped Items') return -1;
+        
+        const aNum = parseInt(aDisplayId.replace('JR-', '')) || 0;
+        const bNum = parseInt(bDisplayId.replace('JR-', '')) || 0;
+        
+        return aNum - bNum;
+      });
+      
+      // Single column layout configuration
+      const marginX = 20;
+      const marginY = 20;
+      const labelWidth = pageWidth - (marginX * 2);
+      const itemsPerPage = 8; // Fewer items per page for grouping headers
+      
+      let yPosition = marginY;
+      let itemCount = 0;
+      let pageCount = 1;
+
+      // Title on first page
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Barcode Labels - ${plan?.name || 'Plan Details'}`, pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 15;
+      
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Generated on: ${new Date().toLocaleString()}`, pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 8;
+      doc.text(`Total Items: ${filteredCutRolls.length}`, pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 20;
+      
+      // Process each jumbo group in sorted order
+      sortedJumboEntries.forEach(([originalJumboId, jumboGroup]) => {
+        const { displayId: jumboDisplayName, rolls: jumboRolls } = jumboGroup;
+        
+        // Check if we need a new page for jumbo header
+        if (itemCount >= itemsPerPage || yPosition > pageHeight - 100) {
+          doc.addPage();
+          pageCount++;
+          yPosition = marginY;
+          itemCount = 0;
+        }
+        
+        // Jumbo roll header
+        doc.setFontSize(18);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(40, 40, 40);
+        doc.text(jumboDisplayName, pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 8;
+        
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 100, 100);
+        doc.text(`${jumboRolls.length} cut rolls - Total Weight: ${jumboRolls.reduce((sum, roll) => sum + roll.weight_kg, 0).toFixed(1)} kg`, pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 15;
+        
+        // Sort cut rolls within this jumbo group and process them
+        jumboRolls
+          .sort((a, b) => {
+            const aRollNum = a.individual_roll_number || 999;
+            const bRollNum = b.individual_roll_number || 999;
+            if (aRollNum !== bRollNum) return aRollNum - bRollNum;
+            
+            if (a.width_inches !== b.width_inches) {
+              return a.width_inches - b.width_inches;
+            }
+            
+            const aCode = a.barcode_id || a.qr_code;
+            const bCode = b.barcode_id || b.qr_code;
+            return aCode.localeCompare(bCode);
+          })
+          .forEach((item, index) => {
+          // Check if we need a new page for this item
+          if (itemCount >= itemsPerPage || yPosition > pageHeight - 80) {
+            doc.addPage();
+            pageCount++;
+            yPosition = marginY;
+            itemCount = 0;
+          }
+
+          const barcodeValue = item.barcode_id || item.qr_code;
+          
+          // Generate and add barcode image
+          try {
+            const canvas = generateBarcodeCanvas(barcodeValue);
+            const barcodeDataUrl = canvas.toDataURL('image/png');
+            
+            // Barcode at full width, centered
+            const barcodeWidth = labelWidth * 0.8; // 80% of available width
+            const barcodeHeight = 25;
+            const barcodeX = marginX + (labelWidth - barcodeWidth) / 2;
+            const barcodeY = yPosition;
+            
+            doc.addImage(barcodeDataUrl, 'PNG', barcodeX, barcodeY, barcodeWidth, barcodeHeight);
+            yPosition += barcodeHeight + 8;
+            
+          } catch (error) {
+            console.error('Error adding barcode:', error);
+            // Fallback: text representation
+            doc.setFontSize(12);
+            doc.setFont('courier', 'bold');
+            doc.setTextColor(0, 0, 0);
+            doc.text(`|||| ${barcodeValue} ||||`, pageWidth / 2, yPosition, { align: 'center' });
+            yPosition += 12;
+          }
+
+          // Paper specifications and dimensions (only if available)
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(60, 60, 60);
+          
+          let infoLine = `${item.width_inches}" x ${item.weight_kg}kg`;
+          if (item.paper_specs) {
+            infoLine += ` | ${item.paper_specs.gsm}gsm, BF:${item.paper_specs.bf}, ${item.paper_specs.shade}`;
+          }
+          
+          doc.text(infoLine, pageWidth / 2, yPosition, { align: 'center' });
+          yPosition += 12;
+
+          // Separation line (except for last item in group)
+          if (index < jumboRolls.length - 1) {
+            doc.setDrawColor(200, 200, 200);
+            doc.setLineWidth(0.3);
+            doc.line(marginX + 40, yPosition, pageWidth - marginX - 40, yPosition);
+            yPosition += 10;
+          }
+
+          itemCount++;
+        });
+        
+        // Larger separation between jumbo groups
+        yPosition += 20;
+      });
+
+      // Add page numbers
+      const totalPages = doc.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Page ${i} of ${totalPages}`, pageWidth - 20, pageHeight - 10, { align: 'right' });
+      }
+
+      doc.save(`barcode-labels-${plan?.name || 'plan'}-${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success('Barcode labels exported to PDF successfully!', { id: `labels-${plan.id}` });
+    } catch (error) {
+      console.error('Error printing labels:', error);
+      toast.error('Failed to export labels', { id: `labels-${plan.id}` });
+    }
   };
 
   // Filter functions
@@ -482,17 +1161,30 @@ export default function PlansPage() {
                           {new Date(plan.created_at).toLocaleDateString()}
                         </TableCell>
                         <TableCell>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleViewPlan(plan)}
-                            >
-                              <Eye className="h-3 w-3 mr-1" />
-                              View Details
-                            </Button>
-                            
-                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleViewPlan(plan)}>
+                                <Eye className="mr-2 h-4 w-4" />
+                                View Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleDownloadReport(plan)}>
+                                <Download className="mr-2 h-4 w-4" />
+                                Download Report
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handlePrintLabels(plan)}>
+                                <Printer className="mr-2 h-4 w-4" />
+                                Print Labels
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </TableCell>
                       </TableRow>
                     ))

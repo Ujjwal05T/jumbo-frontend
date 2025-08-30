@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { MASTER_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
+import { generatePackingSlipPDF, convertDispatchToPackingSlip } from "@/lib/packing-slip-pdf";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -152,26 +153,40 @@ export default function PastDispatchListPage() {
 
   const downloadPDF = async (dispatchId: string, dispatchNumber: string) => {
     try {
-      const response = await fetch(`${MASTER_ENDPOINTS.BASE}/past-dispatch/${dispatchId}/pdf`, createRequestOptions('GET'));
+      console.log('Downloading PDF for dispatch:', dispatchId, dispatchNumber);
+      
+      // Show loading toast
+      toast.loading('Generating packing slip...', { id: `pdf-${dispatchId}` });
+      
+      // Fetch full dispatch details first
+      const response = await fetch(`${MASTER_ENDPOINTS.BASE}/past-dispatch/${dispatchId}`, createRequestOptions('GET'));
       
       if (!response.ok) {
-        throw new Error('Failed to generate PDF');
+        throw new Error(`Failed to fetch dispatch details: ${response.status}`);
       }
       
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `past-dispatch-${dispatchNumber}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      const dispatch = await response.json();
+      console.log('Fetched dispatch data:', dispatch);
       
-      toast.success('PDF downloaded successfully');
+      // Convert past dispatch data to packing slip format
+      const packingSlipData = convertDispatchToPackingSlip({
+        ...dispatch,
+        dispatch_items: dispatch.items, // Map items field
+        client: {
+          company_name: dispatch.client_name // Map client name field
+        }
+      });
+      
+      console.log('Converted packing slip data:', packingSlipData);
+      
+      // Generate PDF using the same format as dispatch records
+      generatePackingSlipPDF(packingSlipData);
+      
+      toast.success('Packing slip PDF downloaded successfully', { id: `pdf-${dispatchId}` });
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to download PDF';
-      toast.error(errorMessage);
+      console.error('Error generating PDF:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate packing slip PDF';
+      toast.error(errorMessage, { id: `pdf-${dispatchId}` });
     }
   };
 
@@ -352,7 +367,7 @@ export default function PastDispatchListPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Dispatch ID</TableHead>
-                        <TableHead>Dispatch Number</TableHead>
+                        <TableHead>Packing Slip Number</TableHead>
                         <TableHead>Date</TableHead>
                         <TableHead>Client</TableHead>
                         <TableHead>Vehicle</TableHead>

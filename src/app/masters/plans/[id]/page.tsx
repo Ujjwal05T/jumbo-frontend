@@ -200,6 +200,7 @@ export default function PlanDetailsPage() {
     }
   }, [planId]);
 
+
   const loadPlanDetails = async () => {
     try {
       setLoading(true);

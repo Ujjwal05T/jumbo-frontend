@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { MASTER_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
+import { generatePackingSlipPDF, convertDispatchToPackingSlip } from "@/lib/packing-slip-pdf";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -105,25 +106,21 @@ export default function PastDispatchDetailPage() {
     if (!dispatch) return;
     
     try {
-      const response = await fetch(`${MASTER_ENDPOINTS.BASE}/past-dispatch/${dispatch.id}/pdf`, createRequestOptions('GET'));
+      // Convert past dispatch data to packing slip format
+      const packingSlipData = convertDispatchToPackingSlip({
+        ...dispatch,
+        dispatch_items: dispatch.items, // Map items field
+        client: {
+          company_name: dispatch.client_name // Map client name field
+        }
+      });
       
-      if (!response.ok) {
-        throw new Error('Failed to generate PDF');
-      }
+      // Generate PDF using the same format as dispatch records
+      generatePackingSlipPDF(packingSlipData);
       
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `past-dispatch-${dispatch.dispatch_number}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-      
-      toast.success('PDF downloaded successfully');
+      toast.success('Packing slip PDF downloaded successfully');
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to download PDF';
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate packing slip PDF';
       toast.error(errorMessage);
     }
   };
@@ -264,7 +261,7 @@ export default function PastDispatchDetailPage() {
                   <div className="font-medium">{dispatch.frontend_id || 'N/A'}</div>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Dispatch Number:</span>
+                  <span className="text-muted-foreground">Packing Slip Number:</span>
                   <div className="font-medium">{dispatch.dispatch_number}</div>
                 </div>
                 <div>
@@ -345,7 +342,7 @@ export default function PastDispatchDetailPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Frontend ID</TableHead>
+                      <TableHead>Reel No.</TableHead>
                       <TableHead>Width</TableHead>
                       <TableHead>Weight</TableHead>
                       <TableHead>Rate</TableHead>
