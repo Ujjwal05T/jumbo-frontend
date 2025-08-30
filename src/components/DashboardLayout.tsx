@@ -70,8 +70,11 @@ const navigation = [
   // },
   {
     name: "Dispatch",
-    href: "/dispatch",
     icon: Truck,
+    children: [
+      { name: "Current Dispatch", href: "/dispatch" },
+      { name: "Past Dispatch", href: "/past-dispatch" },
+    ],
   },
   {
     name: "Challan",

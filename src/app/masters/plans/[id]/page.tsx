@@ -1048,6 +1048,32 @@ export default function PlanDetailsPage() {
           return groups;
         }, {});
 
+        // Helper function to wrap text for PDF
+        const wrapText = (text: string, maxWidth: number, fontSize: number): string[] => {
+          doc.setFontSize(fontSize);
+          const words = text.split(' ');
+          const lines: string[] = [];
+          let currentLine = '';
+
+          for (const word of words) {
+            const testLine = currentLine + (currentLine ? ' ' : '') + word;
+            const textWidth = doc.getTextWidth(testLine);
+            
+            if (textWidth > maxWidth && currentLine !== '') {
+              lines.push(currentLine);
+              currentLine = word;
+            } else {
+              currentLine = testLine;
+            }
+          }
+          
+          if (currentLine) {
+            lines.push(currentLine);
+          }
+          
+          return lines;
+        };
+
         Object.entries(specGroups).forEach(([specKey, specGroup]: [string, any], index) => {
           const weightMultiplier = getWeightMultiplier(specGroup.gsm);
           
@@ -1085,9 +1111,23 @@ export default function PlanDetailsPage() {
             .join(', ');
           
           const specText = `• ${specKey} - ${totalRolls} rolls (${widthDetails}) - Weight: ${totalWeight.toFixed(1)}kg`;
-          doc.text(specText, 25, yPosition);
-          yPosition += 6;
-          if ((index + 1) % 12 === 0) checkPageBreak(20); // Check page break every 12 specs (reduced due to longer text)
+          
+          // Wrap text if it's too long (max width: pageWidth - 50 for margins and bullet)
+          const maxLineWidth = pageWidth - 50;
+          const wrappedLines = wrapText(specText, maxLineWidth, 10);
+          
+          // Check if we need page break for all lines of this spec
+          checkPageBreak(wrappedLines.length * 6 + 2);
+          
+          // Print each line of the wrapped text
+          wrappedLines.forEach((line, lineIndex) => {
+            const xPos = lineIndex === 0 ? 25 : 30; // Indent continuation lines slightly more
+            doc.text(line, xPos, yPosition);
+            yPosition += 6;
+          });
+          
+          // Add small gap between specifications
+          yPosition += 2;
         });
         yPosition += 8;
       }
