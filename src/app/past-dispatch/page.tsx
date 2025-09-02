@@ -159,7 +159,7 @@ export default function PastDispatchListPage() {
       toast.loading('Generating packing slip...', { id: `pdf-${dispatchId}` });
       
       // Fetch full dispatch details first
-      const response = await fetch(`${MASTER_ENDPOINTS.BASE}/past-dispatch/${dispatchId}`, createRequestOptions('GET'));
+      const response = await fetch(`${MASTER_ENDPOINTS.BASE}/past-dispatch/${dispatchId}/details`, createRequestOptions('GET'));
       
       if (!response.ok) {
         throw new Error(`Failed to fetch dispatch details: ${response.status}`);

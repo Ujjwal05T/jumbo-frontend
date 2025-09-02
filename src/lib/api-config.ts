@@ -21,6 +21,7 @@ export const AUTH_ENDPOINTS = {
 // Master endpoints
 export const MASTER_ENDPOINTS = {
   BASE: API_BASE_URL,
+  BASE_URL: API_BASE_URL,
   CLIENTS: `${API_BASE_URL}/clients`,
   PAPERS: `${API_BASE_URL}/papers`,
   USERS: `${API_BASE_URL}/users`,

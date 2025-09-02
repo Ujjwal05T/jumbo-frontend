@@ -424,18 +424,7 @@ export default function CreatePastDispatchPage() {
           ) : (
           <div className="space-y-6">
             {/* Status Indicator */}
-            {!isDispatchRecordComplete() && (
-              <Card className="border-yellow-200 bg-yellow-50">
-                <CardContent className="p-1">
-                  <div className="flex items-center gap-2 text-yellow-800">
-                    <Settings className="h-4 w-4" />
-                    <span className="text-sm font-medium">
-                      Complete dispatch details to save the record (use Fill Dispatch Details button below)
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+            
             
             {/* Dispatch Items */}
             <Card>

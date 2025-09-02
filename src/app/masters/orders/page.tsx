@@ -144,16 +144,70 @@ export default function OrderMasterPage() {
     }
   };
 
-  const filteredOrders = orders.filter((order: Order) => {
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      order.client?.contact_person?.toLowerCase().includes(searchLower) ||
-      order.client?.company_name?.toLowerCase().includes(searchLower) ||
-      order.order_items?.some(item => 
-        item.paper?.name?.toLowerCase().includes(searchLower)
-      )
-    );
-  });
+  // Sorting function for order IDs
+  const sortOrdersByIdDesc = (ordersToSort: Order[]) => {
+    return ordersToSort.sort((a, b) => {
+      const parseOrderId = (orderId: string) => {
+        if (!orderId) return { year: 0, month: 0, number: 0 };
+        
+        // ORD-YY-MM-0001 format
+        const yymmMatch = orderId.match(/^ORD-(\d{2})-(\d{2})-(\d{4})$/);
+        if (yymmMatch) {
+          const year = 2000 + parseInt(yymmMatch[1]);
+          const month = parseInt(yymmMatch[2]);
+          const number = parseInt(yymmMatch[3]);
+          return { year, month, number };
+        }
+        
+        // ORD-YYYY-00001 format (5 digits)
+        const yyyy5Match = orderId.match(/^ORD-(\d{4})-(\d{5})$/);
+        if (yyyy5Match) {
+          const year = parseInt(yyyy5Match[1]);
+          const number = parseInt(yyyy5Match[2]);
+          return { year, month: 0, number };
+        }
+        
+        // ORD-YYYY-001 format (3 digits)
+        const yyyy3Match = orderId.match(/^ORD-(\d{4})-(\d{3})$/);
+        if (yyyy3Match) {
+          const year = parseInt(yyyy3Match[1]);
+          const number = parseInt(yyyy3Match[2]);
+          return { year, month: 0, number };
+        }
+        
+        return { year: 0, month: 0, number: 0 };
+      };
+      
+      const parsedA = parseOrderId(a.frontend_id || '');
+      const parsedB = parseOrderId(b.frontend_id || '');
+      
+      // Sort by year descending
+      if (parsedA.year !== parsedB.year) {
+        return parsedB.year - parsedA.year;
+      }
+      
+      // Sort by month descending (for YY-MM format)
+      if (parsedA.month !== parsedB.month) {
+        return parsedB.month - parsedA.month;
+      }
+      
+      // Sort by number descending
+      return parsedB.number - parsedA.number;
+    });
+  };
+
+  const filteredOrders = sortOrdersByIdDesc(
+    orders.filter((order: Order) => {
+      const searchLower = searchTerm.toLowerCase();
+      return (
+        order.client?.contact_person?.toLowerCase().includes(searchLower) ||
+        order.client?.company_name?.toLowerCase().includes(searchLower) ||
+        order.order_items?.some(item => 
+          item.paper?.name?.toLowerCase().includes(searchLower)
+        )
+      );
+    })
+  );
 
   const createdOrders = orders.filter((o: Order) => o.status === 'created').length;
   const inProcessOrders = orders.filter((o: Order) => o.status === 'in_process').length;

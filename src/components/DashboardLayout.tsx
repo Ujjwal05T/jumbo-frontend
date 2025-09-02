@@ -31,7 +31,9 @@ import {
   Truck,
   BarChart3,
   Receipt,
-  Recycle
+  Recycle,
+  Package,
+  Database
 } from "lucide-react";
 import { getCurrentUser, logout } from "@/lib/auth";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -59,15 +61,22 @@ const navigation = [
     ],
   },
   {
+    name: "Stock",
+    href: "/wastage",
+    icon: Recycle,
+  },
+  {
     name: "Planning",
     href: "/planning",
     icon: Scissors,
   },
-  // {
-  //   name: "Inventory",
-  //   href: "/wastage",
-  //   icon: Recycle,
-  // },
+  {
+    name: "Inventory",
+    icon: Package,
+    children: [
+      { name: "Past Inventory", href: "/inventory/past-inventory" },
+    ],
+  },
   {
     name: "Dispatch",
     icon: Truck,
