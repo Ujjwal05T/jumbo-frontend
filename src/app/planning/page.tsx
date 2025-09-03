@@ -48,6 +48,16 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
   Loader2,
   AlertCircle,
   Factory,
@@ -58,10 +68,13 @@ import {
   ChevronDown,
   ChevronRight,
   ArrowLeft,
+  Plus,
+  Minus,
 } from "lucide-react";
 import BarcodeDisplay from "@/components/BarcodeDisplay";
 import { fetchOrders, Order } from "@/lib/orders";
 import { PRODUCTION_ENDPOINTS, API_BASE_URL, createRequestOptions } from "@/lib/api-config";
+import { createGuptaCompletionOrder, type RequiredRoll } from "@/lib/gupta-orders";
 import jsPDF from "jspdf";
 import JsBarcode from 'jsbarcode';
 
@@ -190,6 +203,10 @@ export default function PlanningPage() {
   const [selectedCutRolls, setSelectedCutRolls] = useState<number[]>([]); // Individual cut piece indices
   const [selected118Rolls, setSelected118Rolls] = useState<string[]>([]); // 118" roll composite keys (spec-rollNumber)
   const [selectedJumboRolls, setSelectedJumboRolls] = useState<string[]>([]); // Individual jumbo roll composite keys
+  const [addedRolls, setAddedRolls] = useState<Record<string, RequiredRoll[]>>({}); // Store added rolls by jumbo_id
+  const [showAddCutsModal, setShowAddCutsModal] = useState(false);
+  const [currentJumboForCuts, setCurrentJumboForCuts] = useState<JumboRollDetail | null>(null);
+  const [cutSpecifications, setCutSpecifications] = useState<{width: number, quantity: number}[]>([{width: 0, quantity: 1}]);
   const [wastageCalculation, setWastageCalculation] = useState<WastageCalculationResult | null>(null);
   const [productionRecords, setProductionRecords] = useState<
     ProductionRecord[]
@@ -503,6 +520,146 @@ export default function PlanningPage() {
 
   // REMOVED: handleSelectAll118Rolls - only jumbo selection buttons now
 
+  const handleAddRollsToPartialJumbo = (jumboDetail: JumboRollDetail) => {
+    const rollsNeeded = 3 - jumboDetail.roll_count;
+    setCurrentJumboForCuts(jumboDetail);
+    setCutSpecifications([{width: 0, quantity: 1}]); // Reset to one empty cut
+    setShowAddCutsModal(true);
+  };
+
+  const handleSubmitCuts = () => {
+    if (!currentJumboForCuts) return;
+    
+    try {
+      const rollsNeeded = 3 - currentJumboForCuts.roll_count;
+      
+      // Find a cut roll from this jumbo to get paper specs
+      const jumboRolls = planResult?.cut_rolls_generated?.filter(roll => 
+        roll.jumbo_roll_id === currentJumboForCuts.jumbo_id
+      );
+      
+      if (!jumboRolls || jumboRolls.length === 0) {
+        throw new Error("Cannot find paper specifications for this jumbo");
+      }
+
+      const sampleRoll = jumboRolls[0];
+      
+      // Validate cuts fit within 118"
+      const totalWidth = cutSpecifications.reduce((sum, cut) => sum + (cut.width * cut.quantity), 0);
+      if (totalWidth > 118 * rollsNeeded) {
+        toast.error(`Total cut width (${totalWidth}") exceeds available roll width (${118 * rollsNeeded}")`);
+        return;
+      }
+
+      // Create required rolls array with cut specifications
+      const requiredRolls: RequiredRoll[] = [];
+      for (let i = 0; i < rollsNeeded; i++) {
+        requiredRolls.push({
+          width_inches: 118,
+          paper_id: sampleRoll.paper_id || 'PAPER_001',
+          rate: 50,
+          cut_specifications: cutSpecifications // Add cut specs to the roll
+        } as any);
+      }
+
+      // Store the added rolls in state
+      setAddedRolls(prev => ({
+        ...prev,
+        [currentJumboForCuts.jumbo_id]: requiredRolls
+      }));
+
+      // Update the planResult to show this jumbo as complete AND create actual cut roll data
+      if (planResult?.jumbo_roll_details) {
+        setPlanResult(prev => {
+          if (!prev) return prev;
+          
+          // Find existing cuts for this jumbo to determine next roll number
+          const existingCuts = prev.cut_rolls_generated.filter(roll => 
+            roll.jumbo_roll_id === currentJumboForCuts.jumbo_id
+          );
+          
+          // Find the highest individual_roll_number for this jumbo
+          const maxRollNumber = Math.max(
+            ...existingCuts.map(roll => roll.individual_roll_number || 0),
+            0
+          );
+          
+          // Create new cut rolls based on specifications
+          const newCutRolls = [];
+          for (let rollIndex = 0; rollIndex < rollsNeeded; rollIndex++) {
+            const rollNumber = maxRollNumber + 1 + rollIndex;
+            const parent118RollId = `${currentJumboForCuts.jumbo_id}_roll_${rollNumber}`;
+            
+            // Create individual cut rolls from specifications
+            for (const cutSpec of cutSpecifications) {
+              for (let cutIndex = 0; cutIndex < cutSpec.quantity; cutIndex++) {
+                const newCutRoll = {
+                  width: cutSpec.width,
+                  gsm: sampleRoll.gsm,
+                  bf: sampleRoll.bf,
+                  shade: sampleRoll.shade,
+                  individual_roll_number: rollNumber,
+                  parent_118_roll_id: parent118RollId,
+                  jumbo_roll_id: currentJumboForCuts.jumbo_id,
+                  paper_id: sampleRoll.paper_id || 'PAPER_001',
+                  order_id: `GUPTA_${Date.now()}_${rollIndex}_${cutIndex}`,
+                  source: 'added_completion',
+                  source_type: 'added_completion',
+                  trim_left: 0,
+                  source_pending_id: null
+                };
+                
+                newCutRolls.push(newCutRoll);
+              }
+            }
+          }
+          
+          return {
+            ...prev,
+            cut_rolls_generated: [...prev.cut_rolls_generated, ...newCutRolls],
+            jumbo_roll_details: prev.jumbo_roll_details.map(jumbo => 
+              jumbo.jumbo_id === currentJumboForCuts.jumbo_id
+                ? { 
+                    ...jumbo, 
+                    is_complete: true, 
+                    roll_count: 3,
+                    total_cuts: (jumbo.total_cuts || 0) + newCutRolls.length
+                  }
+                : jumbo
+            ),
+            summary: {
+              ...prev.summary,
+              complete_jumbos: (prev.summary.complete_jumbos || 0) + 1,
+              partial_jumbos: Math.max(0, (prev.summary.partial_jumbos || 0) - 1),
+              total_cut_rolls: (prev.summary.total_cut_rolls || 0) + newCutRolls.length
+            }
+          };
+        });
+      }
+      
+      setShowAddCutsModal(false);
+      setCurrentJumboForCuts(null);
+      toast.success(`Added ${rollsNeeded} rolls with ${cutSpecifications.length} cut specifications to complete Jumbo ${currentJumboForCuts.jumbo_frontend_id}!`);
+    } catch (error) {
+      console.error('Error adding cuts to partial jumbo:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to add cuts');
+    }
+  };
+
+  const addCutSpecification = () => {
+    setCutSpecifications(prev => [...prev, {width: 0, quantity: 1}]);
+  };
+
+  const removeCutSpecification = (index: number) => {
+    setCutSpecifications(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const updateCutSpecification = (index: number, field: 'width' | 'quantity', value: number) => {
+    setCutSpecifications(prev => prev.map((cut, i) => 
+      i === index ? {...cut, [field]: value} : cut
+    ));
+  };
+
   const generatePlan = async () => {
     if (selectedOrders.length === 0) {
       const errorMessage = "Please select at least one order to generate a plan.";
@@ -547,6 +704,7 @@ export default function PlanningPage() {
       };
 
       setPlanResult(planResult);
+      setAddedRolls({}); // Clear any previously added rolls when generating new plan
       setActiveTab("cut-rolls");
       
       if (validationResult.is_valid) {
@@ -760,12 +918,14 @@ export default function PlanningPage() {
         selected_cut_rolls: selectedRolls,
         all_available_cuts: allAvailableCuts,
         wastage_data: wastageCalculation.wastageItems, // Include wastage data
+        added_rolls_data: addedRolls, // Include added rolls for partial jumbo completion
         created_by_id: user_id,
         jumbo_roll_width: planningWidth // Use calculated width from wastage
       };
 
       console.log("🚀 PRODUCTION REQUEST:", productionRequest);
       console.log("🗑️ WASTAGE DATA BEING SENT:", wastageCalculation.wastageItems);
+      console.log("➕ ADDED ROLLS DATA BEING SENT:", addedRolls);
 
       const response = await fetch(`${API_BASE_URL}/plans/${currentPlanId}/start-production`, {
         method: 'POST',
@@ -1916,6 +2076,7 @@ export default function PlanningPage() {
                 </Card>
               </div>
 
+
               {/* Jumbo Roll Sets - Brief Summary - NEW FLOW */}
               {planResult.jumbo_rolls_needed > 0 && (
                 <div className="mb-6 p-4 bg-muted/50 border rounded-lg">
@@ -2420,6 +2581,15 @@ export default function PlanningPage() {
                                   className="text-sm">
                                   {jumboDetail.is_complete ? "Complete" : `${jumboDetail.roll_count}/3 Rolls`}
                                 </Badge>
+                                {!jumboDetail.is_complete && !productionStarted && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleAddRollsToPartialJumbo(jumboDetail)}
+                                    className="text-blue-600 hover:text-blue-700 hover:bg-blue-50">
+                                    Add Rolls
+                                  </Button>
+                                )}
                                 <div className="text-right">
                                   <div className="text-lg font-semibold text-green-600">
                                     {jumboDetail.efficiency_percentage}%
@@ -2836,6 +3006,93 @@ export default function PlanningPage() {
           </div>
         </div>
       )}
+
+      {/* Cut Specifications Modal */}
+      <Dialog open={showAddCutsModal} onOpenChange={setShowAddCutsModal}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Add Cut Specifications</DialogTitle>
+            <DialogDescription>
+              Specify the cuts you want for {currentJumboForCuts ? `Jumbo ${currentJumboForCuts.jumbo_frontend_id}` : ''}
+              ({currentJumboForCuts ? 3 - currentJumboForCuts.roll_count : 0} roll{(currentJumboForCuts && 3 - currentJumboForCuts.roll_count !== 1) ? 's' : ''} needed)
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {cutSpecifications.map((cut, index) => (
+              <div key={index} className="flex items-center space-x-3 p-3 border rounded-lg">
+                <div className="flex-1">
+                  <Label htmlFor={`width-${index}`}>Width (inches)</Label>
+                  <Input
+                    id={`width-${index}`}
+                    type="number"
+                    min="1"
+                    max="117"
+                    value={cut.width || ''}
+                    onChange={(e) => updateCutSpecification(index, 'width', parseInt(e.target.value) || 0)}
+                    placeholder="e.g. 24"
+                  />
+                </div>
+                <div className="flex-1">
+                  <Label htmlFor={`quantity-${index}`}>Quantity</Label>
+                  <Input
+                    id={`quantity-${index}`}
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={cut.quantity || 1}
+                    onChange={(e) => updateCutSpecification(index, 'quantity', parseInt(e.target.value) || 1)}
+                  />
+                </div>
+                <div className="flex flex-col space-y-1">
+                  {index === cutSpecifications.length - 1 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addCutSpecification}
+                      className="h-8 w-8 p-0">
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {cutSpecifications.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => removeCutSpecification(index)}
+                      className="h-8 w-8 p-0 text-red-600 hover:text-red-700">
+                      <Minus className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+            
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <div className="text-sm">
+                <strong>Total width per roll:</strong> {cutSpecifications.reduce((sum, cut) => sum + (cut.width * cut.quantity), 0)}"
+              </div>
+              <div className="text-sm text-muted-foreground">
+                Available: {currentJumboForCuts ? (118 * (3 - currentJumboForCuts.roll_count)) : 0}" total
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowAddCutsModal(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSubmitCuts}
+              disabled={cutSpecifications.some(cut => cut.width <= 0)}>
+              Add Cuts
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Confirmation Dialog */}
       <ConfirmationDialog
