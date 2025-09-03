@@ -586,6 +586,8 @@ export default function PlanningPage() {
           
           // Create new cut rolls based on specifications
           const newCutRolls = [];
+          const currentCutRollsLength = prev.cut_rolls_generated.length;
+          
           for (let rollIndex = 0; rollIndex < rollsNeeded; rollIndex++) {
             const rollNumber = maxRollNumber + 1 + rollIndex;
             const parent118RollId = `${currentJumboForCuts.jumbo_id}_roll_${rollNumber}`;
@@ -614,9 +616,11 @@ export default function PlanningPage() {
             }
           }
           
+          const updatedCutRolls = [...prev.cut_rolls_generated, ...newCutRolls];
+          
           return {
             ...prev,
-            cut_rolls_generated: [...prev.cut_rolls_generated, ...newCutRolls],
+            cut_rolls_generated: updatedCutRolls,
             jumbo_roll_details: prev.jumbo_roll_details.map(jumbo => 
               jumbo.jumbo_id === currentJumboForCuts.jumbo_id
                 ? { 
@@ -1237,7 +1241,12 @@ export default function PlanningPage() {
             if (!groups[key]) {
               groups[key] = [];
             }
-            const originalIndex = (planResult.cut_rolls_generated || []).findIndex(r => r === roll);
+            // Find original index in the full cut_rolls_generated array
+            let originalIndex = (planResult.cut_rolls_generated || []).findIndex(r => r === roll);
+            // If not found (for newly added rolls), use current index as fallback
+            if (originalIndex === -1) {
+              originalIndex = index;
+            }
             groups[key].push({ ...roll, originalIndex: originalIndex >= 0 ? originalIndex : index });
             return groups;
           }, {} as Record<string, Array<CutRoll & { originalIndex: number }>>);
@@ -1393,7 +1402,13 @@ export default function PlanningPage() {
             if (!groups[key]) {
               groups[key] = [];
             }
-            groups[key].push({ ...roll, originalIndex: index });
+            // Find original index in the full cut_rolls_generated array  
+            let originalIndex = (planResult.cut_rolls_generated || []).findIndex(r => r === roll);
+            // If not found (for newly added rolls), use current index as fallback
+            if (originalIndex === -1) {
+              originalIndex = index;
+            }
+            groups[key].push({ ...roll, originalIndex: originalIndex >= 0 ? originalIndex : index });
             return groups;
           },
           {} as Record<string, Array<CutRoll & { originalIndex: number }>>
@@ -2201,10 +2216,18 @@ export default function PlanningPage() {
                       const groupedWithIndex = Object.fromEntries(
                         Object.entries(groupedRolls).map(([key, rolls]) => [
                           key.replace(/-/g, ', '),
-                          rolls.map((roll, idx) => ({ 
-                            ...roll, 
-                            originalIndex: planResult.cut_rolls_generated.findIndex(r => r === roll)
-                          }))
+                          rolls.map((roll, idx) => {
+                            // Find original index in the full cut_rolls_generated array
+                            let originalIndex = planResult.cut_rolls_generated.findIndex(r => r === roll);
+                            // If not found (for newly added rolls), use the current position in the array
+                            if (originalIndex === -1) {
+                              originalIndex = planResult.cut_rolls_generated.length - (rolls.length - idx);
+                            }
+                            return { 
+                              ...roll, 
+                              originalIndex: originalIndex >= 0 ? originalIndex : idx
+                            };
+                          })
                         ])
                       );
 
@@ -2613,9 +2636,20 @@ export default function PlanningPage() {
                                   if (!groups[key]) {
                                     groups[key] = [];
                                   }
+                                  // Find original index in the full cut_rolls_generated array
+                                  let originalIndex = planResult.cut_rolls_generated.findIndex(r => r === roll);
+                                  // If not found (for newly added rolls), find by matching properties
+                                  if (originalIndex === -1) {
+                                    originalIndex = planResult.cut_rolls_generated.findIndex(r => 
+                                      r.width === roll.width &&
+                                      r.jumbo_roll_id === roll.jumbo_roll_id &&
+                                      r.individual_roll_number === roll.individual_roll_number &&
+                                      r.parent_118_roll_id === roll.parent_118_roll_id
+                                    );
+                                  }
                                   groups[key].push({
                                     ...roll,
-                                    originalIndex: planResult.cut_rolls_generated.findIndex(r => r === roll)
+                                    originalIndex: originalIndex >= 0 ? originalIndex : Object.keys(groups).length
                                   });
                                   return groups;
                                 }, {} as Record<string, Array<CutRoll & { originalIndex: number }>>);
