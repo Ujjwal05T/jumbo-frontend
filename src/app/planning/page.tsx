@@ -404,18 +404,30 @@ export default function PlanningPage() {
     return Array.from(rollKeys).sort();
   }, [planResult, getRollKeyFromCutRoll]);
 
-  // Helper function to get available jumbo roll count (all jumbos with 1+ rolls ready for production)
-  const getAvailableJumboRolls = useCallback(() => {
-    // FLEXIBLE: Count all jumbos with 1+ rolls (ready for production)
+  // Helper function to get COMPLETE jumbo roll count (exactly 3 rolls - for button selection)
+  const getCompleteJumboRolls = useCallback(() => {
     if (!planResult?.jumbo_roll_details) {
       return 0;
     }
     
-    const readyJumbos = planResult.jumbo_roll_details.filter(jumbo => 
-      jumbo && jumbo.is_complete && jumbo.roll_count >= 1
+    const completeJumbos = planResult.jumbo_roll_details.filter(jumbo => 
+      jumbo && jumbo.roll_count === 3
     );
     
-    return readyJumbos.length;
+    return completeJumbos.length;
+  }, [planResult]);
+
+  // Helper function to get ALL available jumbo roll count (1+ rolls - manual selection allowed)
+  const getAllAvailableJumboRolls = useCallback(() => {
+    if (!planResult?.jumbo_roll_details) {
+      return 0;
+    }
+    
+    const availableJumbos = planResult.jumbo_roll_details.filter(jumbo => 
+      jumbo && jumbo.roll_count >= 1
+    );
+    
+    return availableJumbos.length;
   }, [planResult]);
 
   // Helper function to get total available individual 118" rolls
@@ -448,6 +460,23 @@ export default function PlanningPage() {
     return selectedJumboIds.size;
   }, [planResult, selected118Rolls, getRollKeyFromCutRoll]);
 
+  // Helper to get correct complete/partial counts for display
+  const getCorrectJumboCounts = useCallback(() => {
+    if (!planResult?.jumbo_roll_details) {
+      return { complete: 0, partial: 0 };
+    }
+    
+    const complete = planResult.jumbo_roll_details.filter(jumbo => 
+      jumbo && jumbo.roll_count === 3
+    ).length;
+    
+    const partial = planResult.jumbo_roll_details.filter(jumbo => 
+      jumbo && jumbo.roll_count > 0 && jumbo.roll_count < 3
+    ).length;
+    
+    return { complete, partial };
+  }, [planResult]);
+
   // Helper function to check if selection is valid (FLEXIBLE: any quantity of rolls)
   const isValid118RollSelection = useCallback(
     (selectedRollCount: number) => {
@@ -461,27 +490,27 @@ export default function PlanningPage() {
     [getTotalAvailable118Rolls]
   );
 
-  // Helper function to select specific number of jumbo rolls (FLEXIBLE: 1-3 rolls each)
+  // Helper function to select specific number of COMPLETE jumbo rolls (exactly 3 rolls each)
   const selectJumboRolls = useCallback(
     (jumboCount: number) => {
       if (!planResult?.jumbo_roll_details) return;
       
-      // FLEXIBLE: Get ready jumbos (1+ rolls each)
-      const readyJumbos = planResult.jumbo_roll_details.filter(jumbo => 
-        jumbo && jumbo.is_complete && jumbo.roll_count >= 1
-      ).slice(0, jumboCount); // Select only the requested number of ready jumbos
+      // ONLY complete jumbos (exactly 3 rolls) for button selection
+      const completeJumbos = planResult.jumbo_roll_details.filter(jumbo => 
+        jumbo && jumbo.roll_count === 3
+      ).slice(0, jumboCount); // Select only the requested number of complete jumbos
       
-      if (readyJumbos.length < jumboCount) {
-        console.warn(`Only ${readyJumbos.length} ready jumbos available, requested ${jumboCount}`);
+      if (completeJumbos.length < jumboCount) {
+        console.warn(`Only ${completeJumbos.length} complete jumbos available, requested ${jumboCount}`);
         return;
       }
       
-      // Get roll keys for the selected ready jumbos
+      // Get roll keys for the selected complete jumbos
       const selectedRollKeysSet = new Set<string>();
       const cutRollIndices: number[] = [];
       
-      readyJumbos.forEach(jumbo => {
-        // Find cut rolls belonging to this ready jumbo
+      completeJumbos.forEach(jumbo => {
+        // Find cut rolls belonging to this complete jumbo
         planResult.cut_rolls_generated.forEach((roll, index) => {
           if (roll.jumbo_roll_id === jumbo.jumbo_id) {
             const rollKey = getRollKeyFromCutRoll(roll);
@@ -764,7 +793,7 @@ export default function PlanningPage() {
     
     if (!isValid118RollSelection(selected118Rolls.length)) {
       const totalAvailable = getTotalAvailable118Rolls();
-      const availableJumbos = getAvailableJumboRolls();
+      const availableJumbos = getAllAvailableJumboRolls();
       const errorMessage = `Please select valid 118" rolls. Available: ${totalAvailable} individual rolls from ${availableJumbos} jumbo${availableJumbos !== 1 ? 's' : ''}`;
       setError(errorMessage);
       toast.error(errorMessage);
@@ -844,7 +873,7 @@ export default function PlanningPage() {
       // Validate 118" roll selection before proceeding
       if (!isValid118RollSelection(selected118Rolls.length)) {
         const totalAvailable = getTotalAvailable118Rolls();
-        const availableJumbos = getAvailableJumboRolls();
+        const availableJumbos = getAllAvailableJumboRolls();
         toast.error(
           `Please select valid 118" rolls. ` +
           `Available: ${totalAvailable} individual rolls from ${availableJumbos} jumbo${availableJumbos !== 1 ? 's' : ''}`
@@ -2089,17 +2118,17 @@ export default function PlanningPage() {
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-2xl text-cyan-600">
-                      {planResult.summary.complete_jumbos || 0}
+                      {getCorrectJumboCounts().complete}
                     </CardTitle>
-                    <CardDescription>Complete Jumbos</CardDescription>
+                    <CardDescription>Complete Jumbos (3 rolls)</CardDescription>
                   </CardHeader>
                 </Card>
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-2xl text-yellow-600">
-                      {planResult.summary.partial_jumbos || 0}
+                      {getCorrectJumboCounts().partial}
                     </CardTitle>
-                    <CardDescription>Partial Jumbos</CardDescription>
+                    <CardDescription>Partial Jumbos (1-2 rolls)</CardDescription>
                   </CardHeader>
                 </Card>
                 <Card>
@@ -2158,11 +2187,11 @@ export default function PlanningPage() {
                       <CardTitle>Cut Rolls Available for Production</CardTitle>
                       <CardDescription>
                         {displayMode === 'jumbo' 
-                          ? 'Select any available jumbo rolls (flexible 1-3 rolls each)'
+                          ? 'Select complete jumbos (3 rolls) via buttons, or manually select any jumbo (1-3 rolls)'
                           : 'Select rolls by paper specification and roll number - Traditional view'
                         }
                         <div className="text-xs text-blue-600 mt-1">
-                           All jumbos with 1+ rolls are available for selection.
+                           Buttons select complete jumbos only. Partial jumbos selectable manually.
                         </div>
                       </CardDescription>
                     </div>
@@ -2184,7 +2213,7 @@ export default function PlanningPage() {
                   <div className="flex flex-col gap-3">
                       <div className="text-sm text-muted-foreground">
                         {selected118Rolls.length > 0 
-                          ? `${selected118Rolls.length} of ${getTotalAvailable118Rolls()} available 118" rolls selected from ${getSelectedJumboCount()}/${getAvailableJumboRolls()} jumbos`
+                          ? `${selected118Rolls.length} of ${getTotalAvailable118Rolls()} available 118" rolls selected from ${getSelectedJumboCount()}/${getAllAvailableJumboRolls()} jumbos (${getCompleteJumboRolls()} complete, ${getAllAvailableJumboRolls() - getCompleteJumboRolls()} partial)`
                           : `${selectedCutRolls.length} cut rolls selected from ${selected118Rolls.length} x 118" rolls`
                         }
                         {selected118Rolls.length > 0 && (
@@ -2207,17 +2236,17 @@ export default function PlanningPage() {
                         </div>
                       )}
                       <div className="flex flex-wrap gap-2">
-                        {/* Jumbo Roll Selection Helpers */}
-                        {getAvailableJumboRolls() > 0 && (
+                        {/* Complete Jumbo Roll Selection Buttons (3 rolls only) */}
+                        {getCompleteJumboRolls() > 0 && (
                           <>
-                            {Array.from({ length: getAvailableJumboRolls() }, (_, i) => i + 1).map((jumboCount) => (
+                            {Array.from({ length: getCompleteJumboRolls() }, (_, i) => i + 1).map((jumboCount) => (
                               <Button
                                 key={jumboCount}
                                 size="sm"
                                 variant={getSelectedJumboCount() === jumboCount ? "default" : "outline"}
                                 onClick={() => selectJumboRolls(jumboCount)}
                                 className="text-xs">
-                                {jumboCount} Jumbo{jumboCount > 1 ? 's' : ''} (flexible sizing)
+                                {jumboCount} Complete Jumbo{jumboCount > 1 ? 's' : ''} (3 rolls each)
                               </Button>
                             ))}
                             <div className="w-px h-6 bg-border mx-1" />
@@ -2629,9 +2658,9 @@ export default function PlanningPage() {
                               </div>
                               <div className="flex items-center gap-3">
                                 <Badge 
-                                  variant={jumboDetail.is_complete ? "default" : "secondary"}
+                                  variant={jumboDetail.roll_count === 3 ? "default" : "secondary"}
                                   className="text-sm">
-                                  {jumboDetail.is_complete ? `${jumboDetail.roll_count} Roll${jumboDetail.roll_count > 1 ? 's' : ''} Ready` : "Empty"}
+                                  {jumboDetail.roll_count === 3 ? "Complete" : jumboDetail.roll_count > 0 ? `Partial (${jumboDetail.roll_count}/3 rolls)` : "Empty"}
                                 </Badge>
                                 {jumboDetail.roll_count < 3 && !productionStarted && (
                                   <Button
