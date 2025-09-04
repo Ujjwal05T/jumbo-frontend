@@ -77,6 +77,7 @@ interface JumboRollSuggestion {
   };
   jumbo_number: number;
   target_width: number;
+  pending_order_ids: string[];
   rolls: Array<{
     roll_number: number;
     target_width: number;
@@ -123,6 +124,10 @@ export default function PendingOrderItemsPage() {
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [showWastageDialog, setShowWastageDialog] = useState(false);
   const [wastageInput, setWastageInput] = useState<string>("");
+  
+  // Selection and production state
+  const [selectedSuggestions, setSelectedSuggestions] = useState<Set<string>>(new Set());
+  const [productionLoading, setProductionLoading] = useState(false);
 
   // Fetch pending order items from API
   useEffect(() => {
@@ -350,6 +355,124 @@ export default function PendingOrderItemsPage() {
 
     pdf.save(`roll-suggestions-${suggestionResult.target_width}inch-${new Date().toISOString().split('T')[0]}.pdf`);
     toast.success('PDF downloaded successfully');
+  };
+
+  // Selection and production functions
+  const handleSuggestionToggle = (suggestionId: string, checked: boolean) => {
+    setSelectedSuggestions(prev => {
+      const newSet = new Set(prev);
+      if (checked) {
+        newSet.add(suggestionId);
+      } else {
+        newSet.delete(suggestionId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAllSuggestions = (checked: boolean) => {
+    if (checked && suggestionResult?.jumbo_suggestions) {
+      setSelectedSuggestions(new Set(suggestionResult.jumbo_suggestions.map(s => s.suggestion_id)));
+    } else {
+      setSelectedSuggestions(new Set());
+    }
+  };
+
+  const handleStartProduction = async () => {
+    if (!suggestionResult || selectedSuggestions.size === 0) {
+      toast.error('Please select at least one suggestion');
+      return;
+    }
+
+    try {
+      setProductionLoading(true);
+      
+      // Get user ID from localStorage
+      const userId = localStorage.getItem('user_id');
+      if (!userId) {
+        toast.error('User not authenticated');
+        return;
+      }
+      
+      // Filter selected suggestions
+      const selectedSuggestionData = suggestionResult.jumbo_suggestions.filter(
+        suggestion => selectedSuggestions.has(suggestion.suggestion_id)
+      );
+
+      // Extract all pending order IDs from selected suggestions
+      const allSelectedPendingIds = selectedSuggestionData.flatMap(
+        suggestion => suggestion.pending_order_ids
+      );
+
+      // Get original pending order items for selected suggestions
+      const originalPendingOrders = pendingItems.filter(item =>
+        allSelectedPendingIds.includes(item.id)
+      );
+
+      console.log('🔧 PRODUCTION DATA EXTRACTION:');
+      console.log('Selected suggestions:', selectedSuggestionData.length);
+      console.log('Pending IDs from suggestions:', allSelectedPendingIds);
+      console.log('Original pending orders found:', originalPendingOrders.length);
+
+      // Transform to main planning format - individual cut_rolls from original pending orders
+      const selectedCutRolls = originalPendingOrders.map((pendingItem, index) => ({
+        paper_id: "", // Will be filled by backend from paper specs
+        width_inches: pendingItem.width_inches,
+        qr_code: `PENDING_CUT_${Date.now()}_${Math.random().toString(36).substr(2, 4)}_${index}`,
+        barcode_id: `PCR_${String(index + 1).padStart(5, '0')}`,
+        gsm: pendingItem.gsm,
+        bf: pendingItem.bf,
+        shade: pendingItem.shade,
+        individual_roll_number: index + 1,
+        trim_left: null,
+        order_id: pendingItem.original_order_id, // ✅ PRESERVE ORDER LINK
+        // ✅ CRITICAL: Include source tracking for pending orders
+        source_type: 'pending_order',
+        source_pending_id: pendingItem.id
+      }));
+
+      // Also send all available cuts (same as selected for pending flow)
+      const allAvailableCuts = [...selectedCutRolls];
+
+      console.log('🔧 TRANSFORMED CUT ROLLS:', selectedCutRolls);
+
+      // Use same format as main planning page (StartProductionRequest)
+      const requestData = {
+        selected_cut_rolls: selectedCutRolls,
+        all_available_cuts: allAvailableCuts,
+        wastage_data: [], // No wastage for pending flow
+        added_rolls_data: {}, // No added rolls for pending flow
+        created_by_id: userId,
+        jumbo_roll_width: 118
+      };
+
+      const response = await fetch(`${MASTER_ENDPOINTS.PENDING_ORDERS.replace('pending-order-items', 'pending-orders')}/start-production`, 
+        createRequestOptions('POST', requestData)
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to start production: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      toast.success(`Production started successfully! Created ${result.summary.inventory_created} inventory items`);
+      
+      // Reset selection and refresh data
+      setSelectedSuggestions(new Set());
+      setShowSuggestions(false);
+      setSuggestionResult(null);
+      
+      // Refresh pending items
+      window.location.reload();
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to start production';
+      toast.error(`Error: ${errorMessage}`);
+      console.error('Production error:', error);
+    } finally {
+      setProductionLoading(false);
+    }
   };
 
   const handlePrintTablePDF = () => {
@@ -667,19 +790,49 @@ export default function PendingOrderItemsPage() {
                 {/* Jumbo Roll Suggestions */}
                 {suggestionResult.jumbo_suggestions && suggestionResult.jumbo_suggestions.length > 0 ? (
                   <div className="space-y-6">
-                    <h3 className="text-lg font-semibold">Jumbo Roll Suggestions</h3>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold">Jumbo Roll Suggestions</h3>
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="select-all-suggestions"
+                            checked={suggestionResult.jumbo_suggestions.length > 0 && selectedSuggestions.size === suggestionResult.jumbo_suggestions.length}
+                            onCheckedChange={handleSelectAllSuggestions}
+                          />
+                          <label htmlFor="select-all-suggestions" className="text-sm font-medium">
+                            Select All ({selectedSuggestions.size}/{suggestionResult.jumbo_suggestions.length})
+                          </label>
+                        </div>
+                        <Button 
+                          onClick={handleStartProduction}
+                          disabled={selectedSuggestions.size === 0 || productionLoading}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          {productionLoading ? 'Starting Production...' : `Start Production (${selectedSuggestions.size})`}
+                        </Button>
+                      </div>
+                    </div>
                     <div className="space-y-6">
                       {suggestionResult.jumbo_suggestions.map((jumbo) => (
-                        <Card key={jumbo.suggestion_id} className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200">
+                        <Card key={jumbo.suggestion_id} className={`bg-gradient-to-r from-blue-50 to-indigo-50 border-2 ${
+                          selectedSuggestions.has(jumbo.suggestion_id) ? 'border-green-400 ring-2 ring-green-200' : 'border-blue-200'
+                        }`}>
                           <CardHeader className="pb-3">
                             <div className="flex items-center justify-between">
-                              <div>
-                                <CardTitle className="text-lg">
-                                  Jumbo Roll #{jumbo.jumbo_number} - {jumbo.paper_specs.shade} {jumbo.paper_specs.gsm}GSM
-                                </CardTitle>
-                                <CardDescription>
-                                  BF: {jumbo.paper_specs.bf} | Target: {jumbo.target_width}" per roll
-                                </CardDescription>
+                              <div className="flex items-center gap-3">
+                                <Checkbox
+                                  id={`suggestion-${jumbo.suggestion_id}`}
+                                  checked={selectedSuggestions.has(jumbo.suggestion_id)}
+                                  onCheckedChange={(checked) => handleSuggestionToggle(jumbo.suggestion_id, checked as boolean)}
+                                />
+                                <div>
+                                  <CardTitle className="text-lg">
+                                    Jumbo Roll #{jumbo.jumbo_number} - {jumbo.paper_specs.shade} {jumbo.paper_specs.gsm}GSM
+                                  </CardTitle>
+                                  <CardDescription>
+                                    BF: {jumbo.paper_specs.bf} | Target: {jumbo.target_width}" per roll
+                                  </CardDescription>
+                                </div>
                               </div>
                               <div className="text-right">
                                 <div className="text-sm text-muted-foreground">

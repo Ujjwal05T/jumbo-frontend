@@ -57,7 +57,9 @@ export async function fetchWastageInventory(
       params.append('search', search);
     }
 
-    const response = await fetch(`${BASE_URL}/wastage?${params}`);
+    const response = await fetch(`${BASE_URL}/wastage?${params}`,
+      { headers: { 'ngrok-skip-browser-warning': 'true' } }
+    );
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -72,7 +74,9 @@ export async function fetchWastageInventory(
 
 export async function fetchWastageStats(): Promise<WastageStats> {
   try {
-    const response = await fetch(`${BASE_URL}/wastage/stats/summary`);
+    const response = await fetch(`${BASE_URL}/wastage/stats/summary`,
+      { headers: { 'ngrok-skip-browser-warning': 'true' } }
+    );
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -114,6 +118,9 @@ export async function deleteWastageItem(wastage_id: string): Promise<void> {
   try {
     const response = await fetch(`${BASE_URL}/wastage/${wastage_id}`, {
       method: 'DELETE',
+      headers: {
+        'ngrok-skip-browser-warning': 'true',
+      },
     });
 
     if (!response.ok) {
