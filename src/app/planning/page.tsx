@@ -404,57 +404,84 @@ export default function PlanningPage() {
     return Array.from(rollKeys).sort();
   }, [planResult, getRollKeyFromCutRoll]);
 
-  // Helper function to get available jumbo roll count (only complete jumbos with exactly 3 x 118" rolls)
+  // Helper function to get available jumbo roll count (all jumbos with 1+ rolls ready for production)
   const getAvailableJumboRolls = useCallback(() => {
-    // Only count complete jumbos (exactly 3 x 118" rolls)
+    // FLEXIBLE: Count all jumbos with 1+ rolls (ready for production)
     if (!planResult?.jumbo_roll_details) {
       return 0;
     }
     
-    const completeJumbos = planResult.jumbo_roll_details.filter(jumbo => 
-      jumbo && jumbo.is_complete && jumbo.roll_count === 3
+    const readyJumbos = planResult.jumbo_roll_details.filter(jumbo => 
+      jumbo && jumbo.is_complete && jumbo.roll_count >= 1
     );
     
-    return completeJumbos.length;
+    return readyJumbos.length;
   }, [planResult]);
 
-  // Helper function to check if selection is valid (only complete jumbos with exactly 3 x 118" rolls)
+  // Helper function to get total available individual 118" rolls
+  const getTotalAvailable118Rolls = useCallback(() => {
+    if (!planResult?.jumbo_roll_details) {
+      return 0;
+    }
+    
+    return planResult.jumbo_roll_details
+      .filter(jumbo => jumbo && jumbo.is_complete && jumbo.roll_count >= 1)
+      .reduce((total, jumbo) => total + jumbo.roll_count, 0);
+  }, [planResult]);
+
+  // Helper function to count how many jumbos are currently selected
+  const getSelectedJumboCount = useCallback(() => {
+    if (!planResult?.jumbo_roll_details || selected118Rolls.length === 0) {
+      return 0;
+    }
+    
+    // Count unique jumbos that have at least one selected roll
+    const selectedJumboIds = new Set<string>();
+    
+    planResult.cut_rolls_generated.forEach((roll, index) => {
+      const rollKey = getRollKeyFromCutRoll(roll);
+      if (rollKey && selected118Rolls.includes(rollKey) && roll.jumbo_roll_id) {
+        selectedJumboIds.add(roll.jumbo_roll_id);
+      }
+    });
+    
+    return selectedJumboIds.size;
+  }, [planResult, selected118Rolls, getRollKeyFromCutRoll]);
+
+  // Helper function to check if selection is valid (FLEXIBLE: any quantity of rolls)
   const isValid118RollSelection = useCallback(
     (selectedRollCount: number) => {
       if (selectedRollCount === 0) return true;
       
-      // Must be multiple of 3 AND must correspond to complete jumbos only
-      if (selectedRollCount % 3 !== 0) return false;
+      // FLEXIBLE: Compare selected individual rolls with total available individual rolls
+      const totalAvailableRolls = getTotalAvailable118Rolls();
       
-      const requestedJumbos = selectedRollCount / 3;
-      const availableCompleteJumbos = getAvailableJumboRolls();
-      
-      return requestedJumbos <= availableCompleteJumbos;
+      return selectedRollCount <= totalAvailableRolls;
     },
-    [getAvailableJumboRolls]
+    [getTotalAvailable118Rolls]
   );
 
-  // Helper function to select specific number of COMPLETE jumbo rolls (exactly 3 x 118" rolls each)
+  // Helper function to select specific number of jumbo rolls (FLEXIBLE: 1-3 rolls each)
   const selectJumboRolls = useCallback(
     (jumboCount: number) => {
       if (!planResult?.jumbo_roll_details) return;
       
-      // Get only complete jumbos (exactly 3 x 118" rolls)
-      const completeJumbos = planResult.jumbo_roll_details.filter(jumbo => 
-        jumbo && jumbo.is_complete && jumbo.roll_count === 3
-      ).slice(0, jumboCount); // Select only the requested number of complete jumbos
+      // FLEXIBLE: Get ready jumbos (1+ rolls each)
+      const readyJumbos = planResult.jumbo_roll_details.filter(jumbo => 
+        jumbo && jumbo.is_complete && jumbo.roll_count >= 1
+      ).slice(0, jumboCount); // Select only the requested number of ready jumbos
       
-      if (completeJumbos.length < jumboCount) {
-        console.warn(`Only ${completeJumbos.length} complete jumbos available, requested ${jumboCount}`);
+      if (readyJumbos.length < jumboCount) {
+        console.warn(`Only ${readyJumbos.length} ready jumbos available, requested ${jumboCount}`);
         return;
       }
       
-      // Get roll keys for the selected complete jumbos
+      // Get roll keys for the selected ready jumbos
       const selectedRollKeysSet = new Set<string>();
       const cutRollIndices: number[] = [];
       
-      completeJumbos.forEach(jumbo => {
-        // Find cut rolls belonging to this complete jumbo
+      readyJumbos.forEach(jumbo => {
+        // Find cut rolls belonging to this ready jumbo
         planResult.cut_rolls_generated.forEach((roll, index) => {
           if (roll.jumbo_roll_id === jumbo.jumbo_id) {
             const rollKey = getRollKeyFromCutRoll(roll);
@@ -570,17 +597,17 @@ export default function PlanningPage() {
 
       // Update the planResult to show this jumbo as complete AND create actual cut roll data
       if (planResult?.jumbo_roll_details) {
-        setPlanResult(prev => {
+        setPlanResult((prev:any) => {
           if (!prev) return prev;
           
           // Find existing cuts for this jumbo to determine next roll number
-          const existingCuts = prev.cut_rolls_generated.filter(roll => 
+          const existingCuts = prev.cut_rolls_generated.filter((roll:any) => 
             roll.jumbo_roll_id === currentJumboForCuts.jumbo_id
           );
           
           // Find the highest individual_roll_number for this jumbo
           const maxRollNumber = Math.max(
-            ...existingCuts.map(roll => roll.individual_roll_number || 0),
+            ...existingCuts.map((roll:any) => roll.individual_roll_number || 0),
             0
           );
           
@@ -621,12 +648,12 @@ export default function PlanningPage() {
           return {
             ...prev,
             cut_rolls_generated: updatedCutRolls,
-            jumbo_roll_details: prev.jumbo_roll_details.map(jumbo => 
+            jumbo_roll_details: prev.jumbo_roll_details!.map((jumbo:any) => 
               jumbo.jumbo_id === currentJumboForCuts.jumbo_id
                 ? { 
                     ...jumbo, 
                     is_complete: true, 
-                    roll_count: 3,
+                    roll_count: jumbo.roll_count + rollsNeeded,
                     total_cuts: (jumbo.total_cuts || 0) + newCutRolls.length
                   }
                 : jumbo
@@ -703,7 +730,7 @@ export default function PlanningPage() {
           "Select cut rolls for production",
           "Validate plan constraints and waste levels",
           "Start production with selected rolls",
-          `Procure ${optimizationResult.jumbo_rolls_needed} jumbo rolls (${optimizationResult.jumbo_rolls_needed * 3} individual ${planningWidth}" rolls)`
+          `Procure ${optimizationResult.jumbo_rolls_needed} jumbo rolls (flexible sizing, 1-3 individual ${planningWidth}" rolls each)`
         ]
       };
 
@@ -736,8 +763,9 @@ export default function PlanningPage() {
     }
     
     if (!isValid118RollSelection(selected118Rolls.length)) {
+      const totalAvailable = getTotalAvailable118Rolls();
       const availableJumbos = getAvailableJumboRolls();
-      const errorMessage = `Please select complete jumbo rolls only (exactly 3 x 118" rolls each). Available: ${availableJumbos} complete jumbo${availableJumbos !== 1 ? 's' : ''}`;
+      const errorMessage = `Please select valid 118" rolls. Available: ${totalAvailable} individual rolls from ${availableJumbos} jumbo${availableJumbos !== 1 ? 's' : ''}`;
       setError(errorMessage);
       toast.error(errorMessage);
       return;
@@ -815,10 +843,11 @@ export default function PlanningPage() {
 
       // Validate 118" roll selection before proceeding
       if (!isValid118RollSelection(selected118Rolls.length)) {
+        const totalAvailable = getTotalAvailable118Rolls();
         const availableJumbos = getAvailableJumboRolls();
         toast.error(
-          `Please select complete jumbo rolls only (exactly 3 x 118" rolls each). ` +
-          `Available: ${availableJumbos} complete jumbo${availableJumbos !== 1 ? 's' : ''}`
+          `Please select valid 118" rolls. ` +
+          `Available: ${totalAvailable} individual rolls from ${availableJumbos} jumbo${availableJumbos !== 1 ? 's' : ''}`
         );
         return;
       }
@@ -1176,15 +1205,15 @@ export default function PlanningPage() {
         
         // Enhanced statistics if jumbo details are available
         if (planResult.summary.complete_jumbos !== undefined && planResult.summary.partial_jumbos !== undefined) {
-          pdf.text(`Complete Jumbos (3/3 rolls): ${planResult.summary.complete_jumbos}`, 20, yPosition);
+          pdf.text(`Ready Jumbos (1+ rolls): ${planResult.summary.complete_jumbos}`, 20, yPosition);
           yPosition += 8;
-          pdf.text(`Partial Jumbos (<3 rolls): ${planResult.summary.partial_jumbos}`, 20, yPosition);
+          pdf.text(`Empty Jumbos: ${planResult.summary.partial_jumbos}`, 20, yPosition);
           yPosition += 8;
         }
         
-        pdf.text(`Each jumbo roll contains up to 3 rolls of ${planningWidth}" width`, 20, yPosition);
+        pdf.text(`Each jumbo roll contains 1-3 rolls of ${planningWidth}" width (flexible)`, 20, yPosition);
         yPosition += 8;
-        pdf.text(`Total ${planningWidth}" rolls produced: ${planResult.jumbo_rolls_needed * 3}`, 20, yPosition);
+        pdf.text(`Total ${planningWidth}" rolls available: ${planResult.jumbo_rolls_needed}`, 20, yPosition);
         yPosition += 8;
         
         // Efficiency metrics
@@ -1221,7 +1250,7 @@ export default function PlanningPage() {
           pdf.setFontSize(10);
           pdf.setTextColor(80, 80, 80);
           pdf.text(`Paper: ${jumboDetail.paper_spec || 'Unknown'}`, 25, yPosition);
-          pdf.text(`Rolls: ${jumboDetail.roll_count || 0}/3`, 120, yPosition);
+          pdf.text(`Rolls: ${jumboDetail.roll_count || 0}`, 120, yPosition);
           pdf.text(`Efficiency: ${jumboDetail.efficiency_percentage || 0}%`, 160, yPosition);
           yPosition += 8;
 
@@ -2107,7 +2136,7 @@ export default function PlanningPage() {
                           Jumbo Rolls Required (CORRECTED)
                         </h3>
                         <p className="text-sm text-muted-foreground">
-                          {planResult.jumbo_rolls_needed} jumbo rolls × 3 individual rolls = {planResult.jumbo_rolls_needed * 3} total 118&quot; rolls
+                          {planResult.jumbo_rolls_needed} jumbo rolls with flexible sizing (1-3 rolls each)
                         </p>
                         <p className="text-xs text-muted-foreground">
                           Algorithm: {planResult.summary.algorithm_note}
@@ -2129,11 +2158,11 @@ export default function PlanningPage() {
                       <CardTitle>Cut Rolls Available for Production</CardTitle>
                       <CardDescription>
                         {displayMode === 'jumbo' 
-                          ? 'Select complete jumbo rolls only (exactly 3 x 118" rolls each)'
+                          ? 'Select any available jumbo rolls (flexible 1-3 rolls each)'
                           : 'Select rolls by paper specification and roll number - Traditional view'
                         }
                         <div className="text-xs text-blue-600 mt-1">
-                           Only complete jumbos available for selection. Partial jumbos are excluded.
+                           All jumbos with 1+ rolls are available for selection.
                         </div>
                       </CardDescription>
                     </div>
@@ -2154,8 +2183,8 @@ export default function PlanningPage() {
                   </div>
                   <div className="flex flex-col gap-3">
                       <div className="text-sm text-muted-foreground">
-                        {selected118Rolls.length > 0 && selected118Rolls.length % 3 === 0 
-                          ? `${selected118Rolls.length / 3} of ${getAvailableJumboRolls()} complete jumbo rolls selected`
+                        {selected118Rolls.length > 0 
+                          ? `${selected118Rolls.length} of ${getTotalAvailable118Rolls()} available 118" rolls selected from ${getSelectedJumboCount()}/${getAvailableJumboRolls()} jumbos`
                           : `${selectedCutRolls.length} cut rolls selected from ${selected118Rolls.length} x 118" rolls`
                         }
                         {selected118Rolls.length > 0 && (
@@ -2165,8 +2194,8 @@ export default function PlanningPage() {
                               : 'bg-yellow-100 text-yellow-700'
                           }`}>
                             {isValid118RollSelection(selected118Rolls.length) 
-                              ? `✓ ${selected118Rolls.length / 3} complete jumbo${selected118Rolls.length / 3 > 1 ? 's' : ''} (${selectedCutRolls.length} cut pieces)` 
-                              : `⚠ Invalid selection: ${selected118Rolls.length} x 118" rolls (need multiples of 3 from complete jumbos)`
+                              ? `✓ ${selected118Rolls.length} individual 118" roll${selected118Rolls.length > 1 ? 's' : ''} selected (${selectedCutRolls.length} cut pieces)` 
+                              : `⚠ Invalid selection: ${selected118Rolls.length} x 118" rolls (exceeds ${getTotalAvailable118Rolls()} available)`
                             }
                           </span>
                         )}
@@ -2174,7 +2203,7 @@ export default function PlanningPage() {
                       {/* Show warning message when selection is invalid */}
                       {selected118Rolls.length > 0 && !isValid118RollSelection(selected118Rolls.length) && (
                         <div className="text-xs text-yellow-600">
-                           Production disabled: Please select complete jumbo rolls only (exactly 3 x 118" rolls each)
+                           Production disabled: Invalid selection - exceeds available 118" rolls
                         </div>
                       )}
                       <div className="flex flex-wrap gap-2">
@@ -2185,10 +2214,10 @@ export default function PlanningPage() {
                               <Button
                                 key={jumboCount}
                                 size="sm"
-                                variant={selected118Rolls.length === jumboCount * 3 ? "default" : "outline"}
+                                variant={getSelectedJumboCount() === jumboCount ? "default" : "outline"}
                                 onClick={() => selectJumboRolls(jumboCount)}
                                 className="text-xs">
-                                {jumboCount} Jumbo{jumboCount > 1 ? 's' : ''} ({jumboCount * 3} × {planningWidth}" rolls)
+                                {jumboCount} Jumbo{jumboCount > 1 ? 's' : ''} (flexible sizing)
                               </Button>
                             ))}
                             <div className="w-px h-6 bg-border mx-1" />
@@ -2594,7 +2623,7 @@ export default function PlanningPage() {
                                     Jumbo Roll {jumboDetail.jumbo_frontend_id}
                                   </h3>
                                   <p className="text-sm text-muted-foreground">
-                                    {jumboDetail.paper_spec} • {jumboDetail.roll_count} of 3 rolls • {jumboDetail.total_cuts} cuts
+                                    {jumboDetail.paper_spec} • {jumboDetail.roll_count} roll{jumboDetail.roll_count > 1 ? 's' : ''} • {jumboDetail.total_cuts} cuts
                                   </p>
                                 </div>
                               </div>
@@ -2602,9 +2631,9 @@ export default function PlanningPage() {
                                 <Badge 
                                   variant={jumboDetail.is_complete ? "default" : "secondary"}
                                   className="text-sm">
-                                  {jumboDetail.is_complete ? "Complete" : `${jumboDetail.roll_count}/3 Rolls`}
+                                  {jumboDetail.is_complete ? `${jumboDetail.roll_count} Roll${jumboDetail.roll_count > 1 ? 's' : ''} Ready` : "Empty"}
                                 </Badge>
-                                {!jumboDetail.is_complete && !productionStarted && (
+                                {jumboDetail.roll_count < 3 && !productionStarted && (
                                   <Button
                                     size="sm"
                                     variant="outline"
@@ -3048,7 +3077,7 @@ export default function PlanningPage() {
             <DialogTitle>Add Cut Specifications</DialogTitle>
             <DialogDescription>
               Specify the cuts you want for {currentJumboForCuts ? `Jumbo ${currentJumboForCuts.jumbo_frontend_id}` : ''}
-              ({currentJumboForCuts ? 3 - currentJumboForCuts.roll_count : 0} roll{(currentJumboForCuts && 3 - currentJumboForCuts.roll_count !== 1) ? 's' : ''} needed)
+              (can add {currentJumboForCuts ? 3 - currentJumboForCuts.roll_count : 0} more roll{(currentJumboForCuts && 3 - currentJumboForCuts.roll_count !== 1) ? 's' : ''})
             </DialogDescription>
           </DialogHeader>
           

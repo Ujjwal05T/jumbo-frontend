@@ -83,7 +83,7 @@ export interface JumboRollDetail {
 export interface OptimizationSummary {
   total_cut_rolls: number;
   total_individual_118_rolls: number;
-  total_jumbo_rolls_needed: number; // CORRECTED: 1 jumbo = 3×118" rolls
+  total_jumbo_rolls_needed: number; // FLEXIBLE: 1 jumbo = 1-3×118" rolls (variable)
   total_pending_orders: number;
   total_pending_quantity: number;
   specification_groups_processed: number;
@@ -99,7 +99,7 @@ export interface OptimizationSummary {
 // NEW FLOW: Main optimization result (updated - removed inventory_remaining)
 export interface OptimizationResult {
   cut_rolls_generated: CutRoll[];
-  jumbo_rolls_needed: number; // CORRECTED calculation
+  jumbo_rolls_needed: number; // FLEXIBLE calculation (1-3 rolls per jumbo)
   pending_orders: PendingOrder[];
   summary: OptimizationSummary;
   jumbo_roll_details?: JumboRollDetail[]; // Enhanced jumbo hierarchy details
@@ -412,7 +412,7 @@ export const calculateEfficiencyMetrics = (cutRolls: CutRoll[]): {
   });
 
   const averageEfficiency = totalRolls > 0 ? (totalUsedWidth / (totalRolls * 118)) * 100 : 0;
-  const jumboRollsNeeded = Math.ceil(totalRolls / 3); // CORRECTED: 1 jumbo = 3×118" rolls
+  const jumboRollsNeeded = totalRolls; // FLEXIBLE: 1 jumbo = 1-3×118" rolls (each roll can be separate)
 
   return {
     totalRolls,
