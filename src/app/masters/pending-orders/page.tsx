@@ -13,6 +13,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { 
   Table, 
   TableBody, 
@@ -39,7 +46,11 @@ import {
   Package,
   Settings,
   Target,
-  FileDown
+  FileDown,
+  Filter,
+  X,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 
 interface PendingOrderItem {
@@ -129,6 +140,16 @@ export default function PendingOrderItemsPage() {
   const [selectedSuggestions, setSelectedSuggestions] = useState<Set<string>>(new Set());
   const [productionLoading, setProductionLoading] = useState(false);
 
+  // Filter states
+  const [clientFilter, setClientFilter] = useState<string>("");
+  const [gsmFilter, setGsmFilter] = useState<string>("");
+  const [bfFilter, setBfFilter] = useState<string>("");
+  const [shadeFilter, setShadeFilter] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [reasonFilter, setReasonFilter] = useState<string>("");
+  const [widthFilter, setWidthFilter] = useState<string>("");
+  const [showFilters, setShowFilters] = useState<boolean>(false);
+
   // Fetch pending order items from API
   useEffect(() => {
     const fetchPendingItems = async () => {
@@ -174,12 +195,42 @@ export default function PendingOrderItemsPage() {
   // Use real data only - no fallback to sample data
   const displayItems = pendingItems;
 
-  const filteredItems = displayItems.filter(item =>
-    item.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.original_order?.client?.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.shade.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.reason.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredItems = displayItems.filter(item => {
+    // Search term filter
+    const matchesSearch = !searchTerm || (
+      item.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.original_order?.client?.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.shade.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.reason.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.frontend_id && item.frontend_id.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+
+    // Client filter
+    const matchesClient = !clientFilter || (
+      item.original_order?.client?.company_name?.toLowerCase().includes(clientFilter.toLowerCase())
+    );
+
+    // GSM filter
+    const matchesGsm = !gsmFilter || item.gsm.toString() === gsmFilter;
+
+    // BF filter
+    const matchesBf = !bfFilter || item.bf.toString() === bfFilter;
+
+    // Shade filter
+    const matchesShade = !shadeFilter || item.shade.toLowerCase().includes(shadeFilter.toLowerCase());
+
+    // Status filter
+    const matchesStatus = !statusFilter || item.status === statusFilter;
+
+    // Reason filter
+    const matchesReason = !reasonFilter || item.reason === reasonFilter;
+
+    // Width filter
+    const matchesWidth = !widthFilter || item.width_inches.toString() === widthFilter;
+
+    return matchesSearch && matchesClient && matchesGsm && matchesBf && 
+           matchesShade && matchesStatus && matchesReason && matchesWidth;
+  });
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -223,6 +274,48 @@ export default function PendingOrderItemsPage() {
   const averageWaitTime = displayItems.length > 0 ? Math.round(
     displayItems.reduce((sum, item) => sum + getDaysWaiting(item.created_at), 0) / displayItems.length
   ) : 0;
+
+  // Get unique values for filter dropdowns
+  const uniqueClients = [...new Set(
+    displayItems
+      .map(item => item.original_order?.client?.company_name)
+      .filter(name => name)
+  )].sort();
+
+  const uniqueGSMs = [...new Set(
+    displayItems.map(item => item.gsm.toString())
+  )].sort((a, b) => parseInt(a) - parseInt(b));
+
+  const uniqueBFs = [...new Set(
+    displayItems.map(item => item.bf.toString())
+  )].sort((a, b) => parseFloat(a) - parseFloat(b));
+
+  const uniqueShades = [...new Set(
+    displayItems.map(item => item.shade)
+  )].sort();
+
+  const uniqueStatuses = [...new Set(
+    displayItems.map(item => item.status)
+  )].sort();
+
+  const uniqueReasons = [...new Set(
+    displayItems.map(item => item.reason)
+  )].sort();
+
+  const uniqueWidths = [...new Set(
+    displayItems.map(item => item.width_inches.toString())
+  )].sort((a, b) => parseFloat(a) - parseFloat(b));
+
+  const clearAllFilters = () => {
+    setSearchTerm("");
+    setClientFilter("");
+    setGsmFilter("");
+    setBfFilter("");
+    setShadeFilter("");
+    setStatusFilter("");
+    setReasonFilter("");
+    setWidthFilter("");
+  };
 
 
   // Roll suggestions functions
@@ -302,7 +395,7 @@ export default function PendingOrderItemsPage() {
     pdf.setFontSize(16);
     pdf.text('Summary Statistics', margin, yPosition);
     
-    yPosition += 15;
+    yPosition += 15
     pdf.setFontSize(12);
     pdf.text(`Target Width: ${suggestionResult.target_width}"`, margin, yPosition);
     yPosition += 8;
@@ -1013,14 +1106,28 @@ export default function PendingOrderItemsPage() {
         {/* Search and Filters */}
         <Card>
           <CardHeader>
-            <CardTitle>Pending Order Items Queue</CardTitle>
-            <CardDescription>
-              Review and process order items that couldn&apos;t be fulfilled immediately
-              {loading && " (Loading...)"}
-              {error && ` (Error: ${error} - showing sample data)`}
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Pending Order Items Queue</CardTitle>
+                <CardDescription>
+                  Review and process order items that couldn&apos;t be fulfilled immediately
+                  {loading && " (Loading...)"}
+                  {error && ` (Error: ${error} - showing sample data)`}
+                </CardDescription>
+              </div>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowFilters(!showFilters)}
+                className="gap-2"
+              >
+                <Filter className="w-4 h-4" />
+                Filters
+                {showFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
+            {/* Search Bar */}
             <div className="flex items-center space-x-2 mb-4">
               <div className="relative flex-1">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -1031,9 +1138,152 @@ export default function PendingOrderItemsPage() {
                   className="pl-8"
                 />
               </div>
-              <Button variant="outline">Priority Filter</Button>
-              <Button variant="outline">Sort by Wait Time</Button>
+              {(clientFilter || gsmFilter || bfFilter || shadeFilter || statusFilter || reasonFilter || widthFilter) && (
+                <Button 
+                  variant="outline" 
+                  onClick={clearAllFilters}
+                  className="gap-2"
+                >
+                  <X className="w-4 h-4" />
+                  Clear Filters
+                </Button>
+              )}
             </div>
+
+            {/* Filter Panel */}
+            {showFilters && (
+              <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {/* Client Filter */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Client</label>
+                    <Select value={clientFilter} onValueChange={setClientFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All clients" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All clients</SelectItem>
+                        {uniqueClients.map(client => (
+                          <SelectItem key={client} value={client}>{client}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* GSM Filter */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">GSM</label>
+                    <Select value={gsmFilter} onValueChange={setGsmFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All GSM" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All GSM</SelectItem>
+                        {uniqueGSMs.map(gsm => (
+                          <SelectItem key={gsm} value={gsm}>{gsm}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* BF Filter */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">BF</label>
+                    <Select value={bfFilter} onValueChange={setBfFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All BF" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All BF</SelectItem>
+                        {uniqueBFs.map(bf => (
+                          <SelectItem key={bf} value={bf}>{bf}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Shade Filter */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Shade</label>
+                    <Select value={shadeFilter} onValueChange={setShadeFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All shades" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All shades</SelectItem>
+                        {uniqueShades.map(shade => (
+                          <SelectItem key={shade} value={shade}>{shade}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Width Filter */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Width (inches)</label>
+                    <Select value={widthFilter} onValueChange={setWidthFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All widths" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All widths</SelectItem>
+                        {uniqueWidths.map(width => (
+                          <SelectItem key={width} value={width}>{width}"</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Status Filter */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Status</label>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All status</SelectItem>
+                        {uniqueStatuses.map(status => (
+                          <SelectItem key={status} value={status}>
+                            {status.replace(/_/g, ' ')}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Reason Filter */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Reason</label>
+                    <Select value={reasonFilter} onValueChange={setReasonFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All reasons" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All reasons</SelectItem>
+                        {uniqueReasons.map(reason => (
+                          <SelectItem key={reason} value={reason}>
+                            {reason.replace(/_/g, ' ')}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Filter Summary */}
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="flex items-center justify-between text-sm text-muted-foreground">
+                    <span>
+                      Showing {filteredItems.length} of {displayItems.length} pending items
+                    </span>
+                    <span>
+                      Active filters: {[clientFilter, gsmFilter, bfFilter, shadeFilter, statusFilter, reasonFilter, widthFilter].filter(f => f).length}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Pending Orders Table */}
             <div className="rounded-md border">
