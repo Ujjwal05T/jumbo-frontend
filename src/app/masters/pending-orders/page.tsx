@@ -398,6 +398,8 @@ export default function PendingOrderItemsPage() {
       const selectedSuggestionData = suggestionResult.jumbo_suggestions.filter(
         suggestion => selectedSuggestions.has(suggestion.suggestion_id)
       );
+      console.log('🔧 SELECTED SUGGESTIONS DATA:', selectedSuggestions);
+      console.log(selectedSuggestionData)
 
       // Extract all pending order IDs from selected suggestions
       const allSelectedPendingIds = selectedSuggestionData.flatMap(
@@ -433,6 +435,7 @@ export default function PendingOrderItemsPage() {
 
       // Also send all available cuts (same as selected for pending flow)
       const allAvailableCuts = [...selectedCutRolls];
+      console.log('🔧 ALL AVAILABLE CUTS:', allAvailableCuts);
 
       console.log('🔧 TRANSFORMED CUT ROLLS:', selectedCutRolls);
 
