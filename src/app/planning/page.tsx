@@ -843,13 +843,9 @@ export default function PlanningPage() {
           
           // METHOD 2: For pending orders, check if we have source_pending_id
           else if (roll.source_type === 'pending_order' && roll.source_pending_id) {
-            // If we have pending order data in planResult.pending_orders
+            // Find the pending order and then get the original order by original_order_id
             const pendingOrder = planResult.pending_orders?.find((p: any) => p.id === roll.source_pending_id);
-            if (pendingOrder?.original_order?.client?.company_name) {
-              companyName = pendingOrder.original_order.client.company_name;
-            }
-            // Fallback: Try to find by original_order_id in orders array
-            else if (pendingOrder?.original_order_id) {
+            if (pendingOrder?.original_order_id) {
               const originalOrder = orders.find(o => o.id === pendingOrder.original_order_id);
               if (originalOrder?.client?.company_name) {
                 companyName = originalOrder.client.company_name;
@@ -1386,13 +1382,30 @@ export default function PlanningPage() {
               pdf.setLineWidth(0.5);
               pdf.rect(currentX, yPosition, sectionWidth, rectHeight, 'S');
 
-              // Add width text inside the rectangle if wide enough
+              // Add width and client name text inside the rectangle if wide enough
               if (sectionWidth > 15 && rollWidth > 0) {
                 pdf.setTextColor(255, 255, 255);
-                pdf.setFontSize(7);
+                pdf.setFontSize(6);
                 const textX = currentX + sectionWidth/2;
-                const textY = yPosition + rectHeight/2 + 1;
-                pdf.text(`${rollWidth}"`, textX, textY, { align: 'center' });
+                
+                // Get client name (first 8 letters)
+                const clientName = '';
+                
+                // Display client name on top line, width on bottom line
+                if (clientName && sectionWidth > 25) {
+                  const topTextY = yPosition + rectHeight/2 - 2;
+                  const bottomTextY = yPosition + rectHeight/2 + 4;
+                  pdf.text(clientName, textX, topTextY, { align: 'center' });
+                  pdf.text(`${rollWidth}"`, textX, bottomTextY, { align: 'center' });
+                } else {
+                  // If space is limited, show client name only or width only
+                  const textY = yPosition + rectHeight/2 + 1;
+                  if (clientName) {
+                    pdf.text(clientName, textX, textY, { align: 'center' });
+                  } else {
+                    pdf.text(`${rollWidth}"`, textX, textY, { align: 'center' });
+                  }
+                }
               }
 
               currentX += sectionWidth;
@@ -1565,12 +1578,29 @@ export default function PlanningPage() {
             pdf.setLineWidth(0.5);
             pdf.rect(currentX, yPosition, sectionWidth, rectHeight, 'S');
 
-            // Add width text inside the rectangle
+            // Add width and client name text inside the rectangle
             pdf.setTextColor(255, 255, 255);
-            pdf.setFontSize(7);
+            pdf.setFontSize(6);
             const textX = currentX + sectionWidth/2;
-            const textY = yPosition + rectHeight/2 + 1;
-            pdf.text(`${roll.width}"`, textX, textY, { align: 'center' });
+            
+            // Get client name (first 8 letters)
+            const clientName = '';
+            
+            // Display client name on top line, width on bottom line
+            if (clientName && sectionWidth > 25) {
+              const topTextY = yPosition + rectHeight/2 - 2;
+              const bottomTextY = yPosition + rectHeight/2 + 4;
+              pdf.text(clientName, textX, topTextY, { align: 'center' });
+              pdf.text(`${roll.width}"`, textX, bottomTextY, { align: 'center' });
+            } else {
+              // If space is limited, show client name only or width only
+              const textY = yPosition + rectHeight/2 + 1;
+              if (clientName) {
+                pdf.text(clientName, textX, textY, { align: 'center' });
+              } else {
+                pdf.text(`${roll.width}"`, textX, textY, { align: 'center' });
+              }
+            }
 
             currentX += sectionWidth;
           });

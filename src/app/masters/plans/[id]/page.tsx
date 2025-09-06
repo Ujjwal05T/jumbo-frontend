@@ -1287,13 +1287,56 @@ export default function PlanDetailsPage() {
               doc.setLineWidth(0.5);
               doc.rect(currentX, yPosition, sectionWidth, rectHeight, 'S');
 
-              // Add width text inside the rectangle
+              // Add width and client name text inside the rectangle
               if (sectionWidth > 15) { // Only add text if section is wide enough
                 doc.setTextColor(0, 0, 0);
-                doc.setFontSize(7);
+                doc.setFontSize(6);
                 const textX = currentX + sectionWidth/2;
-                const textY = yPosition + rectHeight/2 + 1;
-                doc.text(`${roll.width_inches}"`, textX, textY, { align: 'center' });
+                
+                // Get client name (first 8 letters) by matching with cut_pattern data
+                let clientName = '';
+                if (plan?.cut_pattern && Array.isArray(plan.cut_pattern)) {
+                  const matchingCutPattern = plan.cut_pattern.find((cutItem: any) => 
+                    cutItem.width === roll.width_inches &&
+                    cutItem.individual_roll_number === roll.individual_roll_number &&
+                    cutItem.gsm === (roll.paper_specs?.gsm || roll.gsm) &&
+                    cutItem.bf === (roll.paper_specs?.bf || roll.bf) &&
+                    cutItem.shade === (roll.paper_specs?.shade || roll.shade)
+                  );
+                  clientName = matchingCutPattern?.company_name ? matchingCutPattern.company_name.substring(0, 8) : '';
+                } else {
+                  // Try to parse JSON if cut_pattern is a string
+                  try {
+                    const cutPatternArray = typeof plan?.cut_pattern === 'string' ? JSON.parse(plan.cut_pattern) : [];
+                    const matchingCutPattern = cutPatternArray.find((cutItem: any) => 
+                      cutItem.width === roll.width_inches &&
+                      cutItem.individual_roll_number === roll.individual_roll_number &&
+                      cutItem.gsm === (roll.paper_specs?.gsm || roll.gsm) &&
+                      cutItem.bf === (roll.paper_specs?.bf || roll.bf) &&
+                      cutItem.shade === (roll.paper_specs?.shade || roll.shade)
+                    );
+                    clientName = matchingCutPattern?.company_name ? matchingCutPattern.company_name.substring(0, 8) : '';
+                  } catch (e) {
+                    // If parsing fails, fallback to empty string
+                    clientName = '';
+                  }
+                }
+                
+                // Display client name on top line, width on bottom line
+                if (clientName && sectionWidth > 25) {
+                  const topTextY = yPosition + rectHeight/2 - 2;
+                  const bottomTextY = yPosition + rectHeight/2 + 4;
+                  doc.text(clientName, textX, topTextY, { align: 'center' });
+                  doc.text(`${roll.width_inches}"`, textX, bottomTextY, { align: 'center' });
+                } else {
+                  // If space is limited, show client name only or width only
+                  const textY = yPosition + rectHeight/2 + 1;
+                  if (clientName) {
+                    doc.text(clientName, textX, textY, { align: 'center' });
+                  } else {
+                    doc.text(`${roll.width_inches}"`, textX, textY, { align: 'center' });
+                  }
+                }
               }
 
               currentX += sectionWidth;

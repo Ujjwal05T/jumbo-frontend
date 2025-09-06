@@ -509,22 +509,49 @@ export default function PendingOrderItemsPage() {
       console.log('Pending IDs from suggestions:', allSelectedPendingIds);
       console.log('Original pending orders found:', originalPendingOrders.length);
 
-      // Transform to main planning format - individual cut_rolls from original pending orders
-      const selectedCutRolls = originalPendingOrders.map((pendingItem, index) => ({
-        paper_id: "", // Will be filled by backend from paper specs
-        width_inches: pendingItem.width_inches,
-        qr_code: `PENDING_CUT_${Date.now()}_${Math.random().toString(36).substr(2, 4)}_${index}`,
-        barcode_id: `PCR_${String(index + 1).padStart(5, '0')}`,
-        gsm: pendingItem.gsm,
-        bf: pendingItem.bf,
-        shade: pendingItem.shade,
-        individual_roll_number: index + 1,
-        trim_left: null,
-        order_id: pendingItem.original_order_id, // ✅ PRESERVE ORDER LINK
-        // ✅ CRITICAL: Include source tracking for pending orders
-        source_type: 'pending_order',
-        source_pending_id: pendingItem.id
-      }));
+      // Transform to main planning format using suggestion roll structure
+      // ✅ FIX: Use actual suggestion roll numbers for proper individual_roll_number assignment
+      const selectedCutRolls: any[] = [];
+      let globalIndex = 0;
+      
+      // Process each selected jumbo suggestion
+      selectedSuggestionData.forEach((jumboSuggestion) => {
+        // Process each 118" roll in this jumbo
+        jumboSuggestion.rolls.forEach((roll) => {
+          // Get pending items for this roll's widths
+          if (roll.uses_existing && roll.widths && roll.widths.length > 0) {
+            // Create individual cut_rolls for each width piece in this 118" roll
+            roll.widths.forEach((width) => {
+              // Find matching pending item
+              const matchingPendingItem = originalPendingOrders.find(item => 
+                item.width_inches === width && 
+                item.gsm === jumboSuggestion.paper_specs.gsm &&
+                item.bf === jumboSuggestion.paper_specs.bf &&
+                item.shade === jumboSuggestion.paper_specs.shade
+              );
+              
+              if (matchingPendingItem) {
+                selectedCutRolls.push({
+                  paper_id: "", // Will be filled by backend from paper specs
+                  width_inches: matchingPendingItem.width_inches,
+                  qr_code: `PENDING_CUT_${Date.now()}_${Math.random().toString(36).substr(2, 4)}_${globalIndex}`,
+                  barcode_id: `PCR_${String(globalIndex + 1).padStart(5, '0')}`,
+                  gsm: matchingPendingItem.gsm,
+                  bf: matchingPendingItem.bf,
+                  shade: matchingPendingItem.shade,
+                  individual_roll_number: roll.roll_number, // ✅ FIXED: Use suggestion's roll_number (1,2,3 per jumbo)
+                  trim_left: null,
+                  order_id: matchingPendingItem.original_order_id, // ✅ PRESERVE ORDER LINK
+                  // ✅ CRITICAL: Include source tracking for pending orders
+                  source_type: 'pending_order',
+                  source_pending_id: matchingPendingItem.id
+                });
+                globalIndex++;
+              }
+            });
+          }
+        });
+      });
 
       // Also send all available cuts (same as selected for pending flow)
       const allAvailableCuts = [...selectedCutRolls];
