@@ -2457,6 +2457,11 @@ export default function PlanningPage() {
                                                       }}>
                                                       <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
                                                         {roll.width}&quot;
+                                                        {(roll.source_type === 'pending_order' || roll.source_pending_id) && (
+                                                          <div className="absolute -top-1 -right-1 bg-orange-500 text-white rounded-full text-xs px-1 py-0.5 text-[10px] font-bold shadow-lg">
+                                                            P
+                                                          </div>
+                                                        )}
                                                       </div>
                                                     </div>
                                                   );
@@ -2596,6 +2601,11 @@ export default function PlanningPage() {
                                                   className="text-xs">
                                                   {roll.source}
                                                 </Badge>
+                                                {(roll.source_type === 'pending_order' || roll.source_pending_id) && (
+                                                  <Badge variant="destructive" className="text-xs bg-orange-500 hover:bg-orange-600">
+                                                    Pending Order
+                                                  </Badge>
+                                                )}
                                               </div>
                                               {roll.trim_left && (
                                                 <div className="flex items-center gap-2">
@@ -2778,6 +2788,11 @@ export default function PlanningPage() {
                                                     }}>
                                                     <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
                                                       {roll.width}"
+                                                      {(roll.source_type === 'pending_order' || roll.source_pending_id) && (
+                                                        <div className="absolute -top-1 -right-1 bg-orange-500 text-white rounded-full text-xs px-1 py-0.5 text-[10px] font-bold shadow-lg">
+                                                          P
+                                                        </div>
+                                                      )}
                                                     </div>
                                                   </div>
                                                 );
@@ -2815,8 +2830,15 @@ export default function PlanningPage() {
                                             // Individual cut selection disabled - use jumbo buttons instead
                                           }}>
                                           <div className="flex items-center justify-between">
-                                            <div className="text-sm font-medium">
-                                              {roll.width}" cut
+                                            <div className="flex items-center gap-2">
+                                              <div className="text-sm font-medium">
+                                                {roll.width}" cut
+                                              </div>
+                                              {(roll.source_type === 'pending_order' || roll.source_pending_id) && (
+                                                <Badge variant="destructive" className="text-xs bg-orange-500 hover:bg-orange-600">
+                                                  P
+                                                </Badge>
+                                              )}
                                             </div>
                                             <Checkbox
                                               checked={selectedCutRolls.includes(roll.originalIndex)}

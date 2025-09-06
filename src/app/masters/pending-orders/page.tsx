@@ -1163,7 +1163,7 @@ export default function PendingOrderItemsPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All clients</SelectItem>
-                        {uniqueClients.map(client => (
+                        {uniqueClients.map((client : any) => (
                           <SelectItem key={client} value={client}>{client}</SelectItem>
                         ))}
                       </SelectContent>
