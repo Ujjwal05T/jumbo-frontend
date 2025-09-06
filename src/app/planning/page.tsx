@@ -832,19 +832,47 @@ export default function PlanningPage() {
       // Create a plan record first with actual optimization data
       const planCreateRequest = {
         name: `Production Plan - ${new Date().toISOString().split('T')[0]}`,
-        cut_pattern: planResult.cut_rolls_generated.map((roll:CutRoll, index) => ({
-          width: roll.width,
-          gsm: roll.gsm,
-          bf: roll.bf,
-          shade: roll.shade,
-          individual_roll_number: roll.individual_roll_number,
-          source: roll.source,
-          order_id: roll.order_id,
-          selected: selectedCutRolls.includes(index),
-          // CRITICAL: Include source tracking in cut_pattern
-          source_type: roll.source_type || 'regular_order',
-          source_pending_id: roll.source_pending_id || null
-        })),
+        cut_pattern: planResult.cut_rolls_generated.map((roll:CutRoll, index) => {
+          let companyName = 'Unknown Company';
+          
+          // METHOD 1: Try to find company from regular order
+          const sourceOrder = orders.find(o => o.id === roll.order_id);
+          if (sourceOrder?.client?.company_name) {
+            companyName = sourceOrder.client.company_name;
+          }
+          
+          // METHOD 2: For pending orders, check if we have source_pending_id
+          else if (roll.source_type === 'pending_order' && roll.source_pending_id) {
+            // If we have pending order data in planResult.pending_orders
+            const pendingOrder = planResult.pending_orders?.find((p: any) => p.id === roll.source_pending_id);
+            if (pendingOrder?.original_order?.client?.company_name) {
+              companyName = pendingOrder.original_order.client.company_name;
+            }
+            // Fallback: Try to find by original_order_id in orders array
+            else if (pendingOrder?.original_order_id) {
+              const originalOrder = orders.find(o => o.id === pendingOrder.original_order_id);
+              if (originalOrder?.client?.company_name) {
+                companyName = originalOrder.client.company_name;
+              }
+            }
+          }
+
+          return {
+            width: roll.width,
+            gsm: roll.gsm,
+            bf: roll.bf,
+            shade: roll.shade,
+            individual_roll_number: roll.individual_roll_number,
+            source: roll.source,
+            order_id: roll.order_id,
+            selected: selectedCutRolls.includes(index),
+            // CRITICAL: Include source tracking in cut_pattern
+            source_type: roll.source_type || 'regular_order',
+            source_pending_id: roll.source_pending_id || null,
+            // ✅ Enhanced company name with proper pending order fallback
+            company_name: companyName
+          };
+        }),
         expected_waste_percentage: 100 - calculateEfficiencyMetrics(planResult.cut_rolls_generated).averageEfficiency,
         created_by_id: user_id,
         order_ids: selectedOrders,
