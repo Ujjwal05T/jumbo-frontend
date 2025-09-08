@@ -92,6 +92,14 @@ export const REPORTS_ENDPOINTS = {
   SUMMARY: `${API_BASE_URL}/reports/summary`,
 };
 
+// GPT Planning endpoints
+export const GPT_PLANNING_ENDPOINTS = {
+  STATUS: `${API_BASE_URL}/planning/gpt-status`,
+  SMART_PLAN: `${API_BASE_URL}/planning/smart-plan`,
+  SMART_PLAN_WITH_FALLBACK: `${API_BASE_URL}/planning/smart-plan-with-fallback`,
+  QUICK_ANALYSIS: `${API_BASE_URL}/planning/quick-gpt-analysis`,
+};
+
 /**
  * Helper function to create API request options
  */
