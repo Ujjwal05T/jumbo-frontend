@@ -50,7 +50,8 @@ import {
   Filter,
   X,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Plus
 } from "lucide-react";
 
 interface PendingOrderItem {
@@ -110,16 +111,77 @@ interface JumboRollSuggestion {
   };
 }
 
+interface OrderSuggestion {
+  suggestion_id: string;
+  order_info: {
+    order_id: string;
+    order_frontend_id: string;
+    client_name: string;
+  };
+  
+  paper_spec: {
+    gsm: number;
+    bf: number;
+    shade: string;
+  };
+  target_width: number;
+  jumbo_rolls: Array<{
+    jumbo_id: string;
+    jumbo_number: number;
+    target_width: number;
+    sets: Array<{
+      set_id: string;
+      set_number: number;
+      target_width: number;
+      cuts: Array<{
+        cut_id: string;
+        width_inches: number;
+        uses_existing: boolean;
+        used_widths: Record<string, number>;
+        description: string;
+      }>;
+      manual_addition_available: boolean;
+      summary: {
+        total_cuts: number;
+        using_existing_cuts: number;
+        total_actual_width: number;
+        total_waste: number;
+        efficiency: number;
+      };
+    }>;
+    summary: {
+      total_sets: number;
+      total_cuts: number;
+      using_existing_cuts: number;
+      total_actual_width: number;
+      total_waste: number;
+      efficiency: number;
+    };
+  }>;
+  pending_order_ids: string[];
+  manual_addition_enabled: boolean;
+  summary: {
+    total_jumbo_rolls: number;
+    total_118_sets: number;
+    total_cuts: number;
+    using_existing_cuts: number;
+  };
+}
+
 interface SuggestionResult {
   status: string;
   target_width: number;
   wastage: number;
-  jumbo_suggestions: JumboRollSuggestion[];
+  order_suggestions?: OrderSuggestion[];
+  jumbo_suggestions?: JumboRollSuggestion[]; // Legacy support
   summary: {
     total_pending_input: number;
-    spec_groups_processed: number;
-    jumbo_rolls_suggested: number;
+    orders_processed?: number;
+    roll_sets_suggested?: number;
+    spec_groups_processed?: number;
+    jumbo_rolls_suggested?: number;
     total_rolls_suggested: number;
+    total_118_sets:number;
   };
 }
 
@@ -139,6 +201,18 @@ export default function PendingOrderItemsPage() {
   // Selection and production state
   const [selectedSuggestions, setSelectedSuggestions] = useState<Set<string>>(new Set());
   const [productionLoading, setProductionLoading] = useState(false);
+  
+  // Manual cut addition state
+  const [showManualRollDialog, setShowManualRollDialog] = useState(false);
+  const [manualRollData, setManualRollData] = useState({
+    suggestionId: '',
+    jumboId: '',
+    setId: '',
+    width: '',
+    description: 'Manual Cut',
+    availableWaste: 0
+  });
+  const [modifiedSuggestions, setModifiedSuggestions] = useState<Map<string, any>>(new Map());
 
   // Filter states
   const [clientFilter, setClientFilter] = useState<string>("");
@@ -345,17 +419,32 @@ export default function PendingOrderItemsPage() {
       
       const result = await response.json();
       
-      // Check if the result is valid
-      if (result.status === 'success' && result.jumbo_suggestions) {
+      // Check if the result is valid - support both order-based and legacy jumbo suggestions
+      if (result.status === 'success' && (result.order_suggestions || result.jumbo_suggestions)) {
         setSuggestionResult(result);
         setShowSuggestions(true);
-        const jumboCount = result.jumbo_suggestions?.length || 0;
-        const totalRolls = result.summary?.total_rolls_suggested || 0;
         
-        if (jumboCount > 0) {
-          toast.success(`Generated ${jumboCount} jumbo roll suggestions with ${totalRolls} individual rolls for ${result.target_width}" target width`);
-        } else {
-          toast.info('No jumbo roll suggestions could be generated with the current pending items');
+        if (result.order_suggestions) {
+          // New order-based flow
+          const orderCount = result.order_suggestions.length;
+          const totalRolls = result.summary?.total_rolls_suggested || 0;
+          const rollSets = result.summary?.roll_sets_suggested || 0;
+          
+          if (orderCount > 0) {
+            toast.success(`Generated ${orderCount} order-based suggestions with ${rollSets} roll sets (${totalRolls} individual rolls) for ${result.target_width}" target width`);
+          } else {
+            toast.info('No order-based suggestions could be generated with the current pending items');
+          }
+        } else if (result.jumbo_suggestions) {
+          // Legacy jumbo-based flow
+          const jumboCount = result.jumbo_suggestions.length;
+          const totalRolls = result.summary?.total_rolls_suggested || 0;
+          
+          if (jumboCount > 0) {
+            toast.success(`Generated ${jumboCount} jumbo roll suggestions with ${totalRolls} individual rolls for ${result.target_width}" target width`);
+          } else {
+            toast.info('No jumbo roll suggestions could be generated with the current pending items');
+          }
         }
       } else if (result.status === 'no_pending_orders') {
         toast.info('No pending orders found to generate suggestions from');
@@ -410,7 +499,7 @@ export default function PendingOrderItemsPage() {
     pdf.text('Jumbo Roll Suggestions', margin, yPosition);
     yPosition += 10;
 
-    suggestionResult.jumbo_suggestions.forEach((jumbo, jumboIndex) => {
+    suggestionResult.jumbo_suggestions!.forEach((jumbo, jumboIndex) => {
       if (yPosition > 220) {
         pdf.addPage();
         yPosition = 30;
@@ -464,11 +553,119 @@ export default function PendingOrderItemsPage() {
   };
 
   const handleSelectAllSuggestions = (checked: boolean) => {
-    if (checked && suggestionResult?.jumbo_suggestions) {
-      setSelectedSuggestions(new Set(suggestionResult.jumbo_suggestions.map(s => s.suggestion_id)));
+    if (checked) {
+      if (suggestionResult?.order_suggestions) {
+        setSelectedSuggestions(new Set(suggestionResult.order_suggestions.map(s => s.suggestion_id)));
+      } else if (suggestionResult?.jumbo_suggestions) {
+        setSelectedSuggestions(new Set(suggestionResult.jumbo_suggestions.map(s => s.suggestion_id)));
+      }
     } else {
       setSelectedSuggestions(new Set());
     }
+  };
+
+  // Manual cut addition functions
+  const handleAddManualCut = (suggestionId: string, jumboId: string, setId: string) => {
+    // Find the available waste for this set
+    const suggestion = suggestionResult?.order_suggestions?.find(s => s.suggestion_id === suggestionId);
+    const jumboRoll = suggestion?.jumbo_rolls?.find(jr => jr.jumbo_id === jumboId);
+    const rollSet = jumboRoll?.sets?.find(s => s.set_id === setId);
+    const availableWaste = rollSet?.summary?.total_waste || 0;
+    
+    setManualRollData({
+      suggestionId,
+      jumboId,
+      setId,
+      width: '',
+      description: 'Manual Cut',
+      availableWaste
+    });
+    setShowManualRollDialog(true);
+  };
+
+  const handleManualRollSubmit = () => {
+    const width = parseFloat(manualRollData.width);
+    if (isNaN(width) || width <= 0) {
+      toast.error('Please enter a valid width');
+      return;
+    }
+    
+    if (width > manualRollData.availableWaste) {
+      toast.error(`Width cannot exceed available waste of ${manualRollData.availableWaste.toFixed(1)}"`);
+      return;
+    }
+
+    // Create the manual cut
+    const manualCut = {
+      cut_id: `manual_cut_${Date.now()}`,
+      width_inches: width,
+      uses_existing: false,
+      used_widths: {},
+      description: `${manualRollData.description}: ${width}"`
+    };
+
+    // Clone current suggestions and add the manual cut
+    if (suggestionResult?.order_suggestions) {
+      const updatedSuggestions = suggestionResult.order_suggestions.map(suggestion => {
+        if (suggestion.suggestion_id === manualRollData.suggestionId) {
+          const updatedSuggestion = { ...suggestion };
+          updatedSuggestion.jumbo_rolls = suggestion.jumbo_rolls.map(jumboRoll => {
+            if (jumboRoll.jumbo_id === manualRollData.jumboId) {
+              const updatedJumboRoll = { ...jumboRoll };
+              updatedJumboRoll.sets = jumboRoll.sets.map(rollSet => {
+                if (rollSet.set_id === manualRollData.setId) {
+                  const updatedRollSet = { ...rollSet };
+                  updatedRollSet.cuts = [...rollSet.cuts, manualCut];
+                  
+                  // Update summary
+                  updatedRollSet.summary = {
+                    ...updatedRollSet.summary,
+                    total_cuts: updatedRollSet.cuts.length,
+                    using_existing_cuts: updatedRollSet.cuts.filter(c => c.uses_existing).length,
+                    total_actual_width: updatedRollSet.cuts.reduce((sum, c) => sum + c.width_inches, 0),
+                    total_waste: Math.max(0, rollSet.target_width - updatedRollSet.cuts.reduce((sum, c) => sum + c.width_inches, 0)),
+                    efficiency: Math.round((updatedRollSet.cuts.reduce((sum, c) => sum + c.width_inches, 0) / rollSet.target_width) * 100)
+                  };
+                  
+                  return updatedRollSet;
+                }
+                return rollSet;
+              });
+              
+              // Update jumbo summary
+              updatedJumboRoll.summary = {
+                ...updatedJumboRoll.summary,
+                total_cuts: updatedJumboRoll.sets.reduce((sum, s) => sum + s.cuts.length, 0),
+                using_existing_cuts: updatedJumboRoll.sets.reduce((sum, s) => sum + s.cuts.filter(c => c.uses_existing).length, 0),
+                total_actual_width: updatedJumboRoll.sets.reduce((sum, s) => sum + s.summary.total_actual_width, 0),
+                total_waste: updatedJumboRoll.sets.reduce((sum, s) => sum + s.summary.total_waste, 0),
+                efficiency: Math.round((updatedJumboRoll.sets.reduce((sum, s) => sum + s.summary.total_actual_width, 0) / (jumboRoll.target_width * updatedJumboRoll.sets.length)) * 100)
+              };
+              
+              return updatedJumboRoll;
+            }
+            return jumboRoll;
+          });
+          
+          // Update suggestion summary
+          updatedSuggestion.summary = {
+            ...suggestion.summary,
+            total_cuts: updatedSuggestion.jumbo_rolls.reduce((sum, jr) => sum + jr.summary.total_cuts, 0),
+            using_existing_cuts: updatedSuggestion.jumbo_rolls.reduce((sum, jr) => sum + jr.summary.using_existing_cuts, 0)
+          };
+          
+          return updatedSuggestion;
+        }
+        return suggestion;
+      });
+
+      // Update the suggestion result
+      setSuggestionResult(prev => prev ? { ...prev, order_suggestions: updatedSuggestions } : null);
+    }
+
+    setShowManualRollDialog(false);
+    setManualRollData({ suggestionId: '', jumboId: '', setId: '', width: '', description: 'Manual Cut', availableWaste: 0 });
+    toast.success('Manual cut added successfully');
   };
 
   const handleStartProduction = async () => {
@@ -487,10 +684,14 @@ export default function PendingOrderItemsPage() {
         return;
       }
       
-      // Filter selected suggestions
-      const selectedSuggestionData = suggestionResult.jumbo_suggestions.filter(
-        suggestion => selectedSuggestions.has(suggestion.suggestion_id)
-      );
+      // Filter selected suggestions - handle both order-based and legacy formats
+      const selectedSuggestionData = suggestionResult.order_suggestions 
+        ? suggestionResult.order_suggestions.filter(
+            suggestion => selectedSuggestions.has(suggestion.suggestion_id)
+          )
+        : suggestionResult.jumbo_suggestions?.filter(
+            suggestion => selectedSuggestions.has(suggestion.suggestion_id)
+          ) || [];
       console.log('🔧 SELECTED SUGGESTIONS DATA:', selectedSuggestions);
       console.log(selectedSuggestionData)
 
@@ -514,43 +715,86 @@ export default function PendingOrderItemsPage() {
       const selectedCutRolls: any[] = [];
       let globalIndex = 0;
       
-      // Process each selected jumbo suggestion
-      selectedSuggestionData.forEach((jumboSuggestion) => {
-        // Process each 118" roll in this jumbo
-        jumboSuggestion.rolls.forEach((roll) => {
-          // Get pending items for this roll's widths
-          if (roll.uses_existing && roll.widths && roll.widths.length > 0) {
-            // Create individual cut_rolls for each width piece in this 118" roll
-            roll.widths.forEach((width) => {
-              // Find matching pending item
-              const matchingPendingItem = originalPendingOrders.find(item => 
-                item.width_inches === width && 
-                item.gsm === jumboSuggestion.paper_specs.gsm &&
-                item.bf === jumboSuggestion.paper_specs.bf &&
-                item.shade === jumboSuggestion.paper_specs.shade
-              );
-              
-              if (matchingPendingItem) {
-                selectedCutRolls.push({
-                  paper_id: "", // Will be filled by backend from paper specs
-                  width_inches: matchingPendingItem.width_inches,
-                  qr_code: `PENDING_CUT_${Date.now()}_${Math.random().toString(36).substr(2, 4)}_${globalIndex}`,
-                  barcode_id: `PCR_${String(globalIndex + 1).padStart(5, '0')}`,
-                  gsm: matchingPendingItem.gsm,
-                  bf: matchingPendingItem.bf,
-                  shade: matchingPendingItem.shade,
-                  individual_roll_number: roll.roll_number, // ✅ FIXED: Use suggestion's roll_number (1,2,3 per jumbo)
-                  trim_left: null,
-                  order_id: matchingPendingItem.original_order_id, // ✅ PRESERVE ORDER LINK
-                  // ✅ CRITICAL: Include source tracking for pending orders
-                  source_type: 'pending_order',
-                  source_pending_id: matchingPendingItem.id
-                });
-                globalIndex++;
-              }
+      // Process each selected order suggestion
+      selectedSuggestionData.forEach((orderSuggestion : OrderSuggestion | any) => {
+        // Check if it's order-based or legacy jumbo-based format
+        if (orderSuggestion.jumbo_rolls) {
+          // NEW ORDER-BASED FORMAT
+          orderSuggestion.jumbo_rolls.forEach((jumboRoll:any) => {
+            jumboRoll.sets.forEach((rollSet:any) => {
+              rollSet.cuts.forEach((cut:any) => {
+                if (cut.uses_existing && cut.width_inches) {
+                  // Find matching pending item for this width and paper spec
+                  const matchingPendingItem = originalPendingOrders.find(item =>
+                    Math.abs(item.width_inches - cut.width_inches) < 0.1 &&
+                    item.gsm === orderSuggestion.paper_spec.gsm &&
+                    item.shade === orderSuggestion.paper_spec.shade &&
+                    Math.abs(item.bf - orderSuggestion.paper_spec.bf) < 0.01
+                  );
+
+                  if (matchingPendingItem && cut.used_widths) {
+                    // Get the quantity used for this specific width
+                    const quantity = cut.used_widths[cut.width_inches.toString()] || 1;
+                    
+                    console.log(`🔢 Creating ${quantity} cut rolls for ${cut.width_inches}" from pending item ${matchingPendingItem.id}`);
+                    
+                    // Create one cut roll entry for EACH quantity used
+                    for (let i = 0; i < quantity; i++) {
+                      selectedCutRolls.push({
+                        paper_id: "", // Will be resolved by backend from paper specs
+                        width_inches: cut.width_inches,
+                        qr_code: `PENDING_CUT_${Date.now()}_${Math.random().toString(36).substr(2, 4)}_${globalIndex}`,
+                        gsm: orderSuggestion.paper_spec.gsm,
+                        bf: orderSuggestion.paper_spec.bf,
+                        shade: orderSuggestion.paper_spec.shade,
+                        individual_roll_number: rollSet.set_number,
+                        trim_left: null,
+                        source_type: 'pending_order',
+                        source_pending_id: matchingPendingItem.id,
+                        order_id: matchingPendingItem.original_order_id
+                      });
+                      globalIndex++;
+                    }
+                  }
+                }
+              });
             });
-          }
-        });
+          });
+        } else if (orderSuggestion.rolls) {
+          // LEGACY JUMBO-BASED FORMAT
+          orderSuggestion.rolls.forEach((roll:any) => {
+            // Get pending items for this roll's widths
+            if (roll.uses_existing && roll.widths && roll.widths.length > 0) {
+              // Create individual cut_rolls for each width piece in this 118" roll
+              roll.widths.forEach((width:any) => {
+                // Find matching pending item
+                const matchingPendingItem = originalPendingOrders.find(item => 
+                  item.width_inches === width && 
+                  item.gsm === orderSuggestion.paper_specs.gsm &&
+                  item.bf === orderSuggestion.paper_specs.bf &&
+                  item.shade === orderSuggestion.paper_specs.shade
+                );
+                
+                if (matchingPendingItem) {
+                  selectedCutRolls.push({
+                    paper_id: "", // Will be resolved by backend from paper specs
+                    width_inches: width,
+                    qr_code: `PENDING_CUT_${Date.now()}_${Math.random().toString(36).substr(2, 4)}_${globalIndex}`,
+                    gsm: orderSuggestion.paper_specs.gsm,
+                    bf: orderSuggestion.paper_specs.bf,
+                    shade: orderSuggestion.paper_specs.shade,
+                    individual_roll_number: roll.roll_number,
+                    trim_left: null,
+                    source_type: 'pending_order',
+                    source_pending_id: matchingPendingItem.id,
+                    order_id: matchingPendingItem.original_order_id
+                  });
+                  globalIndex++;
+                }
+              });
+            }
+          });
+        }
       });
 
       // Also send all available cuts (same as selected for pending flow)
@@ -876,6 +1120,73 @@ export default function PendingOrderItemsPage() {
           </DialogContent>
         </Dialog>
 
+        {/* Manual Cut Addition Dialog */}
+        <Dialog open={showManualRollDialog} onOpenChange={setShowManualRollDialog}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Add Manual Cut</DialogTitle>
+              <DialogDescription>
+                Add a custom cut to the selected 118" roll set. This will be marked as a manual cut requirement.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="manual-width" className="text-right">
+                  Width (inches)
+                </Label>
+                <Input
+                  id="manual-width"
+                  type="number"
+                  min="1"
+                  max={manualRollData.availableWaste}
+                  step="0.1"
+                  value={manualRollData.width}
+                  onChange={(e) => setManualRollData(prev => ({ ...prev, width: e.target.value }))}
+                  className="col-span-3"
+                  placeholder={`Max: ${manualRollData.availableWaste.toFixed(1)}"`}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="manual-description" className="text-right">
+                  Description
+                </Label>
+                <Input
+                  id="manual-description"
+                  value={manualRollData.description}
+                  onChange={(e) => setManualRollData(prev => ({ ...prev, description: e.target.value }))}
+                  className="col-span-3"
+                  placeholder="e.g., Additional cut for order"
+                />
+              </div>
+              <div className="text-sm text-muted-foreground text-center">
+                <div className="bg-blue-50 p-3 rounded">
+                  <div className="font-medium text-blue-800">Available Waste Space</div>
+                  <div className="text-lg font-bold text-blue-600">{manualRollData.availableWaste.toFixed(1)}"</div>
+                  <div className="text-xs text-blue-600">Maximum cut width allowed</div>
+                </div>
+              </div>
+              {manualRollData.width && !isNaN(parseFloat(manualRollData.width)) && (
+                <div className="text-sm text-muted-foreground text-center">
+                  This will add a {manualRollData.width}" cut marked as "Manual Cut"
+                  {parseFloat(manualRollData.width) > manualRollData.availableWaste && (
+                    <div className="text-red-500 text-xs mt-1">
+                      ⚠️ Width exceeds available waste space
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowManualRollDialog(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleManualRollSubmit}>
+                Add Manual Cut
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Roll Suggestions Results */}
         {showSuggestions && suggestionResult && (
           <div className="space-y-4">
@@ -890,28 +1201,241 @@ export default function PendingOrderItemsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {/* Summary Stats */}
+                {/* Summary Stats - Support both order-based and legacy */}
                 <div className="grid gap-4 md:grid-cols-4 mb-6">
                   <div className="text-center p-4 bg-blue-50 rounded-lg">
                     <div className="text-2xl font-bold text-blue-600">{suggestionResult.target_width}"</div>
                     <div className="text-sm text-blue-800">Target Width</div>
                   </div>
                   <div className="text-center p-4 bg-green-50 rounded-lg">
-                    <div className="text-2xl font-bold text-green-600">{suggestionResult.summary.jumbo_rolls_suggested}</div>
-                    <div className="text-sm text-green-800">Jumbo Rolls</div>
+                    <div className="text-2xl font-bold text-green-600">
+                      {suggestionResult.order_suggestions ? suggestionResult.summary.orders_processed : suggestionResult.summary.jumbo_rolls_suggested}
+                    </div>
+                    <div className="text-sm text-green-800">
+                      {suggestionResult.order_suggestions ? 'Orders' : 'Jumbo Rolls'}
+                    </div>
                   </div>
                   <div className="text-center p-4 bg-purple-50 rounded-lg">
                     <div className="text-2xl font-bold text-purple-600">{suggestionResult.summary.total_rolls_suggested}</div>
                     <div className="text-sm text-purple-800">Total Rolls</div>
                   </div>
                   <div className="text-center p-4 bg-orange-50 rounded-lg">
-                    <div className="text-2xl font-bold text-orange-600">{suggestionResult.summary.spec_groups_processed}</div>
-                    <div className="text-sm text-orange-800">Paper Specs</div>
+                    <div className="text-2xl font-bold text-orange-600">
+                      {suggestionResult.order_suggestions ? suggestionResult.summary.total_118_sets : suggestionResult.summary.spec_groups_processed}
+                    </div>
+                    <div className="text-sm text-orange-800">
+                      {suggestionResult.order_suggestions ? '118" Sets' : 'Paper Specs'}
+                    </div>
                   </div>
                 </div>
 
-                {/* Jumbo Roll Suggestions */}
-                {suggestionResult.jumbo_suggestions && suggestionResult.jumbo_suggestions.length > 0 ? (
+                {/* Order-Based Suggestions */}
+                {suggestionResult.order_suggestions && suggestionResult.order_suggestions.length > 0 ? (
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold">Order-Based Roll Suggestions</h3>
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="select-all-order-suggestions"
+                            checked={suggestionResult.order_suggestions.length > 0 && selectedSuggestions.size === suggestionResult.order_suggestions.length}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedSuggestions(new Set(suggestionResult.order_suggestions!.map(s => s.suggestion_id)));
+                              } else {
+                                setSelectedSuggestions(new Set());
+                              }
+                            }}
+                          />
+                          <label htmlFor="select-all-order-suggestions" className="text-sm font-medium">
+                            Select All ({selectedSuggestions.size}/{suggestionResult.order_suggestions.length})
+                          </label>
+                        </div>
+                        <Button 
+                          onClick={handleStartProduction}
+                          disabled={selectedSuggestions.size === 0 || productionLoading}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          {productionLoading ? 'Starting Production...' : `Start Production (${selectedSuggestions.size})`}
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="space-y-6">
+                      {suggestionResult.order_suggestions.map((orderSuggestion) => (
+                        <Card key={orderSuggestion.suggestion_id} className={`bg-gradient-to-r from-blue-50 to-indigo-50 border-2 ${
+                          selectedSuggestions.has(orderSuggestion.suggestion_id) ? 'border-green-400 ring-2 ring-green-200' : 'border-blue-200'
+                        }`}>
+                          <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <Checkbox
+                                  id={`order-suggestion-${orderSuggestion.suggestion_id}`}
+                                  checked={selectedSuggestions.has(orderSuggestion.suggestion_id)}
+                                  onCheckedChange={(checked) => handleSuggestionToggle(orderSuggestion.suggestion_id, checked as boolean)}
+                                />
+                                <div>
+                                  <CardTitle className="text-lg">
+                                    Order {orderSuggestion.order_info.order_frontend_id} - {orderSuggestion.order_info.client_name}
+                                  </CardTitle>
+                                  <CardDescription>
+                                    {orderSuggestion.paper_spec.shade} {orderSuggestion.paper_spec.gsm}GSM (BF: {orderSuggestion.paper_spec.bf}) | Target: {orderSuggestion.target_width}" per roll
+                                  </CardDescription>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm text-muted-foreground">
+                                  {orderSuggestion.summary.total_jumbo_rolls} jumbo rolls | {orderSuggestion.summary.total_118_sets} sets | {orderSuggestion.summary.total_cuts} cuts
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  {orderSuggestion.summary.using_existing_cuts} using existing cuts
+                                </div>
+                              </div>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            {/* Jumbo Rolls for this Order */}
+                            <div className="grid gap-4">
+                              {orderSuggestion.jumbo_rolls.map((jumboRoll, jumboIndex) => (
+                                <div key={jumboRoll.jumbo_id} className="p-4 rounded-lg border-2 bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
+                                  <div className="flex items-center justify-between mb-3">
+                                    <div className="font-medium text-purple-800">
+                                      Jumbo Roll #{jumboRoll.jumbo_number} ({jumboRoll.summary.efficiency}% efficient)
+                                    </div>
+                                    <Badge className="bg-purple-100 text-purple-800">
+                                      {jumboRoll.summary.total_sets} sets | {jumboRoll.summary.total_waste.toFixed(1)}" total waste
+                                    </Badge>
+                                  </div>
+                                  
+                                  {/* 118" Roll Sets in this Jumbo */}
+                                  <div className="space-y-3">
+                                    {jumboRoll.sets.map((rollSet, setIndex) => (
+                                      <div key={rollSet.set_id} className="p-3 rounded-lg border bg-white border-blue-200">
+                                        <div className="flex items-center justify-between mb-2">
+                                          <div className="font-medium text-blue-800">
+                                            118" Roll Set #{rollSet.set_number} ({rollSet.summary.efficiency}% efficient)
+                                          </div>
+                                          <Badge className="bg-blue-100 text-blue-800">
+                                            {rollSet.summary.total_cuts} cuts | {rollSet.summary.total_waste.toFixed(1)}" waste
+                                          </Badge>
+                                        </div>
+                                        
+                                        {/* Visual representation of the 118" roll */}
+                                        <div className="relative h-8 bg-muted rounded border overflow-hidden mb-3">
+                                          {(() => {
+                                            const actualPercentage = (rollSet.summary.total_actual_width / rollSet.target_width) * 100;
+                                            const wastePercentage = (rollSet.summary.total_waste / rollSet.target_width) * 100;
+                                            
+                                            return (
+                                              <>
+                                                {/* Actual cuts section */}
+                                                <div
+                                                  className="absolute h-full bg-gradient-to-r from-green-400 to-green-500"
+                                                  style={{
+                                                    left: "0%",
+                                                    width: `${actualPercentage}%`,
+                                                  }}>
+                                                  <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
+                                                    {rollSet.summary.total_actual_width.toFixed(1)}"
+                                                  </div>
+                                                </div>
+                                                
+                                                {/* Waste section */}
+                                                {rollSet.summary.total_waste > 0 && (
+                                                  <div
+                                                    className="absolute h-full border-l-2 border-white bg-gradient-to-r from-gray-300 to-gray-400"
+                                                    style={{
+                                                      left: `${actualPercentage}%`,
+                                                      width: `${wastePercentage}%`,
+                                                    }}>
+                                                    <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-700 font-bold">
+                                                      {rollSet.summary.total_waste.toFixed(1)}" waste
+                                                    </div>
+                                                  </div>
+                                                )}
+                                              </>
+                                            );
+                                          })()}
+                                        </div>
+                                        
+                                        {/* Individual cuts in this 118" roll */}
+                                        <div className="space-y-2">
+                                          {rollSet.cuts.map((cut, cutIndex) => (
+                                            <div key={cut.cut_id} className={`p-2 rounded border text-sm ${
+                                              cut.uses_existing 
+                                                ? 'bg-green-50 border-green-200' 
+                                                : 'bg-orange-50 border-orange-200'
+                                            }`}>
+                                              <div className="flex items-center justify-between">
+                                                <div className="font-medium">
+                                                  Cut #{cutIndex + 1}: {cut.width_inches}" ({cut.uses_existing ? 'From Pending' : 'Manual'})
+                                                </div>
+                                                <div className="text-xs text-muted-foreground">
+                                                  {cut.description}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          ))}
+                                          
+                                          {/* Manual Cut Addition Button */}
+                                          {rollSet.manual_addition_available && rollSet.summary.total_waste > 20 ? (
+                                            <div className="p-2 rounded border-2 border-dashed border-green-300 bg-green-50">
+                                              <Button 
+                                                variant="outline" 
+                                                size="sm" 
+                                                className="w-full gap-2 text-xs border-green-300 text-green-700 hover:bg-green-100"
+                                                onClick={() => handleAddManualCut(orderSuggestion.suggestion_id, jumboRoll.jumbo_id, rollSet.set_id)}
+                                              >
+                                                <Plus className="w-3 h-3" />
+                                                Add Manual Cut to 118" Set #{rollSet.set_number}
+                                              </Button>
+                                              <div className="text-xs text-green-600 text-center mt-1">
+                                                {rollSet.summary.total_waste.toFixed(1)}" waste available for manual cut
+                                              </div>
+                                            </div>
+                                          ) : rollSet.summary.total_waste <= 20 ? (
+                                            <div className="p-2 rounded border-2 border-dashed border-gray-300 bg-gray-50">
+                                              <div className="text-xs text-gray-500 text-center py-2">
+                                                Manual cuts only available when waste is greater than 20"
+                                                <br />
+                                                Current waste: {rollSet.summary.total_waste.toFixed(1)}"
+                                              </div>
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            
+                            {/* Order Summary */}
+                            <div className="pt-3 border-t border-blue-200">
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                                <div>
+                                  <div className="text-lg font-bold text-purple-600">{orderSuggestion.summary.total_jumbo_rolls}</div>
+                                  <div className="text-xs text-purple-800">Jumbo Rolls</div>
+                                </div>
+                                <div>
+                                  <div className="text-lg font-bold text-blue-600">{orderSuggestion.summary.total_118_sets}</div>
+                                  <div className="text-xs text-blue-800">118" Sets</div>
+                                </div>
+                                <div>
+                                  <div className="text-lg font-bold text-green-600">{orderSuggestion.summary.using_existing_cuts}</div>
+                                  <div className="text-xs text-green-800">Existing Cuts</div>
+                                </div>
+                                <div>
+                                  <div className="text-lg font-bold text-orange-600">{orderSuggestion.summary.total_cuts}</div>
+                                  <div className="text-xs text-orange-800">Total Cuts</div>
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                ) : suggestionResult.jumbo_suggestions && suggestionResult.jumbo_suggestions.length > 0 ? (
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
                       <h3 className="text-lg font-semibold">Jumbo Roll Suggestions</h3>
