@@ -5,7 +5,6 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { toast } from "sonner";
-import { useGPTPlanning } from "./hooks/useGPTPlanning";
 import { 
   processMultipleOrders,
   validateCuttingPlan,
@@ -71,8 +70,6 @@ import {
   ArrowLeft,
   Plus,
   Minus,
-  Brain,
-  Sparkles,
 } from "lucide-react";
 import BarcodeDisplay from "@/components/BarcodeDisplay";
 import { fetchOrders, Order } from "@/lib/orders";
@@ -87,20 +84,6 @@ interface PlanGenerationResult extends OptimizationResult {
   validation_result?: any;
   next_steps?: string[];
   plans_created?: string[]; // Array of plan IDs created
-  // GPT Planning fields
-  gpt_analysis?: {
-    recommended_orders: string[];
-    deferred_orders: string[];
-    reasoning: string;
-    confidence: number;
-    expected_pending: number;
-  };
-  performance_metrics?: {
-    gpt_response_time?: number;
-    optimization_time?: number;
-    total_time?: number;
-  };
-  status?: string;
 }
 
 interface ProductionRecord {
@@ -244,16 +227,6 @@ export default function PlanningPage() {
   const [displayMode, setDisplayMode] = useState<'traditional' | 'jumbo'>('jumbo'); // Display mode toggle
   const [planId, setPlanId] = useState<string | null>(null); // Current plan ID for wastage tracking
 
-  // GPT Planning hook
-  const {
-    isGeneratingSmartPlan,
-    gptStatus,
-    lastGptAnalysis,
-    checkGPTStatus,
-    generateSmartPlanWithFallback,
-    isGPTAvailable,
-  } = useGPTPlanning();
-
   // Calculate planning width from wastage
   const planningWidth = useMemo(() => {
     const calculated = 119 - wastage;
@@ -262,7 +235,7 @@ export default function PlanningPage() {
 
   // Calculate wastage whenever cut rolls selection changes
   useEffect(() => {
-    if (planResult && planResult.cut_rolls_generated && selectedCutRolls.length > 0 && planId) {
+    if (planResult && selectedCutRolls.length > 0 && planId) {
       const selectedCutRollsForWastage = selectedCutRolls.map(index => planResult.cut_rolls_generated[index]);
       const calculation = calculateWastageFromCutRolls(selectedCutRollsForWastage, planId);
       setWastageCalculation(calculation);
@@ -342,11 +315,11 @@ export default function PlanningPage() {
 
   // Memoized computations for performance
   const filteredOrders = useMemo(() => {
-    return (orders || []).filter((order) => order.status === "created");
+    return orders.filter((order) => order.status === "created");
   }, [orders]);
 
   const orderTableData = useMemo(() => {
-    return (filteredOrders || []).map((order) => ({
+    return filteredOrders.map((order) => ({
       ...order,
       aggregatedPaper: (() => {
         const firstItem = order.order_items?.[0];
@@ -357,8 +330,8 @@ export default function PlanningPage() {
         // Fallback: aggregate all paper specs from order items
         const uniqueSpecs = Array.from(
           new Set(
-            (order.order_items || [])
-              .filter((item) => item.paper)
+            order.order_items
+              ?.filter((item) => item.paper)
               .map(
                 (item) =>
                   `${item.paper!.gsm}gsm, ${item.paper!.bf}bf, ${
@@ -370,13 +343,13 @@ export default function PlanningPage() {
         return uniqueSpecs.length > 0 ? uniqueSpecs.join("; ") : "N/A";
       })(),
       aggregatedWidths: (() => {
-        const widths = (order.order_items || []).map(
+        const widths = order.order_items?.map(
           (item) => `${item.width_inches} inches`
         );
         return widths?.length ? [...new Set(widths)].join(", ") : "N/A";
       })(),
       totalQuantity:
-        (order.order_items || []).reduce(
+        order.order_items?.reduce(
           (total, item) => total + item.quantity_rolls,
           0
         ) || 0,
@@ -405,8 +378,6 @@ export default function PlanningPage() {
         const data = await fetchOrders();
         console.log("Fetched orders:", data);
         setOrders(data);
-        // Clear any existing selections to prevent UUID/frontend_id mix
-        setSelectedOrders([]);
       } catch (err) {
         const errorMessage = "Failed to load orders. Please try again.";
         setError(errorMessage);
@@ -419,11 +390,6 @@ export default function PlanningPage() {
 
     loadOrders();
   }, []);
-
-  // Check GPT service status on component mount
-  useEffect(() => {
-    checkGPTStatus();
-  }, [checkGPTStatus]);
 
   // Helper function to get unique 118" roll keys from cut rolls
   const get118RollKeys = useCallback(() => {
@@ -772,20 +738,8 @@ export default function PlanningPage() {
       }
 
       // NEW FLOW: Use the 3-input/4-output workflow with dynamic width
-      console.log("🔍 DEBUG: selectedOrders being sent to generate plan:", selectedOrders);
-      
-      // Filter to ensure only valid UUIDs are sent
-      const validUUIDs = selectedOrders.filter(id => {
-        const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-        if (!isValidUUID) {
-          console.warn("🚨 Filtering out non-UUID from selectedOrders:", id);
-        }
-        return isValidUUID;
-      });
-      console.log("🔍 DEBUG: Filtered valid UUIDs:", validUUIDs);
-      
       const request: WorkflowProcessRequest = {
-        order_ids: validUUIDs,
+        order_ids: selectedOrders,
         user_id: user_id,
         include_pending_orders: true,
         include_available_inventory: true,
@@ -826,94 +780,6 @@ export default function PlanningPage() {
       console.error(err);
     } finally {
       setGenerating(false);
-    }
-  };
-
-  const generateSmartPlan = async () => {
-    if (selectedOrders.length === 0) {
-      const errorMessage = "Please select at least one order for smart planning.";
-      setError(errorMessage);
-      toast.error(errorMessage);
-      return;
-    }
-
-    try {
-      setError(null);
-
-      const user_id = localStorage.getItem("user_id");
-      if (!user_id) {
-        throw new Error("User not authenticated");
-      }
-
-      // Use the GPT planning hook with fallback
-      const result = await generateSmartPlanWithFallback(selectedOrders, {
-        includePending: true,
-        maxBatchSize: 10,
-        criteria: {
-          prioritize_pending: true,
-          max_pending_days: 7,
-          prefer_complete_orders: true,
-        }
-      });
-
-      if (!result || !result.optimization_result) {
-        throw new Error("Smart planning failed to generate optimization results");
-      }
-
-      // Check if optimization result has valid cut rolls
-      const optimizationResult = result.optimization_result;
-      if (!optimizationResult.cut_rolls_generated || optimizationResult.cut_rolls_generated.length === 0) {
-        throw new Error("No cut rolls were generated. This may be due to GPT recommending invalid orders or optimization constraints.");
-      }
-      
-      const validationResult = await validateCuttingPlan(optimizationResult);
-
-      const planResult: PlanGenerationResult = {
-        ...optimizationResult,
-        validation: validationResult,
-        gpt_analysis: result.gpt_analysis || undefined,
-        performance_metrics: result.performance_metrics,
-        status: result.status,
-        workflow_status: {
-          current_step: 1,
-          total_steps: 4,
-          steps: [
-            "Analyze orders and generate smart cutting plan",
-            "Select cut rolls for production", 
-            "Validate plan constraints and waste levels",
-            "Start production with selected rolls",
-            `Procure ${optimizationResult.jumbo_rolls_needed} jumbo rolls (flexible sizing, 1-3 individual ${planningWidth}" rolls each)`
-          ]
-        }
-      };
-
-      setPlanResult(planResult);
-      setAddedRolls({}); // Clear any previously added rolls
-      setActiveTab("cut-rolls");
-      
-      // Show success message with GPT insights
-      if (result.gpt_analysis) {
-        const gptAnalysis = result.gpt_analysis;
-        const efficiency = calculateEfficiencyMetrics(optimizationResult.cut_rolls_generated || []).averageEfficiency;
-        
-        toast.success(
-          `Smart plan generated! GPT selected ${gptAnalysis.recommended_orders.length} orders from ${selectedOrders.length} candidates.`,
-          {
-            description: `Efficiency: ${efficiency.toFixed(1)}% | Confidence: ${(gptAnalysis.confidence * 100).toFixed(0)}% | Expected pending: ${gptAnalysis.expected_pending}`,
-            duration: 6000,
-          }
-        );
-      } else {
-        // Fallback case
-        const efficiency = calculateEfficiencyMetrics(optimizationResult.cut_rolls_generated).averageEfficiency;
-        toast.success(`Smart plan generated using traditional optimization. Efficiency: ${efficiency.toFixed(1)}%`);
-      }
-      
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to generate smart plan";
-      setError(errorMessage);
-      toast.error(errorMessage);
-      console.error(err);
     }
   };
 
@@ -966,7 +832,7 @@ export default function PlanningPage() {
       // Create a plan record first with actual optimization data
       const planCreateRequest = {
         name: `Production Plan - ${new Date().toISOString().split('T')[0]}`,
-        cut_pattern: (planResult.cut_rolls_generated || []).map((roll:CutRoll, index) => {
+        cut_pattern: planResult.cut_rolls_generated.map((roll:CutRoll, index) => {
           let companyName = 'Unknown Company';
           
           // METHOD 1: Try to find company from regular order
@@ -1118,12 +984,7 @@ export default function PlanningPage() {
 
       // Calculate wastage from selected cut rolls (>= 9 inches only)
       console.log("🗑️ CALCULATING WASTAGE: Processing selected cut rolls for wastage >= 9 inches");
-      
-      if (!planResult?.cut_rolls_generated) {
-        throw new Error("No cut rolls generated to calculate wastage from");
-      }
-      
-      const selectedCutRollsForWastage = selectedCutRolls.map(index => planResult.cut_rolls_generated[index]);
+      const selectedCutRollsForWastage = selectedCutRolls.map(index => planResult!.cut_rolls_generated[index]);
       const wastageCalculation = calculateWastageFromCutRolls(selectedCutRollsForWastage, currentPlanId);
       
       // Validate wastage data before sending
@@ -2078,7 +1939,7 @@ export default function PlanningPage() {
               <Button
                 variant="default"
                 onClick={generatePlan}
-                disabled={generating || isGeneratingSmartPlan || selectedOrders.length === 0 || exceedsQuantityLimit}>
+                disabled={generating || selectedOrders.length === 0 || exceedsQuantityLimit}>
                 {generating ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -2088,25 +1949,6 @@ export default function PlanningPage() {
                   "Generate Plan"
                 )}
               </Button>
-              {isGPTAvailable && (
-                <Button
-                  variant="secondary"
-                  onClick={generateSmartPlan}
-                  disabled={generating || isGeneratingSmartPlan || selectedOrders.length === 0 || exceedsQuantityLimit}
-                  className="bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700">
-                  {isGeneratingSmartPlan ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Smart Planning...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="mr-2 h-4 w-4" />
-                      Smart Plan
-                    </>
-                  )}
-                </Button>
-              )}
               {planResult && (
                 <>
                   <Button
@@ -2320,62 +2162,6 @@ export default function PlanningPage() {
         <TabsContent value="cut-rolls">
           {planResult && (
             <div className="space-y-6">
-              {/* GPT Smart Planning Insights */}
-              {planResult.gpt_analysis && planResult.gpt_analysis.recommended_orders && (
-                <Card className="border-l-4 border-l-purple-500 bg-gradient-to-r from-purple-50 to-blue-50">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Brain className="h-5 w-5 text-purple-600" />
-                      Smart Planning Insights
-                      <Badge variant="secondary" className="ml-2 bg-purple-100 text-purple-700">
-                        {((planResult.gpt_analysis.confidence || 0) * 100).toFixed(0)}% Confidence
-                      </Badge>
-                    </CardTitle>
-                    <CardDescription>
-                      GPT analyzed your orders and provided intelligent recommendations
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="text-center p-3 bg-white rounded-lg shadow-sm">
-                        <div className="text-2xl font-bold text-green-600">
-                          {(planResult.gpt_analysis.recommended_orders || []).length}
-                        </div>
-                        <div className="text-sm text-muted-foreground">Orders Selected</div>
-                      </div>
-                      <div className="text-center p-3 bg-white rounded-lg shadow-sm">
-                        <div className="text-2xl font-bold text-orange-600">
-                          {(planResult.gpt_analysis.deferred_orders || []).length}
-                        </div>
-                        <div className="text-sm text-muted-foreground">Orders Deferred</div>
-                      </div>
-                      <div className="text-center p-3 bg-white rounded-lg shadow-sm">
-                        <div className="text-2xl font-bold text-blue-600">
-                          {planResult.gpt_analysis.expected_pending || 0}
-                        </div>
-                        <div className="text-sm text-muted-foreground">Expected Pending</div>
-                      </div>
-                    </div>
-                    <div className="bg-white p-4 rounded-lg shadow-sm">
-                      <h4 className="font-semibold text-gray-900 mb-2">GPT Reasoning:</h4>
-                      <p className="text-gray-700 text-sm leading-relaxed">
-                        {planResult.gpt_analysis.reasoning || "No reasoning provided"}
-                      </p>
-                    </div>
-                    {planResult.performance_metrics && (
-                      <div className="bg-white p-4 rounded-lg shadow-sm">
-                        <h4 className="font-semibold text-gray-900 mb-2">Performance:</h4>
-                        <div className="flex gap-4 text-sm text-gray-600">
-                          <span>GPT Analysis: {(planResult.performance_metrics.gpt_response_time || 0).toFixed(2)}s</span>
-                          <span>Optimization: {(planResult.performance_metrics.optimization_time || 0).toFixed(2)}s</span>
-                          <span>Total: {(planResult.performance_metrics.total_time || 0).toFixed(2)}s</span>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-              
               {/* Enhanced Summary Cards - NEW FLOW with Jumbo Hierarchy */}
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
                 <Card>
@@ -3164,7 +2950,7 @@ export default function PlanningPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {(planResult.pending_orders || []).map(
+                        {planResult.pending_orders.map(
                           (order, index) => (
                             <TableRow key={index}>
                               <TableCell>{order.width}&quot;</TableCell>
@@ -3326,7 +3112,7 @@ export default function PlanningPage() {
           </CardHeader>
           <CardContent>
             <ol className="list-decimal list-inside space-y-2">
-              {(planResult.next_steps || []).map((step, index) => (
+              {planResult.next_steps!.map((step, index) => (
                 <li key={index} className="text-sm">
                   {step}
                 </li>
