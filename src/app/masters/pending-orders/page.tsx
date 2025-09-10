@@ -210,9 +210,16 @@ export default function PendingOrderItemsPage() {
     setId: '',
     width: '',
     description: 'Manual Cut',
-    availableWaste: 0
+    availableWaste: 0,
+    selectedClient: '',
+    paperSpecs: {
+      gsm: 0,
+      bf: 0,
+      shade: ''
+    }
   });
   const [modifiedSuggestions, setModifiedSuggestions] = useState<Map<string, any>>(new Map());
+  const [clients, setClients] = useState<any[]>([]);
 
   // Filter states
   const [clientFilter, setClientFilter] = useState<string>("");
@@ -223,6 +230,23 @@ export default function PendingOrderItemsPage() {
   const [reasonFilter, setReasonFilter] = useState<string>("");
   const [widthFilter, setWidthFilter] = useState<string>("");
   const [showFilters, setShowFilters] = useState<boolean>(false);
+
+  // Fetch clients for manual cut dialog
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        const response = await fetch(MASTER_ENDPOINTS.CLIENTS, createRequestOptions('GET'));
+        if (response.ok) {
+          const clientsData = await response.json();
+          setClients(clientsData);
+        }
+      } catch (error) {
+        console.error('Error fetching clients:', error);
+      }
+    };
+    
+    fetchClients();
+  }, []);
 
   // Fetch pending order items from API
   useEffect(() => {
@@ -572,13 +596,22 @@ export default function PendingOrderItemsPage() {
     const rollSet = jumboRoll?.sets?.find(s => s.set_id === setId);
     const availableWaste = rollSet?.summary?.total_waste || 0;
     
+    // Capture paper specs from the suggestion
+    const paperSpecs = suggestion?.paper_spec || {
+      gsm: 0,
+      bf: 0,
+      shade: ''
+    };
+    
     setManualRollData({
       suggestionId,
       jumboId,
       setId,
       width: '',
       description: 'Manual Cut',
-      availableWaste
+      availableWaste,
+      selectedClient: '',
+      paperSpecs
     });
     setShowManualRollDialog(true);
   };
@@ -595,13 +628,28 @@ export default function PendingOrderItemsPage() {
       return;
     }
 
-    // Create the manual cut
+    if (!manualRollData.selectedClient) {
+      toast.error('Please select a client for the manual cut');
+      return;
+    }
+
+    // Create the manual cut with client and paper specs info
+    const selectedClient = clients.find(client => client.id === manualRollData.selectedClient);
     const manualCut = {
       cut_id: `manual_cut_${Date.now()}`,
       width_inches: width,
       uses_existing: false,
       used_widths: {},
-      description: `${manualRollData.description}: ${width}"`
+      description: `${manualRollData.description}: ${width}"`,
+      // Manual cut specific fields
+      is_manual_cut: true,
+      client_id: manualRollData.selectedClient,
+      client_name: selectedClient?.company_name || 'Unknown',
+      paper_specs: {
+        gsm: manualRollData.paperSpecs.gsm,
+        bf: manualRollData.paperSpecs.bf,
+        shade: manualRollData.paperSpecs.shade
+      }
     };
 
     // Clone current suggestions and add the manual cut
@@ -617,14 +665,24 @@ export default function PendingOrderItemsPage() {
                   const updatedRollSet = { ...rollSet };
                   updatedRollSet.cuts = [...rollSet.cuts, manualCut];
                   
-                  // Update summary
+                  // Update summary - FIXED: Account for used_widths quantities
+                  const totalActualWidth = updatedRollSet.cuts.reduce((sum, c) => {
+                    if (c.used_widths && Object.keys(c.used_widths).length > 0) {
+                      // Sum width × quantity for cuts with used_widths (existing cuts)
+                      return sum + Object.entries(c.used_widths).reduce((widthSum, [width, qty]) => 
+                        widthSum + (parseFloat(width) * qty), 0);
+                    }
+                    // Manual cuts or cuts without used_widths - use width_inches directly
+                    return sum + c.width_inches;
+                  }, 0);
+                  
                   updatedRollSet.summary = {
                     ...updatedRollSet.summary,
                     total_cuts: updatedRollSet.cuts.length,
                     using_existing_cuts: updatedRollSet.cuts.filter(c => c.uses_existing).length,
-                    total_actual_width: updatedRollSet.cuts.reduce((sum, c) => sum + c.width_inches, 0),
-                    total_waste: Math.max(0, rollSet.target_width - updatedRollSet.cuts.reduce((sum, c) => sum + c.width_inches, 0)),
-                    efficiency: Math.round((updatedRollSet.cuts.reduce((sum, c) => sum + c.width_inches, 0) / rollSet.target_width) * 100)
+                    total_actual_width: totalActualWidth,
+                    total_waste: Math.max(0, rollSet.target_width - totalActualWidth),
+                    efficiency: Math.round((totalActualWidth / rollSet.target_width) * 100)
                   };
                   
                   return updatedRollSet;
@@ -664,7 +722,16 @@ export default function PendingOrderItemsPage() {
     }
 
     setShowManualRollDialog(false);
-    setManualRollData({ suggestionId: '', jumboId: '', setId: '', width: '', description: 'Manual Cut', availableWaste: 0 });
+    setManualRollData({ 
+      suggestionId: '', 
+      jumboId: '', 
+      setId: '', 
+      width: '', 
+      description: 'Manual Cut', 
+      availableWaste: 0,
+      selectedClient: '',
+      paperSpecs: { gsm: 0, bf: 0, shade: '' }
+    });
     toast.success('Manual cut added successfully');
   };
 
@@ -716,14 +783,33 @@ export default function PendingOrderItemsPage() {
       let globalIndex = 0;
       
       // Process each selected order suggestion
-      selectedSuggestionData.forEach((orderSuggestion : OrderSuggestion | any) => {
+      selectedSuggestionData.forEach((orderSuggestion : OrderSuggestion | any, suggestionIndex: number) => {
+        console.log(`🔧 === PROCESSING SUGGESTION ${suggestionIndex + 1} ===`);
+        console.log('🔧 Suggestion ID:', orderSuggestion.suggestion_id);
+        console.log('🔧 Has jumbo_rolls:', !!orderSuggestion.jumbo_rolls);
+        console.log('🔧 Has rolls (legacy):', !!orderSuggestion.rolls);
+        
         // Check if it's order-based or legacy jumbo-based format
         if (orderSuggestion.jumbo_rolls) {
           // NEW ORDER-BASED FORMAT
-          orderSuggestion.jumbo_rolls.forEach((jumboRoll:any) => {
-            jumboRoll.sets.forEach((rollSet:any) => {
-              rollSet.cuts.forEach((cut:any) => {
+          console.log(`🔧 Processing ${orderSuggestion.jumbo_rolls.length} jumbo rolls`);
+          orderSuggestion.jumbo_rolls.forEach((jumboRoll:any, jumboIndex: number) => {
+            console.log(`🔧 Jumbo ${jumboIndex + 1}: ${jumboRoll.sets?.length || 0} sets`);
+            jumboRoll.sets.forEach((rollSet:any, setIndex: number) => {
+              console.log(`🔧 Set ${setIndex + 1}: ${rollSet.cuts?.length || 0} cuts`);
+              rollSet.cuts.forEach((cut:any, cutIndex: number) => {
+                console.log(`🔧 Cut ${cutIndex + 1}: ${cut.width_inches}" uses_existing=${cut.uses_existing} used_widths=`, cut.used_widths);
                 if (cut.uses_existing && cut.width_inches) {
+                  // Handle existing pending order cuts
+                  console.log(`🔍 SEARCHING for pending item: width=${cut.width_inches}, gsm=${orderSuggestion.paper_spec.gsm}, shade=${orderSuggestion.paper_spec.shade}, bf=${orderSuggestion.paper_spec.bf}`);
+                  console.log(`🔍 Available pending items:`, originalPendingOrders.map(item => ({
+                    id: item.id.substring(0, 8),
+                    width: item.width_inches,
+                    gsm: item.gsm,
+                    shade: item.shade,
+                    bf: item.bf
+                  })));
+                  
                   // Find matching pending item for this width and paper spec
                   const matchingPendingItem = originalPendingOrders.find(item =>
                     Math.abs(item.width_inches - cut.width_inches) < 0.1 &&
@@ -731,11 +817,31 @@ export default function PendingOrderItemsPage() {
                     item.shade === orderSuggestion.paper_spec.shade &&
                     Math.abs(item.bf - orderSuggestion.paper_spec.bf) < 0.01
                   );
+                  
+                  console.log(`🔍 MATCH RESULT: ${matchingPendingItem ? 'FOUND' : 'NOT FOUND'} for ${cut.width_inches}"`);
+                  if (!matchingPendingItem) {
+                    console.log(`❌ NO MATCH for ${cut.width_inches}" - skipping cut_roll creation`);
+                  }
 
                   if (matchingPendingItem && cut.used_widths) {
-                    // Get the quantity used for this specific width
-                    const quantity = cut.used_widths[cut.width_inches.toString()] || 1;
+                    // FIXED: Handle both "40" and "40.0" key formats in used_widths
+                    const widthStr = cut.width_inches.toString();
+                    const widthFloatStr = parseFloat(cut.width_inches).toString();
                     
+                    // Try all possible key formats
+                    let quantity = 1;
+                    const availableKeys = Object.keys(cut.used_widths);
+                    console.log(`🔍 Available keys in used_widths:`, availableKeys);
+                    
+                    for (const key of availableKeys) {
+                      if (parseFloat(key) === cut.width_inches) {
+                        quantity = cut.used_widths[key];
+                        console.log(`🔍 FOUND MATCH: key="${key}" matches width=${cut.width_inches}, quantity=${quantity}`);
+                        break;
+                      }
+                    }
+                    
+                    console.log(`🔍 CUT DEBUG: cut.width_inches=${cut.width_inches}, cut.used_widths=`, cut.used_widths);
                     console.log(`🔢 Creating ${quantity} cut rolls for ${cut.width_inches}" from pending item ${matchingPendingItem.id}`);
                     
                     // Create one cut roll entry for EACH quantity used
@@ -755,7 +861,29 @@ export default function PendingOrderItemsPage() {
                       });
                       globalIndex++;
                     }
+                    console.log(`📊 RUNNING TOTAL: ${selectedCutRolls.length} cut_rolls so far`);
                   }
+                } else if (cut.is_manual_cut && cut.width_inches) {
+                  // Handle manual cuts - no source_pending_id, special processing
+                  console.log(`🔧 Creating manual cut: ${cut.width_inches}" for client ${cut.client_name}`);
+                  
+                  selectedCutRolls.push({
+                    paper_id: "", // Will be resolved by backend from paper specs
+                    width_inches: cut.width_inches,
+                    qr_code: `MANUAL_CUT_${Date.now()}_${Math.random().toString(36).substr(2, 4)}_${globalIndex}`,
+                    gsm: cut.paper_specs.gsm,
+                    bf: cut.paper_specs.bf,
+                    shade: cut.paper_specs.shade,
+                    individual_roll_number: rollSet.set_number,
+                    trim_left: null,
+                    source_type: 'manual_cut',
+                    // Manual cut specific fields
+                    is_manual_cut: true,
+                    manual_cut_client_id: cut.client_id,
+                    manual_cut_client_name: cut.client_name,
+                    description: cut.description
+                  });
+                  globalIndex++;
                 }
               });
             });
@@ -801,7 +929,16 @@ export default function PendingOrderItemsPage() {
       const allAvailableCuts = [...selectedCutRolls];
       console.log('🔧 ALL AVAILABLE CUTS:', allAvailableCuts);
 
-      console.log('🔧 TRANSFORMED CUT ROLLS:', selectedCutRolls);
+      console.log('🔧 TRANSFORMED CUT ROLLS COUNT:', selectedCutRolls.length);
+      console.log('🔧 TRANSFORMED CUT ROLLS DETAIL:', selectedCutRolls);
+      
+      // Debug: Show count per width
+      const widthCounts = selectedCutRolls.reduce((acc, roll) => {
+        const width = roll.width_inches;
+        acc[width] = (acc[width] || 0) + 1;
+        return acc;
+      }, {} as Record<number, number>);
+      console.log('🔧 CUT ROLLS BY WIDTH:', widthCounts);
 
       // Use same format as main planning page (StartProductionRequest)
       const requestData = {
@@ -831,7 +968,7 @@ export default function PendingOrderItemsPage() {
       setSuggestionResult(null);
       
       // Refresh pending items
-      window.location.reload();
+      // window.location.reload();
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to start production';
@@ -1158,11 +1295,49 @@ export default function PendingOrderItemsPage() {
                   placeholder="e.g., Additional cut for order"
                 />
               </div>
-              <div className="text-sm text-muted-foreground text-center">
-                <div className="bg-blue-50 p-3 rounded">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="client-select" className="text-right">
+                  Client
+                </Label>
+                <Select 
+                  value={manualRollData.selectedClient} 
+                  onValueChange={(value) => setManualRollData(prev => ({ ...prev, selectedClient: value }))}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select a client" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.company_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="text-sm text-muted-foreground space-y-3">
+                <div className="bg-blue-50 p-3 rounded text-center">
                   <div className="font-medium text-blue-800">Available Waste Space</div>
                   <div className="text-lg font-bold text-blue-600">{manualRollData.availableWaste.toFixed(1)}"</div>
                   <div className="text-xs text-blue-600">Maximum cut width allowed</div>
+                </div>
+                <div className="bg-gray-50 p-3 rounded">
+                  <div className="font-medium text-gray-800 mb-2">Paper Specifications</div>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <div className="text-gray-600">GSM:</div>
+                      <div className="font-medium">{manualRollData.paperSpecs.gsm}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-600">BF:</div>
+                      <div className="font-medium">{manualRollData.paperSpecs.bf}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-600">Shade:</div>
+                      <div className="font-medium">{manualRollData.paperSpecs.shade}</div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-500 mt-2">Will be used for the manual cut order</div>
                 </div>
               </div>
               {manualRollData.width && !isNaN(parseFloat(manualRollData.width)) && (
