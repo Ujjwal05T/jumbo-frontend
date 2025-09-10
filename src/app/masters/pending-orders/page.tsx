@@ -445,7 +445,65 @@ export default function PendingOrderItemsPage() {
       
       // Check if the result is valid - support both order-based and legacy jumbo suggestions
       if (result.status === 'success' && (result.order_suggestions || result.jumbo_suggestions)) {
-        setSuggestionResult(result);
+        // Fix summary counts to account for quantities in used_widths
+        const processedResult = { ...result };
+        if (processedResult.order_suggestions) {
+          processedResult.order_suggestions = processedResult.order_suggestions.map((suggestion: any) => ({
+            ...suggestion,
+            jumbo_rolls: suggestion.jumbo_rolls.map((jumboRoll: any) => ({
+              ...jumboRoll,
+              sets: jumboRoll.sets.map((rollSet: any) => ({
+                ...rollSet,
+                summary: {
+                  ...rollSet.summary,
+                  total_cuts: rollSet.cuts.reduce((sum: number, c: any) => {
+                    if (c.used_widths && Object.keys(c.used_widths).length > 0) {
+                      return sum + Object.values(c.used_widths).reduce((a: number, b: number) => a + b, 0);
+                    }
+                    return sum + 1;
+                  }, 0),
+                  using_existing_cuts: rollSet.cuts.reduce((sum: number, c: any) => {
+                    if (c.uses_existing && c.used_widths && Object.keys(c.used_widths).length > 0) {
+                      return sum + Object.values(c.used_widths).reduce((a: number, b: number) => a + b, 0);
+                    }
+                    return sum + (c.uses_existing ? 1 : 0);
+                  }, 0)
+                }
+              })),
+              summary: {
+                ...jumboRoll.summary,
+                total_cuts: jumboRoll.sets.reduce((sum: number, s: any) => sum + s.cuts.reduce((cutSum: number, c: any) => {
+                  if (c.used_widths && Object.keys(c.used_widths).length > 0) {
+                    return cutSum + Object.values(c.used_widths).reduce((a: number, b: number) => a + b, 0);
+                  }
+                  return cutSum + 1;
+                }, 0), 0),
+                using_existing_cuts: jumboRoll.sets.reduce((sum: number, s: any) => sum + s.cuts.reduce((cutSum: number, c: any) => {
+                  if (c.uses_existing && c.used_widths && Object.keys(c.used_widths).length > 0) {
+                    return cutSum + Object.values(c.used_widths).reduce((a: number, b: number) => a + b, 0);
+                  }
+                  return cutSum + (c.uses_existing ? 1 : 0);
+                }, 0), 0)
+              }
+            })),
+            summary: {
+              ...suggestion.summary,
+              total_cuts: suggestion.jumbo_rolls.reduce((sum: number, jr: any) => sum + jr.sets.reduce((setSum: number, s: any) => setSum + s.cuts.reduce((cutSum: number, c: any) => {
+                if (c.used_widths && Object.keys(c.used_widths).length > 0) {
+                  return cutSum + Object.values(c.used_widths).reduce((a: number, b: number) => a + b, 0);
+                }
+                return cutSum + 1;
+              }, 0), 0), 0),
+              using_existing_cuts: suggestion.jumbo_rolls.reduce((sum: number, jr: any) => sum + jr.sets.reduce((setSum: number, s: any) => setSum + s.cuts.reduce((cutSum: number, c: any) => {
+                if (c.uses_existing && c.used_widths && Object.keys(c.used_widths).length > 0) {
+                  return cutSum + Object.values(c.used_widths).reduce((a: number, b: number) => a + b, 0);
+                }
+                return cutSum + (c.uses_existing ? 1 : 0);
+              }, 0), 0), 0)
+            }
+          }));
+        }
+        setSuggestionResult(processedResult);
         setShowSuggestions(true);
         
         if (result.order_suggestions) {
@@ -678,8 +736,18 @@ export default function PendingOrderItemsPage() {
                   
                   updatedRollSet.summary = {
                     ...updatedRollSet.summary,
-                    total_cuts: updatedRollSet.cuts.length,
-                    using_existing_cuts: updatedRollSet.cuts.filter(c => c.uses_existing).length,
+                    total_cuts: updatedRollSet.cuts.reduce((sum, c) => {
+                      if (c.used_widths && Object.keys(c.used_widths).length > 0) {
+                        return sum + Object.values(c.used_widths).reduce((a, b) => a + b, 0);
+                      }
+                      return sum + 1;
+                    }, 0),
+                    using_existing_cuts: updatedRollSet.cuts.reduce((sum, c) => {
+                      if (c.uses_existing && c.used_widths && Object.keys(c.used_widths).length > 0) {
+                        return sum + Object.values(c.used_widths).reduce((a, b) => a + b, 0);
+                      }
+                      return sum + (c.uses_existing ? 1 : 0);
+                    }, 0),
                     total_actual_width: totalActualWidth,
                     total_waste: Math.max(0, rollSet.target_width - totalActualWidth),
                     efficiency: Math.round((totalActualWidth / rollSet.target_width) * 100)
@@ -693,8 +761,8 @@ export default function PendingOrderItemsPage() {
               // Update jumbo summary
               updatedJumboRoll.summary = {
                 ...updatedJumboRoll.summary,
-                total_cuts: updatedJumboRoll.sets.reduce((sum, s) => sum + s.cuts.length, 0),
-                using_existing_cuts: updatedJumboRoll.sets.reduce((sum, s) => sum + s.cuts.filter(c => c.uses_existing).length, 0),
+                total_cuts: updatedJumboRoll.sets.reduce((sum, s) => sum + s.summary.total_cuts, 0),
+                using_existing_cuts: updatedJumboRoll.sets.reduce((sum, s) => sum + s.summary.using_existing_cuts, 0),
                 total_actual_width: updatedJumboRoll.sets.reduce((sum, s) => sum + s.summary.total_actual_width, 0),
                 total_waste: updatedJumboRoll.sets.reduce((sum, s) => sum + s.summary.total_waste, 0),
                 efficiency: Math.round((updatedJumboRoll.sets.reduce((sum, s) => sum + s.summary.total_actual_width, 0) / (jumboRoll.target_width * updatedJumboRoll.sets.length)) * 100)
@@ -810,13 +878,21 @@ export default function PendingOrderItemsPage() {
                     bf: item.bf
                   })));
                   
-                  // Find matching pending item for this width and paper spec
-                  const matchingPendingItem = originalPendingOrders.find(item =>
+                  // Find ALL matching pending items for this width and paper spec
+                  const matchingPendingItems = originalPendingOrders.filter(item =>
                     Math.abs(item.width_inches - cut.width_inches) < 0.1 &&
                     item.gsm === orderSuggestion.paper_spec.gsm &&
                     item.shade === orderSuggestion.paper_spec.shade &&
-                    Math.abs(item.bf - orderSuggestion.paper_spec.bf) < 0.01
+                    Math.abs(item.bf - orderSuggestion.paper_spec.bf) < 0.01 &&
+                    item.quantity_pending > 0  // Only items with remaining quantity
                   );
+                  
+                  // Select the item with the most remaining quantity (greedy approach)
+                  const matchingPendingItem = matchingPendingItems.length > 0 
+                    ? matchingPendingItems.reduce((best, current) => 
+                        current.quantity_pending > best.quantity_pending ? current : best
+                      )
+                    : null;
                   
                   console.log(`🔍 MATCH RESULT: ${matchingPendingItem ? 'FOUND' : 'NOT FOUND'} for ${cut.width_inches}"`);
                   if (!matchingPendingItem) {
@@ -842,24 +918,53 @@ export default function PendingOrderItemsPage() {
                     }
                     
                     console.log(`🔍 CUT DEBUG: cut.width_inches=${cut.width_inches}, cut.used_widths=`, cut.used_widths);
-                    console.log(`🔢 Creating ${quantity} cut rolls for ${cut.width_inches}" from pending item ${matchingPendingItem.id}`);
+                    console.log(`🔢 Need to create ${quantity} cut rolls for ${cut.width_inches}"`);
                     
-                    // Create one cut roll entry for EACH quantity used
-                    for (let i = 0; i < quantity; i++) {
-                      selectedCutRolls.push({
-                        paper_id: "", // Will be resolved by backend from paper specs
-                        width_inches: cut.width_inches,
-                        qr_code: `PENDING_CUT_${Date.now()}_${Math.random().toString(36).substr(2, 4)}_${globalIndex}`,
-                        gsm: orderSuggestion.paper_spec.gsm,
-                        bf: orderSuggestion.paper_spec.bf,
-                        shade: orderSuggestion.paper_spec.shade,
-                        individual_roll_number: rollSet.set_number,
-                        trim_left: null,
-                        source_type: 'pending_order',
-                        source_pending_id: matchingPendingItem.id,
-                        order_id: matchingPendingItem.original_order_id
-                      });
-                      globalIndex++;
+                    // Distribute cut_rolls across available items (CRITICAL FIX)
+                    let remainingQuantity = quantity;
+                    let currentItemIndex = 0;
+                    
+                    while (remainingQuantity > 0 && currentItemIndex < matchingPendingItems.length) {
+                      const currentItem = matchingPendingItems[currentItemIndex];
+                      
+                      // Skip items with no remaining quantity
+                      if (currentItem.quantity_pending <= 0) {
+                        currentItemIndex++;
+                        continue;
+                      }
+                      
+                      // Take minimum of what we need and what's available
+                      const canTake = Math.min(remainingQuantity, currentItem.quantity_pending);
+                      console.log(`📦 Taking ${canTake} from item ${currentItem.id} (has ${currentItem.quantity_pending})`);
+                      
+                      // Create cut_rolls for this item
+                      for (let i = 0; i < canTake; i++) {
+                        selectedCutRolls.push({
+                          paper_id: "", // Will be resolved by backend from paper specs
+                          width_inches: cut.width_inches,
+                          qr_code: `PENDING_CUT_${Date.now()}_${Math.random().toString(36).substr(2, 4)}_${globalIndex}`,
+                          gsm: orderSuggestion.paper_spec.gsm,
+                          bf: orderSuggestion.paper_spec.bf,
+                          shade: orderSuggestion.paper_spec.shade,
+                          individual_roll_number: rollSet.set_number,
+                          trim_left: null,
+                          source_type: 'pending_order',
+                          source_pending_id: currentItem.id,
+                          order_id: currentItem.original_order_id
+                        });
+                        globalIndex++;
+                      }
+                      
+                      // Update tracking
+                      currentItem.quantity_pending -= canTake;
+                      remainingQuantity -= canTake;
+                      console.log(`📊 Item ${currentItem.id} now has ${currentItem.quantity_pending} remaining`);
+                      
+                      currentItemIndex++;
+                    }
+                    
+                    if (remainingQuantity > 0) {
+                      console.error(`❌ SHORTAGE: Could not create ${remainingQuantity} cut_rolls - insufficient items`);
                     }
                     console.log(`📊 RUNNING TOTAL: ${selectedCutRolls.length} cut_rolls so far`);
                   }
