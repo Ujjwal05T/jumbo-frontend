@@ -844,7 +844,7 @@ export default function PlanningPage() {
           // METHOD 2: For pending orders, check if we have source_pending_id
           else if (roll.source_type === 'pending_order' && roll.source_pending_id) {
             // Find the pending order and then get the original order by original_order_id
-            const pendingOrder = planResult.pending_orders?.find((p: any) => p.id === roll.source_pending_id);
+            const pendingOrder  = planResult.pending_orders?.find((p: any) => p.id === roll.source_pending_id);
             if (pendingOrder?.original_order_id) {
               const originalOrder = orders.find(o => o.id === pendingOrder.original_order_id);
               if (originalOrder?.client?.company_name) {
@@ -1190,32 +1190,32 @@ export default function PlanningPage() {
       const pdf = new jsPDF();
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
-      let yPosition = 20;
+      let yPosition = 15;
 
       // Helper function to check if we need a new page
       const checkPageBreak = (height: number) => {
-        if (yPosition + height > pageHeight - 20) {
+        if (yPosition + height > pageHeight - 15) {
           pdf.addPage();
-          yPosition = 20;
+          yPosition = 15;
         }
       };
 
       // Title
       pdf.setFontSize(20);
       pdf.setTextColor(40, 40, 40);
-      pdf.text("Production Planning Report", 20, yPosition);
-      yPosition += 15;
+      pdf.text("Production Planning Report", 15, yPosition);
+      yPosition += 10;
 
       // Date
       pdf.setFontSize(10);
       pdf.setTextColor(100, 100, 100);
-      pdf.text(`Generated on: ${new Date().toLocaleString()}`, 20, yPosition);
-      yPosition += 15;
+      pdf.text(`Generated on: ${new Date().toLocaleString()}`, 15, yPosition);
+      yPosition += 10;
 
       // Legend
       pdf.setFontSize(12);
       pdf.setTextColor(40, 40, 40);
-      pdf.text("Color Legend:", 20, yPosition);
+      pdf.text("Color Legend:", 15, yPosition);
       yPosition += 8;
 
       const legendItems = [
@@ -1240,41 +1240,41 @@ export default function PlanningPage() {
         pdf.text(item.text, legendX + 10, yPosition);
       });
 
-      yPosition += 15;
+      yPosition += 10;
 
       // Enhanced Jumbo Roll Summary Section
       if (planResult.jumbo_rolls_needed > 0) {
         checkPageBreak(40);
         pdf.setFontSize(16);
         pdf.setTextColor(40, 40, 40);
-        pdf.text("Jumbo Rolls Summary", 20, yPosition);
-        yPosition += 15;
+        pdf.text("Jumbo Rolls Summary", 15, yPosition);
+        yPosition += 10;
 
         // Basic statistics
         pdf.setFontSize(12);
         pdf.setTextColor(60, 60, 60);
-        pdf.text(`Total Virtual Jumbo Rolls: ${planResult.jumbo_rolls_needed}`, 20, yPosition);
+        pdf.text(`Total Virtual Jumbo Rolls: ${planResult.jumbo_rolls_needed}`, 15, yPosition);
         yPosition += 8;
         
         // Enhanced statistics if jumbo details are available
         if (planResult.summary.complete_jumbos !== undefined && planResult.summary.partial_jumbos !== undefined) {
-          pdf.text(`Ready Jumbos (1+ rolls): ${planResult.summary.complete_jumbos}`, 20, yPosition);
+          pdf.text(`Ready Jumbos (1+ rolls): ${planResult.summary.complete_jumbos}`, 15, yPosition);
           yPosition += 8;
-          pdf.text(`Empty Jumbos: ${planResult.summary.partial_jumbos}`, 20, yPosition);
+          pdf.text(`Empty Jumbos: ${planResult.summary.partial_jumbos}`, 15, yPosition);
           yPosition += 8;
         }
         
-        pdf.text(`Each jumbo roll contains 1-3 rolls of ${planningWidth}" width (flexible)`, 20, yPosition);
+        pdf.text(`Each jumbo roll contains 1-3 rolls of ${planningWidth}" width (flexible)`, 15, yPosition);
         yPosition += 8;
-        pdf.text(`Total ${planningWidth}" rolls available: ${planResult.jumbo_rolls_needed}`, 20, yPosition);
+        pdf.text(`Total ${planningWidth}" rolls available: ${planResult.jumbo_rolls_needed}`, 15, yPosition);
         yPosition += 8;
         
         // Efficiency metrics
         const metrics = calculateEfficiencyMetrics(planResult.cut_rolls_generated);
-        pdf.text(`Overall Material Efficiency: ${metrics.averageEfficiency.toFixed(1)}%`, 20, yPosition);
+        pdf.text(`Overall Material Efficiency: ${metrics.averageEfficiency.toFixed(1)}%`, 15, yPosition);
         yPosition += 8;
-        pdf.text(`Total Cut Rolls Generated: ${planResult.summary.total_cut_rolls}`, 20, yPosition);
-        yPosition += 15;
+        pdf.text(`Total Cut Rolls Generated: ${planResult.summary.total_cut_rolls}`, 15, yPosition);
+        yPosition += 10;
       }
 
       // Enhanced: Jumbo Roll Hierarchy Section
@@ -1284,8 +1284,8 @@ export default function PlanningPage() {
       
       // Check if we have jumbo roll details for enhanced view
       if (planResult.jumbo_roll_details && planResult.jumbo_roll_details.length > 0) {
-        pdf.text("Production Plan - Jumbo Roll Hierarchy", 20, yPosition);
-        yPosition += 15;
+        pdf.text("Production Plan - Jumbo Roll Hierarchy", 15, yPosition);
+        yPosition += 10;
 
         // Process jumbo roll details
         (planResult.jumbo_roll_details || []).forEach((jumboDetail: JumboRollDetail) => {
@@ -1296,7 +1296,7 @@ export default function PlanningPage() {
           // Jumbo Roll Header
           pdf.setFontSize(14);
           pdf.setTextColor(40, 40, 40);
-          pdf.text(`Jumbo Roll ${jumboDetail.jumbo_frontend_id || jumboDetail.jumbo_id || 'Unknown'}`, 20, yPosition);
+          pdf.text(`Jumbo Roll ${jumboDetail.jumbo_frontend_id || jumboDetail.jumbo_id || 'Unknown'}`, 15, yPosition);
           yPosition += 8;
 
           // Jumbo Roll Details
@@ -1508,8 +1508,8 @@ export default function PlanningPage() {
         });
       } else {
         // Fallback to traditional view if no jumbo details
-        pdf.text("Cut Rolls by Specification (Traditional View)", 20, yPosition);
-        yPosition += 15;
+        pdf.text("Cut Rolls by Specification (Traditional View)", 15, yPosition);
+        yPosition += 10;
 
         // Group cut rolls by specification (original logic)
         const groupedRolls = planResult.cut_rolls_generated.reduce(
@@ -1537,7 +1537,7 @@ export default function PlanningPage() {
         // Specification header
         pdf.setFontSize(14);
         pdf.setTextColor(40, 40, 40);
-        pdf.text(specKey, 20, yPosition);
+        pdf.text(specKey, 15, yPosition);
         yPosition += 10;
 
         // Group by roll number
@@ -1733,13 +1733,39 @@ export default function PlanningPage() {
         checkPageBreak(30);
         pdf.setFontSize(16);
         pdf.setTextColor(220, 38, 38);
-        pdf.text("Pending Orders", 20, yPosition);
-        yPosition += 15;
+        pdf.text("Pending Orders", 15, yPosition);
+        yPosition += 10;
 
         planResult.pending_orders.forEach((order, index) => {
-          checkPageBreak(8);
+          checkPageBreak(12);
+          
+          // Get client name and order frontend ID from original order
+          let clientName = 'Unknown Client';
+          let orderFrontendId = 'N/A';
+          
+          if (order.source_order_id && orders.length > 0) {
+            const sourceOrder = orders.find(o => o.id === order.source_order_id);
+            
+            if (sourceOrder) {
+              clientName = sourceOrder.client?.company_name || 'Unknown Client';
+              orderFrontendId = sourceOrder.frontend_id || sourceOrder.id.split("-")[0] || 'N/A';
+            }
+          }
+          
           pdf.setFontSize(10);
           pdf.setTextColor(80, 80, 80);
+          
+          // First line: Order info and specifications
+          pdf.text(
+            `Order ${orderFrontendId} - ${clientName}`,
+            25,
+            yPosition
+          );
+          yPosition += 6;
+          
+          // Second line: Item details and reason
+          pdf.setFontSize(9);
+          pdf.setTextColor(100, 100, 100);
           pdf.text(
             `${order.width}" × ${order.quantity} rolls (${order.gsm}gsm, ${order.bf}bf, ${order.shade}) - ${order.reason}`,
             25,
@@ -1753,8 +1779,8 @@ export default function PlanningPage() {
       checkPageBreak(50);
       pdf.setFontSize(16);
       pdf.setTextColor(40, 40, 40);
-      pdf.text("Production Summary", 20, yPosition);
-      yPosition += 15;
+      pdf.text("Production Summary", 15, yPosition);
+      yPosition += 10;
 
       const summaryData = [
         [
@@ -1787,7 +1813,7 @@ export default function PlanningPage() {
       summaryData.forEach(([label, value]) => {
         checkPageBreak(8);
         pdf.setTextColor(60, 60, 60);
-        pdf.text(`${label}:`, 20, yPosition);
+        pdf.text(`${label}:`, 15, yPosition);
         pdf.setTextColor(40, 40, 40);
         pdf.text(value, 120, yPosition);
         yPosition += 8;
@@ -1843,7 +1869,7 @@ export default function PlanningPage() {
       doc.setFontSize(16);
       doc.setFont('helvetica', 'bold');
       doc.text(`Barcode Labels - Production Records`, pageWidth / 2, yPosition, { align: 'center' });
-      yPosition += 15;
+      yPosition += 10;
       
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
@@ -1882,7 +1908,7 @@ export default function PlanningPage() {
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(100, 100, 100);
         doc.text(`${records.length} cut rolls in this jumbo`, pageWidth / 2, yPosition, { align: 'center' });
-        yPosition += 15;
+        yPosition += 10;
 
         // Add separator line
         doc.setDrawColor(200, 200, 200);

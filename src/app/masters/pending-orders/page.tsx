@@ -591,8 +591,10 @@ export default function PendingOrderItemsPage() {
       yPosition += 8;
       pdf.text(`Total Rolls: ${suggestionResult.summary.total_rolls_suggested || 0}`, margin, yPosition);
     }
+
+    pdf.addPage();
     
-    yPosition += 12;
+    yPosition = 12;
     pdf.setFontSize(16);
     pdf.text('Order-Based Roll Suggestions', margin, yPosition);
     yPosition += 8;
@@ -612,8 +614,6 @@ export default function PendingOrderItemsPage() {
         yPosition += 7;
         pdf.setFontSize(11);
         pdf.text(`Paper: ${orderSuggestion.paper_spec.gsm}GSM, ${orderSuggestion.paper_spec.bf}BF, ${orderSuggestion.paper_spec.shade}`, margin, yPosition);
-        yPosition += 6;
-        pdf.text(`${orderSuggestion.summary.total_jumbo_rolls} jumbo rolls | ${orderSuggestion.summary.total_118_sets} sets | ${orderSuggestion.summary.total_cuts} cuts`, margin, yPosition);
         
         // Show jumbo rolls for this order
         orderSuggestion.jumbo_rolls.forEach((jumboRoll, jumboIndex) => {
@@ -633,9 +633,6 @@ export default function PendingOrderItemsPage() {
               yPosition = 20;
             }
             
-            yPosition += 7;
-            pdf.setFontSize(10);
-            pdf.text(`    118" Set #${rollSet.set_number}: ${rollSet.summary.total_cuts} cuts, ${rollSet.summary.total_waste.toFixed(1)}" waste`, margin + 20, yPosition);
             
             // Add visual cutting pattern representation
             yPosition += 6;
@@ -736,7 +733,7 @@ export default function PendingOrderItemsPage() {
           });
         });
         
-        yPosition += 8;
+        yPosition += 0;
       });
     } 
     // Fallback for legacy format

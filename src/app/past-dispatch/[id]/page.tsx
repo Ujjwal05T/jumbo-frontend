@@ -116,7 +116,7 @@ export default function PastDispatchDetailPage() {
       });
       
       // Generate PDF and open print dialog
-      const doc = generatePackingSlipPDF(packingSlipData, true); // Add print flag
+      const doc:any = generatePackingSlipPDF(packingSlipData, true); // Add print flag
       const pdfBlob = doc.output('blob');
       const url = URL.createObjectURL(pdfBlob);
       

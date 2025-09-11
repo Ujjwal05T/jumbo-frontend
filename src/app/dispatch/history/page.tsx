@@ -954,7 +954,7 @@ export default function DispatchHistoryPage() {
               <div className="flex justify-end gap-2">
                 <Button
                   variant="outline"
-                  onClick={() => downloadPDF(selectedDispatch.id, selectedDispatch.dispatch_number)}
+                  onClick={() => printPDF(selectedDispatch.id, selectedDispatch.dispatch_number)}
                 >
                   <Download className="w-4 h-4 mr-2" />
                   Print PDF

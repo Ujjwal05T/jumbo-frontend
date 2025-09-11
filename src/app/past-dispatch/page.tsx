@@ -180,7 +180,7 @@ export default function PastDispatchListPage() {
       console.log('Converted packing slip data:', packingSlipData);
       
       // Generate PDF and open print dialog
-      const doc = generatePackingSlipPDF(packingSlipData, true);
+      const doc : any= generatePackingSlipPDF(packingSlipData, true);
       const pdfBlob = doc.output('blob');
       const url = URL.createObjectURL(pdfBlob);
       

@@ -20,6 +20,7 @@ export interface OrderRequirement {
 }
 
 export interface PendingOrder {
+  source_order_id: string;
   width: number;
   quantity: number;
   gsm: number;
