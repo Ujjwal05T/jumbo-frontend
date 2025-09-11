@@ -549,13 +549,13 @@ export default function PendingOrderItemsPage() {
 
     const pdf = new jsPDF();
     const pageWidth = pdf.internal.pageSize.getWidth();
-    const margin = 20;
-    let yPosition = 30;
+    const margin = 10;
+    let yPosition = 15;
 
     pdf.setFontSize(20);
     pdf.text('Roll Suggestions Report', margin, yPosition);
     
-    yPosition += 15;
+    yPosition += 10;
     pdf.setFontSize(12);
     pdf.text(`Target Width: ${suggestionResult.target_width}" (119" - ${suggestionResult.wastage}" wastage)`, margin, yPosition);
     
@@ -592,37 +592,37 @@ export default function PendingOrderItemsPage() {
       pdf.text(`Total Rolls: ${suggestionResult.summary.total_rolls_suggested || 0}`, margin, yPosition);
     }
     
-    yPosition += 20;
+    yPosition += 12;
     pdf.setFontSize(16);
     pdf.text('Order-Based Roll Suggestions', margin, yPosition);
-    yPosition += 10;
+    yPosition += 8;
 
     // Handle new order-based format
     if (suggestionResult.order_suggestions) {
       suggestionResult.order_suggestions.forEach((orderSuggestion, orderIndex) => {
-        if (yPosition > 200) {
+        if (yPosition > 240) {
           pdf.addPage();
-          yPosition = 30;
+          yPosition = 20;
         }
         
-        yPosition += 15;
+        yPosition += 10;
         pdf.setFontSize(14);
         pdf.text(`Order: ${orderSuggestion.order_info.order_frontend_id} - ${orderSuggestion.order_info.client_name}`, margin, yPosition);
         
-        yPosition += 10;
+        yPosition += 7;
         pdf.setFontSize(11);
         pdf.text(`Paper: ${orderSuggestion.paper_spec.gsm}GSM, ${orderSuggestion.paper_spec.bf}BF, ${orderSuggestion.paper_spec.shade}`, margin, yPosition);
-        yPosition += 8;
+        yPosition += 6;
         pdf.text(`${orderSuggestion.summary.total_jumbo_rolls} jumbo rolls | ${orderSuggestion.summary.total_118_sets} sets | ${orderSuggestion.summary.total_cuts} cuts`, margin, yPosition);
         
         // Show jumbo rolls for this order
         orderSuggestion.jumbo_rolls.forEach((jumboRoll, jumboIndex) => {
           if (yPosition > 240) {
             pdf.addPage();
-            yPosition = 30;
+            yPosition = 20;
           }
           
-          yPosition += 12;
+          yPosition += 8;
           pdf.setFontSize(12);
           pdf.text(`  Jumbo Roll #${jumboRoll.jumbo_number} (${jumboRoll.summary.efficiency}% efficient)`, margin + 10, yPosition);
           
@@ -630,23 +630,23 @@ export default function PendingOrderItemsPage() {
           jumboRoll.sets.forEach((rollSet, setIndex) => {
             if (yPosition > 250) {
               pdf.addPage();
-              yPosition = 30;
+              yPosition = 20;
             }
             
-            yPosition += 10;
+            yPosition += 7;
             pdf.setFontSize(10);
             pdf.text(`    118" Set #${rollSet.set_number}: ${rollSet.summary.total_cuts} cuts, ${rollSet.summary.total_waste.toFixed(1)}" waste`, margin + 20, yPosition);
             
             // Add visual cutting pattern representation
-            yPosition += 8;
+            yPosition += 6;
             pdf.setFontSize(8);
             pdf.setTextColor(80, 80, 80);
             pdf.text(`    Cutting Pattern (${rollSet.target_width}" Roll):`, margin + 20, yPosition);
-            yPosition += 8;
+            yPosition += 6;
             
             // Draw visual cutting representation
-            const rectStartX = margin + 25;
-            const rectWidth = pageWidth - 70;
+            const rectStartX = margin + 15;
+            const rectWidth = pageWidth - 50;
             const rectHeight = 12;
             let currentX = rectStartX;
             
@@ -736,49 +736,59 @@ export default function PendingOrderItemsPage() {
           });
         });
         
-        yPosition += 15;
+        yPosition += 8;
       });
     } 
     // Fallback for legacy format
     else if (suggestionResult.jumbo_suggestions) {
       suggestionResult.jumbo_suggestions.forEach((jumbo, jumboIndex) => {
-        if (yPosition > 220) {
+        if (yPosition > 240) {
           pdf.addPage();
-          yPosition = 30;
+          yPosition = 20;
         }
         
-        yPosition += 15;
+        yPosition += 10;
         pdf.setFontSize(14);
         pdf.text(`Jumbo ${jumbo.jumbo_number}: ${jumbo.paper_specs.shade} ${jumbo.paper_specs.gsm}GSM (BF: ${jumbo.paper_specs.bf})`, margin, yPosition);
         
-        yPosition += 10;
+        yPosition += 7;
         pdf.setFontSize(11);
         pdf.text(`${jumbo.summary.using_existing} using existing + ${jumbo.summary.new_rolls_needed} new rolls | Avg waste: ${jumbo.summary.avg_waste}"`, margin, yPosition);
         
         jumbo.rolls.forEach((roll, rollIndex) => {
           if (yPosition > 250) {
             pdf.addPage();
-            yPosition = 30;
+            yPosition = 20;
           }
           
-          yPosition += 12;
+          yPosition += 8;
           pdf.setFontSize(10);
           const rollColor = roll.uses_existing ? '[EXISTING]' : '[NEW]';
           pdf.text(`  Roll ${roll.roll_number}: ${rollColor} ${roll.description}`, margin + 10, yPosition);
           
           if (roll.uses_existing && roll.widths && roll.widths.length > 3) {
-            yPosition += 8;
+            yPosition += 6;
             pdf.setFontSize(8);
             pdf.text(`    (${roll.widths.length} pieces total)`, margin + 15, yPosition);
           }
         });
         
-        yPosition += 15;
+        yPosition += 8;
       });
     }
 
-    pdf.save(`roll-suggestions-${suggestionResult.target_width}inch-${new Date().toISOString().split('T')[0]}.pdf`);
-    toast.success('PDF downloaded successfully');
+    const pdfBlob = pdf.output('blob');
+    const url = URL.createObjectURL(pdfBlob);
+    
+    const printWindow = window.open(url, '_blank');
+    if (printWindow) {
+      printWindow.onload = () => {
+        printWindow.print();
+      };
+    }
+    
+    URL.revokeObjectURL(url);
+    toast.success('PDF opened for printing');
   };
 
   // Selection and production functions
@@ -1250,24 +1260,24 @@ export default function PendingOrderItemsPage() {
   const handlePrintTablePDF = () => {
     const pdf = new jsPDF();
     const pageWidth = pdf.internal.pageSize.getWidth();
-    const margin = 20;
-    let yPosition = 30;
+    const margin = 10;
+    let yPosition = 15;
 
     // Header
     pdf.setFontSize(20);
     pdf.text('Pending Order Items Report', margin, yPosition);
     
-    yPosition += 15;
+    yPosition += 10;
     pdf.setFontSize(12);
     pdf.text(`Generated on: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, margin, yPosition);
     pdf.text(`Total Items: ${filteredItems.length}`, pageWidth - margin - 50, yPosition);
     
-    yPosition += 20;
+    yPosition += 12;
     
     // Summary Statistics
     pdf.setFontSize(16);
     pdf.text('Summary Statistics', margin, yPosition);
-    yPosition += 15;
+    yPosition += 10;
     
     pdf.setFontSize(11);
     pdf.text(`• Total Pending Items: ${displayItems.length}`, margin, yPosition);
@@ -1282,7 +1292,7 @@ export default function PendingOrderItemsPage() {
     // Table Header
     pdf.setFontSize(16);
     pdf.text('Pending Items Details', margin, yPosition);
-    yPosition += 15;
+    yPosition += 10;
 
     // Table column setup
     const colWidths = [25, 40, 35, 20, 25, 35, 20];
@@ -1301,7 +1311,7 @@ export default function PendingOrderItemsPage() {
       xPos += colWidths[index];
     });
     
-    yPosition += 15;
+    yPosition += 10;
 
     // Table rows
     filteredItems.forEach((item, index) => {
@@ -1320,7 +1330,7 @@ export default function PendingOrderItemsPage() {
           xPos += colWidths[hIndex];
         });
         
-        yPosition += 15;
+        yPosition += 10;
       }
 
       // Alternate row background
@@ -1381,8 +1391,18 @@ export default function PendingOrderItemsPage() {
       pdf.text('JumboReel App - Pending Orders Report', margin, pdf.internal.pageSize.getHeight() - 10);
     }
 
-    pdf.save(`pending-orders-report-${new Date().toISOString().split('T')[0]}.pdf`);
-    toast.success('Pending orders PDF downloaded successfully');
+    const pdfBlob = pdf.output('blob');
+    const url = URL.createObjectURL(pdfBlob);
+    
+    const printWindow = window.open(url, '_blank');
+    if (printWindow) {
+      printWindow.onload = () => {
+        printWindow.print();
+      };
+    }
+    
+    URL.revokeObjectURL(url);
+    toast.success('Pending orders PDF opened for printing');
   };
 
 

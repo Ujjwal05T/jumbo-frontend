@@ -189,12 +189,26 @@ export default function OrderDetailsPage() {
     return matchesSearch && matchesStatus;
   }) || [];
 
-  const exportToPDF = (includeRates: boolean = true) => {
+  const printToPDF = (includeRates: boolean = true) => {
     if (!order) return;
     
     try {
-      generateOrderPDF(order, includeRates);
-      toast.success('PDF exported successfully!');
+      const doc = generateOrderPDF(order, includeRates, true);
+      
+      if (doc) {
+        const pdfBlob = doc.output('blob');
+        const url = URL.createObjectURL(pdfBlob);
+        
+        const printWindow = window.open(url, '_blank');
+        if (printWindow) {
+          printWindow.onload = () => {
+            printWindow.print();
+          };
+        }
+        
+        URL.revokeObjectURL(url);
+        toast.success('PDF opened for printing!');
+      }
     } catch (error) {
       console.error('Error generating PDF:', error);
       toast.error('Failed to generate PDF');
@@ -255,7 +269,7 @@ export default function OrderDetailsPage() {
           <div className="flex gap-2">
             <Button
               variant="outline"
-              onClick={() => exportToPDF(true)}
+              onClick={() => printToPDF(true)}
               className="text-blue-600 border-blue-600 hover:bg-blue-50"
             >
               <Download className="mr-2 h-4 w-4" />
@@ -263,7 +277,7 @@ export default function OrderDetailsPage() {
             </Button>
             <Button
               variant="outline"
-              onClick={() => exportToPDF(false)}
+              onClick={() => printToPDF(false)}
               className="text-green-600 border-green-600 hover:bg-green-50"
             >
               <Download className="mr-2 h-4 w-4" />

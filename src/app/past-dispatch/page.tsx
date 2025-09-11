@@ -151,9 +151,9 @@ export default function PastDispatchListPage() {
     }
   };
 
-  const downloadPDF = async (dispatchId: string, dispatchNumber: string) => {
+  const printPDF = async (dispatchId: string, dispatchNumber: string) => {
     try {
-      console.log('Downloading PDF for dispatch:', dispatchId, dispatchNumber);
+      console.log('Printing PDF for dispatch:', dispatchId, dispatchNumber);
       
       // Show loading toast
       toast.loading('Generating packing slip...', { id: `pdf-${dispatchId}` });
@@ -179,13 +179,24 @@ export default function PastDispatchListPage() {
       
       console.log('Converted packing slip data:', packingSlipData);
       
-      // Generate PDF using the same format as dispatch records
-      generatePackingSlipPDF(packingSlipData);
+      // Generate PDF and open print dialog
+      const doc = generatePackingSlipPDF(packingSlipData, true);
+      const pdfBlob = doc.output('blob');
+      const url = URL.createObjectURL(pdfBlob);
       
-      toast.success('Packing slip PDF downloaded successfully', { id: `pdf-${dispatchId}` });
+      const printWindow = window.open(url, '_blank');
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      }
+      
+      URL.revokeObjectURL(url);
+      
+      toast.success('Packing slip PDF opened for printing', { id: `pdf-${dispatchId}` });
     } catch (err) {
-      console.error('Error generating PDF:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Failed to generate packing slip PDF';
+      console.error('Error printing PDF:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to print packing slip PDF';
       toast.error(errorMessage, { id: `pdf-${dispatchId}` });
     }
   };
@@ -429,8 +440,8 @@ export default function PastDispatchListPage() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => downloadPDF(dispatch.id, dispatch.dispatch_number)}
-                                title="Download PDF"
+                                onClick={() => printPDF(dispatch.id, dispatch.dispatch_number)}
+                                title="Print PDF"
                               >
                                 <Download className="h-4 w-4" />
                               </Button>

@@ -53,7 +53,7 @@ export interface ChallanData {
 /**
  * Generate Cash Challan PDF
  */
-export const generateCashChallanPDF = (data: ChallanData): void => {
+export const generateCashChallanPDF = (data: ChallanData, printInsteadOfSave: boolean = false): jsPDF | void => {
   try {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -320,9 +320,13 @@ export const generateCashChallanPDF = (data: ChallanData): void => {
     doc.text('For SATGURU PAPER PVT. LTD.', signX + 13, yPosition + 14);
     
 
-    // Save the PDF
-    const fileName = `cash_challan_${data.invoice_number || 'CASH001'}_${new Date().toISOString().split('T')[0]}.pdf`;
-    doc.save(fileName);
+    // Save or return the PDF
+    if (printInsteadOfSave) {
+      return doc;
+    } else {
+      const fileName = `cash_challan_${data.invoice_number || 'CASH001'}_${new Date().toISOString().split('T')[0]}.pdf`;
+      doc.save(fileName);
+    }
 
   } catch (error) {
     console.error('Error generating Cash Challan PDF:', error);
@@ -333,7 +337,7 @@ export const generateCashChallanPDF = (data: ChallanData): void => {
 /**
  * Generate Bill/Invoice PDF (GST Tax Invoice) - Compact
  */
-export const generateBillInvoicePDF = (data: ChallanData): void => {
+export const generateBillInvoicePDF = (data: ChallanData, printInsteadOfSave: boolean = false): jsPDF | void => {
   try {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -602,9 +606,13 @@ export const generateBillInvoicePDF = (data: ChallanData): void => {
     doc.text('true and correct.', signX + 3, yPosition + 10);
     doc.text('For SATGURU PAPER PVT. LTD.', signX + 13, yPosition + 14);
 
-    // Save the PDF - Different filename for tax invoice
-    const fileName = `tax_invoice_${data.invoice_number || 'GST001'}_${new Date().toISOString().split('T')[0]}.pdf`;
-    doc.save(fileName);
+    // Save or return the PDF - Different filename for tax invoice
+    if (printInsteadOfSave) {
+      return doc;
+    } else {
+      const fileName = `tax_invoice_${data.invoice_number || 'GST001'}_${new Date().toISOString().split('T')[0]}.pdf`;
+      doc.save(fileName);
+    }
 
   } catch (error) {
     console.error('Error generating GST Tax Invoice PDF:', error);

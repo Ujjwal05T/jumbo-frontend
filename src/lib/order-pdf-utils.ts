@@ -25,7 +25,7 @@ interface OrderPDFData {
   }>;
 }
 
-export const generateOrderPDF = (order: OrderPDFData, includeRates: boolean = true): void => {
+export const generateOrderPDF = (order: OrderPDFData, includeRates: boolean = true, printInsteadOfSave: boolean = false): jsPDF | void => {
   const doc = new jsPDF();
   
   // Header - Order Details (Line 1)
@@ -157,8 +157,12 @@ export const generateOrderPDF = (order: OrderPDFData, includeRates: boolean = tr
   doc.setFontSize(8);
   doc.text(`Generated on: ${new Date().toLocaleString()}`, 20, pageHeight - 10);
   
-  // Save the PDF
-  const rateText = includeRates ? 'with-rates' : 'without-rates';
-  const filename = `order-${order.frontend_id || order.id}-${rateText}-${new Date().toISOString().split('T')[0]}.pdf`;
-  doc.save(filename);
+  // Save or return the PDF for printing
+  if (printInsteadOfSave) {
+    return doc;
+  } else {
+    const rateText = includeRates ? 'with-rates' : 'without-rates';
+    const filename = `order-${order.frontend_id || order.id}-${rateText}-${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(filename);
+  }
 };

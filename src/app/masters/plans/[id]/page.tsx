@@ -427,8 +427,26 @@ export default function PlanDetailsPage() {
     return canvas;
   };
 
-  // PDF Export Functions
-  const exportBarcodesToPDF = () => {
+  // PDF Print Functions
+  const openPDFForPrint = (doc: any, filename: string) => {
+    try {
+      const pdfBlob = doc.output('blob');
+      const url = URL.createObjectURL(pdfBlob);
+      
+      const printWindow = window.open(url, '_blank');
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      }
+      
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error opening PDF for print:', error);
+      throw error;
+    }
+  };
+  const printBarcodesToPDF = () => {
       try {
       if (!productionSummary || filteredCutRolls.length === 0) {
         toast.error('No cut rolls available for export');
@@ -592,15 +610,15 @@ export default function PlanDetailsPage() {
         doc.text(`Page ${i} of ${totalPages}`, pageWidth - 20, pageHeight - 10, { align: 'right' });
       }
 
-      doc.save(`barcode-labels-${plan?.name || 'plan'}-${new Date().toISOString().split('T')[0]}.pdf`);
-      toast.success('Barcode labels exported to PDF successfully!');
+      openPDFForPrint(doc, `barcode-labels-${plan?.name || 'plan'}-${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success('Barcode labels opened for printing!');
     } catch (error) {
       console.error('Error exporting barcode PDF:', error);
       toast.error('Failed to export barcode PDF');
     }
   };
 
- const exportProductionSummaryToPDF = () => {
+ const printProductionSummaryToPDF = () => {
   try {
     if (!plan || !productionSummary) {
       toast.error('Production data not available for export');
@@ -950,7 +968,7 @@ export default function PlanDetailsPage() {
   }
 };
 
-  const exportPlanDetailsToPDF = () => {
+  const printPlanDetailsToPDF = () => {
     try {
       if (!plan || !productionSummary) {
         toast.error('Plan data not available for export');
@@ -1385,8 +1403,8 @@ export default function PlanDetailsPage() {
       }
 
       
-      doc.save(`plan-details-${plan.name || 'plan'}-${new Date().toISOString().split('T')[0]}.pdf`);
-      toast.success('Plan details exported to PDF successfully!');
+      openPDFForPrint(doc, `plan-details-${plan.name || 'plan'}-${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success('Plan details opened for printing!');
     } catch (error) {
       console.error('Error exporting plan details PDF:', error);
       toast.error('Failed to export plan details PDF');
@@ -1464,7 +1482,7 @@ export default function PlanDetailsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={exportProductionSummaryToPDF}
+                  onClick={printProductionSummaryToPDF}
                 >
                   <Printer className="mr-2 h-4 w-4" />
                   Print
@@ -1472,7 +1490,7 @@ export default function PlanDetailsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={exportBarcodesToPDF}
+                  onClick={printBarcodesToPDF}
                 >
                   <ScanLine className="mr-2 h-4 w-4" />
                   Export Labels
@@ -1480,7 +1498,7 @@ export default function PlanDetailsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={exportPlanDetailsToPDF}
+                  onClick={printPlanDetailsToPDF}
                 >
                   <FileText className="mr-2 h-4 w-4" />
                   Export Plan Report
@@ -1662,7 +1680,7 @@ export default function PlanDetailsPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={exportBarcodesToPDF}
+                        onClick={printBarcodesToPDF}
                         className="text-purple-600 border-purple-600 hover:bg-purple-50"
                       >
                         <Download className="h-3 w-3 mr-1" />

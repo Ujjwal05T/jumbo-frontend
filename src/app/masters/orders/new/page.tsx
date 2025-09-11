@@ -211,19 +211,32 @@ export default function NewOrderPage() {
 
       setAlert({
         type: "success",
-        message: "Order created successfully! Downloading PDF...",
+        message: "Order created successfully! Opening PDF for printing...",
       });
 
-      // Auto-download PDF after successful creation
+      // Auto-print PDF after successful creation
       try {
         // Need to fetch the complete order details including client info for PDF
         const response = await fetch(`${MASTER_ENDPOINTS.ORDERS}/${createdOrder.id}`, createRequestOptions('GET'));
         if (response.ok) {
           const orderWithDetails = await response.json();
           
-          // Generate and download PDF automatically
-          generateOrderPDF(orderWithDetails, true);
-          toast.success('Order created and PDF downloaded successfully!');
+          // Generate and print PDF automatically
+          const doc = generateOrderPDF(orderWithDetails, true, true);
+          if (doc) {
+            const pdfBlob = doc.output('blob');
+            const url = URL.createObjectURL(pdfBlob);
+            
+            const printWindow = window.open(url, '_blank');
+            if (printWindow) {
+              printWindow.onload = () => {
+                printWindow.print();
+              };
+            }
+            
+            URL.revokeObjectURL(url);
+          }
+          toast.success('Order created and PDF opened for printing!');
         } else {
           // Fallback - create PDF with available data
           const pdfData:any = {
@@ -234,15 +247,28 @@ export default function NewOrderPage() {
               paper: papers.find(p => p.id === item.paper_id)
             }))
           };
-          generateOrderPDF(pdfData, true);
-          toast.success('Order created and PDF downloaded successfully!');
+          const doc = generateOrderPDF(pdfData, true, true);
+          if (doc) {
+            const pdfBlob = doc.output('blob');
+            const url = URL.createObjectURL(pdfBlob);
+            
+            const printWindow = window.open(url, '_blank');
+            if (printWindow) {
+              printWindow.onload = () => {
+                printWindow.print();
+              };
+            }
+            
+            URL.revokeObjectURL(url);
+          }
+          toast.success('Order created and PDF opened for printing!');
         }
       } catch (pdfError) {
         console.error('Error generating PDF:', pdfError);
         toast.error('Order created but PDF generation failed');
       }
 
-      // Redirect after a short delay to show success message and allow PDF download
+      // Redirect after a short delay to show success message and allow PDF printing
       setTimeout(() => {
         router.push("/masters/orders");
       }, 2000);

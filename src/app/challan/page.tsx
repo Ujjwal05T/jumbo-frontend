@@ -334,7 +334,7 @@ export default function ChallanPage() {
     }
   };
 
-  const downloadPDF = async (dispatchId: string, dispatchNumber: string) => {
+  const printPDF = async (dispatchId: string, dispatchNumber: string) => {
     try {
       const response = await fetch(`${API_BASE_URL}/dispatch/${dispatchId}/pdf`, {
         headers: { 'ngrok-skip-browser-warning': 'true' }
@@ -344,18 +344,20 @@ export default function ChallanPage() {
       
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = `dispatch_${dispatchNumber}_${new Date().toISOString().split('T')[0]}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
       
-      toast.success('PDF downloaded successfully');
+      // Open PDF in new window and trigger print dialog
+      const printWindow = window.open(url, '_blank');
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      }
+      
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('PDF opened for printing');
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to download PDF';
+      const errorMessage = err instanceof Error ? err.message : 'Failed to print PDF';
       toast.error(errorMessage);
     }
   };
@@ -860,10 +862,10 @@ export default function ChallanPage() {
                               View Details
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              onClick={() => downloadPDF(dispatch.id, dispatch.dispatch_number)}
+                              onClick={() => printPDF(dispatch.id, dispatch.dispatch_number)}
                             >
                               <Download className="mr-2 h-4 w-4" />
-                              Download PDF
+                              Print PDF
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => downloadPackingSlip(dispatch.id)}
@@ -1575,10 +1577,10 @@ export default function ChallanPage() {
                 <div className="flex justify-end gap-2">
                   <Button
                     variant="outline"
-                    onClick={() => downloadPDF(selectedDispatch.id, selectedDispatch.dispatch_number)}
+                    onClick={() => printPDF(selectedDispatch.id, selectedDispatch.dispatch_number)}
                   >
                     <Download className="w-4 h-4 mr-2" />
-                    Download PDF
+                    Print PDF
                   </Button>
                   <Button
                     variant="outline"

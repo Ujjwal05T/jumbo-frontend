@@ -475,11 +475,11 @@ export default function ReportsPage() {
           Export CSV
         </Button>
         <Button
-          onClick={() => exportPaperToPDF(table)}
+          onClick={() => printPaperToPDF(table)}
           size="sm"
           variant="outline"
         >
-          Export PDF
+          Print PDF
         </Button>
       </div>
     ),
@@ -524,11 +524,11 @@ export default function ReportsPage() {
           Export CSV
         </Button>
         <Button
-          onClick={() => exportClientToPDF(table)}
+          onClick={() => printClientToPDF(table)}
           size="sm"
           variant="outline"
         >
-          Export PDF
+          Print PDF
         </Button>
       </div>
     ),
@@ -573,18 +573,31 @@ export default function ReportsPage() {
           Export CSV
         </Button>
         <Button
-          onClick={() => exportDateToPDF(table)}
+          onClick={() => printDateToPDF(table)}
           size="sm"
           variant="outline"
         >
-          Export PDF
+          Print PDF
         </Button>
       </div>
     ),
   });
 
-  // PDF Export helper functions
-  const exportPaperToPDF = (table: any) => {
+  // PDF Print helper functions
+  const openPDFForPrint = (doc: any, filename: string) => {
+    const pdfBlob = doc.output('blob');
+    const url = URL.createObjectURL(pdfBlob);
+    
+    const printWindow = window.open(url, '_blank');
+    if (printWindow) {
+      printWindow.onload = () => {
+        printWindow.print();
+      };
+    }
+    
+    URL.revokeObjectURL(url);
+  };
+  const printPaperToPDF = (table: any) => {
     const doc = new jsPDF();
     const tableData = table.getCoreRowModel().rows.map((row: any) => [
       row.original.paper_name,
@@ -611,10 +624,10 @@ export default function ReportsPage() {
       startY: 40,
     });
 
-    doc.save('paper-analysis-report.pdf');
+    openPDFForPrint(doc, 'paper-analysis-report.pdf');
   };
 
-  const exportClientToPDF = (table: any) => {
+  const printClientToPDF = (table: any) => {
     const doc = new jsPDF();
     const tableData = table.getCoreRowModel().rows.map((row: any) => [
       row.original.client_name,
@@ -642,10 +655,10 @@ export default function ReportsPage() {
       startY: 40,
     });
 
-    doc.save('client-analysis-report.pdf');
+    openPDFForPrint(doc, 'client-analysis-report.pdf');
   };
 
-  const exportDateToPDF = (table: any) => {
+  const printDateToPDF = (table: any) => {
     const doc = new jsPDF();
     const tableData = table.getCoreRowModel().rows.map((row: any) => [
       new Date(row.original.date_period).toLocaleDateString(),
@@ -669,11 +682,11 @@ export default function ReportsPage() {
       startY: 40,
     });
 
-    doc.save('date-analysis-report.pdf');
+    openPDFForPrint(doc, 'date-analysis-report.pdf');
   };
 
   // Chart export function (for chart view)
-  const exportChartToPDF = () => {
+  const printChartToPDF = () => {
     // For chart view, we'll use html2canvas to capture the chart
     // This is a simple implementation - you could enhance it further
     alert('Chart export functionality can be added using html2canvas library');
@@ -708,7 +721,7 @@ export default function ReportsPage() {
               Chart
             </Button>
             {viewMode === 'chart' && (
-              <Button onClick={exportChartToPDF} size="sm" variant="outline">
+              <Button onClick={printChartToPDF} size="sm" variant="outline">
                 <Download className="h-4 w-4 mr-2" />
                 Export Chart
               </Button>

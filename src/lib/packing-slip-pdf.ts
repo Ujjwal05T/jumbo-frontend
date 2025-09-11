@@ -29,7 +29,7 @@ export interface PackingSlipData {
 /**
  * Generate a packing slip PDF for dispatch
  */
-export const generatePackingSlipPDF = (data: PackingSlipData): void => {
+export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean = false): jsPDF | void => {
   try {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -221,9 +221,13 @@ export const generatePackingSlipPDF = (data: PackingSlipData): void => {
     doc.text('Prepared By', leftColX + 25, signatureY + 10);
     doc.text('Received By', rightColX + 25, signatureY + 10);
 
-    // Save the PDF
-    const fileName = `packing_slip_${data.dispatch_number}_${new Date().toISOString().split('T')[0]}.pdf`;
-    doc.save(fileName);
+    // Save or return the PDF
+    if (returnDoc) {
+      return doc;
+    } else {
+      const fileName = `packing_slip_${data.dispatch_number}_${new Date().toISOString().split('T')[0]}.pdf`;
+      doc.save(fileName);
+    }
     
   } catch (error) {
     console.error('Error generating packing slip PDF:', error);

@@ -102,7 +102,7 @@ export default function PastDispatchDetailPage() {
     }
   };
 
-  const downloadPDF = async () => {
+  const printPDF = async () => {
     if (!dispatch) return;
     
     try {
@@ -115,12 +115,23 @@ export default function PastDispatchDetailPage() {
         }
       });
       
-      // Generate PDF using the same format as dispatch records
-      generatePackingSlipPDF(packingSlipData);
+      // Generate PDF and open print dialog
+      const doc = generatePackingSlipPDF(packingSlipData, true); // Add print flag
+      const pdfBlob = doc.output('blob');
+      const url = URL.createObjectURL(pdfBlob);
       
-      toast.success('Packing slip PDF downloaded successfully');
+      const printWindow = window.open(url, '_blank');
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      }
+      
+      URL.revokeObjectURL(url);
+      
+      toast.success('Packing slip PDF opened for printing');
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to generate packing slip PDF';
+      const errorMessage = err instanceof Error ? err.message : 'Failed to print packing slip PDF';
       toast.error(errorMessage);
     }
   };
@@ -185,11 +196,11 @@ export default function PastDispatchDetailPage() {
           <div className="flex gap-2">
             <Button
               variant="outline"
-              onClick={downloadPDF}
+              onClick={printPDF}
               className="flex items-center gap-2"
             >
               <Download className="h-4 w-4" />
-              Download PDF
+              Print PDF
             </Button>
           </div>
         </div>

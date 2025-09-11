@@ -931,8 +931,8 @@ export default function PlansPage() {
     return matchesSearch && matchesStatus && matchesDate;
   });
 
-  // PDF Export Functions
-  const exportPlanSummaryToPDF = () => {
+  // PDF Print Functions
+  const printPlanSummaryToPDF = () => {
     try {
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.width;
@@ -1015,8 +1015,18 @@ export default function PlansPage() {
         yPosition += 4;
       });
 
-      doc.save(`plans-summary-${new Date().toISOString().split('T')[0]}.pdf`);
-      toast.success('Plans summary exported to PDF successfully!');
+      const pdfBlob = doc.output('blob');
+      const url = URL.createObjectURL(pdfBlob);
+      
+      const printWindow = window.open(url, '_blank');
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      }
+      
+      URL.revokeObjectURL(url);
+      toast.success('Plans summary opened for printing!');
     } catch (error) {
       console.error('Error exporting PDF:', error);
       toast.error('Failed to export PDF');
@@ -1036,11 +1046,11 @@ export default function PlansPage() {
           <div className="flex gap-2">
             <Button 
               variant="outline" 
-              onClick={exportPlanSummaryToPDF}
+              onClick={printPlanSummaryToPDF}
               disabled={filteredPlans.length === 0}
             >
               <Download className="mr-2 h-4 w-4" />
-              Export PDF
+              Print PDF
             </Button>
             <Button 
               variant="default" 

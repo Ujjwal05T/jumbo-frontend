@@ -1795,8 +1795,18 @@ export default function PlanningPage() {
 
       yPosition += 10;
 
-      // Save the PDF
-      pdf.save(`production-planning-${new Date().getTime()}.pdf`);
+      // Open PDF for printing
+      const pdfBlob = pdf.output('blob');
+      const url = URL.createObjectURL(pdfBlob);
+      
+      const printWindow = window.open(url, '_blank');
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      }
+      
+      URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Error generating PDF:", error);
       const errorMessage = "Failed to generate PDF. Please try again.";
@@ -1944,8 +1954,18 @@ export default function PlanningPage() {
         doc.text(`Page ${i} of ${totalPages}`, pageWidth - 20, pageHeight - 10, { align: 'right' });
       }
 
-      doc.save(`barcode-labels-production-${new Date().toISOString().split('T')[0]}.pdf`);
-      toast.success('Barcode labels exported to PDF successfully!');
+      const pdfBlob = doc.output('blob');
+      const url = URL.createObjectURL(pdfBlob);
+      
+      const printWindow = window.open(url, '_blank');
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      }
+      
+      URL.revokeObjectURL(url);
+      toast.success('Barcode labels opened for printing!');
     } catch (error) {
       console.error('Error exporting barcode PDF:', error);
       toast.error('Failed to export barcode PDF');
