@@ -336,7 +336,7 @@ export default function PlansPage() {
 
       // Plan Information
       doc.setFontSize(14);
-      doc.text(`Plan: ${plan.name || 'Unnamed Plan'}`, 20, yPosition);
+      doc.text(`Plan: ${plan.frontend_id || 'Unnamed Plan'}`, 20, yPosition);
       yPosition += 8;
       
       doc.setFontSize(10);
@@ -715,7 +715,7 @@ export default function PlansPage() {
         });
       }
       
-      doc.save(`plan-details-${plan.name || 'plan'}-${new Date().toISOString().split('T')[0]}.pdf`);
+      doc.save(`${plan.frontend_id || 'plan'}.pdf`);
       toast.success('Plan details exported to PDF successfully!', { id: `report-${plan.id}` });
     } catch (error) {
       console.error('Error downloading report:', error);

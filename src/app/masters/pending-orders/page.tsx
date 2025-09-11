@@ -458,13 +458,13 @@ export default function PendingOrderItemsPage() {
                   ...rollSet.summary,
                   total_cuts: rollSet.cuts.reduce((sum: number, c: any) => {
                     if (c.used_widths && Object.keys(c.used_widths).length > 0) {
-                      return sum + Object.values(c.used_widths).reduce((a: number, b: number) => a + b, 0);
+                      return sum + (Object.values(c.used_widths) as number[]).reduce((a: number, b: number) => a + b, 0);
                     }
                     return sum + 1;
                   }, 0),
                   using_existing_cuts: rollSet.cuts.reduce((sum: number, c: any) => {
                     if (c.uses_existing && c.used_widths && Object.keys(c.used_widths).length > 0) {
-                      return sum + Object.values(c.used_widths).reduce((a: number, b: number) => a + b, 0);
+                      return sum + (Object.values(c.used_widths) as number[]).reduce((a: number, b: number) => a + b, 0);
                     }
                     return sum + (c.uses_existing ? 1 : 0);
                   }, 0)
@@ -474,13 +474,13 @@ export default function PendingOrderItemsPage() {
                 ...jumboRoll.summary,
                 total_cuts: jumboRoll.sets.reduce((sum: number, s: any) => sum + s.cuts.reduce((cutSum: number, c: any) => {
                   if (c.used_widths && Object.keys(c.used_widths).length > 0) {
-                    return cutSum + Object.values(c.used_widths).reduce((a: number, b: number) => a + b, 0);
+                    return cutSum + (Object.values(c.used_widths) as number[]).reduce((a: number, b: number) => a + b, 0);
                   }
                   return cutSum + 1;
                 }, 0), 0),
                 using_existing_cuts: jumboRoll.sets.reduce((sum: number, s: any) => sum + s.cuts.reduce((cutSum: number, c: any) => {
                   if (c.uses_existing && c.used_widths && Object.keys(c.used_widths).length > 0) {
-                    return cutSum + Object.values(c.used_widths).reduce((a: number, b: number) => a + b, 0);
+                    return cutSum + (Object.values(c.used_widths) as number[]).reduce((a: number, b: number) => a + b, 0);
                   }
                   return cutSum + (c.uses_existing ? 1 : 0);
                 }, 0), 0)
@@ -490,13 +490,13 @@ export default function PendingOrderItemsPage() {
               ...suggestion.summary,
               total_cuts: suggestion.jumbo_rolls.reduce((sum: number, jr: any) => sum + jr.sets.reduce((setSum: number, s: any) => setSum + s.cuts.reduce((cutSum: number, c: any) => {
                 if (c.used_widths && Object.keys(c.used_widths).length > 0) {
-                  return cutSum + Object.values(c.used_widths).reduce((a: number, b: number) => a + b, 0);
+                  return cutSum + (Object.values(c.used_widths) as number[]).reduce((a: number, b: number) => a + b, 0);
                 }
                 return cutSum + 1;
               }, 0), 0), 0),
               using_existing_cuts: suggestion.jumbo_rolls.reduce((sum: number, jr: any) => sum + jr.sets.reduce((setSum: number, s: any) => setSum + s.cuts.reduce((cutSum: number, c: any) => {
                 if (c.uses_existing && c.used_widths && Object.keys(c.used_widths).length > 0) {
-                  return cutSum + Object.values(c.used_widths).reduce((a: number, b: number) => a + b, 0);
+                  return cutSum + (Object.values(c.used_widths) as number[]).reduce((a: number, b: number) => a + b, 0);
                 }
                 return cutSum + (c.uses_existing ? 1 : 0);
               }, 0), 0), 0)
@@ -570,52 +570,212 @@ export default function PendingOrderItemsPage() {
     pdf.setFontSize(12);
     pdf.text(`Target Width: ${suggestionResult.target_width}"`, margin, yPosition);
     yPosition += 8;
-    pdf.text(`Spec Groups Processed: ${suggestionResult.summary.spec_groups_processed}`, margin, yPosition);
-    yPosition += 8;
-    pdf.text(`Jumbo Rolls Suggested: ${suggestionResult.summary.jumbo_rolls_suggested}`, margin, yPosition);
-    yPosition += 8;
-    pdf.text(`Total Rolls: ${suggestionResult.summary.total_rolls_suggested}`, margin, yPosition);
+    
+    // Handle both new and legacy summary formats
+    if (suggestionResult.order_suggestions) {
+      pdf.text(`Orders Processed: ${suggestionResult.summary.orders_processed || 0}`, margin, yPosition);
+      yPosition += 8;
+      const totalJumboRolls = suggestionResult.order_suggestions.reduce((sum, order) => sum + order.summary.total_jumbo_rolls, 0);
+      pdf.text(`Total Jumbo Rolls: ${totalJumboRolls}`, margin, yPosition);
+      yPosition += 8;
+      const total118Sets = suggestionResult.order_suggestions.reduce((sum, order) => sum + order.summary.total_118_sets, 0);
+      pdf.text(`Total 118" Sets: ${total118Sets}`, margin, yPosition);
+      yPosition += 8;
+      const totalCuts = suggestionResult.order_suggestions.reduce((sum, order) => sum + order.summary.total_cuts, 0);
+      pdf.text(`Total Cuts: ${totalCuts}`, margin, yPosition);
+    } else {
+      // Legacy format
+      pdf.text(`Spec Groups Processed: ${suggestionResult.summary.spec_groups_processed || 0}`, margin, yPosition);
+      yPosition += 8;
+      pdf.text(`Jumbo Rolls Suggested: ${suggestionResult.summary.jumbo_rolls_suggested || 0}`, margin, yPosition);
+      yPosition += 8;
+      pdf.text(`Total Rolls: ${suggestionResult.summary.total_rolls_suggested || 0}`, margin, yPosition);
+    }
     
     yPosition += 20;
     pdf.setFontSize(16);
-    pdf.text('Jumbo Roll Suggestions', margin, yPosition);
+    pdf.text('Order-Based Roll Suggestions', margin, yPosition);
     yPosition += 10;
 
-    suggestionResult.jumbo_suggestions!.forEach((jumbo, jumboIndex) => {
-      if (yPosition > 220) {
-        pdf.addPage();
-        yPosition = 30;
-      }
-      
-      yPosition += 15;
-      pdf.setFontSize(14);
-      pdf.text(`Jumbo ${jumbo.jumbo_number}: ${jumbo.paper_specs.shade} ${jumbo.paper_specs.gsm}GSM (BF: ${jumbo.paper_specs.bf})`, margin, yPosition);
-      
-      yPosition += 10;
-      pdf.setFontSize(11);
-      pdf.text(`${jumbo.summary.using_existing} using existing + ${jumbo.summary.new_rolls_needed} new rolls | Avg waste: ${jumbo.summary.avg_waste}"`, margin, yPosition);
-      
-      // Show each roll in the jumbo
-      jumbo.rolls.forEach((roll, rollIndex) => {
-        if (yPosition > 250) {
+    // Handle new order-based format
+    if (suggestionResult.order_suggestions) {
+      suggestionResult.order_suggestions.forEach((orderSuggestion, orderIndex) => {
+        if (yPosition > 200) {
           pdf.addPage();
           yPosition = 30;
         }
         
-        yPosition += 12;
-        pdf.setFontSize(10);
-        const rollColor = roll.uses_existing ? '[EXISTING]' : '[NEW]';
-        pdf.text(`  Roll ${roll.roll_number}: ${rollColor} ${roll.description}`, margin + 10, yPosition);
+        yPosition += 15;
+        pdf.setFontSize(14);
+        pdf.text(`Order: ${orderSuggestion.order_info.order_frontend_id} - ${orderSuggestion.order_info.client_name}`, margin, yPosition);
         
-        if (roll.uses_existing && roll.widths.length > 3) {
-          yPosition += 8;
-          pdf.setFontSize(8);
-          pdf.text(`    (${roll.widths.length} pieces total)`, margin + 15, yPosition);
-        }
+        yPosition += 10;
+        pdf.setFontSize(11);
+        pdf.text(`Paper: ${orderSuggestion.paper_spec.gsm}GSM, ${orderSuggestion.paper_spec.bf}BF, ${orderSuggestion.paper_spec.shade}`, margin, yPosition);
+        yPosition += 8;
+        pdf.text(`${orderSuggestion.summary.total_jumbo_rolls} jumbo rolls | ${orderSuggestion.summary.total_118_sets} sets | ${orderSuggestion.summary.total_cuts} cuts`, margin, yPosition);
+        
+        // Show jumbo rolls for this order
+        orderSuggestion.jumbo_rolls.forEach((jumboRoll, jumboIndex) => {
+          if (yPosition > 240) {
+            pdf.addPage();
+            yPosition = 30;
+          }
+          
+          yPosition += 12;
+          pdf.setFontSize(12);
+          pdf.text(`  Jumbo Roll #${jumboRoll.jumbo_number} (${jumboRoll.summary.efficiency}% efficient)`, margin + 10, yPosition);
+          
+          // Show 118" sets in this jumbo
+          jumboRoll.sets.forEach((rollSet, setIndex) => {
+            if (yPosition > 250) {
+              pdf.addPage();
+              yPosition = 30;
+            }
+            
+            yPosition += 10;
+            pdf.setFontSize(10);
+            pdf.text(`    118" Set #${rollSet.set_number}: ${rollSet.summary.total_cuts} cuts, ${rollSet.summary.total_waste.toFixed(1)}" waste`, margin + 20, yPosition);
+            
+            // Add visual cutting pattern representation
+            yPosition += 8;
+            pdf.setFontSize(8);
+            pdf.setTextColor(80, 80, 80);
+            pdf.text(`    Cutting Pattern (${rollSet.target_width}" Roll):`, margin + 20, yPosition);
+            yPosition += 8;
+            
+            // Draw visual cutting representation
+            const rectStartX = margin + 25;
+            const rectWidth = pageWidth - 70;
+            const rectHeight = 12;
+            let currentX = rectStartX;
+            
+            // Draw individual cut sections
+            rollSet.cuts.forEach((cut, cutIndex) => {
+              const cutWidth = cut.width_inches;
+              let quantity = 1;
+              
+              // Get quantity from used_widths
+              if (cut.used_widths && Object.keys(cut.used_widths).length > 0) {
+                for (const [widthKey, qty] of Object.entries(cut.used_widths)) {
+                  if (Math.abs(parseFloat(widthKey) - cutWidth) < 0.1) {
+                    quantity = qty;
+                    break;
+                  }
+                }
+              }
+              
+              // Draw each quantity as separate section
+              for (let i = 0; i < quantity; i++) {
+                const widthRatio = cutWidth / rollSet.target_width;
+                const sectionWidth = rectWidth * widthRatio;
+                
+                // Set color based on cut type
+                if (cut.uses_existing) {
+                  pdf.setFillColor(34, 197, 94); // Green for pending
+                } else {
+                  pdf.setFillColor(59, 130, 246); // Blue for manual
+                }
+                
+                // Draw rectangle for this cut
+                pdf.rect(currentX, yPosition, sectionWidth, rectHeight, 'F');
+                
+                // Add border
+                pdf.setDrawColor(255, 255, 255);
+                pdf.setLineWidth(1);
+                pdf.rect(currentX, yPosition, sectionWidth, rectHeight, 'S');
+                
+                // Add width text inside the rectangle if wide enough
+                if (sectionWidth > 15) {
+                  pdf.setFontSize(8);
+                  pdf.setTextColor(255, 255, 255);
+                  const textWidth = pdf.getStringUnitWidth(`${cutWidth}"`) * pdf.getFontSize() / pdf.internal.scaleFactor;
+                  const textX = currentX + (sectionWidth - textWidth) / 2;
+                  const textY = yPosition + rectHeight / 2 + 2;
+                  pdf.text(`${cutWidth}"`, textX, textY);
+                  
+                  // Add type indicator for first section of each cut
+                  if (i === 0) {
+                    pdf.setFontSize(6);
+                    const typeText = cut.uses_existing ? 'P' : 'M';
+                    const typeY = yPosition + rectHeight / 2 - 2;
+                    pdf.text(typeText, textX, typeY);
+                  }
+                }
+                
+                currentX += sectionWidth;
+              }
+            });
+            
+            // Draw waste section if any
+            if (rollSet.summary.total_waste > 0) {
+              const wasteRatio = rollSet.summary.total_waste / rollSet.target_width;
+              const wasteWidth = rectWidth * wasteRatio;
+              
+              pdf.setFillColor(239, 68, 68); // Red for waste
+              pdf.rect(currentX, yPosition, wasteWidth, rectHeight, 'F');
+              
+              // Add border
+              pdf.setDrawColor(255, 255, 255);
+              pdf.rect(currentX, yPosition, wasteWidth, rectHeight, 'S');
+              
+              // Add waste text if wide enough
+              if (wasteWidth > 20) {
+                pdf.setFontSize(7);
+                pdf.setTextColor(255, 255, 255);
+                const wasteText = `Waste: ${rollSet.summary.total_waste.toFixed(1)}"`;
+                const wasteTextWidth = pdf.getStringUnitWidth(wasteText) * pdf.getFontSize() / pdf.internal.scaleFactor;
+                const wasteTextX = currentX + (wasteWidth - wasteTextWidth) / 2;
+                const wasteTextY = yPosition + rectHeight / 2 + 2;
+                pdf.text(wasteText, wasteTextX, wasteTextY);
+              }
+            }
+            
+            yPosition += rectHeight + 5;
+            pdf.setTextColor(0, 0, 0); // Reset text color
+          });
+        });
+        
+        yPosition += 15;
       });
-      
-      yPosition += 15;
-    });
+    } 
+    // Fallback for legacy format
+    else if (suggestionResult.jumbo_suggestions) {
+      suggestionResult.jumbo_suggestions.forEach((jumbo, jumboIndex) => {
+        if (yPosition > 220) {
+          pdf.addPage();
+          yPosition = 30;
+        }
+        
+        yPosition += 15;
+        pdf.setFontSize(14);
+        pdf.text(`Jumbo ${jumbo.jumbo_number}: ${jumbo.paper_specs.shade} ${jumbo.paper_specs.gsm}GSM (BF: ${jumbo.paper_specs.bf})`, margin, yPosition);
+        
+        yPosition += 10;
+        pdf.setFontSize(11);
+        pdf.text(`${jumbo.summary.using_existing} using existing + ${jumbo.summary.new_rolls_needed} new rolls | Avg waste: ${jumbo.summary.avg_waste}"`, margin, yPosition);
+        
+        jumbo.rolls.forEach((roll, rollIndex) => {
+          if (yPosition > 250) {
+            pdf.addPage();
+            yPosition = 30;
+          }
+          
+          yPosition += 12;
+          pdf.setFontSize(10);
+          const rollColor = roll.uses_existing ? '[EXISTING]' : '[NEW]';
+          pdf.text(`  Roll ${roll.roll_number}: ${rollColor} ${roll.description}`, margin + 10, yPosition);
+          
+          if (roll.uses_existing && roll.widths && roll.widths.length > 3) {
+            yPosition += 8;
+            pdf.setFontSize(8);
+            pdf.text(`    (${roll.widths.length} pieces total)`, margin + 15, yPosition);
+          }
+        });
+        
+        yPosition += 15;
+      });
+    }
 
     pdf.save(`roll-suggestions-${suggestionResult.target_width}inch-${new Date().toISOString().split('T')[0]}.pdf`);
     toast.success('PDF downloaded successfully');
@@ -917,8 +1077,6 @@ export default function PendingOrderItemsPage() {
                       }
                     }
                     
-                    console.log(`🔍 CUT DEBUG: cut.width_inches=${cut.width_inches}, cut.used_widths=`, cut.used_widths);
-                    console.log(`🔢 Need to create ${quantity} cut rolls for ${cut.width_inches}"`);
                     
                     // Distribute cut_rolls across available items (CRITICAL FIX)
                     let remainingQuantity = quantity;
@@ -971,8 +1129,10 @@ export default function PendingOrderItemsPage() {
                 } else if (cut.is_manual_cut && cut.width_inches) {
                   // Handle manual cuts - no source_pending_id, special processing
                   console.log(`🔧 Creating manual cut: ${cut.width_inches}" for client ${cut.client_name}`);
+                  console.log('🔍 Manual cut full data:', cut);
+                  console.log('🔍 Client mapping: client_id =', cut.client_id, ', client_name =', cut.client_name);
                   
-                  selectedCutRolls.push({
+                  const manualCutRoll = {
                     paper_id: "", // Will be resolved by backend from paper specs
                     width_inches: cut.width_inches,
                     qr_code: `MANUAL_CUT_${Date.now()}_${Math.random().toString(36).substr(2, 4)}_${globalIndex}`,
@@ -987,7 +1147,10 @@ export default function PendingOrderItemsPage() {
                     manual_cut_client_id: cut.client_id,
                     manual_cut_client_name: cut.client_name,
                     description: cut.description
-                  });
+                  };
+                  
+                  console.log('🔍 Final manual cut roll being sent:', manualCutRoll);
+                  selectedCutRolls.push(manualCutRoll);
                   globalIndex++;
                 }
               });
@@ -1599,42 +1762,94 @@ export default function PendingOrderItemsPage() {
                                           </Badge>
                                         </div>
                                         
-                                        {/* Visual representation of the 118" roll */}
-                                        <div className="relative h-8 bg-muted rounded border overflow-hidden mb-3">
-                                          {(() => {
-                                            const actualPercentage = (rollSet.summary.total_actual_width / rollSet.target_width) * 100;
-                                            const wastePercentage = (rollSet.summary.total_waste / rollSet.target_width) * 100;
-                                            
-                                            return (
-                                              <>
-                                                {/* Actual cuts section */}
-                                                <div
-                                                  className="absolute h-full bg-gradient-to-r from-green-400 to-green-500"
-                                                  style={{
-                                                    left: "0%",
-                                                    width: `${actualPercentage}%`,
-                                                  }}>
-                                                  <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
-                                                    {rollSet.summary.total_actual_width.toFixed(1)}"
-                                                  </div>
-                                                </div>
-                                                
-                                                {/* Waste section */}
-                                                {rollSet.summary.total_waste > 0 && (
-                                                  <div
-                                                    className="absolute h-full border-l-2 border-white bg-gradient-to-r from-gray-300 to-gray-400"
-                                                    style={{
-                                                      left: `${actualPercentage}%`,
-                                                      width: `${wastePercentage}%`,
-                                                    }}>
-                                                    <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-700 font-bold">
-                                                      {rollSet.summary.total_waste.toFixed(1)}" waste
+                                        {/* Visual cutting pattern representation like planning page */}
+                                        <div className="mb-3">
+                                          <div className="text-sm font-medium text-muted-foreground mb-2">
+                                            Cutting Pattern ({rollSet.target_width}" Roll):
+                                          </div>
+                                          <div className="relative h-12 bg-muted rounded-lg border overflow-hidden">
+                                            {(() => {
+                                              let currentPosition = 0;
+                                              const targetWidth = rollSet.target_width;
+                                              const totalWaste = rollSet.summary.total_waste;
+                                              const wastePercentage = (totalWaste / targetWidth) * 100;
+                                              
+                                              return (
+                                                <>
+                                                  {/* Individual cut sections - handle quantities > 1 */}
+                                                  {rollSet.cuts.map((cut, cutIndex) => {
+                                                    const cutWidth = cut.width_inches;
+                                                    const sections = [];
+                                                    
+                                                    // Determine quantity - check used_widths for quantity info
+                                                    let quantity = 1;
+                                                    if (cut.used_widths && Object.keys(cut.used_widths).length > 0) {
+                                                      // Find the quantity for this width in used_widths
+                                                      for (const [widthKey, qty] of Object.entries(cut.used_widths)) {
+                                                        if (Math.abs(parseFloat(widthKey) - cutWidth) < 0.1) {
+                                                          quantity = qty;
+                                                          break;
+                                                        }
+                                                      }
+                                                    }
+                                                    
+                                                    // Create individual sections for each quantity
+                                                    for (let i = 0; i < quantity; i++) {
+                                                      const widthPercentage = (cutWidth / targetWidth) * 100;
+                                                      const leftPosition = (currentPosition / targetWidth) * 100;
+                                                      currentPosition += cutWidth;
+                                                      
+                                                      sections.push(
+                                                        <div
+                                                          key={`${cutIndex}-${i}`}
+                                                          className={`absolute h-full border-r-2 border-white ${
+                                                            cut.uses_existing
+                                                              ? "bg-gradient-to-r from-green-400 to-green-500"
+                                                              : "bg-gradient-to-r from-blue-400 to-blue-500"
+                                                          }`}
+                                                          style={{
+                                                            left: `${leftPosition}%`,
+                                                            width: `${widthPercentage}%`,
+                                                          }}>
+                                                          <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
+                                                            {cutWidth}"
+                                                            {cut.uses_existing && i === 0 && (
+                                                              <div className="absolute -top-1 -right-1 bg-blue-500 text-white rounded-full text-xs px-1 py-0.5 text-[10px] font-bold shadow-lg">
+                                                                P
+                                                              </div>
+                                                            )}
+                                                          </div>
+                                                        </div>
+                                                      );
+                                                    }
+                                                    
+                                                    return sections;
+                                                  }).flat()}
+                                                  
+                                                  {/* Waste section */}
+                                                  {totalWaste > 0 && (
+                                                    <div
+                                                      className="absolute h-full bg-gradient-to-r from-red-400 to-red-500 border-l-2 border-white"
+                                                      style={{
+                                                        right: "0%",
+                                                        width: `${wastePercentage}%`,
+                                                      }}>
+                                                      <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
+                                                        Waste: {totalWaste.toFixed(1)}"
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                  
+                                                  {/* Target width indicator */}
+                                                  <div className="absolute -bottom-6 left-0 right-0 text-center">
+                                                    <div className="text-xs text-muted-foreground font-mono">
+                                                      Total: {targetWidth}" target width
                                                     </div>
                                                   </div>
-                                                )}
-                                              </>
-                                            );
-                                          })()}
+                                                </>
+                                              );
+                                            })()}
+                                          </div>
                                         </div>
                                         
                                         {/* Individual cuts in this 118" roll */}

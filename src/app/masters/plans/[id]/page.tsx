@@ -100,6 +100,7 @@ interface Plan {
     username: string;
   };
   cut_pattern?: any[];
+  frontend_id?: string; 
 }
 
 interface ProductionSummary {
@@ -972,7 +973,7 @@ export default function PlanDetailsPage() {
 
       // Plan Information
       doc.setFontSize(14);
-      doc.text(`Plan: ${plan.name || 'Unnamed Plan'}`, 20, yPosition);
+      doc.text(`Plan: ${plan.frontend_id || 'Unnamed Plan'}`, 20, yPosition);
       yPosition += 8;
       
       doc.setFontSize(10);

@@ -1388,8 +1388,25 @@ export default function PlanningPage() {
                 pdf.setFontSize(6);
                 const textX = currentX + sectionWidth/2;
                 
-                // Get client name (first 8 letters)
-                const clientName = '';
+                // Get client name (first 8 letters) from order data
+                let clientName = '';
+                
+                // METHOD 1: Try to find client from regular order using order_id
+                const sourceOrder = orders.find(o => o.id === roll.order_id);
+                if (sourceOrder?.client?.company_name) {
+                  clientName = sourceOrder.client.company_name.substring(0, 8);
+                }
+                
+                // METHOD 2: For pending orders, check if we have source_pending_id
+                else if (roll.source_type === 'pending_order' && roll.source_pending_id) {
+                  const pendingOrder = planResult?.pending_orders?.find((p: any) => p.id === roll.source_pending_id);
+                  if (pendingOrder?.original_order_id) {
+                    const originalOrder = orders.find(o => o.id === pendingOrder.original_order_id);
+                    if (originalOrder?.client?.company_name) {
+                      clientName = originalOrder.client.company_name.substring(0, 8);
+                    }
+                  }
+                }
                 
                 // Display client name on top line, width on bottom line
                 if (clientName && sectionWidth > 25) {
@@ -1583,8 +1600,25 @@ export default function PlanningPage() {
             pdf.setFontSize(6);
             const textX = currentX + sectionWidth/2;
             
-            // Get client name (first 8 letters)
-            const clientName = '';
+            // Get client name (first 8 letters) from order data
+            let clientName = '';
+            
+            // METHOD 1: Try to find client from regular order using order_id
+            const sourceOrder = orders.find(o => o.id === roll.order_id);
+            if (sourceOrder?.client?.company_name) {
+              clientName = sourceOrder.client.company_name.substring(0, 8);
+            }
+            
+            // METHOD 2: For pending orders, check if we have source_pending_id
+            else if (roll.source_type === 'pending_order' && roll.source_pending_id) {
+              const pendingOrder = planResult?.pending_orders?.find((p: any) => p.id === roll.source_pending_id);
+              if (pendingOrder?.original_order_id) {
+                const originalOrder = orders.find(o => o.id === pendingOrder.original_order_id);
+                if (originalOrder?.client?.company_name) {
+                  clientName = originalOrder.client.company_name.substring(0, 8);
+                }
+              }
+            }
             
             // Display client name on top line, width on bottom line
             if (clientName && sectionWidth > 25) {
