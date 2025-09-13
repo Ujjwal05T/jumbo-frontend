@@ -72,6 +72,7 @@ import {
   Minus,
 } from "lucide-react";
 import BarcodeDisplay from "@/components/BarcodeDisplay";
+import WastageIndicator from "@/components/WastageIndicator";
 import { fetchOrders, Order } from "@/lib/orders";
 import { PRODUCTION_ENDPOINTS, API_BASE_URL, createRequestOptions } from "@/lib/api-config";
 import { createGuptaCompletionOrder, type RequiredRoll } from "@/lib/gupta-orders";

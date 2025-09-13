@@ -72,6 +72,7 @@ import {
   PendingItem
 } from "@/lib/dispatch";
 import { API_BASE_URL } from "@/lib/api-config";
+import WastageIndicator from "@/components/WastageIndicator";
 
 type ItemType = "warehouse" | "pending";
 
@@ -555,9 +556,12 @@ export default function DispatchPage() {
                         </TableCell>
                         <TableCell>
                           <div className="space-y-1">
-                            <div className="font-medium">{item.paper_spec}</div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{item.paper_spec}</span>
+                              <WastageIndicator isWastageRoll={item.is_wastage_roll} />
+                            </div>
                             <div className="text-xs text-muted-foreground">
-                              Cut roll ready for dispatch
+                              {item.is_wastage_roll ? "Wastage roll ready for dispatch" : "Cut roll ready for dispatch"}
                             </div>
                           </div>
                         </TableCell>
