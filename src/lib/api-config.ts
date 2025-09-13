@@ -92,6 +92,16 @@ export const REPORTS_ENDPOINTS = {
   SUMMARY: `${API_BASE_URL}/reports/summary`,
 };
 
+// Material Management endpoints
+export const MATERIAL_ENDPOINTS = {
+  MATERIALS: `${API_BASE_URL}/materials`,
+  MATERIAL_BY_ID: (materialId: string) => `${API_BASE_URL}/materials/${materialId}`,
+  INWARD_CHALLANS: `${API_BASE_URL}/inward-challans`,
+  INWARD_CHALLAN_BY_ID: (challanId: string) => `${API_BASE_URL}/inward-challans/${challanId}`,
+  OUTWARD_CHALLANS: `${API_BASE_URL}/outward-challans`,
+  OUTWARD_CHALLAN_BY_ID: (challanId: string) => `${API_BASE_URL}/outward-challans/${challanId}`,
+};
+
 /**
  * Helper function to create API request options
  */

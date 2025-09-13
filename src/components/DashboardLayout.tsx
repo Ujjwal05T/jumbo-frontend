@@ -58,6 +58,7 @@ const navigation = [
       { name: "Plan Master", href: "/masters/plans" },
       { name: "User Master", href: "/masters/users" },
       { name: "Paper Master", href: "/masters/papers" },
+      { name: "Material Master", href: "/masters/materials" },
     ],
   },
   {
@@ -76,6 +77,11 @@ const navigation = [
     children: [
       { name: "Past Inventory", href: "/inventory/past-inventory" },
     ],
+  },
+  {
+    name: "In/Out",
+    href: "/in-out",
+    icon: Database,
   },
   {
     name: "Dispatch",

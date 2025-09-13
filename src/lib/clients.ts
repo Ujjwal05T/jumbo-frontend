@@ -42,13 +42,27 @@ export interface CreateClientFormData {
  * Fetch all clients from the API
  */
 export async function fetchClients(skip: number = 0, status: string = 'active'): Promise<Client[]> {
-  const response = await fetch(`${MASTER_ENDPOINTS.CLIENTS}?skip=${skip}&status=${status}`, createRequestOptions('GET'));
+  const url = `${MASTER_ENDPOINTS.CLIENTS}?skip=${skip}&status=${status}`;
+  console.log('Fetching clients from URL:', url);
+  
+  const response = await fetch(url, createRequestOptions('GET'));
+  
+  console.log('Clients API response:', {
+    status: response.status,
+    statusText: response.statusText,
+    ok: response.ok,
+    url: response.url,
+  });
 
   if (!response.ok) {
-    throw new Error('Failed to fetch clients');
+    const errorText = await response.text();
+    console.error('Clients API error:', errorText);
+    throw new Error(`Failed to fetch clients: ${response.status} ${response.statusText}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  console.log('Clients data received:', data.length, 'clients');
+  return data;
 }
 
 /**
