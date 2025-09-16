@@ -62,17 +62,25 @@ const transformJumboId = (jumboFrontendId: string | undefined, allJumboIds: stri
   return jumboFrontendId;
 };
 
-// Group cut rolls by jumbo roll with sequential display IDs
+// Smart grouping function for PDF generation (handles SCR titles automatically)
 const groupCutRollsByJumboWithSequential = (cutRolls: CutRollItem[]): Record<string, { displayId: string; rolls: CutRollItem[] }> => {
   // Get all unique jumbo IDs first
   const allJumboIds = cutRolls.map(item => item.jumbo_roll_frontend_id || 'ungrouped');
-  
+
   const grouped: Record<string, { displayId: string; rolls: CutRollItem[] }> = {};
-  
+
   cutRolls.forEach(item => {
     const originalJumboId = item.jumbo_roll_frontend_id || 'ungrouped';
-    const transformedId = originalJumboId === 'ungrouped' ? 'Ungrouped Items' : transformJumboId(originalJumboId, allJumboIds);
-    
+    let transformedId;
+
+    if (originalJumboId === 'ungrouped') {
+      // Check if this ungrouped item is a wastage cut roll (SCR barcode)
+      const isWastageRoll = item.barcode_id?.startsWith('SCR-');
+      transformedId = isWastageRoll ? 'Cut Rolls from Stock' : 'Ungrouped Items';
+    } else {
+      transformedId = transformJumboId(originalJumboId, allJumboIds);
+    }
+
     if (!grouped[originalJumboId]) {
       grouped[originalJumboId] = {
         displayId: transformedId,
@@ -81,7 +89,50 @@ const groupCutRollsByJumboWithSequential = (cutRolls: CutRollItem[]): Record<str
     }
     grouped[originalJumboId].rolls.push(item);
   });
-  
+
+  return grouped;
+};
+
+// UI display grouping function with SCR special handling
+const groupCutRollsForUIDisplay = (cutRolls: CutRollItem[]): Record<string, { displayId: string; rolls: CutRollItem[] }> => {
+  console.log('🔍 GROUPING: Starting to group', cutRolls.length, 'cut rolls for UI');
+
+  // Get all unique jumbo IDs first
+  const allJumboIds = cutRolls.map(item => item.jumbo_roll_frontend_id || 'ungrouped');
+  console.log('🔍 GROUPING: All jumbo IDs:', allJumboIds);
+
+  const grouped: Record<string, { displayId: string; rolls: CutRollItem[] }> = {};
+
+  cutRolls.forEach((item, index) => {
+    const originalJumboId = item.jumbo_roll_frontend_id || 'ungrouped';
+
+    // Check if this is a wastage-derived cut roll (SCR barcode)
+    const isWastageRoll = item.barcode_id?.startsWith('SCR-');
+
+    let transformedId;
+    if (originalJumboId === 'ungrouped') {
+      transformedId = isWastageRoll ? 'Cut Rolls from Stock' : 'Ungrouped Items';
+    } else {
+      transformedId = transformJumboId(originalJumboId, allJumboIds);
+    }
+
+    console.log(`🔍 GROUPING: Item ${index + 1} - Barcode: ${item.barcode_id}, Jumbo ID: ${originalJumboId}, Is Wastage: ${isWastageRoll}, Transformed: ${transformedId}`);
+
+    if (!grouped[originalJumboId]) {
+      grouped[originalJumboId] = {
+        displayId: transformedId,
+        rolls: []
+      };
+    }
+    grouped[originalJumboId].rolls.push(item);
+  });
+
+  console.log('🔍 GROUPING: Final groups:', Object.keys(grouped).map(key => ({
+    key,
+    displayId: grouped[key].displayId,
+    rollCount: grouped[key].rolls.length
+  })));
+
   return grouped;
 };
 
@@ -241,8 +292,7 @@ export default function PlanDetailsPage() {
       }
 
       const data = await response.json();
-      console.log('Production summary data:', data);
-      
+
       setProductionSummary(data);
       
       if (data.detailed_items && data.detailed_items.length > 0) {
@@ -457,7 +507,7 @@ export default function PlanDetailsPage() {
       const pageWidth = doc.internal.pageSize.width;
       const pageHeight = doc.internal.pageSize.height;
       
-      // Group cut rolls by jumbo for organized PDF output
+      // Group cut rolls by jumbo for organized PDF output (including SCR barcodes)
       const jumboGroups = groupCutRollsByJumboWithSequential(filteredCutRolls);
       
       // Sort jumbo groups for consistent PDF ordering
@@ -465,8 +515,8 @@ export default function PlanDetailsPage() {
         const aDisplayId = aGroup.displayId;
         const bDisplayId = bGroup.displayId;
         
-        if (aDisplayId === 'Ungrouped Items') return 1;
-        if (bDisplayId === 'Ungrouped Items') return -1;
+        if (aDisplayId === 'Ungrouped Items' || aDisplayId === 'Cut Rolls from Stock') return 1;
+        if (bDisplayId === 'Ungrouped Items' || bDisplayId === 'Cut Rolls from Stock') return -1;
         
         const aNum = parseInt(aDisplayId.replace('JR-', '')) || 0;
         const bNum = parseInt(bDisplayId.replace('JR-', '')) || 0;
@@ -599,6 +649,7 @@ export default function PlanDetailsPage() {
         // Larger separation between jumbo groups
         yPosition += 20;
       });
+
 
       // Add page numbers
       const totalPages = doc.getNumberOfPages();
@@ -814,8 +865,8 @@ export default function PlanDetailsPage() {
         const aDisplayId = aGroup.displayId;
         const bDisplayId = bGroup.displayId;
         
-        if (aDisplayId === 'Ungrouped Items') return 1;
-        if (bDisplayId === 'Ungrouped Items') return -1;
+        if (aDisplayId === 'Ungrouped Items' || aDisplayId === 'Cut Rolls from Stock') return 1;
+        if (bDisplayId === 'Ungrouped Items' || bDisplayId === 'Cut Rolls from Stock') return -1;
         
         const aNum = parseInt(aDisplayId.replace('JR-', '')) || 0;
         const bNum = parseInt(bDisplayId.replace('JR-', '')) || 0;
@@ -1174,14 +1225,51 @@ export default function PlanDetailsPage() {
       });
       yPosition += 10;
 
-      // Use production data directly - group by jumbo rolls first
-      const jumboRollMapping = groupCutRollsByJumboWithSequential(productionSummary.detailed_items);
+      // Separate SCR cut rolls from regular cut rolls for plan details PDF
+      const regularCutRolls = productionSummary.detailed_items.filter(roll => !roll.barcode_id?.startsWith('SCR-'));
+      const scrCutRolls = productionSummary.detailed_items.filter(roll => roll.barcode_id?.startsWith('SCR-'));
+
+      // Add SCR Cut Rolls Summary if any exist
+      if (scrCutRolls.length > 0) {
+        checkPageBreak(80);
+
+        // Summary header
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(40, 40, 40);
+        doc.text('Cut Rolls from Stock Summary', 20, yPosition);
+        yPosition += 12;
+
+        // Summary description
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(60, 60, 60);
+        doc.text(`${scrCutRolls.length} cut rolls sourced from existing stock:`, 20, yPosition);
+        yPosition += 12;
+
+        // List each SCR cut roll
+        scrCutRolls.forEach((roll, index) => {
+          checkPageBreak(8);
+
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(0, 0, 0);
+          const rollText = `• ${roll.barcode_id} - ${roll.width_inches}" × ${roll.weight_kg}kg - ${roll.client_name || 'Unknown Client'}`;
+          doc.text(rollText, 25, yPosition);
+          yPosition += 6;
+        });
+
+        yPosition += 10;
+      }
+
+      // Use production data directly - group by jumbo rolls first (regular rolls only)
+      const jumboRollMapping = groupCutRollsByJumboWithSequential(regularCutRolls);
       const sortedJumboMappingEntries = Object.entries(jumboRollMapping).sort(([aId, aGroup], [bId, bGroup]) => {
         const aDisplayId = aGroup.displayId;
         const bDisplayId = bGroup.displayId;
         
-        if (aDisplayId === 'Ungrouped Items') return 1;
-        if (bDisplayId === 'Ungrouped Items') return -1;
+        if (aDisplayId === 'Ungrouped Items' || aDisplayId === 'Cut Rolls from Stock') return 1;
+        if (bDisplayId === 'Ungrouped Items' || bDisplayId === 'Cut Rolls from Stock') return -1;
         
         const aNum = parseInt(aDisplayId.replace('JR-', '')) || 0;
         const bNum = parseInt(bDisplayId.replace('JR-', '')) || 0;
@@ -1726,15 +1814,15 @@ export default function PlanDetailsPage() {
               <CardContent>
                 {filteredCutRolls.length > 0 ? (
                   <div className="space-y-6">
-                    {Object.entries(groupCutRollsByJumboWithSequential(filteredCutRolls))
+                    {Object.entries(groupCutRollsForUIDisplay(filteredCutRolls))
                       .sort(([aId, aGroup], [bId, bGroup]) => {
                         // Sort by jumbo display ID (JR-00001, JR-00002, etc.)
                         const aDisplayId = aGroup.displayId;
                         const bDisplayId = bGroup.displayId;
                         
-                        // Handle "Ungrouped Items" - always put at end
-                        if (aDisplayId === 'Ungrouped Items') return 1;
-                        if (bDisplayId === 'Ungrouped Items') return -1;
+                        // Handle "Ungrouped Items" and "Cut Rolls from Stock" - always put at end
+                        if (aDisplayId === 'Ungrouped Items' || aDisplayId === 'Cut Rolls from Stock') return 1;
+                        if (bDisplayId === 'Ungrouped Items' || bDisplayId === 'Cut Rolls from Stock') return -1;
                         
                         // Extract numeric part from JR-00001 format for proper sorting
                         const aNum = parseInt(aDisplayId.replace('JR-', '')) || 0;

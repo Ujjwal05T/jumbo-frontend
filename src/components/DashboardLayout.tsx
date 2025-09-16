@@ -33,7 +33,8 @@ import {
   Receipt,
   Recycle,
   Package,
-  Database
+  Database,
+  Clock
 } from "lucide-react";
 import { getCurrentUser, logout } from "@/lib/auth";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -105,6 +106,11 @@ const navigation = [
     name: "Reports",
     href: "/reports",
     icon: BarChart3,
+  },
+  {
+    name: "Hour Calculator",
+    href: "/hour-calculator",
+    icon: Clock,
   },
 ];
 
