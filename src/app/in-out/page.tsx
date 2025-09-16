@@ -272,7 +272,7 @@ export default function InOutPage() {
                               </SelectItem>
                             ))
                           ) : (
-                            <SelectItem value="" disabled>
+                            <SelectItem value="all" disabled>
                               {loading ? "Loading materials..." : "No materials available"}
                             </SelectItem>
                           )}

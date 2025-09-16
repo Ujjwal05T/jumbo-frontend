@@ -552,8 +552,8 @@ export default function PlanningPage() {
       roll.jumbo_roll_id === jumboDetail.jumbo_id
     );
     const jumboRollKeys = jumboRolls.map(roll => getRollKeyFromCutRoll(roll)).filter(Boolean) as string[];
-    const jumboRollIndices = jumboRolls.map((_, index) => 
-      planResult.cut_rolls_generated.findIndex(roll => roll.jumbo_roll_id === jumboDetail.jumbo_id) + index
+    const jumboRollIndices = jumboRolls.map(jumboRoll =>
+      planResult.cut_rolls_generated.findIndex(roll => roll === jumboRoll)
     );
 
     const isCurrentlySelected = selectedJumboRolls.includes(jumboKey);
@@ -835,13 +835,13 @@ export default function PlanningPage() {
         name: `Production Plan - ${new Date().toISOString().split('T')[0]}`,
         cut_pattern: planResult.cut_rolls_generated.map((roll:CutRoll, index) => {
           let companyName = 'Unknown Company';
-          
+
           // METHOD 1: Try to find company from regular order
           const sourceOrder = orders.find(o => o.id === roll.order_id);
           if (sourceOrder?.client?.company_name) {
             companyName = sourceOrder.client.company_name;
           }
-          
+
           // METHOD 2: For pending orders, check if we have source_pending_id
           else if (roll.source_type === 'pending_order' && roll.source_pending_id) {
             // Find the pending order and then get the original order by original_order_id
@@ -870,6 +870,7 @@ export default function PlanningPage() {
             company_name: companyName
           };
         }),
+        wastage_allocations: planResult.wastage_allocations || [], // Send wastage_allocations as separate field
         expected_waste_percentage: 100 - calculateEfficiencyMetrics(planResult.cut_rolls_generated).averageEfficiency,
         created_by_id: user_id,
         order_ids: selectedOrders,

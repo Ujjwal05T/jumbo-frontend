@@ -104,6 +104,7 @@ export interface OptimizationResult {
   pending_orders: PendingOrder[];
   summary: OptimizationSummary;
   jumbo_roll_details?: JumboRollDetail[]; // Enhanced jumbo hierarchy details
+  wastage_allocations?:{} |any ;
   high_trim_approved?: Array<{
     combo: number[];
     trim: number;
