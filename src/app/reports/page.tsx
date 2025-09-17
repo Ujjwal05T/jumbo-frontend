@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MaterialReactTable, useMaterialReactTable, MRT_ColumnDef } from 'material-react-table';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { BarChart3, PieChart as PieChartIcon, Calendar, FileText, Download, Grid3X3, TrendingUp, Users, Package } from 'lucide-react';
@@ -76,6 +77,117 @@ type DateReport = {
   partially_completed_items: number;
 };
 
+// Order Analysis types
+type OrderStatusReport = {
+  status: string;
+  order_count: number;
+  overdue_count: number;
+  percentage: number;
+};
+
+type OrderFulfillmentReport = {
+  order_id: string;
+  client_name: string;
+  order_status: string;
+  priority: string;
+  delivery_date: string | null;
+  created_at: string;
+  total_items: number;
+  total_quantity_ordered: number;
+  total_quantity_fulfilled: number;
+  total_quantity_pending: number;
+  remaining_to_plan: number;
+  fulfillment_percentage: number;
+  total_value: number;
+  is_overdue: boolean;
+};
+
+type OrderTimelineReport = {
+  order_id: string;
+  client_name: string;
+  status: string;
+  created_at: string;
+  started_production_at: string | null;
+  moved_to_warehouse_at: string | null;
+  dispatched_at: string | null;
+  delivery_date: string | null;
+  days_to_production: number | null;
+  days_in_production: number | null;
+  days_in_warehouse: number | null;
+  total_cycle_time: number | null;
+};
+
+type PendingOrderReport = {
+  order_id: string;
+  client_name: string;
+  order_status: string;
+  pending_items_count: number;
+  total_pending_quantity: number;
+  pending_reasons: string;
+  first_pending_date: string | null;
+  latest_pending_date: string | null;
+  days_pending: number;
+};
+
+type DispatchTrackingReport = {
+  order_id: string;
+  client_name: string;
+  order_status: string;
+  dispatch_id: string;
+  vehicle_number: string;
+  driver_name: string;
+  driver_mobile: string;
+  dispatch_date: string | null;
+  dispatch_number: string;
+  dispatched_items: number;
+  dispatched_weight: number;
+  dispatch_status: string;
+};
+
+type OverdueOrderReport = {
+  order_id: string;
+  client_name: string;
+  status: string;
+  priority: string;
+  delivery_date: string | null;
+  created_at: string;
+  days_overdue: number;
+  total_quantity_ordered: number;
+  total_quantity_fulfilled: number;
+  fulfillment_percentage: number;
+  total_value: number;
+};
+
+type DetailedOrderBreakdown = {
+  order_id: string;
+  client_name: string;
+  order_status: string;
+  created_at: string;
+  delivery_date: string | null;
+  total_items: number;
+  total_ordered: number;
+  total_fulfilled: number;
+  total_pending: number;
+  total_value: number;
+  overall_fulfillment: number;
+  items: {
+    item_id: string;
+    paper_name: string;
+    gsm: number;
+    bf: number;
+    shade: string;
+    width_inches: number;
+    ordered_quantity: number;
+    quantity_fulfilled: number;
+    quantity_in_pending: number;
+    remaining_to_plan: number;
+    item_status: string;
+    fulfillment_percentage: number;
+    rate: number;
+    amount: number;
+  }[];
+};
+
 type ViewMode = 'grid' | 'chart';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#ff7300'];
@@ -101,6 +213,12 @@ export default function ReportsPage() {
   const [clientData, setClientData] = useState<ClientReport[]>([]);
   const [dateData, setDateData] = useState<DateReport[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Order Analysis state
+  const [ordersList, setOrdersList] = useState<any[]>([]);
+  const [selectedOrderDetails, setSelectedOrderDetails] = useState<any>(null);
+  const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+  const [loadingOrderDetails, setLoadingOrderDetails] = useState(false);
 
   // Fetch available papers for dropdown
   const fetchAvailablePapers = async () => {
@@ -255,6 +373,43 @@ export default function ReportsPage() {
     fetchAvailableClients();
   }, []);
 
+  // Fetch orders list for Order Analysis
+  const fetchOrdersList = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (startDate) params.append('start_date', startDate);
+      if (endDate) params.append('end_date', endDate);
+      if (status && status !== 'all') params.append('status', status);
+
+      const url = `${REPORTS_ENDPOINTS.ORDER_ANALYSIS.ORDERS_LIST}?${params}`;
+      const response = await fetch(url, createRequestOptions('GET'));
+      const result = await response.json();
+      setOrdersList(result);
+    } catch (error) {
+      console.error('Error fetching orders list:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch detailed order information
+  const fetchOrderDetails = async (orderId: string) => {
+    setLoadingOrderDetails(true);
+    try {
+      const url = REPORTS_ENDPOINTS.ORDER_ANALYSIS.ORDER_DETAILS(orderId);
+      const response = await fetch(url, createRequestOptions('GET'));
+      const result = await response.json();
+      if (result.status === 'success') {
+        setSelectedOrderDetails(result.data);
+      }
+    } catch (error) {
+      console.error('Error fetching order details:', error);
+    } finally {
+      setLoadingOrderDetails(false);
+    }
+  };
+
   // Effect to fetch data when tab changes
   useEffect(() => {
     if (activeTab === 'paper') {
@@ -263,6 +418,8 @@ export default function ReportsPage() {
       fetchClientReport();
     } else if (activeTab === 'date') {
       fetchDateReport();
+    } else if (activeTab === 'order') {
+      fetchOrdersList();
     }
   }, [activeTab, startDate, endDate, status, groupBy, selectedPaper, selectedClient]);
 
@@ -732,7 +889,7 @@ export default function ReportsPage() {
 
         {/* Reports Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="paper" className="flex items-center gap-2">
               <Package className="h-4 w-4" />
               Paper Analysis
@@ -744,6 +901,10 @@ export default function ReportsPage() {
             <TabsTrigger value="date" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
               Date Analysis
+            </TabsTrigger>
+            <TabsTrigger value="order" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Order Analysis
             </TabsTrigger>
           </TabsList>
 
@@ -1431,6 +1592,372 @@ export default function ReportsPage() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Order Analysis */}
+          <TabsContent value="order" className="space-y-4">
+            {/* Order Analysis Filters */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Order Analysis</CardTitle>
+                <CardDescription>
+                  View all orders with detailed breakdown. Click on any order to see complete details.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Start Date</label>
+                    <Input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">End Date</label>
+                    <Input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Order Status</label>
+                    <Select value={status} onValueChange={setStatus}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All statuses" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Statuses</SelectItem>
+                        <SelectItem value="created">Created</SelectItem>
+                        <SelectItem value="in_process">In Process</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Orders List */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Orders List
+                </CardTitle>
+                <CardDescription>
+                  Click on any order to view detailed breakdown with all information
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex justify-center items-center h-40">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : ordersList.length > 0 ? (
+                  <div className="rounded-md border">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left p-3">Order ID</th>
+                            <th className="text-left p-3">Client</th>
+                            <th className="text-left p-3">Status</th>
+                            <th className="text-left p-3">Priority</th>
+                            <th className="text-left p-3">Progress</th>
+                            <th className="text-left p-3">Value</th>
+                            <th className="text-left p-3">Delivery Date</th>
+                            <th className="text-left p-3">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ordersList.map((order) => (
+                            <tr key={order.order_id} className="border-b hover:bg-muted/50">
+                              <td className="p-3 font-mono">{order.order_id}</td>
+                              <td className="p-3">{order.client_name}</td>
+                              <td className="p-3">
+                                <span className={`px-2 py-1 rounded text-xs ${
+                                  order.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                  order.status === 'in_process' ? 'bg-blue-100 text-blue-800' :
+                                  order.status === 'created' ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {order.status}
+                                </span>
+                              </td>
+                              <td className="p-3">
+                                <span className={`px-2 py-1 rounded text-xs ${
+                                  order.priority === 'urgent' ? 'bg-red-100 text-red-800' :
+                                  order.priority === 'high' ? 'bg-orange-100 text-orange-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {order.priority || 'normal'}
+                                </span>
+                              </td>
+                              <td className="p-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-16 bg-gray-200 rounded-full h-2">
+                                    <div
+                                      className={`h-2 rounded-full ${
+                                        order.fulfillment_percentage === 100 ? 'bg-green-600' :
+                                        order.fulfillment_percentage > 0 ? 'bg-blue-600' : 'bg-gray-400'
+                                      }`}
+                                      style={{ width: `${order.fulfillment_percentage || 0}%` }}
+                                    ></div>
+                                  </div>
+                                  <span className="text-xs">{(order.fulfillment_percentage || 0).toFixed(0)}%</span>
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {order.total_quantity_fulfilled || 0}/{order.total_quantity_ordered || 0} rolls
+                                </div>
+                              </td>
+                              <td className="p-3">₹{(order.total_value || 0).toLocaleString()}</td>
+                              <td className="p-3">
+                                {order.delivery_date ? (
+                                  <div className={order.is_overdue ? 'text-red-600' : ''}>
+                                    {new Date(order.delivery_date).toLocaleDateString()}
+                                    {order.is_overdue && <span className="block text-xs">⚠️ Overdue</span>}
+                                  </div>
+                                ) : 'N/A'}
+                              </td>
+                              <td className="p-3">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    fetchOrderDetails(order.order_id);
+                                    setIsOrderModalOpen(true);
+                                  }}
+                                >
+                                  View Details
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <div className="text-muted-foreground mb-2">No orders found</div>
+                    <div className="text-sm text-muted-foreground">Try adjusting your filters or check back later</div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Order Details Modal */}
+            <Dialog open={isOrderModalOpen} onOpenChange={setIsOrderModalOpen}>
+              <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Order Details</DialogTitle>
+                  <DialogDescription>
+                    Complete breakdown of order information
+                  </DialogDescription>
+                </DialogHeader>
+
+                {loadingOrderDetails ? (
+                  <div className="flex justify-center items-center h-40">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : selectedOrderDetails ? (
+                  <div className="space-y-6">
+                    {/* Order Summary */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>{selectedOrderDetails.order_info?.frontend_id}</CardTitle>
+                        <CardDescription>{selectedOrderDetails.client_info?.company_name}</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div>
+                            <div className="text-lg font-bold">₹{(selectedOrderDetails.order_info?.total_value || 0).toLocaleString()}</div>
+                            <div className="text-xs text-muted-foreground">Total Value</div>
+                          </div>
+                          <div>
+                            <div className="text-lg font-bold">{selectedOrderDetails.summary?.total_order_items || 0}</div>
+                            <div className="text-xs text-muted-foreground">Total Items</div>
+                          </div>
+                          <div>
+                            <div className="text-lg font-bold">{(selectedOrderDetails.summary?.fulfillment_percentage || 0).toFixed(1)}%</div>
+                            <div className="text-xs text-muted-foreground">Fulfilled</div>
+                          </div>
+                          <div>
+                            <div className="text-lg font-bold">{selectedOrderDetails.summary?.total_pending_items || 0}</div>
+                            <div className="text-xs text-muted-foreground">Pending Items</div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Order Items */}
+                    {selectedOrderDetails.order_items && selectedOrderDetails.order_items.length > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Order Items</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="rounded-md border">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b">
+                                  <th className="text-left p-3">Paper</th>
+                                  <th className="text-left p-3">Width</th>
+                                  <th className="text-left p-3">Ordered</th>
+                                  <th className="text-left p-3">Rate</th>
+                                  <th className="text-left p-3">Amount</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {selectedOrderDetails.order_items.map((item:any, index:any) => (
+                                  <tr key={index} className="border-b">
+                                    <td className="p-3">
+                                      <div className="text-sm font-medium">{item.paper_name}</div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {item.gsm}GSM, {item.bf}BF, {item.shade}
+                                      </div>
+                                    </td>
+                                    <td className="p-3">{item.width_inches}"</td>
+                                    <td className="p-3">{item.quantity_rolls}</td>
+                                    <td className="p-3">₹{item.rate}</td>
+                                    <td className="p-3">₹{item.amount.toLocaleString()}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Pending Items */}
+                    {selectedOrderDetails.pending_items && selectedOrderDetails.pending_items.length > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Pending Items</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="rounded-md border">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b">
+                                  <th className="text-left p-3">Paper</th>
+                                  <th className="text-left p-3">Width</th>
+                                  <th className="text-left p-3">Quantity</th>
+                                  <th className="text-left p-3">Status</th>
+                                  <th className="text-left p-3">Reason</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {selectedOrderDetails.pending_items.map((item, index) => (
+                                  <tr key={index} className="border-b">
+                                    <td className="p-3">
+                                      <div className="text-sm font-medium">{item.paper_name}</div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {item.gsm}GSM, {item.bf}BF, {item.shade}
+                                      </div>
+                                    </td>
+                                    <td className="p-3">{item.width_inches}"</td>
+                                    <td className="p-3">{item.quantity_rolls}</td>
+                                    <td className="p-3">
+                                      <span className="px-2 py-1 rounded text-xs bg-yellow-100 text-yellow-800">
+                                        {item.status}
+                                      </span>
+                                    </td>
+                                    <td className="p-3">{item.reason || 'N/A'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Dispatch Records */}
+                    {selectedOrderDetails.dispatch_records && selectedOrderDetails.dispatch_records.length > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Dispatch Records</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="rounded-md border">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b">
+                                  <th className="text-left p-3">Dispatch ID</th>
+                                  <th className="text-left p-3">Vehicle</th>
+                                  <th className="text-left p-3">Driver</th>
+                                  <th className="text-left p-3">Date</th>
+                                  <th className="text-left p-3">Items</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {selectedOrderDetails.dispatch_records.map((dispatch:any, index:any) => (
+                                  <tr key={index} className="border-b">
+                                    <td className="p-3 font-mono">{dispatch.dispatch_id}</td>
+                                    <td className="p-3">{dispatch.vehicle_number}</td>
+                                    <td className="p-3">
+                                      <div>{dispatch.driver_name}</div>
+                                      <div className="text-xs text-muted-foreground">{dispatch.driver_mobile}</div>
+                                    </td>
+                                    <td className="p-3">{dispatch.dispatch_date ? new Date(dispatch.dispatch_date).toLocaleDateString() : 'N/A'}</td>
+                                    <td className="p-3">{dispatch.dispatched_items} items</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Timeline */}
+                    {selectedOrderDetails.timeline && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Timeline</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-3">
+                            <div className="flex justify-between">
+                              <span className="text-sm font-medium">Created:</span>
+                              <span className="text-sm">{selectedOrderDetails.timeline.created_days || 0} days ago</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm font-medium">Production Started:</span>
+                              <span className="text-sm">{selectedOrderDetails.timeline.production_days || 'Not started'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm font-medium">Moved to Warehouse:</span>
+                              <span className="text-sm">{selectedOrderDetails.timeline.warehouse_days || 'Not moved'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm font-medium">Dispatched:</span>
+                              <span className="text-sm">{selectedOrderDetails.timeline.dispatch_days || 'Not dispatched'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm font-medium">Total Cycle Time:</span>
+                              <span className="text-sm font-bold">{selectedOrderDetails.timeline.total_cycle_time || 'In progress'}</span>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <div className="text-muted-foreground">No order details available</div>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
+
+
           </TabsContent>
         </Tabs>
       </div>

@@ -405,7 +405,9 @@ export default function OrderMasterPage() {
                               <div className="text-sm capitalize">{order.payment_type}</div>
                               {order.delivery_date && (
                                 <div className="text-xs text-muted-foreground">
-                                  Due: {new Date(order.delivery_date).toLocaleDateString()}
+                                  Created:
+                                  <span className="font-bold text-black">{new Date(order.created_at).toLocaleDateString()}</span>
+                                   
                                 </div>
                               )}
                             </TableCell>

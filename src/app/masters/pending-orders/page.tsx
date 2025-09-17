@@ -139,6 +139,8 @@ interface OrderSuggestion {
         uses_existing: boolean;
         used_widths: Record<string, number>;
         description: string;
+        is_manual_cut?: boolean;
+        client_name?: string;
       }>;
       manual_addition_available: boolean;
       summary: {
@@ -168,20 +170,40 @@ interface OrderSuggestion {
   };
 }
 
+interface SpecSuggestion {
+  spec_id: string;
+  paper_spec: {
+    gsm: number;
+    bf: number;
+    shade: string;
+  };
+  target_width: number;
+  order_suggestions: OrderSuggestion[];
+  summary: {
+    total_orders: number;
+    total_jumbo_rolls: number;
+    total_118_sets: number;
+    total_cuts: number;
+  };
+}
+
 interface SuggestionResult {
   status: string;
   target_width: number;
   wastage: number;
-  order_suggestions?: OrderSuggestion[];
+  spec_suggestions?: SpecSuggestion[];  // New structure
+  order_suggestions?: OrderSuggestion[]; // Legacy support
   jumbo_suggestions?: JumboRollSuggestion[]; // Legacy support
   summary: {
     total_pending_input: number;
+    specs_processed?: number;
     orders_processed?: number;
     roll_sets_suggested?: number;
     spec_groups_processed?: number;
     jumbo_rolls_suggested?: number;
     total_rolls_suggested: number;
     total_118_sets:number;
+    expected_cut_rolls?: number;
   };
 }
 
@@ -443,11 +465,56 @@ export default function PendingOrderItemsPage() {
       
       const result = await response.json();
       
-      // Check if the result is valid - support both order-based and legacy jumbo suggestions
-      if (result.status === 'success' && (result.order_suggestions || result.jumbo_suggestions)) {
+      // Check if the result is valid - support new spec-based, order-based and legacy jumbo suggestions
+      if (result.status === 'success' && (result.spec_suggestions || result.order_suggestions || result.jumbo_suggestions)) {
         // Fix summary counts to account for quantities in used_widths
         const processedResult = { ...result };
-        if (processedResult.order_suggestions) {
+
+        // Process new spec_suggestions format
+        if (processedResult.spec_suggestions) {
+          processedResult.spec_suggestions = processedResult.spec_suggestions.map((specSuggestion: any) => ({
+            ...specSuggestion,
+            order_suggestions: specSuggestion.order_suggestions.map((suggestion: any) => ({
+              ...suggestion,
+              jumbo_rolls: suggestion.jumbo_rolls.map((jumboRoll: any) => ({
+                ...jumboRoll,
+                sets: jumboRoll.sets.map((rollSet: any) => ({
+                  ...rollSet,
+                  summary: {
+                    ...rollSet.summary,
+                    total_cuts: rollSet.cuts.reduce((sum: number, c: any) => {
+                      if (c.used_widths && Object.keys(c.used_widths).length > 0) {
+                        return sum + (Object.values(c.used_widths) as number[]).reduce((a: number, b: number) => a + b, 0);
+                      }
+                      return sum + 1;
+                    }, 0),
+                    using_existing_cuts: rollSet.cuts.reduce((sum: number, c: any) => {
+                      if (c.uses_existing && c.used_widths && Object.keys(c.used_widths).length > 0) {
+                        return sum + (Object.values(c.used_widths) as number[]).reduce((a: number, b: number) => a + b, 0);
+                      }
+                      return sum + (c.uses_existing ? 1 : 0);
+                    }, 0)
+                  }
+                })),
+                summary: {
+                  ...jumboRoll.summary,
+                  total_cuts: jumboRoll.sets.reduce((sum: number, s: any) => sum + s.cuts.reduce((cutSum: number, c: any) => {
+                    if (c.used_widths && Object.keys(c.used_widths).length > 0) {
+                      return cutSum + (Object.values(c.used_widths) as number[]).reduce((a: number, b: number) => a + b, 0);
+                    }
+                    return cutSum + 1;
+                  }, 0), 0),
+                  using_existing_cuts: jumboRoll.sets.reduce((sum: number, s: any) => sum + s.cuts.reduce((cutSum: number, c: any) => {
+                    if (c.uses_existing && c.used_widths && Object.keys(c.used_widths).length > 0) {
+                      return cutSum + (Object.values(c.used_widths) as number[]).reduce((a: number, b: number) => a + b, 0);
+                    }
+                    return cutSum + (c.uses_existing ? 1 : 0);
+                  }, 0), 0)
+                }
+              }))
+            }))
+          }));
+        } else if (processedResult.order_suggestions) {
           processedResult.order_suggestions = processedResult.order_suggestions.map((suggestion: any) => ({
             ...suggestion,
             jumbo_rolls: suggestion.jumbo_rolls.map((jumboRoll: any) => ({
@@ -506,8 +573,15 @@ export default function PendingOrderItemsPage() {
         setSuggestionResult(processedResult);
         setShowSuggestions(true);
         
-        if (result.order_suggestions) {
-          // New order-based flow
+        if (result.spec_suggestions) {
+          // New spec-based flow
+          const specCount = result.spec_suggestions.length;
+          const orderCount = result.summary?.orders_processed || 0;
+          const totalRolls = result.summary?.total_rolls_suggested || 0;
+
+          toast.success(`Generated ${specCount} paper spec group(s) with ${orderCount} order(s) and ${totalRolls} roll suggestion(s)!`);
+        } else if (result.order_suggestions) {
+          // Legacy order-based flow
           const orderCount = result.order_suggestions.length;
           const totalRolls = result.summary?.total_rolls_suggested || 0;
           const rollSets = result.summary?.roll_sets_suggested || 0;
@@ -571,8 +645,24 @@ export default function PendingOrderItemsPage() {
     pdf.text(`Target Width: ${suggestionResult.target_width}"`, margin, yPosition);
     yPosition += 8;
     
-    // Handle both new and legacy summary formats
-    if (suggestionResult.order_suggestions) {
+    // Handle new spec-based, order-based and legacy summary formats
+    if (suggestionResult.spec_suggestions) {
+      pdf.text(`Paper Specs Processed: ${suggestionResult.summary.specs_processed || 0}`, margin, yPosition);
+      yPosition += 8;
+      pdf.text(`Orders Processed: ${suggestionResult.summary.orders_processed || 0}`, margin, yPosition);
+      yPosition += 8;
+      const totalJumboRolls = suggestionResult.spec_suggestions.reduce((sum, spec) =>
+        sum + spec.order_suggestions.reduce((orderSum, order) => orderSum + order.summary.total_jumbo_rolls, 0), 0);
+      pdf.text(`Total Jumbo Rolls: ${totalJumboRolls}`, margin, yPosition);
+      yPosition += 8;
+      const total118Sets = suggestionResult.spec_suggestions.reduce((sum, spec) =>
+        sum + spec.order_suggestions.reduce((orderSum, order) => orderSum + order.summary.total_118_sets, 0), 0);
+      pdf.text(`Total 118" Sets: ${total118Sets}`, margin, yPosition);
+      yPosition += 8;
+      const totalCuts = suggestionResult.spec_suggestions.reduce((sum, spec) =>
+        sum + spec.order_suggestions.reduce((orderSum, order) => orderSum + order.summary.total_cuts, 0), 0);
+      pdf.text(`Total Cuts: ${totalCuts}`, margin, yPosition);
+    } else if (suggestionResult.order_suggestions) {
       pdf.text(`Orders Processed: ${suggestionResult.summary.orders_processed || 0}`, margin, yPosition);
       yPosition += 8;
       const totalJumboRolls = suggestionResult.order_suggestions.reduce((sum, order) => sum + order.summary.total_jumbo_rolls, 0);
@@ -596,11 +686,65 @@ export default function PendingOrderItemsPage() {
     
     yPosition = 12;
     pdf.setFontSize(16);
-    pdf.text('Order-Based Roll Suggestions', margin, yPosition);
+    pdf.text('Roll Suggestions', margin, yPosition);
     yPosition += 8;
 
-    // Handle new order-based format
-    if (suggestionResult.order_suggestions) {
+    // Handle new spec-based format
+    if (suggestionResult.spec_suggestions) {
+      suggestionResult.spec_suggestions.forEach((specSuggestion, specIndex) => {
+        if (yPosition > 240) {
+          pdf.addPage();
+          yPosition = 20;
+        }
+
+        yPosition += 10;
+        pdf.setFontSize(14);
+        pdf.text(`Paper Spec: ${specSuggestion.paper_spec.shade} ${specSuggestion.paper_spec.gsm}GSM (BF: ${specSuggestion.paper_spec.bf})`, margin, yPosition);
+        yPosition += 8;
+
+        // Process orders within this spec
+        specSuggestion.order_suggestions.forEach((orderSuggestion, orderIndex) => {
+          if (yPosition > 230) {
+            pdf.addPage();
+            yPosition = 20;
+          }
+
+          yPosition += 8;
+          pdf.setFontSize(12);
+          pdf.text(`  Order: ${orderSuggestion.order_info.order_frontend_id} - ${orderSuggestion.order_info.client_name}`, margin + 10, yPosition);
+
+          // Process jumbo rolls for this order
+          orderSuggestion.jumbo_rolls.forEach((jumboRoll, jumboIndex) => {
+            if (yPosition > 235) {
+              pdf.addPage();
+              yPosition = 20;
+            }
+
+            yPosition += 6;
+            pdf.setFontSize(10);
+            pdf.text(`    Jumbo Roll #${jumboRoll.jumbo_number}: ${jumboRoll.sets.length} sets`, margin + 20, yPosition);
+
+            jumboRoll.sets.forEach((rollSet, setIndex) => {
+              if (yPosition > 240) {
+                pdf.addPage();
+                yPosition = 20;
+              }
+
+              yPosition += 5;
+              const cutDescriptions = rollSet.cuts.map((cut) => {
+                if (cut.used_widths && Object.keys(cut.used_widths).length > 0) {
+                  const quantities = Object.entries(cut.used_widths).map(([width, qty]) => `${width}"×${qty}`).join(', ');
+                  return quantities;
+                }
+                return `${cut.width_inches}"×1`;
+              }).join(' + ');
+
+              pdf.text(`      Set #${rollSet.set_number}: ${cutDescriptions} = ${rollSet.summary.total_actual_width}"`, margin + 25, yPosition);
+            });
+          });
+        });
+      });
+    } else if (suggestionResult.order_suggestions) {
       suggestionResult.order_suggestions.forEach((orderSuggestion, orderIndex) => {
         if (yPosition > 240) {
           pdf.addPage();
@@ -803,7 +947,12 @@ export default function PendingOrderItemsPage() {
 
   const handleSelectAllSuggestions = (checked: boolean) => {
     if (checked) {
-      if (suggestionResult?.order_suggestions) {
+      if (suggestionResult?.spec_suggestions) {
+        const allSuggestionIds = suggestionResult.spec_suggestions.flatMap(
+          spec => spec.order_suggestions.map(order => order.suggestion_id)
+        );
+        setSelectedSuggestions(new Set(allSuggestionIds));
+      } else if (suggestionResult?.order_suggestions) {
         setSelectedSuggestions(new Set(suggestionResult.order_suggestions.map(s => s.suggestion_id)));
       } else if (suggestionResult?.jumbo_suggestions) {
         setSelectedSuggestions(new Set(suggestionResult.jumbo_suggestions.map(s => s.suggestion_id)));
@@ -815,14 +964,30 @@ export default function PendingOrderItemsPage() {
 
   // Manual cut addition functions
   const handleAddManualCut = (suggestionId: string, jumboId: string, setId: string) => {
-    // Find the available waste for this set
-    const suggestion = suggestionResult?.order_suggestions?.find(s => s.suggestion_id === suggestionId);
+    // Find the available waste for this set - handle both spec-based and order-based structures
+    let suggestion, paperSpecs;
+
+    if (suggestionResult?.spec_suggestions) {
+      // New spec-based structure
+      for (const specSuggestion of suggestionResult.spec_suggestions) {
+        suggestion = specSuggestion.order_suggestions.find(s => s.suggestion_id === suggestionId);
+        if (suggestion) {
+          paperSpecs = specSuggestion.paper_spec;
+          break;
+        }
+      }
+    } else if (suggestionResult?.order_suggestions) {
+      // Legacy order-based structure
+      suggestion = suggestionResult.order_suggestions.find(s => s.suggestion_id === suggestionId);
+      paperSpecs = suggestion?.paper_spec;
+    }
+
     const jumboRoll = suggestion?.jumbo_rolls?.find(jr => jr.jumbo_id === jumboId);
     const rollSet = jumboRoll?.sets?.find(s => s.set_id === setId);
     const availableWaste = rollSet?.summary?.total_waste || 0;
-    
+
     // Capture paper specs from the suggestion
-    const paperSpecs = suggestion?.paper_spec || {
+    paperSpecs = paperSpecs || {
       gsm: 0,
       bf: 0,
       shade: ''
@@ -878,7 +1043,59 @@ export default function PendingOrderItemsPage() {
     };
 
     // Clone current suggestions and add the manual cut
-    if (suggestionResult?.order_suggestions) {
+    if (suggestionResult?.spec_suggestions) {
+      const updatedSpecSuggestions = suggestionResult.spec_suggestions.map(specSuggestion => ({
+        ...specSuggestion,
+        order_suggestions: specSuggestion.order_suggestions.map(suggestion => {
+          if (suggestion.suggestion_id === manualRollData.suggestionId) {
+            const updatedSuggestion = { ...suggestion };
+            updatedSuggestion.jumbo_rolls = suggestion.jumbo_rolls.map(jumboRoll => {
+              if (jumboRoll.jumbo_id === manualRollData.jumboId) {
+                const updatedJumboRoll = { ...jumboRoll };
+                updatedJumboRoll.sets = jumboRoll.sets.map(rollSet => {
+                  if (rollSet.set_id === manualRollData.setId) {
+                    const updatedRollSet = { ...rollSet };
+                    updatedRollSet.cuts = [...rollSet.cuts, manualCut];
+
+                    // Update summary - Account for used_widths quantities
+                    const totalActualWidth = updatedRollSet.cuts.reduce((sum, c) => {
+                      if (c.used_widths && Object.keys(c.used_widths).length > 0) {
+                        return sum + Object.entries(c.used_widths).reduce((widthSum, [width, qty]) =>
+                          widthSum + (parseFloat(width) * qty), 0);
+                      }
+                      return sum + c.width_inches;
+                    }, 0);
+
+                    updatedRollSet.summary = {
+                      ...updatedRollSet.summary,
+                      total_cuts: updatedRollSet.cuts.reduce((sum, c) => {
+                        if (c.used_widths && Object.keys(c.used_widths).length > 0) {
+                          return sum + Object.values(c.used_widths).reduce((a, b) => a + b, 0);
+                        }
+                        return sum + 1;
+                      }, 0),
+                      total_actual_width: totalActualWidth,
+                      total_waste: manualRollData.availableWaste - width,
+                      efficiency: Math.round((totalActualWidth / rollSet.target_width) * 100)
+                    };
+
+                    return updatedRollSet;
+                  }
+                  return rollSet;
+                });
+                return updatedJumboRoll;
+              }
+              return jumboRoll;
+            });
+            return updatedSuggestion;
+          }
+          return suggestion;
+        })
+      }));
+
+      // Update the suggestion result
+      setSuggestionResult(prev => prev ? { ...prev, spec_suggestions: updatedSpecSuggestions } : null);
+    } else if (suggestionResult?.order_suggestions) {
       const updatedSuggestions = suggestionResult.order_suggestions.map(suggestion => {
         if (suggestion.suggestion_id === manualRollData.suggestionId) {
           const updatedSuggestion = { ...suggestion };
@@ -986,14 +1203,26 @@ export default function PendingOrderItemsPage() {
         return;
       }
       
-      // Filter selected suggestions - handle both order-based and legacy formats
-      const selectedSuggestionData = suggestionResult.order_suggestions 
-        ? suggestionResult.order_suggestions.filter(
+      // Filter selected suggestions - handle spec-based, order-based and legacy formats
+      let selectedSuggestionData;
+      if (suggestionResult.spec_suggestions) {
+        // New spec-based format - flatten selected order suggestions from all specs
+        selectedSuggestionData = suggestionResult.spec_suggestions.flatMap(
+          spec => spec.order_suggestions.filter(
             suggestion => selectedSuggestions.has(suggestion.suggestion_id)
           )
-        : suggestionResult.jumbo_suggestions?.filter(
-            suggestion => selectedSuggestions.has(suggestion.suggestion_id)
-          ) || [];
+        );
+      } else if (suggestionResult.order_suggestions) {
+        // Legacy order-based format
+        selectedSuggestionData = suggestionResult.order_suggestions.filter(
+          suggestion => selectedSuggestions.has(suggestion.suggestion_id)
+        );
+      } else {
+        // Legacy jumbo suggestions format
+        selectedSuggestionData = suggestionResult.jumbo_suggestions?.filter(
+          suggestion => selectedSuggestions.has(suggestion.suggestion_id)
+        ) || [];
+      }
       console.log('🔧 SELECTED SUGGESTIONS DATA:', selectedSuggestions);
       console.log(selectedSuggestionData)
 
@@ -1669,28 +1898,285 @@ export default function PendingOrderItemsPage() {
                   </div>
                   <div className="text-center p-4 bg-green-50 rounded-lg">
                     <div className="text-2xl font-bold text-green-600">
-                      {suggestionResult.order_suggestions ? suggestionResult.summary.orders_processed : suggestionResult.summary.jumbo_rolls_suggested}
+                      {suggestionResult.spec_suggestions ? suggestionResult.summary.specs_processed :
+                       suggestionResult.order_suggestions ? suggestionResult.summary.orders_processed :
+                       suggestionResult.summary.jumbo_rolls_suggested}
                     </div>
                     <div className="text-sm text-green-800">
-                      {suggestionResult.order_suggestions ? 'Orders' : 'Jumbo Rolls'}
+                      {suggestionResult.spec_suggestions ? 'Paper Specs' :
+                       suggestionResult.order_suggestions ? 'Orders' : 'Jumbo Rolls'}
                     </div>
                   </div>
                   <div className="text-center p-4 bg-purple-50 rounded-lg">
-                    <div className="text-2xl font-bold text-purple-600">{suggestionResult.summary.total_rolls_suggested}</div>
-                    <div className="text-sm text-purple-800">Total Rolls</div>
+                    <div className="text-2xl font-bold text-purple-600">
+                      {suggestionResult.spec_suggestions ? suggestionResult.summary.orders_processed : suggestionResult.summary.total_rolls_suggested}
+                    </div>
+                    <div className="text-sm text-purple-800">
+                      {suggestionResult.spec_suggestions ? 'Orders' : 'Total Rolls'}
+                    </div>
                   </div>
                   <div className="text-center p-4 bg-orange-50 rounded-lg">
                     <div className="text-2xl font-bold text-orange-600">
-                      {suggestionResult.order_suggestions ? suggestionResult.summary.total_118_sets : suggestionResult.summary.spec_groups_processed}
+                      {suggestionResult.spec_suggestions ? suggestionResult.summary.total_rolls_suggested :
+                       suggestionResult.order_suggestions ? suggestionResult.summary.total_118_sets :
+                       suggestionResult.summary.spec_groups_processed}
                     </div>
                     <div className="text-sm text-orange-800">
-                      {suggestionResult.order_suggestions ? '118" Sets' : 'Paper Specs'}
+                      {suggestionResult.spec_suggestions ? 'Total Rolls' :
+                       suggestionResult.order_suggestions ? '118" Sets' : 'Paper Specs'}
                     </div>
                   </div>
                 </div>
 
-                {/* Order-Based Suggestions */}
-                {suggestionResult.order_suggestions && suggestionResult.order_suggestions.length > 0 ? (
+                {/* New Spec-Based Suggestions */}
+                {suggestionResult.spec_suggestions && suggestionResult.spec_suggestions.length > 0 ? (
+                  <div className="space-y-8">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold">Paper Spec Based Roll Suggestions</h3>
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="select-all-spec-suggestions"
+                            checked={suggestionResult.spec_suggestions.some(spec => spec.order_suggestions.length > 0) && selectedSuggestions.size === suggestionResult.spec_suggestions.flatMap(spec => spec.order_suggestions).length}
+                            onCheckedChange={handleSelectAllSuggestions}
+                          />
+                          <label htmlFor="select-all-spec-suggestions" className="text-sm font-medium">
+                            Select All ({selectedSuggestions.size}/{suggestionResult.spec_suggestions.flatMap(spec => spec.order_suggestions).length})
+                          </label>
+                        </div>
+                        <Button
+                          onClick={handleStartProduction}
+                          disabled={selectedSuggestions.size === 0 || productionLoading}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          {productionLoading ? 'Starting Production...' : `Start Production (${selectedSuggestions.size})`}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Display each paper spec group */}
+                    {suggestionResult.spec_suggestions.map((specSuggestion, specIndex) => (
+                      <Card key={specSuggestion.spec_id} className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-200">
+                        <CardHeader className="pb-4">
+                          <CardTitle className="text-xl flex items-center gap-3">
+                            <Package className="h-6 w-6 text-amber-600" />
+                            📋 {specSuggestion.paper_spec.shade} {specSuggestion.paper_spec.gsm}GSM (BF: {specSuggestion.paper_spec.bf})
+                          </CardTitle>
+                          <CardDescription className="flex items-center gap-4">
+                            <Badge className="bg-amber-100 text-amber-800">
+                              {specSuggestion.summary.total_orders} Orders
+                            </Badge>
+                            <Badge className="bg-amber-100 text-amber-800">
+                              {specSuggestion.summary.total_jumbo_rolls} Jumbo Rolls
+                            </Badge>
+                            <Badge className="bg-amber-100 text-amber-800">
+                              {specSuggestion.summary.total_118_sets} Sets
+                            </Badge>
+                            <Badge className="bg-amber-100 text-amber-800">
+                              {specSuggestion.summary.total_cuts} Cuts
+                            </Badge>
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-6">
+                            {specSuggestion.order_suggestions.map((orderSuggestion) => (
+                              <Card key={orderSuggestion.suggestion_id} className={`bg-gradient-to-r from-blue-50 to-indigo-50 border-2 ${
+                                selectedSuggestions.has(orderSuggestion.suggestion_id) ? 'border-green-400 ring-2 ring-green-200' : 'border-blue-200'
+                              }`}>
+                                <CardHeader className="pb-3">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <Checkbox
+                                        id={`spec-order-suggestion-${orderSuggestion.suggestion_id}`}
+                                        checked={selectedSuggestions.has(orderSuggestion.suggestion_id)}
+                                        onCheckedChange={(checked) => handleSuggestionToggle(orderSuggestion.suggestion_id, checked as boolean)}
+                                      />
+                                      <div>
+                                        <CardTitle className="text-lg">
+                                          📦 Order {orderSuggestion.order_info.order_frontend_id} - {orderSuggestion.order_info.client_name}
+                                        </CardTitle>
+                                        <CardDescription>
+                                          Target: {orderSuggestion.target_width}" per roll
+                                        </CardDescription>
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      <div className="text-sm text-muted-foreground">
+                                        {orderSuggestion.summary.total_jumbo_rolls} jumbo rolls | {orderSuggestion.summary.total_118_sets} sets | {orderSuggestion.summary.total_cuts} cuts
+                                      </div>
+                                      <div className="text-sm text-muted-foreground">
+                                        {orderSuggestion.summary.using_existing_cuts} using existing cuts
+                                      </div>
+                                    </div>
+                                  </div>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                  {/* Jumbo Rolls for this Order (same as before) */}
+                                  <div className="grid gap-4">
+                                    {orderSuggestion.jumbo_rolls.map((jumboRoll, jumboIndex) => (
+                                      <div key={jumboRoll.jumbo_id} className="p-4 rounded-lg border-2 bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
+                                        <div className="flex items-center justify-between mb-3">
+                                          <div className="font-medium text-purple-800">
+                                            Jumbo Roll #{jumboRoll.jumbo_number} ({jumboRoll.summary.efficiency}% efficient)
+                                          </div>
+                                          <Badge className="bg-purple-100 text-purple-800">
+                                            {jumboRoll.summary.total_sets} sets | {jumboRoll.summary.total_waste.toFixed(1)}" total waste
+                                          </Badge>
+                                        </div>
+
+                                        {/* 118" Roll Sets in this Jumbo */}
+                                        <div className="space-y-3">
+                                          {jumboRoll.sets.map((rollSet, setIndex) => (
+                                            <div key={rollSet.set_id} className="p-3 rounded-lg border bg-white border-blue-200">
+                                              <div className="flex items-center justify-between mb-2">
+                                                <div className="font-medium text-blue-800">
+                                                  118" Roll Set #{rollSet.set_number} ({rollSet.summary.efficiency}% efficient)
+                                                </div>
+                                                <Badge className="bg-blue-100 text-blue-800">
+                                                  {rollSet.summary.total_cuts} cuts | {rollSet.summary.total_waste.toFixed(1)}" waste
+                                                </Badge>
+                                              </div>
+
+                                              {/* Visual cutting pattern representation */}
+                                              <div className="mb-3">
+                                                <div className="text-sm font-medium text-muted-foreground mb-2">
+                                                  Cutting Pattern ({rollSet.target_width}" Roll):
+                                                </div>
+                                                <div className="relative h-12 bg-muted rounded-lg border overflow-hidden">
+                                                  {(() => {
+                                                    let currentPosition = 0;
+                                                    const targetWidth = rollSet.target_width;
+                                                    const totalWaste = rollSet.summary.total_waste;
+
+                                                    return (
+                                                      <>
+                                                        {/* Individual cut sections */}
+                                                        {rollSet.cuts.map((cut, cutIndex) => {
+                                                          const cutWidth = cut.width_inches;
+                                                          const sections = [];
+
+                                                          // Determine quantity
+                                                          let quantity = 1;
+                                                          if (cut.used_widths && Object.keys(cut.used_widths).length > 0) {
+                                                            for (const [widthKey, qty] of Object.entries(cut.used_widths)) {
+                                                              if (Math.abs(parseFloat(widthKey) - cutWidth) < 0.1) {
+                                                                quantity = qty;
+                                                                break;
+                                                              }
+                                                            }
+                                                          }
+
+                                                          // Create individual sections for each quantity
+                                                          for (let i = 0; i < quantity; i++) {
+                                                            const widthPercentage = (cutWidth / targetWidth) * 100;
+                                                            const leftPosition = (currentPosition / targetWidth) * 100;
+                                                            currentPosition += cutWidth;
+
+                                                            sections.push(
+                                                              <div
+                                                                key={`${cutIndex}-${i}`}
+                                                                className={`absolute h-full border-r-2 border-white ${
+                                                                  cut.uses_existing
+                                                                    ? "bg-gradient-to-r from-green-400 to-green-500"
+                                                                    : "bg-gradient-to-r from-blue-400 to-blue-500"
+                                                                }`}
+                                                                style={{
+                                                                  left: `${leftPosition}%`,
+                                                                  width: `${widthPercentage}%`,
+                                                                }}
+                                                              >
+                                                                <div className="flex items-center justify-center h-full text-white text-xs font-medium">
+                                                                  {cutWidth}"
+                                                                </div>
+                                                              </div>
+                                                            );
+                                                          }
+
+                                                          return sections;
+                                                        })}
+
+                                                        {/* Waste section */}
+                                                        {totalWaste > 0 && (
+                                                          <div
+                                                            className="absolute h-full bg-gradient-to-r from-red-300 to-red-400"
+                                                            style={{
+                                                              left: `${(currentPosition / targetWidth) * 100}%`,
+                                                              width: `${(totalWaste / targetWidth) * 100}%`,
+                                                            }}
+                                                          >
+                                                            <div className="flex items-center justify-center h-full text-red-800 text-xs font-medium">
+                                                              {totalWaste.toFixed(1)}" waste
+                                                            </div>
+                                                          </div>
+                                                        )}
+                                                      </>
+                                                    );
+                                                  })()}
+                                                </div>
+                                              </div>
+
+                                              {/* Cut Details */}
+                                              <div className="space-y-2">
+                                                {rollSet.cuts.map((cut, cutIndex) => {
+                                                  let quantity = 1;
+                                                  if (cut.used_widths && Object.keys(cut.used_widths).length > 0) {
+                                                    quantity = Object.values(cut.used_widths).reduce((sum, qty) => sum + qty, 0);
+                                                  }
+
+                                                  return (
+                                                    <div key={cutIndex} className={`flex items-center justify-between p-2 rounded ${
+                                                      cut.uses_existing ? 'bg-green-50' : 'bg-blue-50'
+                                                    }`}>
+                                                      <div className="flex items-center gap-2">
+                                                        <Badge className={cut.uses_existing ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}>
+                                                          {cut.width_inches}" × {quantity}
+                                                        </Badge>
+                                                        <span className="text-sm">{cut.description}</span>
+                                                      </div>
+                                                      {cut.uses_existing && (
+                                                        <Badge variant="outline" className="text-xs">
+                                                          From Pending
+                                                        </Badge>
+                                                      )}
+                                                      {cut.is_manual_cut && (
+                                                        <Badge variant="outline" className="text-xs bg-orange-50 text-orange-600 border-orange-200">
+                                                          Manual: {cut.client_name}
+                                                        </Badge>
+                                                      )}
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+
+                                              {/* Manual Addition Button */}
+                                              {rollSet.manual_addition_available && (
+                                                <div className="mt-3 flex justify-center">
+                                                  <Button
+                                                    onClick={() => handleAddManualCut(orderSuggestion.suggestion_id, jumboRoll.jumbo_id, rollSet.set_id)}
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                                                  >
+                                                    <Plus className="h-4 w-4 mr-2" />
+                                                    Add Manual Cut ({rollSet.summary.total_waste.toFixed(1)}" available)
+                                                  </Button>
+                                                </div>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : suggestionResult.order_suggestions && suggestionResult.order_suggestions.length > 0 ? (
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
                       <h3 className="text-lg font-semibold">Order-Based Roll Suggestions</h3>

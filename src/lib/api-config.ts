@@ -90,6 +90,19 @@ export const REPORTS_ENDPOINTS = {
   CLIENT_WISE: `${API_BASE_URL}/reports/client-wise`,
   DATE_WISE: `${API_BASE_URL}/reports/date-wise`,
   SUMMARY: `${API_BASE_URL}/reports/summary`,
+
+  // Order Analysis endpoints
+  ORDER_ANALYSIS: {
+    STATUS_DISTRIBUTION: `${API_BASE_URL}/reports/order-analysis/status-distribution`,
+    FULFILLMENT_PROGRESS: `${API_BASE_URL}/reports/order-analysis/fulfillment-progress`,
+    TIMELINE: `${API_BASE_URL}/reports/order-analysis/timeline`,
+    PENDING_ORDERS: `${API_BASE_URL}/reports/order-analysis/pending-orders`,
+    DISPATCH_TRACKING: `${API_BASE_URL}/reports/order-analysis/dispatch-tracking`,
+    OVERDUE_ORDERS: `${API_BASE_URL}/reports/order-analysis/overdue-orders`,
+    DETAILED_BREAKDOWN: `${API_BASE_URL}/reports/order-analysis/detailed-breakdown`,
+    ORDERS_LIST: `${API_BASE_URL}/reports/order-analysis/orders-list`,
+    ORDER_DETAILS: (orderId: string) => `${API_BASE_URL}/reports/order-analysis/order-details/${orderId}`,
+  },
 };
 
 // Material Management endpoints
