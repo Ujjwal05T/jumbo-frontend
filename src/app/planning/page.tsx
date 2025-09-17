@@ -748,6 +748,7 @@ export default function PlanningPage() {
       };
 
       const optimizationResult = await processMultipleOrders(request);
+      //console.log(optimizationResult) //correct till here
       
       // Validate the plan automatically
       const validationResult = await validateCuttingPlan(optimizationResult);
@@ -828,7 +829,7 @@ export default function PlanningPage() {
       }
 
       // NEW FLOW: Create plan during start production since generate plan is now read-only
-      console.log("🔍 DEBUG: Creating plan during production start (read-only workflow)");
+      
       
       // Create a plan record first with actual optimization data
       const planCreateRequest = {
@@ -875,6 +876,7 @@ export default function PlanningPage() {
         created_by_id: user_id,
         order_ids: selectedOrders,
         pending_orders: planResult.pending_orders || [] // Include pending orders from algorithm
+        
       };
 
       // Create the plan

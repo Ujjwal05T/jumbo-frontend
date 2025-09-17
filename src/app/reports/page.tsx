@@ -1784,7 +1784,7 @@ export default function ReportsPage() {
                           </div>
                           <div>
                             <div className="text-lg font-bold">{(selectedOrderDetails.summary?.fulfillment_percentage || 0).toFixed(1)}%</div>
-                            <div className="text-xs text-muted-foreground">Fulfilled</div>
+                            <div className="text-xs text-muted-foreground">Dispatched Percent</div>
                           </div>
                           <div>
                             <div className="text-lg font-bold">{selectedOrderDetails.summary?.total_pending_items || 0}</div>
@@ -1808,25 +1808,49 @@ export default function ReportsPage() {
                                   <th className="text-left p-3">Paper</th>
                                   <th className="text-left p-3">Width</th>
                                   <th className="text-left p-3">Ordered</th>
-                                  <th className="text-left p-3">Rate</th>
-                                  <th className="text-left p-3">Amount</th>
+                                  <th className="text-left p-3">Pending</th>
+                                  <th className="text-left p-3">Cut</th>
+                                  <th className="text-left p-3">Dispatched</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                {selectedOrderDetails.order_items.map((item:any, index:any) => (
-                                  <tr key={index} className="border-b">
-                                    <td className="p-3">
-                                      <div className="text-sm font-medium">{item.paper_name}</div>
-                                      <div className="text-xs text-muted-foreground">
-                                        {item.gsm}GSM, {item.bf}BF, {item.shade}
-                                      </div>
-                                    </td>
-                                    <td className="p-3">{item.width_inches}"</td>
-                                    <td className="p-3">{item.quantity_rolls}</td>
-                                    <td className="p-3">₹{item.rate}</td>
-                                    <td className="p-3">₹{item.amount.toLocaleString()}</td>
-                                  </tr>
-                                ))}
+                                {selectedOrderDetails.order_items.map((item:any, index:any) => {
+                                  // Calculate pending quantity from pending items
+                                  const pendingQuantity = selectedOrderDetails.pending_items
+                                    ?.filter((pendingItem: any) =>
+                                      pendingItem.gsm === item.paper?.gsm &&
+                                      pendingItem.bf === item.paper?.bf &&
+                                      pendingItem.shade === item.paper?.shade &&
+                                      pendingItem.width_inches === item.width_inches
+                                    )
+                                    .reduce((sum: number, pendingItem: any) => sum + (pendingItem.quantity_pending || 0), 0) || 0;
+
+                                  // Calculate cut quantity from allocated inventory
+                                  const cutQuantity = selectedOrderDetails.allocated_inventory
+                                    ?.filter((invItem: any) =>
+                                      invItem.paper?.gsm === item.paper?.gsm &&
+                                      invItem.paper?.bf === item.paper?.bf &&
+                                      invItem.paper?.shade === item.paper?.shade &&
+                                      invItem.width_inches === item.width_inches
+                                    )
+                                    .length || 0;
+
+                                  return (
+                                    <tr key={index} className="border-b">
+                                      <td className="p-3">
+                                        <div className="text-sm font-medium">{item.paper?.name || 'Unknown Paper'}</div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {item.paper?.gsm}GSM, {item.paper?.bf}BF, {item.paper?.shade}
+                                        </div>
+                                      </td>
+                                      <td className="p-3">{item.width_inches}"</td>
+                                      <td className="p-3">{item.quantity_rolls}</td>
+                                      <td className="p-3">{pendingQuantity}</td>
+                                      <td className="p-3">{cutQuantity}</td>
+                                      <td className="p-3">{item.quantity_fulfilled}</td>
+                                    </tr>
+                                  );
+                                })}
                               </tbody>
                             </table>
                           </div>
@@ -1853,7 +1877,7 @@ export default function ReportsPage() {
                                 </tr>
                               </thead>
                               <tbody>
-                                {selectedOrderDetails.pending_items.map((item, index) => (
+                                {selectedOrderDetails.pending_items.map((item:any, index:any) => (
                                   <tr key={index} className="border-b">
                                     <td className="p-3">
                                       <div className="text-sm font-medium">{item.paper_name}</div>
