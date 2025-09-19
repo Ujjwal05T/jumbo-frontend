@@ -132,6 +132,67 @@ export async function deleteWastageItem(wastage_id: string): Promise<void> {
   }
 }
 
+export interface CreateWastageRequest {
+  width_inches: number;
+  paper_id: string;
+  weight_kg?: number;
+  status?: string;
+  location?: string;
+  notes?: string;
+  source_plan_id?: string;
+  source_jumbo_roll_id?: string;
+  individual_roll_number?: number;
+}
+
+export interface PaperMaster {
+  id: string;
+  frontend_id: string;
+  name: string;
+  gsm: number;
+  bf: number;
+  shade: string;
+  type: string;
+}
+
+export async function fetchPapersForWastage(): Promise<PaperMaster[]> {
+  try {
+    const response = await fetch(`${BASE_URL}/papers`,
+      { headers: { 'ngrok-skip-browser-warning': 'true' } }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching papers for wastage:', error);
+    throw error;
+  }
+}
+
+export async function createManualWastage(wastageData: CreateWastageRequest): Promise<WastageInventory> {
+  try {
+    const response = await fetch(`${BASE_URL}/wastage`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+      },
+      body: JSON.stringify(wastageData),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error creating manual wastage:', error);
+    throw error;
+  }
+}
+
 export async function createTestWastageData(): Promise<WastageInventory[]> {
   try {
     const response = await fetch(`${BASE_URL}/wastage/test-data`, {

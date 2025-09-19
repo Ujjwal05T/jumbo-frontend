@@ -81,6 +81,7 @@ interface PendingOrderItem {
 }
 
 interface JumboRollSuggestion {
+  sets:any
   suggestion_id: string;
   paper_specs: {
     gsm: number;
@@ -108,6 +109,7 @@ interface JumboRollSuggestion {
     new_rolls_needed: number;
     total_waste: number;
     avg_waste: number;
+    efficiency: number;
   };
 }
 
@@ -141,6 +143,7 @@ interface OrderSuggestion {
         description: string;
         is_manual_cut?: boolean;
         client_name?: string;
+        order_frontend_id?: string;
       }>;
       manual_addition_available: boolean;
       summary: {
@@ -171,12 +174,14 @@ interface OrderSuggestion {
 }
 
 interface SpecSuggestion {
+  jumbo_rolls?: JumboRollSuggestion[];
   spec_id: string;
   paper_spec: {
     gsm: number;
     bf: number;
     shade: string;
   };
+  order_frontend_id?: string;
   target_width: number;
   order_suggestions: OrderSuggestion[];
   summary: {
@@ -198,6 +203,7 @@ interface SuggestionResult {
     total_pending_input: number;
     specs_processed?: number;
     orders_processed?: number;
+    total_cuts?: number;
     roll_sets_suggested?: number;
     spec_groups_processed?: number;
     jumbo_rolls_suggested?: number;
@@ -464,7 +470,8 @@ export default function PendingOrderItemsPage() {
       }
       
       const result = await response.json();
-      
+
+
       // Check if the result is valid - support new spec-based, order-based and legacy jumbo suggestions
       if (result.status === 'success' && (result.spec_suggestions || result.order_suggestions || result.jumbo_suggestions)) {
         // Fix summary counts to account for quantities in used_widths
@@ -472,6 +479,19 @@ export default function PendingOrderItemsPage() {
 
         // Process new spec_suggestions format
         if (processedResult.spec_suggestions) {
+          // DEBUG LOG 2: Check first spec suggestion cuts
+          const firstSpec = processedResult.spec_suggestions[0];
+          if (firstSpec?.jumbo_rolls?.[0]?.sets?.[0]?.cuts) {
+            console.log('🔍 DEBUG: First spec cuts sample:',
+              firstSpec.jumbo_rolls[0].sets[0].cuts.slice(0, 2).map((cut: any) => ({
+                width: cut.width_inches,
+                order_id: cut.order_frontend_id,
+                client: cut.client_name,
+                description: cut.description
+              }))
+            );
+          }
+
           processedResult.spec_suggestions = processedResult.spec_suggestions?.map((specSuggestion: any) => ({
             ...specSuggestion,
             order_suggestions: specSuggestion.order_suggestions?.map((suggestion: any) => ({
@@ -514,61 +534,6 @@ export default function PendingOrderItemsPage() {
               }))
             }))
           }));
-        } else if (processedResult.order_suggestions) {
-          processedResult.order_suggestions = processedResult.order_suggestions?.map((suggestion: any) => ({
-            ...suggestion,
-            jumbo_rolls: suggestion.jumbo_rolls?.map((jumboRoll: any) => ({
-              ...jumboRoll,
-              sets: jumboRoll.sets?.map((rollSet: any) => ({
-                ...rollSet,
-                summary: {
-                  ...rollSet.summary,
-                  total_cuts: rollSet.cuts.reduce((sum: number, c: any) => {
-                    if (c.used_widths && Object.keys(c.used_widths).length > 0) {
-                      return sum + (Object.values(c.used_widths) as number[]).reduce((a: number, b: number) => a + b, 0);
-                    }
-                    return sum + 1;
-                  }, 0),
-                  using_existing_cuts: rollSet.cuts.reduce((sum: number, c: any) => {
-                    if (c.uses_existing && c.used_widths && Object.keys(c.used_widths).length > 0) {
-                      return sum + (Object.values(c.used_widths) as number[]).reduce((a: number, b: number) => a + b, 0);
-                    }
-                    return sum + (c.uses_existing ? 1 : 0);
-                  }, 0)
-                }
-              })),
-              summary: {
-                ...jumboRoll.summary,
-                total_cuts: jumboRoll.sets.reduce((sum: number, s: any) => sum + s.cuts.reduce((cutSum: number, c: any) => {
-                  if (c.used_widths && Object.keys(c.used_widths).length > 0) {
-                    return cutSum + (Object.values(c.used_widths) as number[]).reduce((a: number, b: number) => a + b, 0);
-                  }
-                  return cutSum + 1;
-                }, 0), 0),
-                using_existing_cuts: jumboRoll.sets.reduce((sum: number, s: any) => sum + s.cuts.reduce((cutSum: number, c: any) => {
-                  if (c.uses_existing && c.used_widths && Object.keys(c.used_widths).length > 0) {
-                    return cutSum + (Object.values(c.used_widths) as number[]).reduce((a: number, b: number) => a + b, 0);
-                  }
-                  return cutSum + (c.uses_existing ? 1 : 0);
-                }, 0), 0)
-              }
-            })),
-            summary: {
-              ...suggestion.summary,
-              total_cuts: suggestion.jumbo_rolls.reduce((sum: number, jr: any) => sum + jr.sets.reduce((setSum: number, s: any) => setSum + s.cuts.reduce((cutSum: number, c: any) => {
-                if (c.used_widths && Object.keys(c.used_widths).length > 0) {
-                  return cutSum + (Object.values(c.used_widths) as number[]).reduce((a: number, b: number) => a + b, 0);
-                }
-                return cutSum + 1;
-              }, 0), 0), 0),
-              using_existing_cuts: suggestion.jumbo_rolls.reduce((sum: number, jr: any) => sum + jr.sets.reduce((setSum: number, s: any) => setSum + s.cuts.reduce((cutSum: number, c: any) => {
-                if (c.uses_existing && c.used_widths && Object.keys(c.used_widths).length > 0) {
-                  return cutSum + (Object.values(c.used_widths) as number[]).reduce((a: number, b: number) => a + b, 0);
-                }
-                return cutSum + (c.uses_existing ? 1 : 0);
-              }, 0), 0), 0)
-            }
-          }));
         }
         setSuggestionResult(processedResult);
         setShowSuggestions(true);
@@ -576,32 +541,11 @@ export default function PendingOrderItemsPage() {
         if (result.spec_suggestions) {
           // New spec-based flow
           const specCount = result.spec_suggestions.length;
-          const orderCount = result.summary?.orders_processed || 0;
+          const orderCount = result.summary?.total_orders || 0;
           const totalRolls = result.summary?.total_rolls_suggested || 0;
 
           toast.success(`Generated ${specCount} paper spec group(s) with ${orderCount} order(s) and ${totalRolls} roll suggestion(s)!`);
-        } else if (result.order_suggestions) {
-          // Legacy order-based flow
-          const orderCount = result.order_suggestions.length;
-          const totalRolls = result.summary?.total_rolls_suggested || 0;
-          const rollSets = result.summary?.roll_sets_suggested || 0;
-          
-          if (orderCount > 0) {
-            toast.success(`Generated ${orderCount} order-based suggestions with ${rollSets} roll sets (${totalRolls} individual rolls) for ${result.target_width}" target width`);
-          } else {
-            toast.info('No order-based suggestions could be generated with the current pending items');
-          }
-        } else if (result.jumbo_suggestions) {
-          // Legacy jumbo-based flow
-          const jumboCount = result.jumbo_suggestions.length;
-          const totalRolls = result.summary?.total_rolls_suggested || 0;
-          
-          if (jumboCount > 0) {
-            toast.success(`Generated ${jumboCount} jumbo roll suggestions with ${totalRolls} individual rolls for ${result.target_width}" target width`);
-          } else {
-            toast.info('No jumbo roll suggestions could be generated with the current pending items');
-          }
-        }
+        } 
       } else if (result.status === 'no_pending_orders') {
         toast.info('No pending orders found to generate suggestions from');
         setSuggestionResult(result);
@@ -618,334 +562,256 @@ export default function PendingOrderItemsPage() {
     }
   };
 
-  const handlePrintPDF = () => {
-    if (!suggestionResult) return;
+const handlePrintPDF = () => {
+  if (!suggestionResult) return;
 
-    const pdf = new jsPDF();
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const margin = 10;
-    let yPosition = 15;
+  const pdf = new jsPDF();
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const margin = 10;
+  let yPosition = 15;
 
-    pdf.setFontSize(20);
-    pdf.text('Roll Suggestions Report', margin, yPosition);
-    
-    yPosition += 10;
-    pdf.setFontSize(12);
-    pdf.text(`Target Width: ${suggestionResult.target_width}" (119" - ${suggestionResult.wastage}" wastage)`, margin, yPosition);
-    
-    yPosition += 10;
-    pdf.text(`Generated on: ${new Date().toLocaleDateString()}`, margin, yPosition);
-    
-    yPosition += 20;
-    pdf.setFontSize(16);
-    pdf.text('Summary Statistics', margin, yPosition);
-    
-    yPosition += 15
-    pdf.setFontSize(12);
-    pdf.text(`Target Width: ${suggestionResult.target_width}"`, margin, yPosition);
-    yPosition += 8;
-    
-    // Handle new spec-based, order-based and legacy summary formats
-    if (suggestionResult.spec_suggestions) {
-      pdf.text(`Paper Specs Processed: ${suggestionResult.summary.specs_processed || 0}`, margin, yPosition);
-      yPosition += 8;
-      pdf.text(`Orders Processed: ${suggestionResult.summary.orders_processed || 0}`, margin, yPosition);
-      yPosition += 8;
-      const totalJumboRolls = suggestionResult.spec_suggestions.reduce((sum, spec) =>
-        sum + spec.order_suggestions.reduce((orderSum, order) => orderSum + order.summary.total_jumbo_rolls, 0), 0);
-      pdf.text(`Total Jumbo Rolls: ${totalJumboRolls}`, margin, yPosition);
-      yPosition += 8;
-      const total118Sets = suggestionResult.spec_suggestions.reduce((sum, spec) =>
-        sum + spec.order_suggestions.reduce((orderSum, order) => orderSum + order.summary.total_118_sets, 0), 0);
-      pdf.text(`Total 118" Sets: ${total118Sets}`, margin, yPosition);
-      yPosition += 8;
-      const totalCuts = suggestionResult.spec_suggestions.reduce((sum, spec) =>
-        sum + spec.order_suggestions.reduce((orderSum, order) => orderSum + order.summary.total_cuts, 0), 0);
-      pdf.text(`Total Cuts: ${totalCuts}`, margin, yPosition);
-    } else if (suggestionResult.order_suggestions) {
-      pdf.text(`Orders Processed: ${suggestionResult.summary.orders_processed || 0}`, margin, yPosition);
-      yPosition += 8;
-      const totalJumboRolls = suggestionResult.order_suggestions.reduce((sum, order) => sum + order.summary.total_jumbo_rolls, 0);
-      pdf.text(`Total Jumbo Rolls: ${totalJumboRolls}`, margin, yPosition);
-      yPosition += 8;
-      const total118Sets = suggestionResult.order_suggestions.reduce((sum, order) => sum + order.summary.total_118_sets, 0);
-      pdf.text(`Total 118" Sets: ${total118Sets}`, margin, yPosition);
-      yPosition += 8;
-      const totalCuts = suggestionResult.order_suggestions.reduce((sum, order) => sum + order.summary.total_cuts, 0);
-      pdf.text(`Total Cuts: ${totalCuts}`, margin, yPosition);
-    } else {
-      // Legacy format
-      pdf.text(`Spec Groups Processed: ${suggestionResult.summary.spec_groups_processed || 0}`, margin, yPosition);
-      yPosition += 8;
-      pdf.text(`Jumbo Rolls Suggested: ${suggestionResult.summary.jumbo_rolls_suggested || 0}`, margin, yPosition);
-      yPosition += 8;
-      pdf.text(`Total Rolls: ${suggestionResult.summary.total_rolls_suggested || 0}`, margin, yPosition);
-    }
+  // --- HEADER SECTION ---
+  pdf.setFontSize(20);
+  pdf.text('Roll Suggestions Report', margin, yPosition);
+  
+  yPosition += 10;
+  pdf.setFontSize(12);
+  pdf.text(`Target Width: ${suggestionResult.target_width}" (119" - ${suggestionResult.wastage}" wastage)`, margin, yPosition);
+  
+  yPosition += 10;
+  pdf.text(`Generated on: ${new Date().toLocaleDateString()}`, margin, yPosition);
+  
+  // --- SUMMARY STATISTICS SECTION ---
+  yPosition += 20;
+  pdf.setFontSize(16);
+  pdf.text('Summary Statistics', margin, yPosition);
+  
+  yPosition += 15;
+  pdf.setFontSize(12);
+  pdf.text(`Target Width: ${suggestionResult.target_width}"`, margin, yPosition);
+  yPosition += 8;
+  
+  // Only render spec-based statistics
+  pdf.text(`Paper Specs Processed: ${suggestionResult.summary.specs_processed || 0}`, margin, yPosition);
+  yPosition += 8;
+  pdf.text(`Total Pending Input: ${suggestionResult.summary.total_pending_input || 0}`, margin, yPosition);
+  yPosition += 8;
+  pdf.text(`Total Cuts: ${suggestionResult.summary.total_cuts || 0}`, margin, yPosition);
+  yPosition += 8;
+  
+  // --- SUGGESTIONS SECTION ---
+  pdf.addPage();
+  yPosition = 12;
+  pdf.setFontSize(16);
+  pdf.text('Roll Suggestions', margin, yPosition);
+  yPosition += 8;
 
-    pdf.addPage();
-    
-    yPosition = 12;
-    pdf.setFontSize(16);
-    pdf.text('Roll Suggestions', margin, yPosition);
-    yPosition += 8;
+  // Only process spec-based suggestions
+  if (suggestionResult.spec_suggestions && suggestionResult.spec_suggestions.length > 0) {
+    suggestionResult.spec_suggestions.forEach((specSuggestion) => {
+      if (yPosition > 240) {
+        pdf.addPage();
+        yPosition = 20;
+      }
 
-    // Handle new spec-based format
-    if (suggestionResult.spec_suggestions) {
-      suggestionResult.spec_suggestions.forEach((specSuggestion, specIndex) => {
-        if (yPosition > 240) {
+      // Paper spec header
+      yPosition += 10;
+      pdf.setFontSize(14);
+      pdf.text(`Paper Spec: ${specSuggestion.paper_spec.shade} ${specSuggestion.paper_spec.gsm}GSM (BF: ${specSuggestion.paper_spec.bf})`, margin, yPosition);
+      yPosition += 8;
+
+      // Process jumbo rolls directly (simplified structure)
+      specSuggestion.jumbo_rolls?.forEach((jumboRoll) => {
+        if (yPosition > 235) {
           pdf.addPage();
           yPosition = 20;
         }
 
-        yPosition += 10;
-        pdf.setFontSize(14);
-        pdf.text(`Paper Spec: ${specSuggestion.paper_spec.shade} ${specSuggestion.paper_spec.gsm}GSM (BF: ${specSuggestion.paper_spec.bf})`, margin, yPosition);
-        yPosition += 8;
+        // Jumbo roll header
+        yPosition += 6;
+        pdf.setFontSize(10);
+        pdf.text(`Jumbo Roll #${jumboRoll.jumbo_number}:`, margin + 5, yPosition);
+        yPosition += 6;
 
-        // Process orders within this spec
-        specSuggestion.order_suggestions.forEach((orderSuggestion, orderIndex) => {
-          if (yPosition > 230) {
-            pdf.addPage();
-            yPosition = 20;
-          }
-
-          yPosition += 8;
-          pdf.setFontSize(12);
-          pdf.text(`  Order: ${orderSuggestion.order_info.order_frontend_id} - ${orderSuggestion.order_info.client_name}`, margin + 10, yPosition);
-
-          // Process jumbo rolls for this order
-          orderSuggestion.jumbo_rolls.forEach((jumboRoll, jumboIndex) => {
-            if (yPosition > 235) {
-              pdf.addPage();
-              yPosition = 20;
-            }
-
-            yPosition += 6;
-            pdf.setFontSize(10);
-            pdf.text(`    Jumbo Roll #${jumboRoll.jumbo_number}: ${jumboRoll.sets.length} sets`, margin + 20, yPosition);
-
-            jumboRoll.sets.forEach((rollSet, setIndex) => {
-              if (yPosition > 240) {
-                pdf.addPage();
-                yPosition = 20;
-              }
-
-              yPosition += 5;
-              pdf.text(`      Set #${rollSet.set_number}:`, margin + 25, yPosition);
-              yPosition += 5;
-
-              // Show individual cuts with order information
-              rollSet.cuts.forEach((cut, cutIndex) => {
-                if (yPosition > 260) {
-                  pdf.addPage();
-                  yPosition = 20;
-                }
-
-                let quantity = 1;
-                if (cut.used_widths && Object.keys(cut.used_widths).length > 0) {
-                  quantity = Object.values(cut.used_widths).reduce((sum, qty) => sum + qty, 0);
-                }
-
-                const cutText = `        • ${cut.width_inches}"×${quantity}`;
-                const orderInfo = cut.order_frontend_id && cut.client_name ?
-                  ` - ${cut.order_frontend_id} (${cut.client_name})` : '';
-
-                pdf.text(`${cutText}${orderInfo}`, margin + 30, yPosition);
-                yPosition += 5;
-              });
-
-              yPosition += 3;
-            });
-          });
-        });
-      });
-    } else if (suggestionResult.order_suggestions) {
-      suggestionResult.order_suggestions.forEach((orderSuggestion, orderIndex) => {
-        if (yPosition > 240) {
-          pdf.addPage();
-          yPosition = 20;
-        }
-        
-        yPosition += 10;
-        pdf.setFontSize(14);
-        pdf.text(`Order: ${orderSuggestion.order_info.order_frontend_id} - ${orderSuggestion.order_info.client_name}`, margin, yPosition);
-        
-        yPosition += 7;
-        pdf.setFontSize(11);
-        pdf.text(`Paper: ${orderSuggestion.paper_spec.gsm}GSM, ${orderSuggestion.paper_spec.bf}BF, ${orderSuggestion.paper_spec.shade}`, margin, yPosition);
-        
-        // Show jumbo rolls for this order
-        orderSuggestion.jumbo_rolls.forEach((jumboRoll, jumboIndex) => {
+        // Process sets within jumbo roll
+        jumboRoll.sets?.forEach((rollSet:any) => {
           if (yPosition > 240) {
             pdf.addPage();
             yPosition = 20;
           }
-          
+
+          // Set header
+          pdf.text(`Set #${rollSet.set_number} (${rollSet.summary.efficiency}% efficient):`, margin + 10, yPosition);
           yPosition += 8;
-          pdf.setFontSize(12);
-          pdf.text(`  Jumbo Roll #${jumboRoll.jumbo_number} (${jumboRoll.summary.efficiency}% efficient)`, margin + 10, yPosition);
+
+          // IMPROVED: Visual representation of cutting pattern with actual widths and strong borders
+          const rectStartX = margin + 15;
+          const rectWidth = pageWidth - 50;
+          const rectHeight = 16;
           
-          // Show 118" sets in this jumbo
-          jumboRoll.sets.forEach((rollSet, setIndex) => {
-            if (yPosition > 250) {
+          // Draw the container box with thicker border
+          pdf.setDrawColor(50, 50, 50); // Darker border color
+          pdf.setLineWidth(0.5); // Thicker border
+          pdf.rect(rectStartX, yPosition, rectWidth, rectHeight);
+          
+          // Group cuts by width and count for cleaner display
+          const groupedCuts = new Map();
+          
+          rollSet.cuts?.forEach((cut:any) => {
+            const width = cut.width_inches;
+            let quantity = 1;
+            
+            // Get quantity from used_widths if available
+            if (cut.used_widths && Object.keys(cut.used_widths).length > 0) {
+              for (const widthStr in cut.used_widths) {
+                if (Math.abs(parseFloat(widthStr) - width) < 0.1) {
+                  quantity = cut.used_widths[widthStr];
+                  break;
+                }
+              }
+            }
+            
+            const key = `${width}-${cut.uses_existing ? 'existing' : 'manual'}`;
+            if (groupedCuts.has(key)) {
+              groupedCuts.set(key, {
+                ...groupedCuts.get(key),
+                quantity: groupedCuts.get(key).quantity + quantity
+              });
+            } else {
+              groupedCuts.set(key, {
+                width,
+                quantity,
+                uses_existing: cut.uses_existing
+              });
+            }
+          });
+          
+          // Calculate total width for scaling
+          const targetWidth = rollSet.target_width;
+          let currentX = rectStartX;
+          
+          // Draw segments for each cut group with clear borders
+          Array.from(groupedCuts.values()).forEach((cutGroup) => {
+            for (let i = 0; i < cutGroup.quantity; i++) {
+              // Calculate width of this segment
+              const segmentWidthInInches = cutGroup.width;
+              const segmentWidth = (segmentWidthInInches / targetWidth) * rectWidth;
+              
+              // Draw the segment with fill color
+              pdf.setFillColor(cutGroup.uses_existing ? 100 : 150, 170, 100);
+              pdf.rect(currentX, yPosition, segmentWidth, rectHeight, 'F');
+              
+              // Draw border around the segment
+              pdf.setDrawColor(40, 40, 40); // Dark border for segments
+              pdf.setLineWidth(0.3);
+              pdf.rect(currentX, yPosition, segmentWidth, rectHeight);
+              
+              // Add text in the middle of the segment
+              pdf.setFontSize(8);
+              pdf.setTextColor(0);
+              const textX = currentX + (segmentWidth / 2);
+              const textY = yPosition + (rectHeight / 2);
+              pdf.text(`${segmentWidthInInches}"`, textX, textY, { align: 'center', baseline: 'middle' });
+              
+              // Move to next position
+              currentX += segmentWidth;
+            }
+          });
+          
+          // Draw waste section if any
+          const wasteInInches = rollSet.summary.total_waste;
+          if (wasteInInches > 0) {
+            const wasteWidth = (wasteInInches / targetWidth) * rectWidth;
+            pdf.setFillColor(240, 130, 130);
+            pdf.rect(currentX, yPosition, wasteWidth, rectHeight, 'F');
+            
+            // Draw border around waste section
+            pdf.setDrawColor(40, 40, 40);
+            pdf.setLineWidth(0.3);
+            pdf.rect(currentX, yPosition, wasteWidth, rectHeight);
+            
+            // Add waste text
+            pdf.setFontSize(8);
+            pdf.setTextColor(0);
+            const textX = currentX + (wasteWidth / 2);
+            const textY = yPosition + (rectHeight / 2);
+            pdf.text(`${wasteInInches.toFixed(1)}"`, textX, textY, { align: 'center', baseline: 'middle' });
+          }
+          
+          yPosition += rectHeight + 5;
+
+          // Show individual cuts with order information below the visual representation
+          pdf.setFontSize(9);
+          pdf.setTextColor(0);
+          pdf.text("Cut Details:", margin + 15, yPosition);
+          yPosition += 5;
+          
+          rollSet.cuts?.forEach((cut:any) => {
+            if (yPosition > 260) {
               pdf.addPage();
               yPosition = 20;
             }
-            
-            
-            // Add visual cutting pattern representation
-            yPosition += 6;
-            pdf.setFontSize(8);
-            pdf.setTextColor(80, 80, 80);
-            pdf.text(`    Cutting Pattern (${rollSet.target_width}" Roll):`, margin + 20, yPosition);
-            yPosition += 6;
-            
-            // Draw visual cutting representation
-            const rectStartX = margin + 15;
-            const rectWidth = pageWidth - 50;
-            const rectHeight = 12;
-            let currentX = rectStartX;
-            
-            // Draw individual cut sections
-            rollSet.cuts.forEach((cut, cutIndex) => {
-              const cutWidth = cut.width_inches;
-              let quantity = 1;
-              
-              // Get quantity from used_widths
-              if (cut.used_widths && Object.keys(cut.used_widths).length > 0) {
-                for (const [widthKey, qty] of Object.entries(cut.used_widths)) {
-                  if (Math.abs(parseFloat(widthKey) - cutWidth) < 0.1) {
-                    quantity = qty;
-                    break;
-                  }
-                }
-              }
-              
-              // Draw each quantity as separate section
-              for (let i = 0; i < quantity; i++) {
-                const widthRatio = cutWidth / rollSet.target_width;
-                const sectionWidth = rectWidth * widthRatio;
-                
-                // Set color based on cut type
-                if (cut.uses_existing) {
-                  pdf.setFillColor(34, 197, 94); // Green for pending
-                } else {
-                  pdf.setFillColor(59, 130, 246); // Blue for manual
-                }
-                
-                // Draw rectangle for this cut
-                pdf.rect(currentX, yPosition, sectionWidth, rectHeight, 'F');
-                
-                // Add border
-                pdf.setDrawColor(255, 255, 255);
-                pdf.setLineWidth(1);
-                pdf.rect(currentX, yPosition, sectionWidth, rectHeight, 'S');
-                
-                // Add width text inside the rectangle if wide enough
-                if (sectionWidth > 15) {
-                  pdf.setFontSize(8);
-                  pdf.setTextColor(255, 255, 255);
-                  const textWidth = pdf.getStringUnitWidth(`${cutWidth}"`) * pdf.getFontSize() / pdf.internal.scaleFactor;
-                  const textX = currentX + (sectionWidth - textWidth) / 2;
-                  const textY = yPosition + rectHeight / 2 + 2;
-                  pdf.text(`${cutWidth}"`, textX, textY);
-                  
-                  // Add type indicator for first section of each cut
-                  if (i === 0) {
-                    pdf.setFontSize(6);
-                    const typeText = cut.uses_existing ? 'P' : 'M';
-                    const typeY = yPosition + rectHeight / 2 - 2;
-                    pdf.text(typeText, textX, typeY);
-                  }
-                }
-                
-                currentX += sectionWidth;
-              }
-            });
-            
-            // Draw waste section if any
-            if (rollSet.summary.total_waste > 0) {
-              const wasteRatio = rollSet.summary.total_waste / rollSet.target_width;
-              const wasteWidth = rectWidth * wasteRatio;
-              
-              pdf.setFillColor(239, 68, 68); // Red for waste
-              pdf.rect(currentX, yPosition, wasteWidth, rectHeight, 'F');
-              
-              // Add border
-              pdf.setDrawColor(255, 255, 255);
-              pdf.rect(currentX, yPosition, wasteWidth, rectHeight, 'S');
-              
-              // Add waste text if wide enough
-              if (wasteWidth > 20) {
-                pdf.setFontSize(7);
-                pdf.setTextColor(255, 255, 255);
-                const wasteText = `Waste: ${rollSet.summary.total_waste.toFixed(1)}"`;
-                const wasteTextWidth = pdf.getStringUnitWidth(wasteText) * pdf.getFontSize() / pdf.internal.scaleFactor;
-                const wasteTextX = currentX + (wasteWidth - wasteTextWidth) / 2;
-                const wasteTextY = yPosition + rectHeight / 2 + 2;
-                pdf.text(wasteText, wasteTextX, wasteTextY);
-              }
-            }
-            
-            yPosition += rectHeight + 5;
-            pdf.setTextColor(0, 0, 0); // Reset text color
-          });
-        });
-        
-        yPosition += 0;
-      });
-    } 
-    // Fallback for legacy format
-    else if (suggestionResult.jumbo_suggestions) {
-      suggestionResult.jumbo_suggestions.forEach((jumbo, jumboIndex) => {
-        if (yPosition > 240) {
-          pdf.addPage();
-          yPosition = 20;
-        }
-        
-        yPosition += 10;
-        pdf.setFontSize(14);
-        pdf.text(`Jumbo ${jumbo.jumbo_number}: ${jumbo.paper_specs.shade} ${jumbo.paper_specs.gsm}GSM (BF: ${jumbo.paper_specs.bf})`, margin, yPosition);
-        
-        yPosition += 7;
-        pdf.setFontSize(11);
-        pdf.text(`${jumbo.summary.using_existing} using existing + ${jumbo.summary.new_rolls_needed} new rolls | Avg waste: ${jumbo.summary.avg_waste}"`, margin, yPosition);
-        
-        jumbo.rolls.forEach((roll, rollIndex) => {
-          if (yPosition > 250) {
-            pdf.addPage();
-            yPosition = 20;
-          }
-          
-          yPosition += 8;
-          pdf.setFontSize(10);
-          const rollColor = roll.uses_existing ? '[EXISTING]' : '[NEW]';
-          pdf.text(`  Roll ${roll.roll_number}: ${rollColor} ${roll.description}`, margin + 10, yPosition);
-          
-          if (roll.uses_existing && roll.widths && roll.widths.length > 3) {
-            yPosition += 6;
-            pdf.setFontSize(8);
-            pdf.text(`    (${roll.widths.length} pieces total)`, margin + 15, yPosition);
-          }
-        });
-        
-        yPosition += 8;
-      });
-    }
 
-    const pdfBlob = pdf.output('blob');
-    const url = URL.createObjectURL(pdfBlob);
-    
-    const printWindow = window.open(url, '_blank');
-    if (printWindow) {
-      printWindow.onload = () => {
-        printWindow.print();
-      };
-    }
-    
-    URL.revokeObjectURL(url);
-    toast.success('PDF opened for printing');
-  };
+            let quantity:any = 1;
+            if (cut.used_widths && Object.keys(cut.used_widths).length > 0) {
+              quantity = Object.values(cut.used_widths).reduce((sum :any, qty:any) => sum + qty , 0);
+            }
+
+            const cutText = `• ${cut.width_inches}"×${quantity}`;
+            let orderInfo = '';
+            
+            // Use cut.order_frontend_id and cut.client_name if available
+            if (cut.order_frontend_id && cut.client_name) {
+              orderInfo = ` - ${cut.order_frontend_id} (${cut.client_name})`;
+            } 
+            // Otherwise, try to extract from description as fallback
+            else if (cut.description && cut.description.includes('from')) {
+              orderInfo = ` - ${cut.description}`;
+            }
+
+            pdf.text(`${cutText}${orderInfo}`, margin + 15, yPosition);
+            yPosition += 5;
+          });
+
+          // Add waste information
+          pdf.setFontSize(8);
+          pdf.text(`Total width: ${rollSet.summary.total_actual_width.toFixed(1)}" | Waste: ${rollSet.summary.total_waste.toFixed(1)}"`, margin + 15, yPosition);
+          yPosition += 8;
+        });
+
+        // Jumbo roll summary
+        pdf.setFontSize(9);
+        pdf.text(`Jumbo efficiency: ${jumboRoll.summary.efficiency}% | Total waste: ${jumboRoll.summary.total_waste.toFixed(1)}"`, margin + 5, yPosition);
+        yPosition += 10;
+      });
+
+      // Paper spec summary
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(`Spec summary: ${specSuggestion.summary.total_jumbo_rolls} jumbo rolls, ${specSuggestion.summary.total_cuts} total cuts`, margin, yPosition);
+      pdf.setFont('helvetica', 'normal');
+      yPosition += 15;
+    });
+  } else {
+    // No suggestions available
+    yPosition += 10;
+    pdf.setFontSize(12);
+    pdf.text("No roll suggestions available with the current settings.", margin, yPosition);
+  }
+
+  const pdfBlob = pdf.output('blob');
+  const url = URL.createObjectURL(pdfBlob);
+  
+  const printWindow = window.open(url, '_blank');
+  if (printWindow) {
+    printWindow.onload = () => {
+      printWindow.print();
+    };
+  }
+  
+  URL.revokeObjectURL(url);
+  toast.success('PDF opened for printing');
+};
 
   // Selection and production functions
   const handleSuggestionToggle = (suggestionId: string, checked: boolean) => {
@@ -1240,7 +1106,7 @@ export default function PendingOrderItemsPage() {
 
       // Extract all pending order IDs from selected suggestions
       const allSelectedPendingIds = selectedSuggestionData.flatMap(
-        suggestion => suggestion.pending_order_ids
+        suggestion =>(suggestion as any).pending_order_ids
       );
 
       // Get original pending order items for selected suggestions
@@ -1350,9 +1216,9 @@ export default function PendingOrderItemsPage() {
                           paper_id: "", // Will be resolved by backend from paper specs
                           width_inches: cut.width_inches,
                           qr_code: `PENDING_CUT_${Date.now()}_${Math.random().toString(36).substr(2, 4)}_${globalIndex}`,
-                          gsm: orderSuggestion.paper_spec.gsm,
-                          bf: orderSuggestion.paper_spec.bf,
-                          shade: orderSuggestion.paper_spec.shade,
+                          gsm: suggestion.paper_spec.gsm,
+                          bf: suggestion.paper_spec.bf,
+                          shade: suggestion.paper_spec.shade,
                           individual_roll_number: rollSet.set_number,
                           trim_left: null,
                           source_type: 'pending_order',
@@ -1405,9 +1271,9 @@ export default function PendingOrderItemsPage() {
               });
             });
           });
-        } else if (orderSuggestion.rolls) {
+        } else if (suggestion.rolls) {
           // LEGACY JUMBO-BASED FORMAT
-          orderSuggestion.rolls.forEach((roll:any) => {
+          suggestion.rolls.forEach((roll:any) => {
             // Get pending items for this roll's widths
             if (roll.uses_existing && roll.widths && roll.widths.length > 0) {
               // Create individual cut_rolls for each width piece in this 118" roll
@@ -1415,9 +1281,9 @@ export default function PendingOrderItemsPage() {
                 // Find matching pending item
                 const matchingPendingItem = originalPendingOrders.find(item => 
                   item.width_inches === width && 
-                  item.gsm === orderSuggestion.paper_specs.gsm &&
-                  item.bf === orderSuggestion.paper_specs.bf &&
-                  item.shade === orderSuggestion.paper_specs.shade
+                  item.gsm === suggestion.paper_specs.gsm &&
+                  item.bf === suggestion.paper_specs.bf &&
+                  item.shade === suggestion.paper_specs.shade
                 );
                 
                 if (matchingPendingItem) {
@@ -1425,9 +1291,9 @@ export default function PendingOrderItemsPage() {
                     paper_id: "", // Will be resolved by backend from paper specs
                     width_inches: width,
                     qr_code: `PENDING_CUT_${Date.now()}_${Math.random().toString(36).substr(2, 4)}_${globalIndex}`,
-                    gsm: orderSuggestion.paper_specs.gsm,
-                    bf: orderSuggestion.paper_specs.bf,
-                    shade: orderSuggestion.paper_specs.shade,
+                    gsm: suggestion.paper_specs.gsm,
+                    bf: suggestion.paper_specs.bf,
+                    shade: suggestion.paper_specs.shade,
                     individual_roll_number: roll.roll_number,
                     trim_left: null,
                     source_type: 'pending_order',
@@ -1466,6 +1332,7 @@ export default function PendingOrderItemsPage() {
         created_by_id: userId,
         jumbo_roll_width: 118
       };
+      console.log('🔧 FINAL REQUEST DATA:', requestData);
 
       const response = await fetch(`${MASTER_ENDPOINTS.PENDING_ORDERS.replace('pending-order-items', 'pending-orders')}/start-production`, 
         createRequestOptions('POST', requestData)
@@ -1922,7 +1789,7 @@ export default function PendingOrderItemsPage() {
                   </div>
                   <div className="text-center p-4 bg-purple-50 rounded-lg">
                     <div className="text-2xl font-bold text-purple-600">
-                      {suggestionResult.spec_suggestions ? suggestionResult.summary.orders_processed : suggestionResult.summary.total_rolls_suggested}
+                      {suggestionResult.spec_suggestions ? suggestionResult.spec_suggestions[0]?.summary?.total_orders as number : suggestionResult.summary.total_rolls_suggested}
                     </div>
                     <div className="text-sm text-purple-800">
                       {suggestionResult.spec_suggestions ? 'Orders' : 'Total Rolls'}
@@ -1930,7 +1797,7 @@ export default function PendingOrderItemsPage() {
                   </div>
                   <div className="text-center p-4 bg-orange-50 rounded-lg">
                     <div className="text-2xl font-bold text-orange-600">
-                      {suggestionResult.spec_suggestions ? suggestionResult.summary.total_rolls_suggested :
+                      {suggestionResult.spec_suggestions ? suggestionResult.summary?.total_cuts :
                        suggestionResult.order_suggestions ? suggestionResult.summary.total_118_sets :
                        suggestionResult.summary.spec_groups_processed}
                     </div>
@@ -2006,7 +1873,7 @@ export default function PendingOrderItemsPage() {
                         <CardContent>
                           <div className="space-y-6">
                             {/* Display jumbo rolls directly (no order grouping) */}
-                            {specSuggestion.jumbo_rolls?.map((jumboRoll, jumboIndex) => (
+                            {specSuggestion.jumbo_rolls?.map((jumboRoll:any, jumboIndex:any) => (
                               <div key={jumboRoll.jumbo_id} className="p-4 rounded-lg border-2 bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
                                 <div className="flex items-center justify-between mb-3">
                                   <div className="font-medium text-purple-800">
@@ -2018,7 +1885,7 @@ export default function PendingOrderItemsPage() {
                                 </div>
                                 {/* 118" Roll Sets in this Jumbo */}
                                 <div className="space-y-3">
-                                  {jumboRoll.sets?.map((rollSet, setIndex) => (
+                                  {jumboRoll.sets?.map((rollSet:any, setIndex:any) => (
                                     <div key={rollSet.set_id} className="p-3 rounded-lg border bg-white border-blue-200">
                                       <div className="flex items-center justify-between mb-2">
                                         <div className="font-medium text-blue-800">
@@ -2043,7 +1910,7 @@ export default function PendingOrderItemsPage() {
                                             return (
                                               <>
                                                 {/* Individual cut sections */}
-                                                {rollSet.cuts?.map((cut, cutIndex) => {
+                                                {rollSet.cuts?.map((cut:any, cutIndex : any) => {
                                                   const cutWidth = cut.width_inches;
                                                   const sections = [];
 
@@ -2052,7 +1919,7 @@ export default function PendingOrderItemsPage() {
                                                   if (cut.used_widths && Object.keys(cut.used_widths).length > 0) {
                                                     for (const [widthKey, qty] of Object.entries(cut.used_widths)) {
                                                       if (Math.abs(parseFloat(widthKey) - cutWidth) < 0.1) {
-                                                        quantity = qty;
+                                                        quantity = qty as number;
                                                         break;
                                                       }
                                                     }
@@ -2109,10 +1976,10 @@ export default function PendingOrderItemsPage() {
 
                                       {/* Cut Details with Order Information */}
                                       <div className="space-y-2">
-                                        {rollSet.cuts?.map((cut, cutIndex) => {
+                                        {rollSet.cuts?.map((cut:any, cutIndex:any) => {
                                           let quantity = 1;
                                           if (cut.used_widths && Object.keys(cut.used_widths).length > 0) {
-                                            quantity = Object.values(cut.used_widths).reduce((sum, qty) => sum + qty, 0);
+                                            quantity = Object.values(cut.used_widths as number).reduce((sum:any, qty:any) => sum + qty, 0);
                                           }
 
                                           return (
@@ -2125,6 +1992,20 @@ export default function PendingOrderItemsPage() {
                                                 </Badge>
                                                 <div className="flex flex-col">
                                                   <span className="text-sm font-medium">{cut.description}</span>
+                                                  {/* DEBUG LOG 3: Check each cut's order info */}
+                                                  {(() => {
+                                                    if (!cut.order_frontend_id || !cut.client_name) {
+                                                      console.log('🔍 DEBUG: Missing order info for cut:', {
+                                                        cut_id: cut.cut_id,
+                                                        width: cut.width_inches,
+                                                        has_order_id: !!cut.order_frontend_id,
+                                                        has_client: !!cut.client_name,
+                                                        order_id: cut.order_frontend_id,
+                                                        client: cut.client_name
+                                                      });
+                                                    }
+                                                    return null;
+                                                  })()}
                                                   {cut.order_frontend_id && cut.client_name && (
                                                     <span className="text-xs text-muted-foreground">
                                                       {cut.order_frontend_id} - {cut.client_name}

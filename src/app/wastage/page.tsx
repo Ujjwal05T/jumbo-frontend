@@ -32,6 +32,7 @@ import {
   Package,
   Ruler,
   Calendar,
+  Plus,
 } from "lucide-react";
 import {
   WastageInventory,
@@ -39,6 +40,7 @@ import {
   fetchWastageInventory,
   fetchWastageStats,
 } from "@/lib/wastage";
+import CreateWastageModal from "@/components/CreateWastageModal";
 
 export default function WastagePage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -99,11 +101,12 @@ export default function WastagePage() {
       <div className="flex-1 space-y-4 p-4 pt-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-3xl font-bold tracking-tight">Wastage Inventory</h2>
+            <h2 className="text-3xl font-bold tracking-tight">Stock Inventory</h2>
             <p className="text-muted-foreground">
-              Manage wastage rolls from production cuts
+              Manage stock rolls from production cuts and manual stock entries
             </p>
           </div>
+          <CreateWastageModal onWastageCreated={loadWastageData} />
         </div>
 
         {/* Stats Cards */}
@@ -151,9 +154,9 @@ export default function WastagePage() {
         {/* Search and Filters */}
         <Card>
           <CardHeader>
-            <CardTitle>Wastage Rolls</CardTitle>
+            <CardTitle>Stock Rolls</CardTitle>
             <CardDescription>
-              Browse and manage wastage inventory from production cuts
+              Browse and manage stock inventory from production cuts and manual entries
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -177,7 +180,7 @@ export default function WastagePage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Wastage ID</TableHead>
+                        <TableHead>Stock ID</TableHead>
                         <TableHead>Barcode</TableHead>
                         <TableHead>Width</TableHead>
                         <TableHead>Paper Specs</TableHead>
@@ -190,7 +193,7 @@ export default function WastagePage() {
                       {filteredItems.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                            No wastage items found
+                            No stock items found
                           </TableCell>
                         </TableRow>
                       ) : (
