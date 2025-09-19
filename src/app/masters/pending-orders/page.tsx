@@ -398,32 +398,32 @@ export default function PendingOrderItemsPage() {
   // Get unique values for filter dropdowns
   const uniqueClients = [...new Set(
     displayItems
-      .map(item => item.original_order?.client?.company_name)
+      ?.map(item => item.original_order?.client?.company_name)
       .filter(name => name)
   )].sort();
 
   const uniqueGSMs = [...new Set(
-    displayItems.map(item => item.gsm.toString())
+    displayItems?.map(item => item.gsm.toString())
   )].sort((a, b) => parseInt(a) - parseInt(b));
 
   const uniqueBFs = [...new Set(
-    displayItems.map(item => item.bf.toString())
+    displayItems?.map(item => item.bf.toString())
   )].sort((a, b) => parseFloat(a) - parseFloat(b));
 
   const uniqueShades = [...new Set(
-    displayItems.map(item => item.shade)
+    displayItems?.map(item => item.shade)
   )].sort();
 
   const uniqueStatuses = [...new Set(
-    displayItems.map(item => item.status)
+    displayItems?.map(item => item.status)
   )].sort();
 
   const uniqueReasons = [...new Set(
-    displayItems.map(item => item.reason)
+    displayItems?.map(item => item.reason)
   )].sort();
 
   const uniqueWidths = [...new Set(
-    displayItems.map(item => item.width_inches.toString())
+    displayItems?.map(item => item.width_inches.toString())
   )].sort((a, b) => parseFloat(a) - parseFloat(b));
 
   const clearAllFilters = () => {
@@ -472,13 +472,13 @@ export default function PendingOrderItemsPage() {
 
         // Process new spec_suggestions format
         if (processedResult.spec_suggestions) {
-          processedResult.spec_suggestions = processedResult.spec_suggestions.map((specSuggestion: any) => ({
+          processedResult.spec_suggestions = processedResult.spec_suggestions?.map((specSuggestion: any) => ({
             ...specSuggestion,
-            order_suggestions: specSuggestion.order_suggestions.map((suggestion: any) => ({
+            order_suggestions: specSuggestion.order_suggestions?.map((suggestion: any) => ({
               ...suggestion,
-              jumbo_rolls: suggestion.jumbo_rolls.map((jumboRoll: any) => ({
+              jumbo_rolls: suggestion.jumbo_rolls?.map((jumboRoll: any) => ({
                 ...jumboRoll,
-                sets: jumboRoll.sets.map((rollSet: any) => ({
+                sets: jumboRoll.sets?.map((rollSet: any) => ({
                   ...rollSet,
                   summary: {
                     ...rollSet.summary,
@@ -515,11 +515,11 @@ export default function PendingOrderItemsPage() {
             }))
           }));
         } else if (processedResult.order_suggestions) {
-          processedResult.order_suggestions = processedResult.order_suggestions.map((suggestion: any) => ({
+          processedResult.order_suggestions = processedResult.order_suggestions?.map((suggestion: any) => ({
             ...suggestion,
-            jumbo_rolls: suggestion.jumbo_rolls.map((jumboRoll: any) => ({
+            jumbo_rolls: suggestion.jumbo_rolls?.map((jumboRoll: any) => ({
               ...jumboRoll,
-              sets: jumboRoll.sets.map((rollSet: any) => ({
+              sets: jumboRoll.sets?.map((rollSet: any) => ({
                 ...rollSet,
                 summary: {
                   ...rollSet.summary,
@@ -731,15 +731,30 @@ export default function PendingOrderItemsPage() {
               }
 
               yPosition += 5;
-              const cutDescriptions = rollSet.cuts.map((cut) => {
-                if (cut.used_widths && Object.keys(cut.used_widths).length > 0) {
-                  const quantities = Object.entries(cut.used_widths).map(([width, qty]) => `${width}"×${qty}`).join(', ');
-                  return quantities;
-                }
-                return `${cut.width_inches}"×1`;
-              }).join(' + ');
+              pdf.text(`      Set #${rollSet.set_number}:`, margin + 25, yPosition);
+              yPosition += 5;
 
-              pdf.text(`      Set #${rollSet.set_number}: ${cutDescriptions} = ${rollSet.summary.total_actual_width}"`, margin + 25, yPosition);
+              // Show individual cuts with order information
+              rollSet.cuts.forEach((cut, cutIndex) => {
+                if (yPosition > 260) {
+                  pdf.addPage();
+                  yPosition = 20;
+                }
+
+                let quantity = 1;
+                if (cut.used_widths && Object.keys(cut.used_widths).length > 0) {
+                  quantity = Object.values(cut.used_widths).reduce((sum, qty) => sum + qty, 0);
+                }
+
+                const cutText = `        • ${cut.width_inches}"×${quantity}`;
+                const orderInfo = cut.order_frontend_id && cut.client_name ?
+                  ` - ${cut.order_frontend_id} (${cut.client_name})` : '';
+
+                pdf.text(`${cutText}${orderInfo}`, margin + 30, yPosition);
+                yPosition += 5;
+              });
+
+              yPosition += 3;
             });
           });
         });
@@ -948,14 +963,13 @@ export default function PendingOrderItemsPage() {
   const handleSelectAllSuggestions = (checked: boolean) => {
     if (checked) {
       if (suggestionResult?.spec_suggestions) {
-        const allSuggestionIds = suggestionResult.spec_suggestions.flatMap(
-          spec => spec.order_suggestions.map(order => order.suggestion_id)
-        );
-        setSelectedSuggestions(new Set(allSuggestionIds));
+        // Use spec_id for the new simplified structure
+        const allSpecIds = suggestionResult.spec_suggestions?.map(spec => spec.spec_id);
+        setSelectedSuggestions(new Set(allSpecIds));
       } else if (suggestionResult?.order_suggestions) {
-        setSelectedSuggestions(new Set(suggestionResult.order_suggestions.map(s => s.suggestion_id)));
+        setSelectedSuggestions(new Set(suggestionResult.order_suggestions?.map(s => s.suggestion_id)));
       } else if (suggestionResult?.jumbo_suggestions) {
-        setSelectedSuggestions(new Set(suggestionResult.jumbo_suggestions.map(s => s.suggestion_id)));
+        setSelectedSuggestions(new Set(suggestionResult.jumbo_suggestions?.map(s => s.suggestion_id)));
       }
     } else {
       setSelectedSuggestions(new Set());
@@ -1046,13 +1060,13 @@ export default function PendingOrderItemsPage() {
     if (suggestionResult?.spec_suggestions) {
       const updatedSpecSuggestions = suggestionResult.spec_suggestions.map(specSuggestion => ({
         ...specSuggestion,
-        order_suggestions: specSuggestion.order_suggestions.map(suggestion => {
+        order_suggestions: specSuggestion.order_suggestions?.map(suggestion => {
           if (suggestion.suggestion_id === manualRollData.suggestionId) {
             const updatedSuggestion = { ...suggestion };
-            updatedSuggestion.jumbo_rolls = suggestion.jumbo_rolls.map(jumboRoll => {
+            updatedSuggestion.jumbo_rolls = suggestion.jumbo_rolls?.map(jumboRoll => {
               if (jumboRoll.jumbo_id === manualRollData.jumboId) {
                 const updatedJumboRoll = { ...jumboRoll };
-                updatedJumboRoll.sets = jumboRoll.sets.map(rollSet => {
+                updatedJumboRoll.sets = jumboRoll.sets?.map(rollSet => {
                   if (rollSet.set_id === manualRollData.setId) {
                     const updatedRollSet = { ...rollSet };
                     updatedRollSet.cuts = [...rollSet.cuts, manualCut];
@@ -1096,13 +1110,13 @@ export default function PendingOrderItemsPage() {
       // Update the suggestion result
       setSuggestionResult(prev => prev ? { ...prev, spec_suggestions: updatedSpecSuggestions } : null);
     } else if (suggestionResult?.order_suggestions) {
-      const updatedSuggestions = suggestionResult.order_suggestions.map(suggestion => {
+      const updatedSuggestions = suggestionResult.order_suggestions?.map(suggestion => {
         if (suggestion.suggestion_id === manualRollData.suggestionId) {
           const updatedSuggestion = { ...suggestion };
-          updatedSuggestion.jumbo_rolls = suggestion.jumbo_rolls.map(jumboRoll => {
+          updatedSuggestion.jumbo_rolls = suggestion.jumbo_rolls?.map(jumboRoll => {
             if (jumboRoll.jumbo_id === manualRollData.jumboId) {
               const updatedJumboRoll = { ...jumboRoll };
-              updatedJumboRoll.sets = jumboRoll.sets.map(rollSet => {
+              updatedJumboRoll.sets = jumboRoll.sets?.map(rollSet => {
                 if (rollSet.set_id === manualRollData.setId) {
                   const updatedRollSet = { ...rollSet };
                   updatedRollSet.cuts = [...rollSet.cuts, manualCut];
@@ -1206,11 +1220,9 @@ export default function PendingOrderItemsPage() {
       // Filter selected suggestions - handle spec-based, order-based and legacy formats
       let selectedSuggestionData;
       if (suggestionResult.spec_suggestions) {
-        // New spec-based format - flatten selected order suggestions from all specs
-        selectedSuggestionData = suggestionResult.spec_suggestions.flatMap(
-          spec => spec.order_suggestions.filter(
-            suggestion => selectedSuggestions.has(suggestion.suggestion_id)
-          )
+        // New spec-based format - get selected specs directly
+        selectedSuggestionData = suggestionResult.spec_suggestions.filter(
+          spec => selectedSuggestions.has(spec.spec_id)
         );
       } else if (suggestionResult.order_suggestions) {
         // Legacy order-based format
@@ -1246,18 +1258,18 @@ export default function PendingOrderItemsPage() {
       const selectedCutRolls: any[] = [];
       let globalIndex = 0;
       
-      // Process each selected order suggestion
-      selectedSuggestionData.forEach((orderSuggestion : OrderSuggestion | any, suggestionIndex: number) => {
+      // Process each selected suggestion (could be spec or order)
+      selectedSuggestionData.forEach((suggestion : any, suggestionIndex: number) => {
         console.log(`🔧 === PROCESSING SUGGESTION ${suggestionIndex + 1} ===`);
-        console.log('🔧 Suggestion ID:', orderSuggestion.suggestion_id);
-        console.log('🔧 Has jumbo_rolls:', !!orderSuggestion.jumbo_rolls);
-        console.log('🔧 Has rolls (legacy):', !!orderSuggestion.rolls);
-        
-        // Check if it's order-based or legacy jumbo-based format
-        if (orderSuggestion.jumbo_rolls) {
-          // NEW ORDER-BASED FORMAT
-          console.log(`🔧 Processing ${orderSuggestion.jumbo_rolls.length} jumbo rolls`);
-          orderSuggestion.jumbo_rolls.forEach((jumboRoll:any, jumboIndex: number) => {
+        console.log('🔧 Suggestion ID:', suggestion.spec_id || suggestion.suggestion_id);
+        console.log('🔧 Has jumbo_rolls:', !!suggestion.jumbo_rolls);
+        console.log('🔧 Has rolls (legacy):', !!suggestion.rolls);
+
+        // Check if it's spec-based, order-based or legacy jumbo-based format
+        if (suggestion.jumbo_rolls) {
+          // NEW SPEC-BASED OR ORDER-BASED FORMAT
+          console.log(`🔧 Processing ${suggestion.jumbo_rolls.length} jumbo rolls`);
+          suggestion.jumbo_rolls.forEach((jumboRoll:any, jumboIndex: number) => {
             console.log(`🔧 Jumbo ${jumboIndex + 1}: ${jumboRoll.sets?.length || 0} sets`);
             jumboRoll.sets.forEach((rollSet:any, setIndex: number) => {
               console.log(`🔧 Set ${setIndex + 1}: ${rollSet.cuts?.length || 0} cuts`);
@@ -1265,21 +1277,22 @@ export default function PendingOrderItemsPage() {
                 console.log(`🔧 Cut ${cutIndex + 1}: ${cut.width_inches}" uses_existing=${cut.uses_existing} used_widths=`, cut.used_widths);
                 if (cut.uses_existing && cut.width_inches) {
                   // Handle existing pending order cuts
-                  console.log(`🔍 SEARCHING for pending item: width=${cut.width_inches}, gsm=${orderSuggestion.paper_spec.gsm}, shade=${orderSuggestion.paper_spec.shade}, bf=${orderSuggestion.paper_spec.bf}`);
-                  console.log(`🔍 Available pending items:`, originalPendingOrders.map(item => ({
+                  const paperSpec = suggestion.paper_spec || suggestion.paper_specs;
+                  console.log(`🔍 SEARCHING for pending item: width=${cut.width_inches}, gsm=${paperSpec.gsm}, shade=${paperSpec.shade}, bf=${paperSpec.bf}`);
+                  console.log(`🔍 Available pending items:`, originalPendingOrders?.map(item => ({
                     id: item.id.substring(0, 8),
                     width: item.width_inches,
                     gsm: item.gsm,
                     shade: item.shade,
                     bf: item.bf
                   })));
-                  
+
                   // Find ALL matching pending items for this width and paper spec
                   const matchingPendingItems = originalPendingOrders.filter(item =>
                     Math.abs(item.width_inches - cut.width_inches) < 0.1 &&
-                    item.gsm === orderSuggestion.paper_spec.gsm &&
-                    item.shade === orderSuggestion.paper_spec.shade &&
-                    Math.abs(item.bf - orderSuggestion.paper_spec.bf) < 0.01 &&
+                    item.gsm === paperSpec.gsm &&
+                    item.shade === paperSpec.shade &&
+                    Math.abs(item.bf - paperSpec.bf) < 0.01 &&
                     item.quantity_pending > 0  // Only items with remaining quantity
                   );
                   
@@ -1821,7 +1834,7 @@ export default function PendingOrderItemsPage() {
                     <SelectValue placeholder="Select a client" />
                   </SelectTrigger>
                   <SelectContent>
-                    {clients.map((client) => (
+                    {clients?.map((client) => (
                       <SelectItem key={client.id} value={client.id}>
                         {client.company_name}
                       </SelectItem>
@@ -1937,11 +1950,11 @@ export default function PendingOrderItemsPage() {
                         <div className="flex items-center space-x-2">
                           <Checkbox
                             id="select-all-spec-suggestions"
-                            checked={suggestionResult.spec_suggestions.some(spec => spec.order_suggestions.length > 0) && selectedSuggestions.size === suggestionResult.spec_suggestions.flatMap(spec => spec.order_suggestions).length}
+                            checked={selectedSuggestions.size === suggestionResult.spec_suggestions.length}
                             onCheckedChange={handleSelectAllSuggestions}
                           />
                           <label htmlFor="select-all-spec-suggestions" className="text-sm font-medium">
-                            Select All ({selectedSuggestions.size}/{suggestionResult.spec_suggestions.flatMap(spec => spec.order_suggestions).length})
+                            Select All ({selectedSuggestions.size}/{suggestionResult.spec_suggestions.length})
                           </label>
                         </div>
                         <Button
@@ -1955,221 +1968,205 @@ export default function PendingOrderItemsPage() {
                     </div>
 
                     {/* Display each paper spec group */}
-                    {suggestionResult.spec_suggestions.map((specSuggestion, specIndex) => (
-                      <Card key={specSuggestion.spec_id} className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-200">
+                    {suggestionResult.spec_suggestions?.map((specSuggestion, specIndex) => (
+                      <Card key={specSuggestion.spec_id} className={`bg-gradient-to-r from-amber-50 to-orange-50 border-2 ${
+                        selectedSuggestions.has(specSuggestion.spec_id) ? 'border-green-400 ring-2 ring-green-200' : 'border-amber-200'
+                      }`}>
                         <CardHeader className="pb-4">
-                          <CardTitle className="text-xl flex items-center gap-3">
-                            <Package className="h-6 w-6 text-amber-600" />
-                            📋 {specSuggestion.paper_spec.shade} {specSuggestion.paper_spec.gsm}GSM (BF: {specSuggestion.paper_spec.bf})
-                          </CardTitle>
-                          <CardDescription className="flex items-center gap-4">
-                            <Badge className="bg-amber-100 text-amber-800">
-                              {specSuggestion.summary.total_orders} Orders
-                            </Badge>
-                            <Badge className="bg-amber-100 text-amber-800">
-                              {specSuggestion.summary.total_jumbo_rolls} Jumbo Rolls
-                            </Badge>
-                            <Badge className="bg-amber-100 text-amber-800">
-                              {specSuggestion.summary.total_118_sets} Sets
-                            </Badge>
-                            <Badge className="bg-amber-100 text-amber-800">
-                              {specSuggestion.summary.total_cuts} Cuts
-                            </Badge>
-                          </CardDescription>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <Checkbox
+                                id={`spec-suggestion-${specSuggestion.spec_id}`}
+                                checked={selectedSuggestions.has(specSuggestion.spec_id)}
+                                onCheckedChange={(checked) => handleSuggestionToggle(specSuggestion.spec_id, checked as boolean)}
+                              />
+                              <div>
+                                <CardTitle className="text-xl flex items-center gap-3">
+                                  <Package className="h-6 w-6 text-amber-600" />
+                                  📋 {specSuggestion.paper_spec.shade} {specSuggestion.paper_spec.gsm}GSM (BF: {specSuggestion.paper_spec.bf})
+                                </CardTitle>
+                                <CardDescription className="flex items-center gap-4 mt-2">
+                                  <Badge className="bg-amber-100 text-amber-800">
+                                    {specSuggestion.summary.total_orders} Orders
+                                  </Badge>
+                                  <Badge className="bg-amber-100 text-amber-800">
+                                    {specSuggestion.summary.total_jumbo_rolls} Jumbo Rolls
+                                  </Badge>
+                                  <Badge className="bg-amber-100 text-amber-800">
+                                    {specSuggestion.summary.total_118_sets} Sets
+                                  </Badge>
+                                  <Badge className="bg-amber-100 text-amber-800">
+                                    {specSuggestion.summary.total_cuts} Cuts
+                                  </Badge>
+                                </CardDescription>
+                              </div>
+                            </div>
+                          </div>
                         </CardHeader>
                         <CardContent>
                           <div className="space-y-6">
-                            {specSuggestion.order_suggestions.map((orderSuggestion) => (
-                              <Card key={orderSuggestion.suggestion_id} className={`bg-gradient-to-r from-blue-50 to-indigo-50 border-2 ${
-                                selectedSuggestions.has(orderSuggestion.suggestion_id) ? 'border-green-400 ring-2 ring-green-200' : 'border-blue-200'
-                              }`}>
-                                <CardHeader className="pb-3">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                      <Checkbox
-                                        id={`spec-order-suggestion-${orderSuggestion.suggestion_id}`}
-                                        checked={selectedSuggestions.has(orderSuggestion.suggestion_id)}
-                                        onCheckedChange={(checked) => handleSuggestionToggle(orderSuggestion.suggestion_id, checked as boolean)}
-                                      />
-                                      <div>
-                                        <CardTitle className="text-lg">
-                                          📦 Order {orderSuggestion.order_info.order_frontend_id} - {orderSuggestion.order_info.client_name}
-                                        </CardTitle>
-                                        <CardDescription>
-                                          Target: {orderSuggestion.target_width}" per roll
-                                        </CardDescription>
-                                      </div>
-                                    </div>
-                                    <div className="text-right">
-                                      <div className="text-sm text-muted-foreground">
-                                        {orderSuggestion.summary.total_jumbo_rolls} jumbo rolls | {orderSuggestion.summary.total_118_sets} sets | {orderSuggestion.summary.total_cuts} cuts
-                                      </div>
-                                      <div className="text-sm text-muted-foreground">
-                                        {orderSuggestion.summary.using_existing_cuts} using existing cuts
-                                      </div>
-                                    </div>
+                            {/* Display jumbo rolls directly (no order grouping) */}
+                            {specSuggestion.jumbo_rolls?.map((jumboRoll, jumboIndex) => (
+                              <div key={jumboRoll.jumbo_id} className="p-4 rounded-lg border-2 bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
+                                <div className="flex items-center justify-between mb-3">
+                                  <div className="font-medium text-purple-800">
+                                    Jumbo Roll #{jumboRoll.jumbo_number} ({jumboRoll.summary.efficiency}% efficient)
                                   </div>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                  {/* Jumbo Rolls for this Order (same as before) */}
-                                  <div className="grid gap-4">
-                                    {orderSuggestion.jumbo_rolls.map((jumboRoll, jumboIndex) => (
-                                      <div key={jumboRoll.jumbo_id} className="p-4 rounded-lg border-2 bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
-                                        <div className="flex items-center justify-between mb-3">
-                                          <div className="font-medium text-purple-800">
-                                            Jumbo Roll #{jumboRoll.jumbo_number} ({jumboRoll.summary.efficiency}% efficient)
-                                          </div>
-                                          <Badge className="bg-purple-100 text-purple-800">
-                                            {jumboRoll.summary.total_sets} sets | {jumboRoll.summary.total_waste.toFixed(1)}" total waste
-                                          </Badge>
+                                  <Badge className="bg-purple-100 text-purple-800">
+                                    {jumboRoll.summary.total_sets} sets | {jumboRoll.summary.total_waste.toFixed(1)}" total waste
+                                  </Badge>
+                                </div>
+                                {/* 118" Roll Sets in this Jumbo */}
+                                <div className="space-y-3">
+                                  {jumboRoll.sets?.map((rollSet, setIndex) => (
+                                    <div key={rollSet.set_id} className="p-3 rounded-lg border bg-white border-blue-200">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <div className="font-medium text-blue-800">
+                                          118" Roll Set #{rollSet.set_number} ({rollSet.summary.efficiency}% efficient)
                                         </div>
+                                        <Badge className="bg-blue-100 text-blue-800">
+                                          {rollSet.summary.total_cuts} cuts | {rollSet.summary.total_waste.toFixed(1)}" waste
+                                        </Badge>
+                                      </div>
 
-                                        {/* 118" Roll Sets in this Jumbo */}
-                                        <div className="space-y-3">
-                                          {jumboRoll.sets.map((rollSet, setIndex) => (
-                                            <div key={rollSet.set_id} className="p-3 rounded-lg border bg-white border-blue-200">
-                                              <div className="flex items-center justify-between mb-2">
-                                                <div className="font-medium text-blue-800">
-                                                  118" Roll Set #{rollSet.set_number} ({rollSet.summary.efficiency}% efficient)
-                                                </div>
-                                                <Badge className="bg-blue-100 text-blue-800">
-                                                  {rollSet.summary.total_cuts} cuts | {rollSet.summary.total_waste.toFixed(1)}" waste
-                                                </Badge>
-                                              </div>
+                                      {/* Visual cutting pattern representation */}
+                                      <div className="mb-3">
+                                        <div className="text-sm font-medium text-muted-foreground mb-2">
+                                          Cutting Pattern ({rollSet.target_width}" Roll):
+                                        </div>
+                                        <div className="relative h-12 bg-muted rounded-lg border overflow-hidden">
+                                          {(() => {
+                                            let currentPosition = 0;
+                                            const targetWidth = rollSet.target_width;
+                                            const totalWaste = rollSet.summary.total_waste;
 
-                                              {/* Visual cutting pattern representation */}
-                                              <div className="mb-3">
-                                                <div className="text-sm font-medium text-muted-foreground mb-2">
-                                                  Cutting Pattern ({rollSet.target_width}" Roll):
-                                                </div>
-                                                <div className="relative h-12 bg-muted rounded-lg border overflow-hidden">
-                                                  {(() => {
-                                                    let currentPosition = 0;
-                                                    const targetWidth = rollSet.target_width;
-                                                    const totalWaste = rollSet.summary.total_waste;
+                                            return (
+                                              <>
+                                                {/* Individual cut sections */}
+                                                {rollSet.cuts?.map((cut, cutIndex) => {
+                                                  const cutWidth = cut.width_inches;
+                                                  const sections = [];
 
-                                                    return (
-                                                      <>
-                                                        {/* Individual cut sections */}
-                                                        {rollSet.cuts.map((cut, cutIndex) => {
-                                                          const cutWidth = cut.width_inches;
-                                                          const sections = [];
-
-                                                          // Determine quantity
-                                                          let quantity = 1;
-                                                          if (cut.used_widths && Object.keys(cut.used_widths).length > 0) {
-                                                            for (const [widthKey, qty] of Object.entries(cut.used_widths)) {
-                                                              if (Math.abs(parseFloat(widthKey) - cutWidth) < 0.1) {
-                                                                quantity = qty;
-                                                                break;
-                                                              }
-                                                            }
-                                                          }
-
-                                                          // Create individual sections for each quantity
-                                                          for (let i = 0; i < quantity; i++) {
-                                                            const widthPercentage = (cutWidth / targetWidth) * 100;
-                                                            const leftPosition = (currentPosition / targetWidth) * 100;
-                                                            currentPosition += cutWidth;
-
-                                                            sections.push(
-                                                              <div
-                                                                key={`${cutIndex}-${i}`}
-                                                                className={`absolute h-full border-r-2 border-white ${
-                                                                  cut.uses_existing
-                                                                    ? "bg-gradient-to-r from-green-400 to-green-500"
-                                                                    : "bg-gradient-to-r from-blue-400 to-blue-500"
-                                                                }`}
-                                                                style={{
-                                                                  left: `${leftPosition}%`,
-                                                                  width: `${widthPercentage}%`,
-                                                                }}
-                                                              >
-                                                                <div className="flex items-center justify-center h-full text-white text-xs font-medium">
-                                                                  {cutWidth}"
-                                                                </div>
-                                                              </div>
-                                                            );
-                                                          }
-
-                                                          return sections;
-                                                        })}
-
-                                                        {/* Waste section */}
-                                                        {totalWaste > 0 && (
-                                                          <div
-                                                            className="absolute h-full bg-gradient-to-r from-red-300 to-red-400"
-                                                            style={{
-                                                              left: `${(currentPosition / targetWidth) * 100}%`,
-                                                              width: `${(totalWaste / targetWidth) * 100}%`,
-                                                            }}
-                                                          >
-                                                            <div className="flex items-center justify-center h-full text-red-800 text-xs font-medium">
-                                                              {totalWaste.toFixed(1)}" waste
-                                                            </div>
-                                                          </div>
-                                                        )}
-                                                      </>
-                                                    );
-                                                  })()}
-                                                </div>
-                                              </div>
-
-                                              {/* Cut Details */}
-                                              <div className="space-y-2">
-                                                {rollSet.cuts.map((cut, cutIndex) => {
+                                                  // Determine quantity
                                                   let quantity = 1;
                                                   if (cut.used_widths && Object.keys(cut.used_widths).length > 0) {
-                                                    quantity = Object.values(cut.used_widths).reduce((sum, qty) => sum + qty, 0);
+                                                    for (const [widthKey, qty] of Object.entries(cut.used_widths)) {
+                                                      if (Math.abs(parseFloat(widthKey) - cutWidth) < 0.1) {
+                                                        quantity = qty;
+                                                        break;
+                                                      }
+                                                    }
                                                   }
 
-                                                  return (
-                                                    <div key={cutIndex} className={`flex items-center justify-between p-2 rounded ${
-                                                      cut.uses_existing ? 'bg-green-50' : 'bg-blue-50'
-                                                    }`}>
-                                                      <div className="flex items-center gap-2">
-                                                        <Badge className={cut.uses_existing ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}>
-                                                          {cut.width_inches}" × {quantity}
-                                                        </Badge>
-                                                        <span className="text-sm">{cut.description}</span>
-                                                      </div>
-                                                      {cut.uses_existing && (
-                                                        <Badge variant="outline" className="text-xs">
-                                                          From Pending
-                                                        </Badge>
-                                                      )}
-                                                      {cut.is_manual_cut && (
-                                                        <Badge variant="outline" className="text-xs bg-orange-50 text-orange-600 border-orange-200">
-                                                          Manual: {cut.client_name}
-                                                        </Badge>
-                                                      )}
-                                                    </div>
-                                                  );
-                                                })}
-                                              </div>
+                                                  // Create individual sections for each quantity
+                                                  for (let i = 0; i < quantity; i++) {
+                                                    const widthPercentage = (cutWidth / targetWidth) * 100;
+                                                    const leftPosition = (currentPosition / targetWidth) * 100;
+                                                    currentPosition += cutWidth;
 
-                                              {/* Manual Addition Button */}
-                                              {rollSet.manual_addition_available && (
-                                                <div className="mt-3 flex justify-center">
-                                                  <Button
-                                                    onClick={() => handleAddManualCut(orderSuggestion.suggestion_id, jumboRoll.jumbo_id, rollSet.set_id)}
-                                                    size="sm"
-                                                    variant="outline"
-                                                    className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                                                    sections.push(
+                                                      <div
+                                                        key={`${cutIndex}-${i}`}
+                                                        className={`absolute h-full border-r-2 border-white ${
+                                                          cut.uses_existing
+                                                            ? "bg-gradient-to-r from-green-400 to-green-500"
+                                                            : "bg-gradient-to-r from-blue-400 to-blue-500"
+                                                        }`}
+                                                        style={{
+                                                          left: `${leftPosition}%`,
+                                                          width: `${widthPercentage}%`,
+                                                        }}
+                                                      >
+                                                        <div className="flex items-center justify-center h-full text-white text-xs font-medium">
+                                                          {cutWidth}"
+                                                        </div>
+                                                      </div>
+                                                    );
+                                                  }
+
+                                                  return sections;
+                                                })}
+
+                                                {/* Waste section */}
+                                                {totalWaste > 0 && (
+                                                  <div
+                                                    className="absolute h-full bg-gradient-to-r from-red-300 to-red-400"
+                                                    style={{
+                                                      left: `${(currentPosition / targetWidth) * 100}%`,
+                                                      width: `${(totalWaste / targetWidth) * 100}%`,
+                                                    }}
                                                   >
-                                                    <Plus className="h-4 w-4 mr-2" />
-                                                    Add Manual Cut ({rollSet.summary.total_waste.toFixed(1)}" available)
-                                                  </Button>
-                                                </div>
-                                              )}
-                                            </div>
-                                          ))}
+                                                    <div className="flex items-center justify-center h-full text-red-800 text-xs font-medium">
+                                                      {totalWaste.toFixed(1)}" waste
+                                                    </div>
+                                                  </div>
+                                                )}
+                                              </>
+                                            );
+                                          })()}
                                         </div>
                                       </div>
-                                    ))}
-                                  </div>
-                                </CardContent>
-                              </Card>
+
+                                      {/* Cut Details with Order Information */}
+                                      <div className="space-y-2">
+                                        {rollSet.cuts?.map((cut, cutIndex) => {
+                                          let quantity = 1;
+                                          if (cut.used_widths && Object.keys(cut.used_widths).length > 0) {
+                                            quantity = Object.values(cut.used_widths).reduce((sum, qty) => sum + qty, 0);
+                                          }
+
+                                          return (
+                                            <div key={cutIndex} className={`flex items-center justify-between p-2 rounded ${
+                                              cut.uses_existing ? 'bg-green-50' : 'bg-blue-50'
+                                            }`}>
+                                              <div className="flex items-center gap-2">
+                                                <Badge className={cut.uses_existing ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}>
+                                                  {cut.width_inches}" × {quantity}
+                                                </Badge>
+                                                <div className="flex flex-col">
+                                                  <span className="text-sm font-medium">{cut.description}</span>
+                                                  {cut.order_frontend_id && cut.client_name && (
+                                                    <span className="text-xs text-muted-foreground">
+                                                      {cut.order_frontend_id} - {cut.client_name}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              </div>
+                                              <div className="flex items-center gap-2">
+                                                {cut.uses_existing && (
+                                                  <Badge variant="outline" className="text-xs">
+                                                    From Pending
+                                                  </Badge>
+                                                )}
+                                                {cut.is_manual_cut && (
+                                                  <Badge variant="outline" className="text-xs bg-orange-50 text-orange-600 border-orange-200">
+                                                    Manual: {cut.client_name}
+                                                  </Badge>
+                                                )}
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+
+                                      {/* Manual Addition Button */}
+                                      {rollSet.manual_addition_available && (
+                                        <div className="mt-3 flex justify-center">
+                                          <Button
+                                            onClick={() => handleAddManualCut(specSuggestion.spec_id, jumboRoll.jumbo_id, rollSet.set_id)}
+                                            size="sm"
+                                            variant="outline"
+                                            className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                                          >
+                                            <Plus className="h-4 w-4 mr-2" />
+                                            Add Manual Cut ({rollSet.summary.total_waste.toFixed(1)}" available)
+                                          </Button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
                             ))}
                           </div>
                         </CardContent>
@@ -2207,7 +2204,7 @@ export default function PendingOrderItemsPage() {
                       </div>
                     </div>
                     <div className="space-y-6">
-                      {suggestionResult.order_suggestions.map((orderSuggestion) => (
+                      {suggestionResult.order_suggestions?.map((orderSuggestion) => (
                         <Card key={orderSuggestion.suggestion_id} className={`bg-gradient-to-r from-blue-50 to-indigo-50 border-2 ${
                           selectedSuggestions.has(orderSuggestion.suggestion_id) ? 'border-green-400 ring-2 ring-green-200' : 'border-blue-200'
                         }`}>
@@ -2241,7 +2238,7 @@ export default function PendingOrderItemsPage() {
                           <CardContent className="space-y-4">
                             {/* Jumbo Rolls for this Order */}
                             <div className="grid gap-4">
-                              {orderSuggestion.jumbo_rolls.map((jumboRoll, jumboIndex) => (
+                              {orderSuggestion.jumbo_rolls?.map((jumboRoll, jumboIndex) => (
                                 <div key={jumboRoll.jumbo_id} className="p-4 rounded-lg border-2 bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
                                   <div className="flex items-center justify-between mb-3">
                                     <div className="font-medium text-purple-800">
@@ -2254,7 +2251,7 @@ export default function PendingOrderItemsPage() {
                                   
                                   {/* 118" Roll Sets in this Jumbo */}
                                   <div className="space-y-3">
-                                    {jumboRoll.sets.map((rollSet, setIndex) => (
+                                    {jumboRoll.sets?.map((rollSet, setIndex) => (
                                       <div key={rollSet.set_id} className="p-3 rounded-lg border bg-white border-blue-200">
                                         <div className="flex items-center justify-between mb-2">
                                           <div className="font-medium text-blue-800">
@@ -2280,7 +2277,7 @@ export default function PendingOrderItemsPage() {
                                               return (
                                                 <>
                                                   {/* Individual cut sections - handle quantities > 1 */}
-                                                  {rollSet.cuts.map((cut, cutIndex) => {
+                                                  {rollSet.cuts?.map((cut, cutIndex) => {
                                                     const cutWidth = cut.width_inches;
                                                     const sections = [];
                                                     
@@ -2357,7 +2354,7 @@ export default function PendingOrderItemsPage() {
                                         
                                         {/* Individual cuts in this 118" roll */}
                                         <div className="space-y-2">
-                                          {rollSet.cuts.map((cut, cutIndex) => (
+                                          {rollSet.cuts?.map((cut, cutIndex) => (
                                             <div key={cut.cut_id} className={`p-2 rounded border text-sm ${
                                               cut.uses_existing 
                                                 ? 'bg-green-50 border-green-200' 
@@ -2458,7 +2455,7 @@ export default function PendingOrderItemsPage() {
                       </div>
                     </div>
                     <div className="space-y-6">
-                      {suggestionResult.jumbo_suggestions.map((jumbo) => (
+                      {suggestionResult.jumbo_suggestions?.map((jumbo) => (
                         <Card key={jumbo.suggestion_id} className={`bg-gradient-to-r from-blue-50 to-indigo-50 border-2 ${
                           selectedSuggestions.has(jumbo.suggestion_id) ? 'border-green-400 ring-2 ring-green-200' : 'border-blue-200'
                         }`}>
@@ -2492,7 +2489,7 @@ export default function PendingOrderItemsPage() {
                           <CardContent className="space-y-4">
                             {/* Individual Rolls in this Jumbo */}
                             <div className="grid gap-3">
-                              {jumbo.rolls.map((roll, rollIndex) => (
+                              {jumbo.rolls?.map((roll, rollIndex) => (
                                 <div key={rollIndex} className={`p-4 rounded-lg border-2 ${
                                   roll.uses_existing 
                                     ? 'bg-green-50 border-green-200' 
@@ -2569,7 +2566,7 @@ export default function PendingOrderItemsPage() {
                                     <div className="mt-2 text-xs text-green-700">
                                       <div className="font-medium mb-1">Pieces used from pending:</div>
                                       <div className="flex flex-wrap gap-1">
-                                        {roll.widths.map((width, idx) => (
+                                        {roll.widths?.map((width, idx) => (
                                           <span key={idx} className="inline-block px-2 py-1 bg-green-100 rounded text-xs">
                                             {width}"
                                           </span>
@@ -2712,7 +2709,7 @@ export default function PendingOrderItemsPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All clients</SelectItem>
-                        {uniqueClients.map((client : any) => (
+                        {uniqueClients?.map((client : any) => (
                           <SelectItem key={client} value={client}>{client}</SelectItem>
                         ))}
                       </SelectContent>
@@ -2728,7 +2725,7 @@ export default function PendingOrderItemsPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All GSM</SelectItem>
-                        {uniqueGSMs.map(gsm => (
+                        {uniqueGSMs?.map(gsm => (
                           <SelectItem key={gsm} value={gsm}>{gsm}</SelectItem>
                         ))}
                       </SelectContent>
@@ -2744,7 +2741,7 @@ export default function PendingOrderItemsPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All BF</SelectItem>
-                        {uniqueBFs.map(bf => (
+                        {uniqueBFs?.map(bf => (
                           <SelectItem key={bf} value={bf}>{bf}</SelectItem>
                         ))}
                       </SelectContent>
@@ -2760,7 +2757,7 @@ export default function PendingOrderItemsPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All shades</SelectItem>
-                        {uniqueShades.map(shade => (
+                        {uniqueShades?.map(shade => (
                           <SelectItem key={shade} value={shade}>{shade}</SelectItem>
                         ))}
                       </SelectContent>
@@ -2776,7 +2773,7 @@ export default function PendingOrderItemsPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All widths</SelectItem>
-                        {uniqueWidths.map(width => (
+                        {uniqueWidths?.map(width => (
                           <SelectItem key={width} value={width}>{width}"</SelectItem>
                         ))}
                       </SelectContent>
@@ -2792,7 +2789,7 @@ export default function PendingOrderItemsPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All status</SelectItem>
-                        {uniqueStatuses.map(status => (
+                        {uniqueStatuses?.map(status => (
                           <SelectItem key={status} value={status}>
                             {status.replace(/_/g, ' ')}
                           </SelectItem>
@@ -2810,7 +2807,7 @@ export default function PendingOrderItemsPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All reasons</SelectItem>
-                        {uniqueReasons.map(reason => (
+                        {uniqueReasons?.map(reason => (
                           <SelectItem key={reason} value={reason}>
                             {reason.replace(/_/g, ' ')}
                           </SelectItem>
@@ -2849,7 +2846,7 @@ export default function PendingOrderItemsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredItems.map((item, index) => {
+                  {filteredItems?.map((item, index) => {
                     const daysWaiting = getDaysWaiting(item.created_at);
                     return (
                     <TableRow key={item.id} className="hover:bg-muted/50">

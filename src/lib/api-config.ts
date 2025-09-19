@@ -27,6 +27,7 @@ export const MASTER_ENDPOINTS = {
   USERS: `${API_BASE_URL}/users`,
   ORDERS: `${API_BASE_URL}/orders`,
   PENDING_ORDERS: `${API_BASE_URL}/pending-order-items`,
+  PENDING_ORDER_ITEMS: `${API_BASE_URL}/pending-order-items`,
   PLANS: `${API_BASE_URL}/plans`,
   PLAN_ORDER_ITEMS: (planId: string) => `${API_BASE_URL}/plans/${planId}/order-items`,
 };

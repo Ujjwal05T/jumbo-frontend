@@ -56,6 +56,7 @@ const navigation = [
       { name: "Client Master", href: "/masters/clients" },
       { name: "Order Master", href: "/masters/orders" },
       { name: "Pending Orders", href: "/masters/pending-orders" },
+      // { name: "Pending Allocation", href: "/masters/pending-orders/allocation" },
       { name: "Plan Master", href: "/masters/plans" },
       { name: "User Master", href: "/masters/users" },
       { name: "Paper Master", href: "/masters/papers" },
