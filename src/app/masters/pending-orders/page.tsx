@@ -848,18 +848,30 @@ const handlePrintPDF = () => {
     let suggestion, paperSpecs;
 
     if (suggestionResult?.spec_suggestions) {
-      // New spec-based structure
-      for (const specSuggestion of suggestionResult.spec_suggestions) {
-        suggestion = specSuggestion.order_suggestions.find(s => s.suggestion_id === suggestionId);
-        if (suggestion) {
-          paperSpecs = specSuggestion.paper_spec;
-          break;
+      // New spec-based structure - handle case where suggestionId might be spec_id
+      const specSuggestion = suggestionResult.spec_suggestions.find(s => s.spec_id === suggestionId);
+      if (specSuggestion) {
+        // This is a spec-based suggestion
+        paperSpecs = specSuggestion.paper_spec;
+        suggestion = specSuggestion; // Use the spec suggestion directly
+      } else {
+        // Try to find it in nested order_suggestions
+        for (const specSuggestion of suggestionResult.spec_suggestions) {
+          suggestion = specSuggestion.order_suggestions?.find(s => s.suggestion_id === suggestionId);
+          if (suggestion) {
+            paperSpecs = specSuggestion.paper_spec;
+            break;
+          }
         }
       }
     } else if (suggestionResult?.order_suggestions) {
       // Legacy order-based structure
-      suggestion = suggestionResult.order_suggestions.find(s => s.suggestion_id === suggestionId);
+      suggestion = suggestionResult.order_suggestions?.find(s => s.suggestion_id === suggestionId);
       paperSpecs = suggestion?.paper_spec;
+    } else if (suggestionResult?.jumbo_suggestions) {
+      // Jumbo-based structure
+      suggestion = suggestionResult.jumbo_suggestions?.find(s => s.suggestion_id === suggestionId);
+      paperSpecs = suggestion?.paper_specs;
     }
 
     const jumboRoll = suggestion?.jumbo_rolls?.find(jr => jr.jumbo_id === jumboId);
@@ -904,7 +916,7 @@ const handlePrintPDF = () => {
     }
 
     // Create the manual cut with client and paper specs info
-    const selectedClient = clients.find(client => client.id === manualRollData.selectedClient);
+    const selectedClient = clients?.find(client => client.id === manualRollData.selectedClient);
     const manualCut = {
       cut_id: `manual_cut_${Date.now()}`,
       width_inches: width,
@@ -924,18 +936,20 @@ const handlePrintPDF = () => {
 
     // Clone current suggestions and add the manual cut
     if (suggestionResult?.spec_suggestions) {
-      const updatedSpecSuggestions = suggestionResult.spec_suggestions.map(specSuggestion => ({
-        ...specSuggestion,
-        order_suggestions: specSuggestion.order_suggestions?.map(suggestion => {
-          if (suggestion.suggestion_id === manualRollData.suggestionId) {
-            const updatedSuggestion = { ...suggestion };
-            updatedSuggestion.jumbo_rolls = suggestion.jumbo_rolls?.map(jumboRoll => {
+      const updatedSpecSuggestions = suggestionResult.spec_suggestions.map(specSuggestion => {
+        // Check if this is the specSuggestion we need to update (direct spec match)
+        if (specSuggestion.spec_id === manualRollData.suggestionId) {
+          const updatedSpecSuggestion = { ...specSuggestion };
+          
+          // Update jumbo rolls directly in the spec suggestion
+          if (updatedSpecSuggestion.jumbo_rolls) {
+            updatedSpecSuggestion.jumbo_rolls = updatedSpecSuggestion.jumbo_rolls.map(jumboRoll => {
               if (jumboRoll.jumbo_id === manualRollData.jumboId) {
                 const updatedJumboRoll = { ...jumboRoll };
                 updatedJumboRoll.sets = jumboRoll.sets?.map(rollSet => {
                   if (rollSet.set_id === manualRollData.setId) {
                     const updatedRollSet = { ...rollSet };
-                    updatedRollSet.cuts = [...rollSet.cuts, manualCut];
+                    updatedRollSet.cuts = [...(rollSet.cuts || []), manualCut];
 
                     // Update summary - Account for used_widths quantities
                     const totalActualWidth = updatedRollSet.cuts.reduce((sum, c) => {
@@ -958,20 +972,96 @@ const handlePrintPDF = () => {
                       total_waste: manualRollData.availableWaste - width,
                       efficiency: Math.round((totalActualWidth / rollSet.target_width) * 100)
                     };
+                    
+                    // Set manual_addition_available to false if waste is too low
+                    if (updatedRollSet.summary.total_waste < 5) {
+                      updatedRollSet.manual_addition_available = false;
+                    }
 
                     return updatedRollSet;
                   }
                   return rollSet;
                 });
+                
+                // Update jumbo roll summary
+                const totalCuts = updatedJumboRoll.sets?.reduce(
+                  (sum, set) => sum + (set.summary?.total_cuts || 0), 0
+                ) || 0;
+                
+                const totalWaste = updatedJumboRoll.sets?.reduce(
+                  (sum, set) => sum + (set.summary?.total_waste || 0), 0
+                ) || 0;
+                
+                updatedJumboRoll.summary = {
+                  ...updatedJumboRoll.summary,
+                  total_cuts: totalCuts,
+                  total_waste: totalWaste
+                };
+                
                 return updatedJumboRoll;
               }
               return jumboRoll;
             });
-            return updatedSuggestion;
           }
-          return suggestion;
-        })
-      }));
+          
+          return updatedSpecSuggestion;
+        }
+        
+        // Otherwise check order_suggestions
+        return {
+          ...specSuggestion,
+          order_suggestions: specSuggestion.order_suggestions?.map(suggestion => {
+            if (suggestion.suggestion_id === manualRollData.suggestionId) {
+              const updatedSuggestion = { ...suggestion };
+              updatedSuggestion.jumbo_rolls = suggestion.jumbo_rolls?.map(jumboRoll => {
+                if (jumboRoll.jumbo_id === manualRollData.jumboId) {
+                  const updatedJumboRoll = { ...jumboRoll };
+                  updatedJumboRoll.sets = jumboRoll.sets?.map(rollSet => {
+                    if (rollSet.set_id === manualRollData.setId) {
+                      const updatedRollSet = { ...rollSet };
+                      updatedRollSet.cuts = [...(rollSet.cuts || []), manualCut];
+  
+                      // Update summary - Account for used_widths quantities
+                      const totalActualWidth = updatedRollSet.cuts.reduce((sum, c) => {
+                        if (c.used_widths && Object.keys(c.used_widths).length > 0) {
+                          return sum + Object.entries(c.used_widths).reduce((widthSum, [width, qty]) =>
+                            widthSum + (parseFloat(width) * qty), 0);
+                        }
+                        return sum + c.width_inches;
+                      }, 0);
+  
+                      updatedRollSet.summary = {
+                        ...updatedRollSet.summary,
+                        total_cuts: updatedRollSet.cuts.reduce((sum, c) => {
+                          if (c.used_widths && Object.keys(c.used_widths).length > 0) {
+                            return sum + Object.values(c.used_widths).reduce((a, b) => a + b, 0);
+                          }
+                          return sum + 1;
+                        }, 0),
+                        total_actual_width: totalActualWidth,
+                        total_waste: manualRollData.availableWaste - width,
+                        efficiency: Math.round((totalActualWidth / rollSet.target_width) * 100)
+                      };
+                      
+                      // Set manual_addition_available to false if waste is too low
+                      if (updatedRollSet.summary.total_waste < 5) {
+                        updatedRollSet.manual_addition_available = false;
+                      }
+  
+                      return updatedRollSet;
+                    }
+                    return rollSet;
+                  });
+                  return updatedJumboRoll;
+                }
+                return jumboRoll;
+              });
+              return updatedSuggestion;
+            }
+            return suggestion;
+          })
+        };
+      });
 
       // Update the suggestion result
       setSuggestionResult(prev => prev ? { ...prev, spec_suggestions: updatedSpecSuggestions } : null);
@@ -1066,6 +1156,7 @@ const handlePrintPDF = () => {
     });
     toast.success('Manual cut added successfully');
   };
+  
 
   const handleStartProduction = async () => {
     if (!suggestionResult || selectedSuggestions.size === 0) {
@@ -1075,6 +1166,10 @@ const handlePrintPDF = () => {
 
     try {
       setProductionLoading(true);
+      
+      // Debug log the selected suggestions
+      console.log('🔍 Selected suggestions count:', selectedSuggestions.size);
+      console.log('🔍 Selected suggestions:', Array.from(selectedSuggestions));
       
       // Get user ID from localStorage
       const userId = localStorage.getItem('user_id');
@@ -1139,6 +1234,27 @@ const handlePrintPDF = () => {
             console.log(`🔧 Jumbo ${jumboIndex + 1}: ${jumboRoll.sets?.length || 0} sets`);
             jumboRoll.sets.forEach((rollSet:any, setIndex: number) => {
               console.log(`🔧 Set ${setIndex + 1}: ${rollSet.cuts?.length || 0} cuts`);
+
+              // Add wastage data once per rollSet (moved from inside the pending items loop)
+              const totalWaste = rollSet.summary?.total_waste || 0;
+              if (totalWaste > 0) {
+                const wastageItem = {
+                  width_inches: parseFloat(totalWaste.toString()),
+                  paper_id: suggestion.paper_spec.paper_id || "",
+                  gsm: suggestion.paper_spec.gsm,
+                  bf: suggestion.paper_spec.bf,
+                  shade: suggestion.paper_spec.shade,
+                  source_plan_id: "", // Will be filled by backend
+                  individual_roll_number: rollSet.set_number,
+                  notes: `Wastage from pending order rollset ${rollSet.set_number}`,
+                  source_pending_id: rollSet.set_id // Use rollSet ID since this is per rollSet
+                };
+                // Store wastage data (we'll collect all at the end)
+                if (!window.tempWastageData) window.tempWastageData = [];
+                window.tempWastageData.push(wastageItem);
+                console.log('🗑️ Added wastage:', totalWaste, 'inches from rollset', rollSet.set_number);
+              }
+
               rollSet.cuts.forEach((cut:any, cutIndex: number) => {
                 console.log(`🔧 Cut ${cutIndex + 1}: ${cut.width_inches}" uses_existing=${cut.uses_existing} used_widths=`, cut.used_widths);
                 if (cut.uses_existing && cut.width_inches) {
@@ -1192,7 +1308,6 @@ const handlePrintPDF = () => {
                       }
                     }
                     
-                    
                     // Distribute cut_rolls across available items (CRITICAL FIX)
                     let remainingQuantity = quantity;
                     let currentItemIndex = 0;
@@ -1223,7 +1338,8 @@ const handlePrintPDF = () => {
                           trim_left: null,
                           source_type: 'pending_order',
                           source_pending_id: currentItem.id,
-                          order_id: currentItem.original_order_id
+                          order_id: currentItem.original_order_id,
+                          
                         });
                         globalIndex++;
                       }
@@ -1231,7 +1347,6 @@ const handlePrintPDF = () => {
                       // Update tracking
                       currentItem.quantity_pending -= canTake;
                       remainingQuantity -= canTake;
-                      console.log(`📊 Item ${currentItem.id} now has ${currentItem.quantity_pending} remaining`);
                       
                       currentItemIndex++;
                     }
@@ -1279,7 +1394,7 @@ const handlePrintPDF = () => {
               // Create individual cut_rolls for each width piece in this 118" roll
               roll.widths.forEach((width:any) => {
                 // Find matching pending item
-                const matchingPendingItem = originalPendingOrders.find(item => 
+                const matchingPendingItem = originalPendingOrders?.find(item => 
                   item.width_inches === width && 
                   item.gsm === suggestion.paper_specs.gsm &&
                   item.bf === suggestion.paper_specs.bf &&
@@ -1287,6 +1402,13 @@ const handlePrintPDF = () => {
                 );
                 
                 if (matchingPendingItem) {
+                  // Calculate the proper wastage for this roll
+                  const totalRollWaste = roll.waste || 0;
+                  const numWidths = roll.widths?.length || 1;
+                  const wastagePerWidth = numWidths > 1 ? totalRollWaste / numWidths : totalRollWaste;
+                  
+                  console.log(`🗑️ Legacy format - Roll ${roll.roll_number} waste: ${totalRollWaste}", widths: ${numWidths}, wastage per width: ${wastagePerWidth}"`);
+                  
                   selectedCutRolls.push({
                     paper_id: "", // Will be resolved by backend from paper specs
                     width_inches: width,
@@ -1298,7 +1420,8 @@ const handlePrintPDF = () => {
                     trim_left: null,
                     source_type: 'pending_order',
                     source_pending_id: matchingPendingItem.id,
-                    order_id: matchingPendingItem.original_order_id
+                    order_id: matchingPendingItem.original_order_id,
+                   
                   });
                   globalIndex++;
                 }
@@ -1310,10 +1433,18 @@ const handlePrintPDF = () => {
 
       // Also send all available cuts (same as selected for pending flow)
       const allAvailableCuts = [...selectedCutRolls];
-      console.log('🔧 ALL AVAILABLE CUTS:', allAvailableCuts);
+      console.log('🔧 ALL AVAILABLE CUTS COUNT:', allAvailableCuts.length);
 
       console.log('🔧 TRANSFORMED CUT ROLLS COUNT:', selectedCutRolls.length);
-      console.log('🔧 TRANSFORMED CUT ROLLS DETAIL:', selectedCutRolls);
+      
+      // Check if we actually have any selected cut rolls
+      if (!selectedCutRolls || selectedCutRolls.length === 0) {
+        toast.error("No cut rolls were created from the selected suggestions. Please check your selection.");
+        setProductionLoading(false);
+        return;
+      }
+      
+      console.log('🔧 SAMPLE CUT ROLL:', selectedCutRolls[0]);
       
       // Debug: Show count per width
       const widthCounts = selectedCutRolls.reduce((acc, roll) => {
@@ -1323,15 +1454,82 @@ const handlePrintPDF = () => {
       }, {} as Record<number, number>);
       console.log('🔧 CUT ROLLS BY WIDTH:', widthCounts);
 
+      // Double-check selected cut rolls count
+      console.log('🔍 FINAL VERIFICATION - Selected cut rolls count:', selectedCutRolls.length);
+      
+      // Get wastage data that was collected during processing
+      const wastageData = window.tempWastageData || [];
+      // Clear temp data
+      window.tempWastageData = [];
+      console.log('🔍 COLLECTED WASTAGE DATA: Total wastage items:', wastageData.length);
+      console.log('🗑️ WASTAGE DATA EXTRACTED:', wastageData.length, 'items');
+      
+      // Debug the wastage data structure to ensure it's correct
+      console.log('🔧 WASTAGE DATA TYPE:', Array.isArray(wastageData) ? 'Array' : typeof wastageData);
+      
+      if (wastageData.length > 0) {
+        console.log('🗑️ SAMPLE WASTAGE ITEMS:');
+        wastageData.slice(0, Math.min(3, wastageData.length)).forEach((item, i) => {
+          console.log(`  Item ${i+1}: width=${item.width_inches}", paper=${item.gsm}GSM ${item.shade}`);
+          console.log(`  Item ${i+1} type:`, typeof item);
+          console.log(`  Item ${i+1} has get method:`, typeof item.get === 'function');
+          console.log(`  Item ${i+1} stringified:`, JSON.stringify(item));
+        });
+      } else {
+        console.log('⚠️ NO WASTAGE ITEMS EXTRACTED - Check cut roll wastage values');
+      }
+      
+      // Ensure wastage_data is a plain array of objects
+      const plainWastageData = wastageData.map(item => ({
+        width_inches: parseFloat(item.width_inches?.toString() || '0'),
+        paper_id: item.paper_id || "",
+        gsm: item.gsm ? parseInt(item.gsm.toString(), 10) : 0,
+        bf: item.bf ? parseFloat(item.bf.toString()) : 0,
+        shade: item.shade || "",
+        source_plan_id: item.source_plan_id || "",
+        individual_roll_number: item.individual_roll_number,
+        notes: item.notes || "",
+        source_pending_id: item.source_pending_id
+      }));
+      
+      console.log('🔧 PLAIN WASTAGE DATA:', plainWastageData);
+      
       // Use same format as main planning page (StartProductionRequest)
       const requestData = {
         selected_cut_rolls: selectedCutRolls,
         all_available_cuts: allAvailableCuts,
-        wastage_data: [], // No wastage for pending flow
+        wastage_data: plainWastageData, // Use the plain objects
         added_rolls_data: {}, // No added rolls for pending flow
         created_by_id: userId,
         jumbo_roll_width: 118
       };
+      
+      // Final verification of request data
+      console.log('🔧 FINAL REQUEST DATA CHECK:');
+      console.log('  → selected_cut_rolls count:', requestData.selected_cut_rolls.length);
+      console.log('  → all_available_cuts count:', requestData.all_available_cuts.length);
+      console.log('  → wastage_data count:', requestData.wastage_data.length);
+      console.log('  → created_by_id:', requestData.created_by_id);
+      
+      // Safety checks before API call
+      if (requestData.selected_cut_rolls.length === 0) {
+        toast.error("No cut rolls were selected. Please select at least one roll before starting production.");
+        setProductionLoading(false);
+        return;
+      }
+      
+      // Verify that wastage_data is properly formatted
+      if (requestData.wastage_data.length > 0) {
+        console.log('🔧 WASTAGE DATA FORMAT CHECK:');
+        const sampleItem = requestData.wastage_data[0];
+        console.log('  → Sample item:', sampleItem);
+        console.log('  → Sample item type:', typeof sampleItem);
+        console.log('  → Sample item width_inches type:', typeof sampleItem.width_inches);
+        console.log('  → Sample item serializes to:', JSON.stringify(sampleItem));
+      }
+      
+      // Convert the request to a plain object via JSON serialization to ensure no class instances
+      const plainRequestData = JSON.parse(JSON.stringify(requestData));
       console.log('🔧 FINAL REQUEST DATA:', requestData);
 
       const response = await fetch(`${MASTER_ENDPOINTS.PENDING_ORDERS.replace('pending-order-items', 'pending-orders')}/start-production`, 

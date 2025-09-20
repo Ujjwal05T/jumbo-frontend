@@ -1364,58 +1364,105 @@ export default function PlanDetailsPage() {
             // Sort rolls by width_inches for organized display (smallest to largest)
             const sortedRolls = rollsInNumber.sort((a:any, b:any) => (a.width_inches || 0) - (b.width_inches || 0));
 
-            // Draw visual cutting representation using production data
-            const rectStartX = 40;
-            const rectWidth = pageWidth - 80;
-            const rectHeight = 15; // Slightly taller for better visibility
-            let currentX = rectStartX;
-
-            // Calculate total used width from production data
-            const totalUsedWidth = sortedRolls.reduce((sum:number, roll:any) => sum + (roll.width_inches || 0), 0);
-            const waste = 118 - totalUsedWidth; // Calculate waste
-
-            // Draw each cut section from production data
-            sortedRolls.forEach((roll:any, rollIndex:number) => {
-              const widthRatio = (roll.width_inches || 0) / 118;
-              const sectionWidth = rectWidth * widthRatio;
-
-              // Set color based on status (since we don't have source data)
-              if (roll.status === 'cutting') {
-                doc.setFillColor(189, 189, 189); // Golden for available (inventory-like)
-              } else {
-                doc.setFillColor(115, 114, 114); // Default purple
-              }
-
-              // Draw rectangle for this cut
-              doc.rect(currentX, yPosition, sectionWidth, rectHeight, 'F');
+            // Always check if width exceeds 118" and apply automatic segmentation
+            const maxAllowedWidth = 118; // Maximum width constraint in inches
+            
+            // Create segments automatically based on width constraint
+            const segments: any[][] = [];
+            let currentSegment: any[] = [];
+            let currentWidth = 0;
+            
+            // Process each roll and create new segments when width exceeds 118"
+            sortedRolls.forEach((roll: any) => {
+              const rollWidth = roll.width_inches || 0;
               
-              // Add border
-              doc.setDrawColor(255, 255, 255);
-              doc.setLineWidth(0.5);
-              doc.rect(currentX, yPosition, sectionWidth, rectHeight, 'S');
-
-              // Add width and client name text inside the rectangle
-              if (sectionWidth > 15) { // Only add text if section is wide enough
-                doc.setTextColor(0, 0, 0);
-                doc.setFontSize(6);
-                const textX = currentX + sectionWidth/2;
+              // If this single roll exceeds max width, place it in its own segment
+              if (rollWidth > maxAllowedWidth) {
+                // If we have rolls in current segment, add them first
+                if (currentSegment.length > 0) {
+                  segments.push([...currentSegment]);
+                  currentSegment = [];
+                  currentWidth = 0;
+                }
                 
-                // Get client name (first 8 letters) by matching with cut_pattern data
-                let clientName = '';
-                if (plan?.cut_pattern && Array.isArray(plan.cut_pattern)) {
-                  const matchingCutPattern = plan.cut_pattern.find((cutItem: any) => 
-                    cutItem.width === roll.width_inches &&
-                    cutItem.individual_roll_number === roll.individual_roll_number &&
-                    cutItem.gsm === (roll.paper_specs?.gsm || roll.gsm) &&
-                    cutItem.bf === (roll.paper_specs?.bf || roll.bf) &&
-                    cutItem.shade === (roll.paper_specs?.shade || roll.shade)
-                  );
-                  clientName = matchingCutPattern?.company_name ? matchingCutPattern.company_name.substring(0, 8) : '';
+                // Add this oversized roll in its own segment
+                segments.push([roll]);
+              }
+              // If adding this roll would exceed max width, start a new segment
+              else if (currentWidth + rollWidth > maxAllowedWidth) {
+                // Add current segment to segments list
+                if (currentSegment.length > 0) {
+                  segments.push([...currentSegment]);
+                  currentSegment = [roll]; // Start new segment with current roll
+                  currentWidth = rollWidth;
                 } else {
-                  // Try to parse JSON if cut_pattern is a string
-                  try {
-                    const cutPatternArray = typeof plan?.cut_pattern === 'string' ? JSON.parse(plan.cut_pattern) : [];
-                    const matchingCutPattern = cutPatternArray.find((cutItem: any) => 
+                  // If current segment is empty, add this roll to a new segment
+                  currentSegment = [roll];
+                  currentWidth = rollWidth;
+                }
+              } 
+              // Otherwise add to current segment
+              else {
+                currentSegment.push(roll);
+                currentWidth += rollWidth;
+              }
+            });
+            
+            // Add any remaining rolls in the last segment
+            if (currentSegment.length > 0) {
+              segments.push(currentSegment);
+            }
+            
+            // Display segments with appropriate labels
+            segments.forEach((segment, segmentIndex) => {
+              // Add segment labels for multi-segment rolls
+              if (segments.length > 1) {
+                if (segmentIndex === 0) {
+                  
+                  yPosition += 2;
+                }
+              }
+              
+              // Draw visual cutting representation for this segment
+              const rectStartX = 40;
+              const rectWidth = pageWidth - 80;
+              const rectHeight = 15; // Slightly taller for better visibility
+              let currentX = rectStartX;
+              
+              // Calculate total used width for this segment
+              const totalUsedWidth = segment.reduce((sum:number, roll:any) => sum + (roll.width_inches || 0), 0);
+              const waste = Math.max(0, maxAllowedWidth - totalUsedWidth); // Calculate waste (ensure non-negative)
+              
+              // Draw each cut section in this segment
+              segment.forEach((roll:any) => {
+                const widthRatio = (roll.width_inches || 0) / maxAllowedWidth;
+                const sectionWidth = rectWidth * widthRatio;
+
+                // Set color based on status
+                if (roll.status === 'cutting') {
+                  doc.setFillColor(189, 189, 189); // For cutting status
+                } else {
+                  doc.setFillColor(115, 114, 114); // Default color
+                }
+
+                // Draw rectangle for this cut
+                doc.rect(currentX, yPosition, sectionWidth, rectHeight, 'F');
+                
+                // Add border
+                doc.setDrawColor(255, 255, 255);
+                doc.setLineWidth(0.5);
+                doc.rect(currentX, yPosition, sectionWidth, rectHeight, 'S');
+
+                // Add width and client name text inside the rectangle
+                if (sectionWidth > 15) { // Only add text if section is wide enough
+                  doc.setTextColor(0, 0, 0);
+                  doc.setFontSize(6);
+                  const textX = currentX + sectionWidth/2;
+                  
+                  // Get client name (first 8 letters) by matching with cut_pattern data
+                  let clientName = '';
+                  if (plan?.cut_pattern && Array.isArray(plan.cut_pattern)) {
+                    const matchingCutPattern = plan.cut_pattern.find((cutItem: any) => 
                       cutItem.width === roll.width_inches &&
                       cutItem.individual_roll_number === roll.individual_roll_number &&
                       cutItem.gsm === (roll.paper_specs?.gsm || roll.gsm) &&
@@ -1423,67 +1470,86 @@ export default function PlanDetailsPage() {
                       cutItem.shade === (roll.paper_specs?.shade || roll.shade)
                     );
                     clientName = matchingCutPattern?.company_name ? matchingCutPattern.company_name.substring(0, 8) : '';
-                  } catch (e) {
-                    // If parsing fails, fallback to empty string
-                    clientName = '';
-                  }
-                }
-                
-                // Display client name on top line, width on bottom line
-                if (clientName && sectionWidth > 25) {
-                  const topTextY = yPosition + rectHeight/2 - 2;
-                  const bottomTextY = yPosition + rectHeight/2 + 4;
-                  doc.text(clientName, textX, topTextY, { align: 'center' });
-                  doc.text(`${roll.width_inches}"`, textX, bottomTextY, { align: 'center' });
-                } else {
-                  // If space is limited, show client name only or width only
-                  const textY = yPosition + rectHeight/2 + 1;
-                  if (clientName) {
-                    doc.text(clientName, textX, textY, { align: 'center' });
                   } else {
-                    doc.text(`${roll.width_inches}"`, textX, textY, { align: 'center' });
+                    // Try to parse JSON if cut_pattern is a string
+                    try {
+                      const cutPatternArray = typeof plan?.cut_pattern === 'string' ? JSON.parse(plan.cut_pattern) : [];
+                      const matchingCutPattern = cutPatternArray.find((cutItem: any) => 
+                        cutItem.width === roll.width_inches &&
+                        cutItem.individual_roll_number === roll.individual_roll_number &&
+                        cutItem.gsm === (roll.paper_specs?.gsm || roll.gsm) &&
+                        cutItem.bf === (roll.paper_specs?.bf || roll.bf) &&
+                        cutItem.shade === (roll.paper_specs?.shade || roll.shade)
+                      );
+                      clientName = matchingCutPattern?.company_name ? matchingCutPattern.company_name.substring(0, 8) : '';
+                    } catch (e) {
+                      // If parsing fails, fallback to empty string
+                      clientName = '';
+                    }
                   }
+                  
+                  // Display client name on top line, width on bottom line
+                  if (clientName && sectionWidth > 25) {
+                    const topTextY = yPosition + rectHeight/2 - 2;
+                    const bottomTextY = yPosition + rectHeight/2 + 4;
+                    doc.text(clientName, textX, topTextY, { align: 'center' });
+                    doc.text(`${roll.width_inches}"`, textX, bottomTextY, { align: 'center' });
+                  } else {
+                    // If space is limited, show client name only or width only
+                    const textY = yPosition + rectHeight/2 + 1;
+                    if (clientName) {
+                      doc.text(clientName, textX, textY, { align: 'center' });
+                    } else {
+                      doc.text(`${roll.width_inches}"`, textX, textY, { align: 'center' });
+                    }
+                  }
+                }
+
+                currentX += sectionWidth;
+              });
+
+              // Draw waste section
+              if (waste > 0) {
+                const wasteRatio = waste / maxAllowedWidth;
+                const wasteWidth = rectWidth * wasteRatio;
+                
+                doc.setFillColor(239, 68, 68); // Red for waste
+                doc.rect(currentX, yPosition, wasteWidth, rectHeight, 'F');
+                doc.setDrawColor(255, 255, 255);
+                doc.rect(currentX, yPosition, wasteWidth, rectHeight, 'S');
+                
+                if (wasteWidth > 20) { // Only add text if waste section is wide enough
+                  doc.setTextColor(255, 255, 255);
+                  doc.setFontSize(6);
+                  doc.text(`Waste: ${waste.toFixed(1)}"`, currentX + wasteWidth/2, yPosition + rectHeight/2 + 1, { align: 'center' });
                 }
               }
 
-              currentX += sectionWidth;
-            });
+              yPosition += rectHeight + 3;
 
-            // Draw waste section
-            if (waste > 0) {
-              const wasteRatio = waste / 118;
-              const wasteWidth = rectWidth * wasteRatio;
+              // Add 118" total indicator
+              doc.setTextColor(100, 100, 100);
+              doc.setFontSize(7);
+              doc.text("118\" Total Width", rectStartX + rectWidth/2, yPosition, { align: 'center' });
+              yPosition += 8;
+
+              // Statistics for this segment
+              const efficiency = ((totalUsedWidth / maxAllowedWidth) * 100);
+              checkPageBreak(25);
+              doc.setFontSize(8);
+              doc.setTextColor(60, 60, 60);
               
-              doc.setFillColor(239, 68, 68); // Red for waste
-              doc.rect(currentX, yPosition, wasteWidth, rectHeight, 'F');
-              doc.setDrawColor(255, 255, 255);
-              doc.rect(currentX, yPosition, wasteWidth, rectHeight, 'S');
+              let statsLine = `Used: ${totalUsedWidth.toFixed(1)}"  |  Waste: ${waste.toFixed(1)}"  |  Efficiency: ${efficiency.toFixed(1)}%  |  Cuts: ${segment.length}`;
               
-              if (wasteWidth > 20) { // Only add text if waste section is wide enough
-                doc.setTextColor(255, 255, 255);
-                doc.setFontSize(6);
-                doc.text(`Waste: ${waste.toFixed(1)}"`, currentX + wasteWidth/2, yPosition + rectHeight/2 + 1, { align: 'center' });
+              doc.text(statsLine, 30, yPosition);
+              yPosition += 15;
+              
+              // Add spacing between segments if not the last one
+              if (segmentIndex < segments.length - 1) {
+                checkPageBreak(10);
+                yPosition += 5;
               }
-            }
-
-            yPosition += rectHeight + 3;
-
-            // Add 118" total indicator
-            doc.setTextColor(100, 100, 100);
-            doc.setFontSize(7);
-            doc.text("118\" Total Width", rectStartX + rectWidth/2, yPosition, { align: 'center' });
-            yPosition += 8;
-
-            // Statistics for this roll using production data
-            const efficiency = ((totalUsedWidth / 118) * 100);
-            checkPageBreak(25);
-            doc.setFontSize(8);
-            doc.setTextColor(60, 60, 60);
-            
-            let statsLine = `Used: ${totalUsedWidth.toFixed(1)}"  |  Waste: ${waste.toFixed(1)}"  |  Efficiency: ${efficiency.toFixed(1)}%  |  Cuts: ${sortedRolls.length}`;
-            
-            doc.text(statsLine, 30, yPosition);
-            yPosition += 15;
+            });
           });
 
           yPosition += 10; // Space between specifications

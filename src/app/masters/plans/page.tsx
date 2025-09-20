@@ -71,6 +71,15 @@ interface CutRollItem {
   parent_jumbo_id?: string;
   parent_118_roll_id?: string;
   roll_sequence?: number;
+  // Added fields for pending orders
+  source_type?: string;
+  source_pending_id?: string;
+  source_order_id?: string;
+  gsm?: number;
+  bf?: number;
+  shade?: string;
+  client?: string;
+  client_frontend_id?: string;
 }
 
 interface ProductionSummary {
@@ -574,33 +583,32 @@ export default function PlansPage() {
             return rollGroups;
           }, {} as Record<string, CutRollItem[]>);
 
-          Object.entries(rollsByNumber).forEach(([rollNumber, rollsInNumber]:[any, any]) => {
-            checkPageBreak(80);
-
-            doc.setFontSize(14);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(60, 60, 60);
-            const rollTitle = rollNumber === "No Roll #" ? "Unassigned Roll" : `Roll #${rollNumber}`;
-            doc.text(rollTitle, 35, yPosition);
-            yPosition += 12;
-
+          // Check if this is a pending order plan by looking for source_type in the first roll
+          const hasPendingOrderRolls = jumboRolls.some(roll => 
+            roll.source_type === 'pending_order' && roll.source_pending_id
+          );
+          
+          // Helper function to visualize a group of rolls
+          const visualizeRollGroup = (doc: any, rolls: any[], pageWidth: number, startY: number) => {
+            let yPosition = startY;
+            let localY = startY;
+            
             doc.setFontSize(9);
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(60, 60, 60);
-            doc.text("Cutting Pattern:", 40, yPosition);
-            yPosition += 8;
-
-            const sortedRolls = rollsInNumber.sort((a:any, b:any) => (a.width_inches || 0) - (b.width_inches || 0));
+            doc.text("Cutting Pattern:", 40, localY);
+            localY += 8;
 
             const rectStartX = 40;
-            const rectWidth = pageWidth - 80;
+            const rectWidth = pageWidth - 70;
             const rectHeight = 15;
             let currentX = rectStartX;
 
-            const totalUsedWidth = sortedRolls.reduce((sum:number, roll:any) => sum + (roll.width_inches || 0), 0);
-            const waste = 118 - totalUsedWidth;
-
-            sortedRolls.forEach((roll:any, rollIndex:number) => {
+            const totalUsedWidth = rolls.reduce((sum:number, roll:any) => sum + (roll.width_inches || 0), 0);
+            const waste = Math.max(0, 118 - totalUsedWidth); // Ensure waste isn't negative
+            
+            // Draw the roll segments
+            rolls.forEach((roll:any) => {
               const widthRatio = (roll.width_inches || 0) / 118;
               const sectionWidth = rectWidth * widthRatio;
 
@@ -610,23 +618,20 @@ export default function PlansPage() {
                 doc.setFillColor(115, 114, 114);
               }
 
-              doc.rect(currentX, yPosition, sectionWidth, rectHeight, 'F');
+              doc.rect(currentX, localY, sectionWidth, rectHeight, 'F');
               
               doc.setDrawColor(255, 255, 255);
               doc.setLineWidth(0.5);
-              doc.rect(currentX, yPosition, sectionWidth, rectHeight, 'S');
+              doc.rect(currentX, localY, sectionWidth, rectHeight, 'S');
 
               if (sectionWidth > 15) {
                 doc.setTextColor(0, 0, 0);
                 doc.setFontSize(6);
                 const textX = currentX + sectionWidth/2;
                 
-                // Get client name (first 8 letters) from plan's cut_pattern by matching production data
+                // Get client name from plan's cut_pattern by matching production data
                 let clientName = '';
-                
-
                 if (plan?.cut_pattern && Array.isArray(plan.cut_pattern)) {
-                  // Find matching cut_pattern entry by width, individual_roll_number, and paper specs
                   const matchingCutPattern = plan.cut_pattern.find((cutItem: any) => 
                     cutItem.width === roll.width_inches &&
                     cutItem.individual_roll_number === roll.individual_roll_number &&
@@ -636,11 +641,9 @@ export default function PlansPage() {
                   );
                   
                   clientName = matchingCutPattern?.company_name ? matchingCutPattern.company_name.substring(0, 8) : '';
-                } else {
-                  // Try to parse JSON if cut_pattern is a string
+                } else if (typeof plan?.cut_pattern === 'string') {
                   try {
-                    const cutPatternArray = typeof plan?.cut_pattern === 'string' ? JSON.parse(plan.cut_pattern) : [];
-                    
+                    const cutPatternArray = JSON.parse(plan.cut_pattern);
                     const matchingCutPattern = cutPatternArray.find((cutItem: any) => 
                       cutItem.width === roll.width_inches &&
                       cutItem.individual_roll_number === roll.individual_roll_number &&
@@ -652,20 +655,17 @@ export default function PlansPage() {
                     clientName = matchingCutPattern?.company_name ? matchingCutPattern.company_name.substring(0, 8) : '';
                   } catch (e) {
                     console.error('Error parsing cut_pattern:', e);
-                    // If parsing fails, fallback to empty string
-                    clientName = '';
                   }
                 }
                 
-                // Display client name on top line, width on bottom line
+                // Display client name and width
                 if (clientName && sectionWidth > 25) {
-                  const topTextY = yPosition + rectHeight/2 - 2;
-                  const bottomTextY = yPosition + rectHeight/2 + 4;
+                  const topTextY = localY + rectHeight/2 - 2;
+                  const bottomTextY = localY + rectHeight/2 + 4;
                   doc.text(clientName, textX, topTextY, { align: 'center' });
                   doc.text(`${roll.width_inches}"`, textX, bottomTextY, { align: 'center' });
                 } else {
-                  // If space is limited, show client name only or width only
-                  const textY = yPosition + rectHeight/2 + 1;
+                  const textY = localY + rectHeight/2 + 1;
                   if (clientName) {
                     doc.text(clientName, textX, textY, { align: 'center' });
                   } else {
@@ -677,38 +677,122 @@ export default function PlansPage() {
               currentX += sectionWidth;
             });
 
+            // Draw waste section
             if (waste > 0) {
               const wasteRatio = waste / 118;
               const wasteWidth = rectWidth * wasteRatio;
               
               doc.setFillColor(239, 68, 68);
-              doc.rect(currentX, yPosition, wasteWidth, rectHeight, 'F');
+              doc.rect(currentX, localY, wasteWidth, rectHeight, 'F');
               doc.setDrawColor(255, 255, 255);
-              doc.rect(currentX, yPosition, wasteWidth, rectHeight, 'S');
+              doc.rect(currentX, localY, wasteWidth, rectHeight, 'S');
               
               if (wasteWidth > 20) {
                 doc.setTextColor(255, 255, 255);
                 doc.setFontSize(6);
-                doc.text(`Waste: ${waste.toFixed(1)}"`, currentX + wasteWidth/2, yPosition + rectHeight/2 + 1, { align: 'center' });
+                doc.text(`Waste: ${waste.toFixed(1)}"`, currentX + wasteWidth/2, localY + rectHeight/2 + 1, { align: 'center' });
               }
             }
 
-            yPosition += rectHeight + 3;
+            localY += rectHeight + 3;
 
             doc.setTextColor(100, 100, 100);
             doc.setFontSize(7);
-            doc.text("118\" Total Width", rectStartX + rectWidth/2, yPosition, { align: 'center' });
-            yPosition += 8;
+            doc.text("118\" Total Width", rectStartX + rectWidth/2, localY, { align: 'center' });
+            localY += 8;
 
             const efficiency = ((totalUsedWidth / 118) * 100);
-            checkPageBreak(25);
             doc.setFontSize(8);
             doc.setTextColor(60, 60, 60);
             
-            let statsLine = `Used: ${totalUsedWidth.toFixed(1)}"  |  Waste: ${waste.toFixed(1)}"  |  Efficiency: ${efficiency.toFixed(1)}%  |  Cuts: ${sortedRolls.length}`;
+            let statsLine = `Used: ${totalUsedWidth.toFixed(1)}"  |  Waste: ${waste.toFixed(1)}"  |  Efficiency: ${efficiency.toFixed(1)}%  |  Cuts: ${rolls.length}`;
             
-            doc.text(statsLine, 30, yPosition);
-            yPosition += 15;
+            doc.text(statsLine, 30, localY);
+            localY += 15;
+            
+            return localY; // Return the new Y position
+          };
+
+          Object.entries(rollsByNumber).forEach(([rollNumber, rollsInNumber]:[any, any]) => {
+            checkPageBreak(80);
+
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(60, 60, 60);
+            const rollTitle = rollNumber === "No Roll #" ? "Unassigned Roll" : `Roll #${rollNumber}`;
+            doc.text(rollTitle, 35, yPosition);
+            yPosition += 12;
+            
+            // Sort rolls by width for better display
+            const sortedRolls = rollsInNumber.sort((a:any, b:any) => (a.width_inches || 0) - (b.width_inches || 0));
+            
+            // Always check if width exceeds 118" and apply automatic segmentation regardless of order type
+            const maxAllowedWidth = 118; // Maximum width constraint in inches
+            
+            // Create segments automatically based on width constraint
+            const segments: CutRollItem[][] = [];
+            let currentSegment: CutRollItem[] = [];
+            let currentWidth = 0;
+            
+            // Process each roll and create new segments when width exceeds 118"
+            sortedRolls.forEach((roll: CutRollItem) => {
+              const rollWidth = roll.width_inches || 0;
+              
+              // If this single roll exceeds max width, place it in its own segment
+              if (rollWidth > maxAllowedWidth) {
+                // If we have rolls in current segment, add them first
+                if (currentSegment.length > 0) {
+                  segments.push([...currentSegment]);
+                  currentSegment = [];
+                  currentWidth = 0;
+                }
+                
+                // Add this oversized roll in its own segment
+                segments.push([roll]);
+              }
+              // If adding this roll would exceed max width, start a new segment
+              else if (currentWidth + rollWidth > maxAllowedWidth) {
+                // Add current segment to segments list
+                if (currentSegment.length > 0) {
+                  segments.push([...currentSegment]);
+                  currentSegment = [roll]; // Start new segment with current roll
+                  currentWidth = rollWidth;
+                } else {
+                  // If current segment is empty, add this roll to a new segment
+                  currentSegment = [roll];
+                  currentWidth = rollWidth;
+                }
+              } 
+              // Otherwise add to current segment
+              else {
+                currentSegment.push(roll);
+                currentWidth += rollWidth;
+              }
+            });
+            
+            // Add any remaining rolls in the last segment
+            if (currentSegment.length > 0) {
+              segments.push(currentSegment);
+            }
+            
+            // Display segments with appropriate labels
+            segments.forEach((segment, segmentIndex) => {
+              // Add segment labels for multi-segment rolls
+              if (segments.length > 1) {
+                if (segmentIndex === 0) {
+                  yPosition += 2;
+                }
+              }
+              
+              // Visualize this segment
+              yPosition = visualizeRollGroup(doc, segment, pageWidth, yPosition);
+              
+              // Add spacing between segments
+              if (segmentIndex < segments.length - 1) {
+                yPosition += 10;
+                checkPageBreak(80);
+              }
+            });
           });
 
           yPosition += 10;
