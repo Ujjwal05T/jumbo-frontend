@@ -1425,7 +1425,7 @@ export default function PlanDetailsPage() {
               
               // Draw visual cutting representation for this segment
               const rectStartX = 40;
-              const rectWidth = pageWidth - 80;
+              const rectWidth = pageWidth - 65;
               const rectHeight = 15; // Slightly taller for better visibility
               let currentX = rectStartX;
               

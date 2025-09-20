@@ -80,6 +80,12 @@ interface PendingOrderItem {
   frontend_id?: string; // Human-readable ID for display
 }
 
+declare global {
+  interface Window {
+    tempWastageData: any;
+  }
+}
+
 interface JumboRollSuggestion {
   sets:any
   suggestion_id: string;
@@ -88,6 +94,8 @@ interface JumboRollSuggestion {
     bf: number;
     shade: string;
   };
+  jumbo_id?: string;
+  jumbo_rolls?: any;
   jumbo_number: number;
   target_width: number;
   pending_order_ids: string[];
@@ -110,6 +118,7 @@ interface JumboRollSuggestion {
     total_waste: number;
     avg_waste: number;
     efficiency: number;
+    total_cuts?: number;
   };
 }
 
@@ -874,8 +883,8 @@ const handlePrintPDF = () => {
       paperSpecs = suggestion?.paper_specs;
     }
 
-    const jumboRoll = suggestion?.jumbo_rolls?.find(jr => jr.jumbo_id === jumboId);
-    const rollSet = jumboRoll?.sets?.find(s => s.set_id === setId);
+    const jumboRoll = suggestion?.jumbo_rolls?.find((jr:any) => jr.jumbo_id === jumboId);
+    const rollSet = jumboRoll?.sets?.find((s:any) => s.set_id === setId);
     const availableWaste = rollSet?.summary?.total_waste || 0;
 
     // Capture paper specs from the suggestion
@@ -946,15 +955,15 @@ const handlePrintPDF = () => {
             updatedSpecSuggestion.jumbo_rolls = updatedSpecSuggestion.jumbo_rolls.map(jumboRoll => {
               if (jumboRoll.jumbo_id === manualRollData.jumboId) {
                 const updatedJumboRoll = { ...jumboRoll };
-                updatedJumboRoll.sets = jumboRoll.sets?.map(rollSet => {
+                updatedJumboRoll.sets = jumboRoll.sets?.map((rollSet:any) => {
                   if (rollSet.set_id === manualRollData.setId) {
                     const updatedRollSet = { ...rollSet };
                     updatedRollSet.cuts = [...(rollSet.cuts || []), manualCut];
 
                     // Update summary - Account for used_widths quantities
-                    const totalActualWidth = updatedRollSet.cuts.reduce((sum, c) => {
+                    const totalActualWidth = updatedRollSet.cuts.reduce((sum:any, c:any) => {
                       if (c.used_widths && Object.keys(c.used_widths).length > 0) {
-                        return sum + Object.entries(c.used_widths).reduce((widthSum, [width, qty]) =>
+                        return sum + Object.entries(c.used_widths).reduce((widthSum, [width, qty]:[any, any]) =>
                           widthSum + (parseFloat(width) * qty), 0);
                       }
                       return sum + c.width_inches;
@@ -962,9 +971,9 @@ const handlePrintPDF = () => {
 
                     updatedRollSet.summary = {
                       ...updatedRollSet.summary,
-                      total_cuts: updatedRollSet.cuts.reduce((sum, c) => {
+                      total_cuts: updatedRollSet.cuts.reduce((sum:any, c:any) => {
                         if (c.used_widths && Object.keys(c.used_widths).length > 0) {
-                          return sum + Object.values(c.used_widths).reduce((a, b) => a + b, 0);
+                          return sum + Object.values(c.used_widths).reduce((a:any, b:any) => a + b, 0);
                         }
                         return sum + 1;
                       }, 0),
@@ -985,11 +994,11 @@ const handlePrintPDF = () => {
                 
                 // Update jumbo roll summary
                 const totalCuts = updatedJumboRoll.sets?.reduce(
-                  (sum, set) => sum + (set.summary?.total_cuts || 0), 0
+                  (sum:any, set:any) => sum + (set.summary?.total_cuts || 0), 0
                 ) || 0;
                 
                 const totalWaste = updatedJumboRoll.sets?.reduce(
-                  (sum, set) => sum + (set.summary?.total_waste || 0), 0
+                  (sum:any, set:any) => sum + (set.summary?.total_waste || 0), 0
                 ) || 0;
                 
                 updatedJumboRoll.summary = {
@@ -1464,23 +1473,10 @@ const handlePrintPDF = () => {
       console.log('🔍 COLLECTED WASTAGE DATA: Total wastage items:', wastageData.length);
       console.log('🗑️ WASTAGE DATA EXTRACTED:', wastageData.length, 'items');
       
-      // Debug the wastage data structure to ensure it's correct
-      console.log('🔧 WASTAGE DATA TYPE:', Array.isArray(wastageData) ? 'Array' : typeof wastageData);
       
-      if (wastageData.length > 0) {
-        console.log('🗑️ SAMPLE WASTAGE ITEMS:');
-        wastageData.slice(0, Math.min(3, wastageData.length)).forEach((item, i) => {
-          console.log(`  Item ${i+1}: width=${item.width_inches}", paper=${item.gsm}GSM ${item.shade}`);
-          console.log(`  Item ${i+1} type:`, typeof item);
-          console.log(`  Item ${i+1} has get method:`, typeof item.get === 'function');
-          console.log(`  Item ${i+1} stringified:`, JSON.stringify(item));
-        });
-      } else {
-        console.log('⚠️ NO WASTAGE ITEMS EXTRACTED - Check cut roll wastage values');
-      }
       
       // Ensure wastage_data is a plain array of objects
-      const plainWastageData = wastageData.map(item => ({
+      const plainWastageData = wastageData.map((item:any) => ({
         width_inches: parseFloat(item.width_inches?.toString() || '0'),
         paper_id: item.paper_id || "",
         gsm: item.gsm ? parseInt(item.gsm.toString(), 10) : 0,

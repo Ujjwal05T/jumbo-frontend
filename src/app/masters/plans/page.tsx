@@ -600,7 +600,7 @@ export default function PlansPage() {
             localY += 8;
 
             const rectStartX = 40;
-            const rectWidth = pageWidth - 70;
+            const rectWidth = pageWidth - 65;
             const rectHeight = 15;
             let currentX = rectStartX;
 
