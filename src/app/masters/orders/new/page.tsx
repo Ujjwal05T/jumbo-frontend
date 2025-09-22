@@ -42,6 +42,7 @@ import {
   Plus,
   X,
 } from "lucide-react";
+import { Client } from "@/lib/clients";
 
 export default function NewOrderPage() {
   const router = useRouter();
@@ -83,7 +84,10 @@ export default function NewOrderPage() {
           fetchClients(),
           fetchPapers(),
         ]);
-        setClients(clientsData);
+        const sortedClientsData = clientsData.sort((a:Client, b:Client) =>
+          a.company_name.localeCompare(b.company_name)
+        );
+        setClients(sortedClientsData);
         setPapers(papersData);
       } catch (error) {
         console.error("Error loading data:", error);

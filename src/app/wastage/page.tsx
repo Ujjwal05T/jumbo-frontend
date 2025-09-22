@@ -180,11 +180,11 @@ export default function WastagePage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead>Reel Number</TableHead>
                         <TableHead>Stock ID</TableHead>
                         <TableHead>Barcode</TableHead>
                         <TableHead>Width</TableHead>
                         <TableHead>Paper Specs</TableHead>
-                        <TableHead>Roll Number</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Created</TableHead>
                       </TableRow>
@@ -199,7 +199,10 @@ export default function WastagePage() {
                       ) : (
                         filteredItems.map((item) => (
                           <TableRow key={item.id}>
-                            <TableCell className="font-medium">
+                            <TableCell className="font-medium px-4">
+                              {item.reel_no || "-"}
+                            </TableCell>
+                            <TableCell >
                               {item.frontend_id}
                             </TableCell>
                             <TableCell>
@@ -225,9 +228,7 @@ export default function WastagePage() {
                                 <span className="text-muted-foreground">N/A</span>
                               )}
                             </TableCell>
-                            <TableCell>
-                              {item.individual_roll_number || "-"}
-                            </TableCell>
+                            
                             <TableCell>
                               {getStatusBadge(item.status)}
                             </TableCell>

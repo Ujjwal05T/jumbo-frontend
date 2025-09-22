@@ -4,6 +4,7 @@
 
 export interface WastageInventory {
   id: string;
+  reel_no: string;
   frontend_id: string;
   barcode_id: string;
   width_inches: number;
@@ -142,6 +143,7 @@ export interface CreateWastageRequest {
   source_plan_id?: string;
   source_jumbo_roll_id?: string;
   individual_roll_number?: number;
+  reel_no?: string;
 }
 
 export interface PaperMaster {

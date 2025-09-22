@@ -47,6 +47,7 @@ export default function CreateWastageModal({ onWastageCreated }: CreateWastageMo
   const [formData, setFormData] = useState<CreateWastageRequest>({
     width_inches: 0,
     paper_id: "",
+    reel_no: "",
     weight_kg: 0,
     status: "available",
     location: "WASTE_STORAGE",
@@ -120,6 +121,7 @@ export default function CreateWastageModal({ onWastageCreated }: CreateWastageMo
         status: "available",
         location: "WASTE_STORAGE",
         notes: "",
+        reel_no: "",
       });
       setErrors({});
       setOpen(false);
@@ -182,9 +184,6 @@ export default function CreateWastageModal({ onWastageCreated }: CreateWastageMo
             {errors.width_inches && (
               <p className="text-sm text-red-500">{errors.width_inches}</p>
             )}
-            <p className="text-xs text-muted-foreground">
-              Width must be between 9 and 21 inches for wastage stock
-            </p>
           </div>
 
           {/* Paper Type */}
@@ -227,6 +226,17 @@ export default function CreateWastageModal({ onWastageCreated }: CreateWastageMo
             )}
           </div>
 
+          {/* Reel Number */}
+          <div className="space-y-2">
+            <Label htmlFor="reel_no">Reel Number</Label>
+            <Input
+              id="reel_no"
+              placeholder="001"
+              value={formData.reel_no || ""}
+              onChange={(e) => handleInputChange("reel_no", e.target.value)}
+            />
+          </div>
+
           {/* Weight */}
           <div className="space-y-2">
             <Label htmlFor="weight">Weight (kg)</Label>
@@ -246,34 +256,6 @@ export default function CreateWastageModal({ onWastageCreated }: CreateWastageMo
             <p className="text-xs text-muted-foreground">
               Weight can be set now or later via QR code scanning
             </p>
-          </div>
-
-          {/* Status */}
-          <div className="space-y-2">
-            <Label htmlFor="status">Status</Label>
-            <Select
-              value={formData.status}
-              onValueChange={(value) => handleInputChange("status", value)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="available">Available</SelectItem>
-                <SelectItem value="damaged">Damaged</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Location */}
-          <div className="space-y-2">
-            <Label htmlFor="location">Location</Label>
-            <Input
-              id="location"
-              placeholder="e.g., WASTE_STORAGE, WAREHOUSE_A"
-              value={formData.location || ""}
-              onChange={(e) => handleInputChange("location", e.target.value)}
-            />
           </div>
 
           {/* Notes */}
