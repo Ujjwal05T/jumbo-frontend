@@ -121,8 +121,10 @@ export default function InOutPage() {
         material_id: inwardForm.material_id,
         slip_no: inwardForm.slip_no,
         gross_weight: inwardForm.gross_weight ? Number(inwardForm.gross_weight) : undefined,
-        report: inwardForm.report,
+        report: inwardForm.report ? Number(inwardForm.report) : undefined,
         net_weight: inwardForm.net_weight ? Number(inwardForm.net_weight) : undefined,
+        final_weight: inwardForm.final_weight ? Number(inwardForm.final_weight) : undefined,
+        rate: inwardForm.rate ? Number(inwardForm.rate) : undefined,
         bill_no: inwardForm.bill_no,
         cash: inwardForm.cash ? Number(inwardForm.cash) : undefined,
         time_in: inwardForm.time_in,
@@ -150,6 +152,8 @@ export default function InOutPage() {
       setSubmitting(true);
       const challanData: CreateOutwardChallanData = {
         vehicle_number: outwardForm.vehicle_number,
+        driver_name: outwardForm.driver_name,
+        rst_no: outwardForm.rst_no,
         purpose: outwardForm.purpose,
         time_in: outwardForm.time_in,
         time_out: outwardForm.time_out,
@@ -375,13 +379,41 @@ export default function InOutPage() {
                     </div>
 
                     {/* Report */}
-                    <div className="col-span-2 flex flex-col space-y-2">
-                      <Label htmlFor="report">Report</Label>
+                    <div className="flex flex-col space-y-2">
+                      <Label htmlFor="report">Report (Weight Deduction)</Label>
                       <Input
                         id="report"
-                        placeholder="Enter report details"
+                        type="number"
+                        step="0.001"
+                        placeholder="Enter weight to deduct"
                         value={inwardForm.report || ""}
-                        onChange={(e) => setInwardForm({ ...inwardForm, report: e.target.value })}
+                        onChange={(e) => setInwardForm({ ...inwardForm, report: Number(e.target.value) })}
+                      />
+                    </div>
+
+                    {/* Final Weight */}
+                    <div className="flex flex-col space-y-2">
+                      <Label htmlFor="finalWeight">Final Weight (Net - Report)</Label>
+                      <Input
+                        id="finalWeight"
+                        type="number"
+                        step="0.001"
+                        placeholder="Auto calculated or manual entry"
+                        value={inwardForm.final_weight || ""}
+                        onChange={(e) => setInwardForm({ ...inwardForm, final_weight: Number(e.target.value) })}
+                      />
+                    </div>
+
+                    {/* Rate */}
+                    <div className="flex flex-col space-y-2">
+                      <Label htmlFor="rate">Rate per Unit</Label>
+                      <Input
+                        id="rate"
+                        type="number"
+                        step="0.01"
+                        placeholder="Enter rate per unit"
+                        value={inwardForm.rate || ""}
+                        onChange={(e) => setInwardForm({ ...inwardForm, rate: Number(e.target.value) })}
                       />
                     </div>
 
@@ -412,6 +444,8 @@ export default function InOutPage() {
                       <TableHead>Material</TableHead>
                       <TableHead>Vehicle No.</TableHead>
                       <TableHead>Net Weight</TableHead>
+                      <TableHead>Final Weight</TableHead>
+                      <TableHead>Rate</TableHead>
                       <TableHead>Bill No.</TableHead>
                       <TableHead>Time In/Out</TableHead>
                     </TableRow>
@@ -425,6 +459,8 @@ export default function InOutPage() {
                         </TableCell>
                         <TableCell>{challan.vehicle_number || "-"}</TableCell>
                         <TableCell>{challan.net_weight || "-"}</TableCell>
+                        <TableCell>{challan.final_weight || "-"}</TableCell>
+                        <TableCell>{challan.rate ? `₹${challan.rate}` : "-"}</TableCell>
                         <TableCell>{challan.bill_no || "-"}</TableCell>
                         <TableCell>
                           {formatTime(challan.time_in)} - {formatTime(challan.time_out)}
@@ -464,6 +500,28 @@ export default function InOutPage() {
                         placeholder="Enter vehicle number"
                         value={outwardForm.vehicle_number || ""}
                         onChange={(e) => setOutwardForm({ ...outwardForm, vehicle_number: e.target.value })}
+                      />
+                    </div>
+
+                    {/* Driver Name */}
+                    <div className="flex flex-col space-y-2">
+                      <Label htmlFor="driverName">Driver Name</Label>
+                      <Input
+                        id="driverName"
+                        placeholder="Enter driver name"
+                        value={outwardForm.driver_name || ""}
+                        onChange={(e) => setOutwardForm({ ...outwardForm, driver_name: e.target.value })}
+                      />
+                    </div>
+
+                    {/* RST No */}
+                    <div className="flex flex-col space-y-2">
+                      <Label htmlFor="rstNo">RST No.</Label>
+                      <Input
+                        id="rstNo"
+                        placeholder="Enter RST number"
+                        value={outwardForm.rst_no || ""}
+                        onChange={(e) => setOutwardForm({ ...outwardForm, rst_no: e.target.value })}
                       />
                     </div>
 
@@ -573,6 +631,8 @@ export default function InOutPage() {
                     <TableRow>
                       <TableHead>Date</TableHead>
                       <TableHead>Vehicle No.</TableHead>
+                      <TableHead>Driver Name</TableHead>
+                      <TableHead>RST No.</TableHead>
                       <TableHead>Party Name</TableHead>
                       <TableHead>Purpose</TableHead>
                       <TableHead>Net Weight</TableHead>
@@ -584,6 +644,8 @@ export default function InOutPage() {
                       <TableRow key={challan.id}>
                         <TableCell>{formatDate(challan.date)}</TableCell>
                         <TableCell>{challan.vehicle_number || "-"}</TableCell>
+                        <TableCell>{challan.driver_name || "-"}</TableCell>
+                        <TableCell>{challan.rst_no || "-"}</TableCell>
                         <TableCell>{challan.party_name || "-"}</TableCell>
                         <TableCell>{challan.purpose || "-"}</TableCell>
                         <TableCell>{challan.net_weight || "-"}</TableCell>

@@ -1224,9 +1224,10 @@ const handlePrintPDF = () => {
       console.log('Original pending orders found:', originalPendingOrders.length);
 
       // Transform to main planning format using suggestion roll structure
-      // ✅ FIX: Use actual suggestion roll numbers for proper individual_roll_number assignment
+      // ✅ FIX: Use sequential numbering instead of rollSet.set_number to avoid duplicates
       const selectedCutRolls: any[] = [];
       let globalIndex = 0;
+      let sequentialRollNumber = 1; // ✅ ADD: Sequential counter for individual_roll_number
       
       // Process each selected suggestion (could be spec or order)
       selectedSuggestionData.forEach((suggestion : any, suggestionIndex: number) => {
@@ -1254,14 +1255,14 @@ const handlePrintPDF = () => {
                   bf: suggestion.paper_spec.bf,
                   shade: suggestion.paper_spec.shade,
                   source_plan_id: "", // Will be filled by backend
-                  individual_roll_number: rollSet.set_number,
-                  notes: `Wastage from pending order rollset ${rollSet.set_number}`,
+                  individual_roll_number: sequentialRollNumber, // ✅ CHANGED: Use sequential number
+                  notes: `Wastage from pending order rollset ${sequentialRollNumber}`,
                   source_pending_id: rollSet.set_id // Use rollSet ID since this is per rollSet
                 };
                 // Store wastage data (we'll collect all at the end)
                 if (!window.tempWastageData) window.tempWastageData = [];
                 window.tempWastageData.push(wastageItem);
-                console.log('🗑️ Added wastage:', totalWaste, 'inches from rollset', rollSet.set_number);
+                console.log('🗑️ Added wastage:', totalWaste, 'inches from rollset', sequentialRollNumber);
               }
 
               rollSet.cuts.forEach((cut:any, cutIndex: number) => {
@@ -1343,7 +1344,7 @@ const handlePrintPDF = () => {
                           gsm: suggestion.paper_spec.gsm,
                           bf: suggestion.paper_spec.bf,
                           shade: suggestion.paper_spec.shade,
-                          individual_roll_number: rollSet.set_number,
+                          individual_roll_number: sequentialRollNumber, // ✅ CHANGED: Use sequential number
                           trim_left: null,
                           source_type: 'pending_order',
                           source_pending_id: currentItem.id,
@@ -1378,7 +1379,7 @@ const handlePrintPDF = () => {
                     gsm: cut.paper_specs.gsm,
                     bf: cut.paper_specs.bf,
                     shade: cut.paper_specs.shade,
-                    individual_roll_number: rollSet.set_number,
+                    individual_roll_number: sequentialRollNumber, // ✅ CHANGED: Use sequential number
                     trim_left: null,
                     source_type: 'manual_cut',
                     // Manual cut specific fields
@@ -1393,6 +1394,9 @@ const handlePrintPDF = () => {
                   globalIndex++;
                 }
               });
+              
+              // ✅ ADD: Increment sequential roll number after each set
+              sequentialRollNumber++;
             });
           });
         } else if (suggestion.rolls) {
@@ -1425,7 +1429,7 @@ const handlePrintPDF = () => {
                     gsm: suggestion.paper_specs.gsm,
                     bf: suggestion.paper_specs.bf,
                     shade: suggestion.paper_specs.shade,
-                    individual_roll_number: roll.roll_number,
+                    individual_roll_number: sequentialRollNumber, // ✅ CHANGED: Use sequential number instead of roll.roll_number
                     trim_left: null,
                     source_type: 'pending_order',
                     source_pending_id: matchingPendingItem.id,
@@ -1435,6 +1439,9 @@ const handlePrintPDF = () => {
                   globalIndex++;
                 }
               });
+              
+              // ✅ ADD: Increment sequential roll number after each roll
+              sequentialRollNumber++;
             }
           });
         }

@@ -319,320 +319,331 @@ export default function PlansPage() {
     return grouped;
   };
 
-  const handleDownloadReport = async (plan: Plan) => {
-    try {
-      toast.loading('Preparing report download...', { id: `report-${plan.id}` });
-      
-      const productionSummary = await loadProductionData(plan.id);
-      if (!productionSummary) {
-        toast.error('No production data available for this plan', { id: `report-${plan.id}` });
-        return;
+ const handleDownloadReport = async (plan: Plan) => {
+  try {
+    toast.loading('Preparing report download...', { id: `report-${plan.id}` });
+    
+    const productionSummary = await loadProductionData(plan.id);
+    console.log('Production Summary:', productionSummary);
+    if (!productionSummary) {
+      toast.error('No production data available for this plan', { id: `report-${plan.id}` });
+      return;
+    }
+
+    // EXACT copy of exportPlanDetailsToPDF from plan details page
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    let yPosition = 20;
+
+    // Helper function to check if we need a new page
+    const checkPageBreak = (height: number) => {
+      if (yPosition + height > pageHeight - 20) {
+        doc.addPage();
+        yPosition = 20;
       }
+    };
 
-      // EXACT copy of exportPlanDetailsToPDF from plan details page
-      const doc = new jsPDF();
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      let yPosition = 20;
+    // Plan Information
+    doc.setFontSize(14);
+    doc.text(`Plan: ${plan.frontend_id || 'Unnamed Plan'}`, 20, yPosition);
+    yPosition += 8;
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Status: ${plan.status}`, 20, yPosition);
+    yPosition += 5;
+    doc.text(`Expected Waste: ${plan.expected_waste_percentage}%`, 20, yPosition);
+    yPosition += 5;
+    doc.text(`Created: ${new Date(plan.created_at).toLocaleString()}`, 20, yPosition);
+    yPosition += 5;
+    const user = getUserById(plan.created_by_id);
+    doc.text(`Created By: ${user?.name || 'Unknown'}`, 20, yPosition);
+    yPosition += 15;
 
-      // Helper function to check if we need a new page
-      const checkPageBreak = (height: number) => {
-        if (yPosition + height > pageHeight - 20) {
+    // Extract unique clients and paper specs from production data
+    const uniqueClients = [...new Set(productionSummary.detailed_items
+      .map(item => item.client_name)
+      .filter(client => client && client !== 'Unknown Client'))];
+    
+    const uniquePaperSpecs = [...new Set(productionSummary.detailed_items
+      .filter(item => item.paper_specs)
+      .map(item => `${item.paper_specs!.gsm}gsm, BF:${item.paper_specs!.bf}, ${item.paper_specs!.shade}`))];
+
+    // Clients Section
+    if (uniqueClients.length > 0) {
+      checkPageBreak(30);
+      doc.setFontSize(12);
+      doc.setTextColor(40, 40, 40);
+      doc.text('Clients:', 20, yPosition);
+      yPosition += 10;
+      
+      doc.setFontSize(10);
+      doc.setTextColor(60, 60, 60);
+      uniqueClients.forEach((client, index) => {
+        doc.text(`• ${client}`, 25, yPosition);
+        yPosition += 6;
+        if ((index + 1) % 15 === 0) checkPageBreak(20);
+      });
+      yPosition += 8;
+    }
+
+    // Paper Specifications Section with Roll Counts and Weights
+    if (productionSummary.production_summary.paper_specifications.length > 0) {
+      checkPageBreak(30);
+      doc.setFontSize(12);
+      doc.setTextColor(40, 40, 40);
+      doc.text('Paper Specifications:', 20, yPosition);
+      yPosition += 10;
+      
+      doc.setFontSize(10);
+      doc.setTextColor(60, 60, 60);
+      
+      // Group specifications by paper type
+      const specGroups = productionSummary.production_summary.paper_specifications.reduce((groups: any, spec: any) => {
+        const key = `${spec.gsm}gsm, BF:${spec.bf}, ${spec.shade}`;
+        if (!groups[key]) {
+          groups[key] = {
+            gsm: spec.gsm,
+            bf: spec.bf,
+            shade: spec.shade,
+            details: []
+          };
+        }
+        groups[key].details.push(spec);
+        return groups;
+      }, {});
+
+      // Helper function to wrap text for PDF
+      const wrapText = (text: string, maxWidth: number, fontSize: number): string[] => {
+        doc.setFontSize(fontSize);
+        const words = text.split(' ');
+        const lines: string[] = [];
+        let currentLine = '';
+
+        for (const word of words) {
+          const testLine = currentLine + (currentLine ? ' ' : '') + word;
+          const textWidth = doc.getTextWidth(testLine);
+          
+          if (textWidth > maxWidth && currentLine !== '') {
+            lines.push(currentLine);
+            currentLine = word;
+          } else {
+            currentLine = testLine;
+          }
+        }
+        
+        if (currentLine) {
+          lines.push(currentLine);
+        }
+        
+        return lines;
+      };
+
+      Object.entries(specGroups).forEach(([specKey, specGroup]: [string, any], index) => {
+        const weightMultiplier = getWeightMultiplier(specGroup.gsm);
+        
+        let totalWeight = 0;
+        let totalRolls = 0;
+        
+        const specItems = productionSummary.detailed_items.filter((item: any) => 
+          item.paper_specs && 
+          item.paper_specs.gsm === specGroup.gsm &&
+          item.paper_specs.bf === specGroup.bf &&
+          item.paper_specs.shade === specGroup.shade
+        );
+        
+        // Track widths in order of appearance instead of using an object
+        const widthOrderTracker: { width: number; count: number }[] = [];
+
+        specItems.forEach((item: any) => {
+          const width = item.width_inches;
+          const existingEntry = widthOrderTracker.find(entry => entry.width === width);
+          
+          if (existingEntry) {
+            existingEntry.count += 1;
+          } else {
+            widthOrderTracker.push({ width, count: 1 });
+          }
+        });
+
+        // Calculate totals
+        widthOrderTracker.forEach(({ width, count }) => {
+          totalWeight += weightMultiplier * width * count;
+          totalRolls += count;
+        });
+
+        // Generate width details in original order
+        const widthDetails = widthOrderTracker
+          .map(({ width, count }) => `${width}"×${count}`)
+          .join(', ');
+        
+        const specText = `• ${specKey} - ${totalRolls} rolls (${widthDetails}) - Weight: ${totalWeight.toFixed(1)}kg`;
+        
+        const maxLineWidth = pageWidth - 50;
+        const wrappedLines = wrapText(specText, maxLineWidth, 10);
+        
+        checkPageBreak(wrappedLines.length * 6 + 2);
+        
+        wrappedLines.forEach((line, lineIndex) => {
+          const xPos = lineIndex === 0 ? 25 : 30;
+          doc.text(line, xPos, yPosition);
+          yPosition += 6;
+        });
+        
+        yPosition += 2;
+      });
+      yPosition += 8;
+    }
+
+    // Cut Rolls Status Summary
+    checkPageBreak(30);
+    doc.setFontSize(14);
+    doc.setTextColor(40, 40, 40);
+    doc.text('Cut Rolls Summary:', 20, yPosition);
+    yPosition += 15;
+
+    doc.setFontSize(12);
+    doc.setTextColor(60, 60, 60);
+    doc.text(`Total Cut Rolls: ${productionSummary.production_summary.total_cut_rolls}`, 20, yPosition);
+    yPosition += 8;
+    doc.text(`Total Weight: ${productionSummary.production_summary.total_weight_kg} kg`, 20, yPosition);
+    yPosition += 8;
+    doc.text(`Expected Waste: ${plan.expected_waste_percentage}%`, 20, yPosition);
+    yPosition += 8;
+
+    Object.entries(productionSummary.production_summary.status_breakdown).forEach(([status, data]) => {
+      doc.text(`${status}: ${data.count} rolls (${data.total_weight.toFixed(1)} kg)`, 20, yPosition);
+      yPosition += 6;
+    });
+    yPosition += 10;
+
+    // Use production data directly - group by jumbo rolls first
+    const jumboRollMapping = groupCutRollsByJumboWithSequential(productionSummary.detailed_items);
+    const jumboMappingEntries = Object.entries(jumboRollMapping);
+
+    if (jumboMappingEntries.length === 0) {
+      doc.setFontSize(12);
+      doc.setTextColor(100, 100, 100);
+      doc.text("No production data available for cutting pattern", 20, yPosition);
+      yPosition += 15;
+    } else {
+      // Process each jumbo roll
+      jumboMappingEntries.forEach(([originalJumboId, jumboGroup], index) => {
+        const { displayId: jumboDisplayId, rolls: jumboRolls } = jumboGroup;
+        
+        // Sort jumbo rolls by individual_roll_number to preserve cutting pattern order
+        const sortedJumboRolls = [...jumboRolls].sort((a, b) => {
+          const aRollNum = a.individual_roll_number || 999;
+          const bRollNum = b.individual_roll_number || 999;
+          return aRollNum - bRollNum;
+        });
+        
+        if (index > -1) {
           doc.addPage();
           yPosition = 20;
         }
-      };
+        
+        const paperSpecs = sortedJumboRolls[0]?.paper_specs;
+        const specKey = paperSpecs 
+          ? `${paperSpecs.gsm}gsm, ${paperSpecs.bf}bf, ${paperSpecs.shade}`
+          : 'Unknown Specification';
+        
+        checkPageBreak(25);
 
-      // Plan Information
-      doc.setFontSize(14);
-      doc.text(`Plan: ${plan.frontend_id || 'Unnamed Plan'}`, 20, yPosition);
-      yPosition += 8;
-      
-      doc.setFontSize(10);
-      doc.setTextColor(100, 100, 100);
-      doc.text(`Status: ${plan.status}`, 20, yPosition);
-      yPosition += 5;
-      doc.text(`Expected Waste: ${plan.expected_waste_percentage}%`, 20, yPosition);
-      yPosition += 5;
-      doc.text(`Created: ${new Date(plan.created_at).toLocaleString()}`, 20, yPosition);
-      yPosition += 5;
-      const user = getUserById(plan.created_by_id);
-      doc.text(`Created By: ${user?.name || 'Unknown'}`, 20, yPosition);
-      yPosition += 15;
-
-      // Extract unique clients and paper specs from production data
-      const uniqueClients = [...new Set(productionSummary.detailed_items
-        .map(item => item.client_name)
-        .filter(client => client && client !== 'Unknown Client'))];
-      
-      const uniquePaperSpecs = [...new Set(productionSummary.detailed_items
-        .filter(item => item.paper_specs)
-        .map(item => `${item.paper_specs!.gsm}gsm, BF:${item.paper_specs!.bf}, ${item.paper_specs!.shade}`))];
-
-      // Clients Section
-      if (uniqueClients.length > 0) {
-        checkPageBreak(30);
-        doc.setFontSize(12);
+        doc.setFontSize(14);
         doc.setTextColor(40, 40, 40);
-        doc.text('Clients:', 20, yPosition);
+        doc.text(specKey, 20, yPosition);
         yPosition += 10;
+
+        const totalWeight = sortedJumboRolls.reduce((sum, roll) => sum + roll.weight_kg, 0);
+        const cutCount = sortedJumboRolls.length;
+        const productionInfo = { totalWeight, cutCount };
+
+        checkPageBreak(35);
+        doc.setFillColor(240, 240, 240);
+        doc.rect(20, yPosition - 5, pageWidth - 40, 20, 'F');
+        doc.setDrawColor(100, 100, 100);
+        doc.setLineWidth(1);
+        doc.rect(20, yPosition - 5, pageWidth - 40, 20, 'S');
+        
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(40, 40, 40);
+        doc.text(jumboDisplayId, 25, yPosition + 6);
         
         doc.setFontSize(10);
-        doc.setTextColor(60, 60, 60);
-        uniqueClients.forEach((client, index) => {
-          doc.text(`• ${client}`, 25, yPosition);
-          yPosition += 6;
-          if ((index + 1) % 15 === 0) checkPageBreak(20);
-        });
-        yPosition += 8;
-      }
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(80, 80, 80);
+        doc.text(`Production: ${productionInfo.cutCount} cuts, ${productionInfo.totalWeight.toFixed(1)}kg`, pageWidth - 25, yPosition + 6, { align: 'right' });
+        yPosition += 25;
 
-      // Paper Specifications Section with Roll Counts and Weights
-      if (productionSummary.production_summary.paper_specifications.length > 0) {
-        checkPageBreak(30);
-        doc.setFontSize(12);
-        doc.setTextColor(40, 40, 40);
-        doc.text('Paper Specifications:', 20, yPosition);
-        yPosition += 10;
-        
-        doc.setFontSize(10);
-        doc.setTextColor(60, 60, 60);
-        
-        // Group specifications by paper type
-        const specGroups = productionSummary.production_summary.paper_specifications.reduce((groups: any, spec: any) => {
-          const key = `${spec.gsm}gsm, BF:${spec.bf}, ${spec.shade}`;
-          if (!groups[key]) {
-            groups[key] = {
-              gsm: spec.gsm,
-              bf: spec.bf,
-              shade: spec.shade,
-              details: []
-            };
+        const rollsByNumber = sortedJumboRolls.reduce((rollGroups: any, roll: CutRollItem) => {
+          const rollNum = roll.individual_roll_number || "No Roll #";
+          if (!rollGroups[rollNum]) {
+            rollGroups[rollNum] = [];
           }
-          groups[key].details.push(spec);
-          return groups;
-        }, {});
+          rollGroups[rollNum].push(roll);
+          return rollGroups;
+        }, {} as Record<string, CutRollItem[]>);
 
-        // Helper function to wrap text for PDF
-        const wrapText = (text: string, maxWidth: number, fontSize: number): string[] => {
-          doc.setFontSize(fontSize);
-          const words = text.split(' ');
-          const lines: string[] = [];
-          let currentLine = '';
-
-          for (const word of words) {
-            const testLine = currentLine + (currentLine ? ' ' : '') + word;
-            const textWidth = doc.getTextWidth(testLine);
-            
-            if (textWidth > maxWidth && currentLine !== '') {
-              lines.push(currentLine);
-              currentLine = word;
-            } else {
-              currentLine = testLine;
-            }
-          }
+        // Helper function to visualize a group of rolls
+        const visualizeRollGroup = (doc: any, rolls: any[], pageWidth: number, startY: number) => {
+          let yPosition = startY;
+          let localY = startY;
           
-          if (currentLine) {
-            lines.push(currentLine);
-          }
-          
-          return lines;
-        };
-
-        Object.entries(specGroups).forEach(([specKey, specGroup]: [string, any], index) => {
-          const weightMultiplier = getWeightMultiplier(specGroup.gsm);
-          
-          let totalWeight = 0;
-          let totalRolls = 0;
-          
-          const specItems = productionSummary.detailed_items.filter((item: any) => 
-            item.paper_specs && 
-            item.paper_specs.gsm === specGroup.gsm &&
-            item.paper_specs.bf === specGroup.bf &&
-            item.paper_specs.shade === specGroup.shade
-          );
-          
-          const widthGroups = specItems.reduce((widthMap: any, item: any) => {
-            const width = item.width_inches;
-            if (!widthMap[width]) {
-              widthMap[width] = 0;
-            }
-            widthMap[width] += 1;
-            return widthMap;
-          }, {});
-          
-          Object.entries(widthGroups).forEach(([width, quantity]: [string, any]) => {
-            totalWeight += weightMultiplier * parseFloat(width) * quantity;
-            totalRolls += quantity;
-          });
-          
-          const widthDetails = Object.entries(widthGroups)
-            .map(([width, qty]) => `${width}"×${qty}`)
-            .join(', ');
-          
-          const specText = `• ${specKey} - ${totalRolls} rolls (${widthDetails}) - Weight: ${totalWeight.toFixed(1)}kg`;
-          
-          const maxLineWidth = pageWidth - 50;
-          const wrappedLines = wrapText(specText, maxLineWidth, 10);
-          
-          checkPageBreak(wrappedLines.length * 6 + 2);
-          
-          wrappedLines.forEach((line, lineIndex) => {
-            const xPos = lineIndex === 0 ? 25 : 30;
-            doc.text(line, xPos, yPosition);
-            yPosition += 6;
-          });
-          
-          yPosition += 2;
-        });
-        yPosition += 8;
-      }
-
-      // Cut Rolls Status Summary
-      checkPageBreak(30);
-      doc.setFontSize(14);
-      doc.setTextColor(40, 40, 40);
-      doc.text('Cut Rolls Summary:', 20, yPosition);
-      yPosition += 15;
-
-      doc.setFontSize(12);
-      doc.setTextColor(60, 60, 60);
-      doc.text(`Total Cut Rolls: ${productionSummary.production_summary.total_cut_rolls}`, 20, yPosition);
-      yPosition += 8;
-      doc.text(`Total Weight: ${productionSummary.production_summary.total_weight_kg} kg`, 20, yPosition);
-      yPosition += 8;
-      doc.text(`Expected Waste: ${plan.expected_waste_percentage}%`, 20, yPosition);
-      yPosition += 8;
-
-      Object.entries(productionSummary.production_summary.status_breakdown).forEach(([status, data]) => {
-        doc.text(`${status}: ${data.count} rolls (${data.total_weight.toFixed(1)} kg)`, 20, yPosition);
-        yPosition += 6;
-      });
-      yPosition += 10;
-
-      // Use production data directly - group by jumbo rolls first
-      const jumboRollMapping = groupCutRollsByJumboWithSequential(productionSummary.detailed_items);
-      const sortedJumboMappingEntries = Object.entries(jumboRollMapping).sort(([aId, aGroup], [bId, bGroup]) => {
-        const aDisplayId = aGroup.displayId;
-        const bDisplayId = bGroup.displayId;
-        
-        if (aDisplayId === 'Ungrouped Items') return 1;
-        if (bDisplayId === 'Ungrouped Items') return -1;
-        
-        const aNum = parseInt(aDisplayId.replace('JR-', '')) || 0;
-        const bNum = parseInt(bDisplayId.replace('JR-', '')) || 0;
-        
-        return aNum - bNum;
-      });
-
-      if (sortedJumboMappingEntries.length === 0) {
-        doc.setFontSize(12);
-        doc.setTextColor(100, 100, 100);
-        doc.text("No production data available for cutting pattern", 20, yPosition);
-        yPosition += 15;
-      } else {
-        // Process each jumbo roll
-        sortedJumboMappingEntries.forEach(([originalJumboId, jumboGroup], index) => {
-          const { displayId: jumboDisplayId, rolls: jumboRolls } = jumboGroup;
-          
-          if (index > -1) {
-            doc.addPage();
-            yPosition = 20;
-          }
-          
-          const paperSpecs = jumboRolls[0]?.paper_specs;
-          const specKey = paperSpecs 
-            ? `${paperSpecs.gsm}gsm, ${paperSpecs.bf}bf, ${paperSpecs.shade}`
-            : 'Unknown Specification';
-          
-          checkPageBreak(25);
-
-          doc.setFontSize(14);
-          doc.setTextColor(40, 40, 40);
-          doc.text(specKey, 20, yPosition);
-          yPosition += 10;
-
-          const totalWeight = jumboRolls.reduce((sum, roll) => sum + roll.weight_kg, 0);
-          const cutCount = jumboRolls.length;
-          const productionInfo = { totalWeight, cutCount };
-
-          checkPageBreak(35);
-          doc.setFillColor(240, 240, 240);
-          doc.rect(20, yPosition - 5, pageWidth - 40, 20, 'F');
-          doc.setDrawColor(100, 100, 100);
-          doc.setLineWidth(1);
-          doc.rect(20, yPosition - 5, pageWidth - 40, 20, 'S');
-          
-          doc.setFontSize(16);
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(40, 40, 40);
-          doc.text(jumboDisplayId, 25, yPosition + 6);
-          
-          doc.setFontSize(10);
+          doc.setFontSize(9);
           doc.setFont('helvetica', 'normal');
-          doc.setTextColor(80, 80, 80);
-          doc.text(`Production: ${productionInfo.cutCount} cuts, ${productionInfo.totalWeight.toFixed(1)}kg`, pageWidth - 25, yPosition + 6, { align: 'right' });
-          yPosition += 25;
+          doc.setTextColor(60, 60, 60);
+          doc.text("Cutting Pattern:", 40, localY);
+          localY += 8;
 
-          const rollsByNumber = jumboRolls.reduce((rollGroups: any, roll: CutRollItem) => {
-            const rollNum = roll.individual_roll_number || "No Roll #";
-            if (!rollGroups[rollNum]) {
-              rollGroups[rollNum] = [];
-            }
-            rollGroups[rollNum].push(roll);
-            return rollGroups;
-          }, {} as Record<string, CutRollItem[]>);
+          const rectStartX = 40;
+          const rectWidth = pageWidth - 65;
+          const rectHeight = 15;
+          let currentX = rectStartX;
 
-          // Check if this is a pending order plan by looking for source_type in the first roll
-          const hasPendingOrderRolls = jumboRolls.some(roll => 
-            roll.source_type === 'pending_order' && roll.source_pending_id
-          );
+          const totalUsedWidth = rolls.reduce((sum:number, roll:any) => sum + (roll.width_inches || 0), 0);
+          const waste = Math.max(0, 119 - totalUsedWidth); // Ensure waste isn't negative
           
-          // Helper function to visualize a group of rolls
-          const visualizeRollGroup = (doc: any, rolls: any[], pageWidth: number, startY: number) => {
-            let yPosition = startY;
-            let localY = startY;
+          // Draw the roll segments
+          rolls.forEach((roll:any) => {
             
-            doc.setFontSize(9);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(60, 60, 60);
-            doc.text("Cutting Pattern:", 40, localY);
-            localY += 8;
+            const sectionWidth = 35
 
-            const rectStartX = 40;
-            const rectWidth = pageWidth - 65;
-            const rectHeight = 15;
-            let currentX = rectStartX;
+            if (roll.status === 'cutting') {
+              doc.setFillColor(189, 189, 189);
+            } else {
+              doc.setFillColor(115, 114, 114);
+            }
 
-            const totalUsedWidth = rolls.reduce((sum:number, roll:any) => sum + (roll.width_inches || 0), 0);
-            const waste = Math.max(0, 118 - totalUsedWidth); // Ensure waste isn't negative
+            doc.rect(currentX, localY, sectionWidth, rectHeight, 'F');
             
-            // Draw the roll segments
-            rolls.forEach((roll:any) => {
-              const widthRatio = (roll.width_inches || 0) / 118;
-              const sectionWidth = rectWidth * widthRatio;
+            doc.setDrawColor(255, 255, 255);
+            doc.setLineWidth(0.5);
+            doc.rect(currentX, localY, sectionWidth, rectHeight, 'S');
 
-              if (roll.status === 'cutting') {
-                doc.setFillColor(189, 189, 189);
-              } else {
-                doc.setFillColor(115, 114, 114);
-              }
-
-              doc.rect(currentX, localY, sectionWidth, rectHeight, 'F');
+            if (sectionWidth > 15) {
+              doc.setTextColor(0, 0, 0);
+              doc.setFontSize(6);
+              const textX = currentX + sectionWidth/2;
               
-              doc.setDrawColor(255, 255, 255);
-              doc.setLineWidth(0.5);
-              doc.rect(currentX, localY, sectionWidth, rectHeight, 'S');
-
-              if (sectionWidth > 15) {
-                doc.setTextColor(0, 0, 0);
-                doc.setFontSize(6);
-                const textX = currentX + sectionWidth/2;
+              // Get client name from plan's cut_pattern by matching production data
+              let clientName = '';
+              if (plan?.cut_pattern && Array.isArray(plan.cut_pattern)) {
+                const matchingCutPattern = plan.cut_pattern.find((cutItem: any) => 
+                  cutItem.width === roll.width_inches &&
+                  cutItem.individual_roll_number === roll.individual_roll_number &&
+                  cutItem.gsm === (roll.paper_specs?.gsm || roll.gsm) &&
+                  cutItem.bf === (roll.paper_specs?.bf || roll.bf) &&
+                  cutItem.shade === (roll.paper_specs?.shade || roll.shade)
+                );
                 
-                // Get client name from plan's cut_pattern by matching production data
-                let clientName = '';
-                if (plan?.cut_pattern && Array.isArray(plan.cut_pattern)) {
-                  const matchingCutPattern = plan.cut_pattern.find((cutItem: any) => 
+                clientName = matchingCutPattern?.company_name ? matchingCutPattern.company_name.substring(0, 8) : '';
+              } else if (typeof plan?.cut_pattern === 'string') {
+                try {
+                  const cutPatternArray = JSON.parse(plan.cut_pattern);
+                  const matchingCutPattern = cutPatternArray.find((cutItem: any) => 
                     cutItem.width === roll.width_inches &&
                     cutItem.individual_roll_number === roll.individual_roll_number &&
                     cutItem.gsm === (roll.paper_specs?.gsm || roll.gsm) &&
@@ -641,171 +652,163 @@ export default function PlansPage() {
                   );
                   
                   clientName = matchingCutPattern?.company_name ? matchingCutPattern.company_name.substring(0, 8) : '';
-                } else if (typeof plan?.cut_pattern === 'string') {
-                  try {
-                    const cutPatternArray = JSON.parse(plan.cut_pattern);
-                    const matchingCutPattern = cutPatternArray.find((cutItem: any) => 
-                      cutItem.width === roll.width_inches &&
-                      cutItem.individual_roll_number === roll.individual_roll_number &&
-                      cutItem.gsm === (roll.paper_specs?.gsm || roll.gsm) &&
-                      cutItem.bf === (roll.paper_specs?.bf || roll.bf) &&
-                      cutItem.shade === (roll.paper_specs?.shade || roll.shade)
-                    );
-                    
-                    clientName = matchingCutPattern?.company_name ? matchingCutPattern.company_name.substring(0, 8) : '';
-                  } catch (e) {
-                    console.error('Error parsing cut_pattern:', e);
-                  }
-                }
-                
-                // Display client name and width
-                if (clientName && sectionWidth > 25) {
-                  const topTextY = localY + rectHeight/2 - 2;
-                  const bottomTextY = localY + rectHeight/2 + 4;
-                  doc.text(clientName, textX, topTextY, { align: 'center' });
-                  doc.text(`${roll.width_inches}"`, textX, bottomTextY, { align: 'center' });
-                } else {
-                  const textY = localY + rectHeight/2 + 1;
-                  if (clientName) {
-                    doc.text(clientName, textX, textY, { align: 'center' });
-                  } else {
-                    doc.text(`${roll.width_inches}"`, textX, textY, { align: 'center' });
-                  }
+                } catch (e) {
+                  console.error('Error parsing cut_pattern:', e);
                 }
               }
-
-              currentX += sectionWidth;
-            });
-
-            // Draw waste section
-            if (waste > 0) {
-              const wasteRatio = waste / 118;
-              const wasteWidth = rectWidth * wasteRatio;
               
-              doc.setFillColor(239, 68, 68);
-              doc.rect(currentX, localY, wasteWidth, rectHeight, 'F');
-              doc.setDrawColor(255, 255, 255);
-              doc.rect(currentX, localY, wasteWidth, rectHeight, 'S');
-              
-              if (wasteWidth > 20) {
-                doc.setTextColor(255, 255, 255);
-                doc.setFontSize(6);
-                doc.text(`Waste: ${waste.toFixed(1)}"`, currentX + wasteWidth/2, localY + rectHeight/2 + 1, { align: 'center' });
+              // Display client name and width
+              if (clientName && sectionWidth > 25) {
+                const topTextY = localY + rectHeight/2 - 2;
+                const bottomTextY = localY + rectHeight/2 + 4;
+                doc.text(clientName, textX, topTextY, { align: 'center' });
+                doc.text(`${roll.width_inches}"`, textX, bottomTextY, { align: 'center' });
+              } else {
+                const textY = localY + rectHeight/2 + 1;
+                if (clientName) {
+                  doc.text(clientName, textX, textY, { align: 'center' });
+                } else {
+                  doc.text(`${roll.width_inches}"`, textX, textY, { align: 'center' });
+                }
               }
             }
 
-            localY += rectHeight + 3;
-
-            doc.setTextColor(100, 100, 100);
-            doc.setFontSize(7);
-            doc.text("118\" Total Width", rectStartX + rectWidth/2, localY, { align: 'center' });
-            localY += 8;
-
-            const efficiency = ((totalUsedWidth / 118) * 100);
-            doc.setFontSize(8);
-            doc.setTextColor(60, 60, 60);
-            
-            let statsLine = `Used: ${totalUsedWidth.toFixed(1)}"  |  Waste: ${waste.toFixed(1)}"  |  Efficiency: ${efficiency.toFixed(1)}%  |  Cuts: ${rolls.length}`;
-            
-            doc.text(statsLine, 30, localY);
-            localY += 15;
-            
-            return localY; // Return the new Y position
-          };
-
-          Object.entries(rollsByNumber).forEach(([rollNumber, rollsInNumber]:[any, any]) => {
-            checkPageBreak(80);
-
-            doc.setFontSize(14);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(60, 60, 60);
-            const rollTitle = rollNumber === "No Roll #" ? "Unassigned Roll" : `Roll #${rollNumber}`;
-            doc.text(rollTitle, 35, yPosition);
-            yPosition += 12;
-            
-            // Sort rolls by width for better display
-            const sortedRolls = rollsInNumber.sort((a:any, b:any) => (a.width_inches || 0) - (b.width_inches || 0));
-            
-            // Always check if width exceeds 118" and apply automatic segmentation regardless of order type
-            const maxAllowedWidth = 118; // Maximum width constraint in inches
-            
-            // Create segments automatically based on width constraint
-            const segments: CutRollItem[][] = [];
-            let currentSegment: CutRollItem[] = [];
-            let currentWidth = 0;
-            
-            // Process each roll and create new segments when width exceeds 118"
-            sortedRolls.forEach((roll: CutRollItem) => {
-              const rollWidth = roll.width_inches || 0;
-              
-              // If this single roll exceeds max width, place it in its own segment
-              if (rollWidth > maxAllowedWidth) {
-                // If we have rolls in current segment, add them first
-                if (currentSegment.length > 0) {
-                  segments.push([...currentSegment]);
-                  currentSegment = [];
-                  currentWidth = 0;
-                }
-                
-                // Add this oversized roll in its own segment
-                segments.push([roll]);
-              }
-              // If adding this roll would exceed max width, start a new segment
-              else if (currentWidth + rollWidth > maxAllowedWidth) {
-                // Add current segment to segments list
-                if (currentSegment.length > 0) {
-                  segments.push([...currentSegment]);
-                  currentSegment = [roll]; // Start new segment with current roll
-                  currentWidth = rollWidth;
-                } else {
-                  // If current segment is empty, add this roll to a new segment
-                  currentSegment = [roll];
-                  currentWidth = rollWidth;
-                }
-              } 
-              // Otherwise add to current segment
-              else {
-                currentSegment.push(roll);
-                currentWidth += rollWidth;
-              }
-            });
-            
-            // Add any remaining rolls in the last segment
-            if (currentSegment.length > 0) {
-              segments.push(currentSegment);
-            }
-            
-            // Display segments with appropriate labels
-            segments.forEach((segment, segmentIndex) => {
-              // Add segment labels for multi-segment rolls
-              if (segments.length > 1) {
-                if (segmentIndex === 0) {
-                  yPosition += 2;
-                }
-              }
-              
-              // Visualize this segment
-              yPosition = visualizeRollGroup(doc, segment, pageWidth, yPosition);
-              
-              // Add spacing between segments
-              if (segmentIndex < segments.length - 1) {
-                yPosition += 10;
-                checkPageBreak(80);
-              }
-            });
+            currentX += sectionWidth;
           });
 
-          yPosition += 10;
+          // Draw waste section
+          if (waste > 0) {
+            const wasteRatio = waste / 119;
+            const wasteWidth = rectWidth * wasteRatio;
+            
+            doc.setFillColor(239, 68, 68);
+            doc.rect(currentX, localY, wasteWidth, rectHeight, 'F');
+            doc.setDrawColor(255, 255, 255);
+            doc.rect(currentX, localY, wasteWidth, rectHeight, 'S');
+            
+            if (wasteWidth > 20) {
+              doc.setTextColor(255, 255, 255);
+              doc.setFontSize(6);
+              doc.text(`Waste: ${waste.toFixed(1)}"`, currentX + wasteWidth/2, localY + rectHeight/2 + 1, { align: 'center' });
+            }
+          }
+
+          localY += rectHeight + 3;
+
+          doc.setTextColor(100, 100, 100);
+          doc.setFontSize(7);
+          doc.text("118\" Total Width", rectStartX + rectWidth/2, localY, { align: 'center' });
+          localY += 8;
+
+          const efficiency = ((totalUsedWidth / 119) * 100);
+          doc.setFontSize(8);
+          doc.setTextColor(60, 60, 60);
+          
+          let statsLine = `Used: ${totalUsedWidth.toFixed(1)}"  |  Waste: ${waste.toFixed(1)}"  |  Efficiency: ${efficiency.toFixed(1)}%  |  Cuts: ${rolls.length}`;
+          
+          doc.text(statsLine, 30, localY);
+          localY += 15;
+          
+          return localY; // Return the new Y position
+        };
+
+        // Process roll groups in order of individual_roll_number
+        const sortedRollEntries = Object.entries(rollsByNumber).sort(([aKey], [bKey]) => {
+          if (aKey === "No Roll #") return 1;
+          if (bKey === "No Roll #") return -1;
+          return parseInt(aKey) - parseInt(bKey);
         });
-      }
-      
-      doc.save(`${plan.frontend_id || 'plan'}.pdf`);
-      toast.success('Plan details exported to PDF successfully!', { id: `report-${plan.id}` });
-    } catch (error) {
-      console.error('Error downloading report:', error);
-      toast.error('Failed to download report', { id: `report-${plan.id}` });
+
+        sortedRollEntries.forEach(([rollNumber, rollsInNumber]:[any, any]) => {
+          checkPageBreak(80);
+
+          doc.setFontSize(14);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(60, 60, 60);
+          const rollTitle = rollNumber === "No Roll #" ? "Unassigned Roll" : `Roll #${rollNumber}`;
+          doc.text(rollTitle, 35, yPosition);
+          yPosition += 12;
+          
+          // Always check if width exceeds 118" and apply automatic segmentation regardless of order type
+          const maxAllowedWidth = 120; // Maximum width constraint in inches
+          
+          // Create segments automatically based on width constraint
+          const segments: CutRollItem[][] = [];
+          let currentSegment: CutRollItem[] = [];
+          let currentWidth = 0;
+          
+          // Process each roll and create new segments when width exceeds 118"
+          rollsInNumber.forEach((roll: CutRollItem) => {
+            const rollWidth = roll.width_inches || 0;
+            
+            // If this single roll exceeds max width, place it in its own segment
+            if (rollWidth > maxAllowedWidth) {
+              // If we have rolls in current segment, add them first
+              if (currentSegment.length > 0) {
+                segments.push([...currentSegment]);
+                currentSegment = [];
+                currentWidth = 0;
+              }
+              
+              // Add this oversized roll in its own segment
+              segments.push([roll]);
+            }
+            // If adding this roll would exceed max width, start a new segment
+            else if (currentWidth + rollWidth > maxAllowedWidth) {
+              // Add current segment to segments list
+              if (currentSegment.length > 0) {
+                segments.push([...currentSegment]);
+                currentSegment = [roll]; // Start new segment with current roll
+                currentWidth = rollWidth;
+              } else {
+                // If current segment is empty, add this roll to a new segment
+                currentSegment = [roll];
+                currentWidth = rollWidth;
+              }
+            } 
+            // Otherwise add to current segment
+            else {
+              currentSegment.push(roll);
+              currentWidth += rollWidth;
+            }
+          });
+          
+          // Add any remaining rolls in the last segment
+          if (currentSegment.length > 0) {
+            segments.push(currentSegment);
+          }
+          
+          // Display segments with appropriate labels
+          segments.forEach((segment, segmentIndex) => {
+            // Add segment labels for multi-segment rolls
+            if (segments.length > 1) {
+              if (segmentIndex === 0) {
+                yPosition += 2;
+              }
+            }
+            
+            // Visualize this segment
+            yPosition = visualizeRollGroup(doc, segment, pageWidth, yPosition);
+            
+            // Add spacing between segments
+            if (segmentIndex < segments.length - 1) {
+              yPosition += 10;
+              checkPageBreak(80);
+            }
+          });
+        });
+
+        yPosition += 10;
+      });
     }
-  };
+    
+    doc.save(`${plan.frontend_id || 'plan'}.pdf`);
+    toast.success('Plan details exported to PDF successfully!', { id: `report-${plan.id}` });
+  } catch (error) {
+    console.error('Error downloading report:', error);
+    toast.error('Failed to download report', { id: `report-${plan.id}` });
+  }
+};
 
   const handlePrintLabels = async (plan: Plan) => {
     try {

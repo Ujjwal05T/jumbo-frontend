@@ -370,7 +370,7 @@ export default function PlanningPage() {
   }, [selectedOrders, orders]);
 
   // Check if total quantity exceeds limit
-  const exceedsQuantityLimit = totalSelectedQuantity > 250;
+  const exceedsQuantityLimit = totalSelectedQuantity > 350;
 
   useEffect(() => {
     const loadOrders = async () => {
@@ -2140,7 +2140,7 @@ export default function PlanningPage() {
       {/* Quantity Limit Warning */}
       {exceedsQuantityLimit && selectedOrders.length > 0 && (
         <div className="text-red-600 text-sm font-medium">
-          ⚠️ Cannot generate plan: Total selected quantity ({totalSelectedQuantity} rolls) exceeds the maximum limit of 250 rolls.
+          ⚠️ Cannot generate plan: Total selected quantity ({totalSelectedQuantity} rolls) exceeds the maximum limit of 350 rolls.
         </div>
       )}
 

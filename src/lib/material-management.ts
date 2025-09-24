@@ -28,8 +28,10 @@ export interface InwardChallan {
   material_id: string;
   slip_no?: string;
   gross_weight?: number;
-  report?: string;
+  report?: number;
   net_weight?: number;
+  final_weight?: number;
+  rate?: number;
   bill_no?: string;
   cash?: number;
   time_in?: string;
@@ -43,8 +45,10 @@ export interface CreateInwardChallanData {
   material_id: string;
   slip_no?: string;
   gross_weight?: number;
-  report?: string;
+  report?: number;
   net_weight?: number;
+  final_weight?: number;
+  rate?: number;
   bill_no?: string;
   cash?: number;
   time_in?: string;
@@ -55,6 +59,8 @@ export interface OutwardChallan {
   id: string;
   date: string;
   vehicle_number?: string;
+  driver_name?: string;
+  rst_no?: string;
   purpose?: string;
   time_in?: string;
   time_out?: string;
@@ -67,6 +73,8 @@ export interface OutwardChallan {
 
 export interface CreateOutwardChallanData {
   vehicle_number?: string;
+  driver_name?: string;
+  rst_no?: string;
   purpose?: string;
   time_in?: string;
   time_out?: string;

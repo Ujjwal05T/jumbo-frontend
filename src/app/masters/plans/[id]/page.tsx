@@ -1435,8 +1435,7 @@ export default function PlanDetailsPage() {
               
               // Draw each cut section in this segment
               segment.forEach((roll:any) => {
-                const widthRatio = (roll.width_inches || 0) / maxAllowedWidth;
-                const sectionWidth = rectWidth * widthRatio;
+                const sectionWidth = 35
 
                 // Set color based on status
                 if (roll.status === 'cutting') {

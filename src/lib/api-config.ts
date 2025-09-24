@@ -104,6 +104,15 @@ export const REPORTS_ENDPOINTS = {
     ORDERS_LIST: `${API_BASE_URL}/reports/order-analysis/orders-list`,
     ORDER_DETAILS: (orderId: string) => `${API_BASE_URL}/reports/order-analysis/order-details/${orderId}`,
   },
+
+  // Order Tracking and Mismatch Detection endpoints
+  ORDER_TRACKING: `${API_BASE_URL}/reports/order-tracking`,
+  ORDER_TRACKING_FIX: `${API_BASE_URL}/reports/order-tracking/fix-allocation`,
+  ORDER_TRACKING_BATCH_FIX: `${API_BASE_URL}/reports/order-tracking/batch-fix`,
+  ORDER_TRACKING_SYSTEM_HEALTH: `${API_BASE_URL}/reports/order-tracking/system-health`,
+
+  // Client Orders with Plans endpoint
+  CLIENT_ORDERS_WITH_PLANS: `${API_BASE_URL}/reports/client-orders-with-plans`,
 };
 
 // Material Management endpoints
