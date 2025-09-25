@@ -91,6 +91,7 @@ const navigation = [
     children: [
       { name: "Current Dispatch", href: "/dispatch" },
       { name: "Past Dispatch", href: "/past-dispatch" },
+      { name: "Plan Weights", href: "/plan-weights" },
     ],
   },
   {

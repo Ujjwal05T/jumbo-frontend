@@ -26,6 +26,7 @@ export const MASTER_ENDPOINTS = {
   PAPERS: `${API_BASE_URL}/papers`,
   USERS: `${API_BASE_URL}/users`,
   ORDERS: `${API_BASE_URL}/orders`,
+  ORDERS_WITH_SUMMARY: `${API_BASE_URL}/orders/with-summary`,
   PENDING_ORDERS: `${API_BASE_URL}/pending-order-items`,
   PENDING_ORDER_ITEMS: `${API_BASE_URL}/pending-order-items`,
   PLANS: `${API_BASE_URL}/plans`,

@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Users, Package, TrendingUp, Calendar, BarChart3, FileText, Eye } from 'lucide-react';
+import { Users, Package, TrendingUp, Calendar, BarChart3, FileText, Eye } from 'lucide-react';
 import { REPORTS_ENDPOINTS, MASTER_ENDPOINTS, createRequestOptions } from '@/lib/api-config';
 
 // Types
@@ -34,6 +34,8 @@ type ClientOrder = {
   total_quantity_ordered: number;
   total_quantity_fulfilled: number;
   total_quantity_pending: number;
+  total_quantity_cut: number;
+  total_quantity_dispatched: number;
   remaining_to_plan: number;
   fulfillment_percentage: number;
   total_value: number;
@@ -84,13 +86,13 @@ export default function ClientOrdersPage() {
     }
   };
 
-  // Fetch client orders using existing endpoints
+  // Fetch client orders using the new orders with summary endpoint
   const fetchClientOrders = async (clientId: string) => {
     if (!clientId) return;
 
     setLoading(true);
     try {
-      // Build query parameters for orders endpoint
+      // Build query parameters for orders with summary endpoint
       const params = new URLSearchParams();
       params.append('client_id', clientId);
       params.append('limit', '1000'); // Get more orders
@@ -98,9 +100,9 @@ export default function ClientOrdersPage() {
       if (endDate) params.append('end_date', endDate);
       if (statusFilter && statusFilter !== 'all') params.append('status', statusFilter);
 
-      // Fetch orders using the existing orders endpoint
-      const ordersUrl = `${MASTER_ENDPOINTS.ORDERS}?${params}`;
-      console.log('Fetching orders from:', ordersUrl);
+      // Fetch orders using the new orders with summary endpoint
+      const ordersUrl = `${MASTER_ENDPOINTS.ORDERS_WITH_SUMMARY}?${params}`;
+      console.log('Fetching orders with summary from:', ordersUrl);
 
       const ordersResponse = await fetch(ordersUrl, createRequestOptions('GET'));
       const ordersResult = await ordersResponse.json();
@@ -108,34 +110,26 @@ export default function ClientOrdersPage() {
       console.log('Orders API response:', ordersResult);
 
       if (Array.isArray(ordersResult)) {
-        // Transform the data to match our ClientOrder type
+        // Transform the data to match our ClientOrder type - now using summary data from backend
         const transformedOrders = ordersResult.map((order: any) => {
-          const total_ordered = order.order_items?.reduce((sum: number, item: any) => sum + (item.quantity_rolls || 0), 0) || 0;
-          const total_fulfilled = order.order_items?.reduce((sum: number, item: any) => sum + (item.quantity_fulfilled || 0), 0) || 0;
-          const total_value = order.order_items?.reduce((sum: number, item: any) => sum + (item.amount || 0), 0) || 0;
-          const fulfillment_percentage = total_ordered > 0 ? (total_fulfilled / total_ordered) * 100 : 0;
-
-          // Check if overdue
-          const is_overdue = order.delivery_date && order.status !== 'completed'
-            ? new Date(order.delivery_date) < new Date()
-            : false;
-
           return {
-            order_id: order.id,
+            order_id: order.order_id,
             frontend_id: order.frontend_id,
-            client_name: order.client?.company_name || 'Unknown Client',
+            client_name: order.client_name,
             status: order.status,
             priority: order.priority,
             delivery_date: order.delivery_date,
             created_at: order.created_at,
-            total_items: order.order_items?.length || 0,
-            total_quantity_ordered: total_ordered,
-            total_quantity_fulfilled: total_fulfilled,
-            total_quantity_pending: total_ordered - total_fulfilled,
-            remaining_to_plan: total_ordered - total_fulfilled,
-            fulfillment_percentage: fulfillment_percentage,
-            total_value: total_value,
-            is_overdue: is_overdue,
+            total_items: order.total_items,
+            total_quantity_ordered: order.total_quantity_ordered,
+            total_quantity_fulfilled: order.total_quantity_fulfilled,
+            total_quantity_pending: order.total_quantity_pending,
+            total_quantity_cut: order.total_quantity_cut,
+            total_quantity_dispatched: order.total_quantity_dispatched,
+            remaining_to_plan: order.total_quantity_pending, // Same as pending
+            fulfillment_percentage: order.fulfillment_percentage,
+            total_value: order.total_value,
+            is_overdue: order.is_overdue,
             payment_type: order.payment_type
           };
         });
@@ -226,15 +220,6 @@ export default function ClientOrdersPage() {
     }
   }, [selectedClient, startDate, endDate, statusFilter]);
 
-  // Reset to client selection
-  const resetToClientSelection = () => {
-    setSelectedClient(null);
-    setClientOrders([]);
-    setClientSummary(null);
-    setStartDate('');
-    setEndDate('');
-    setStatusFilter('all');
-  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -266,157 +251,136 @@ export default function ClientOrdersPage() {
     }
   };
 
-  if (!selectedClient) {
-    // Client Selection View
-    return (
-      <DashboardLayout>
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Client-Order Analysis</h1>
-            <p className="text-muted-foreground">
-              Select a client to view their orders and detailed analysis
-            </p>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Select Client
-              </CardTitle>
-              <CardDescription>
-                Choose a client to analyze their order history and performance ({availableClients.length} clients available)
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="max-w-md">
-                  <label className="text-sm font-medium">Select Client</label>
-                  <Select
-                    value={(selectedClient as Client | null)?.id || ""}
-                    onValueChange={(value) => {
-                      const client = availableClients.find(c => c.id === value);
-                      if (client) {
-                        setSelectedClient(client);
-                      }
-                    }}
-                  >
-
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose a client..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableClients.length === 0 ? (
-                        <SelectItem value="none" disabled>No clients found</SelectItem>
-                      ) : (
-                        availableClients.map((client) => (
-                          <SelectItem key={client.id} value={client.id}>
-                            <div className="flex flex-col">
-                              <span className="font-medium">{client.company_name}</span>
-                              {client.contact_person && (
-                                <span className="text-xs text-muted-foreground">
-                                  Contact: {client.contact_person}
-                                </span>
-                              )}
-                            </div>
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Placeholder message when no client selected */}
-                <div className="text-center py-8 border-2 border-dashed border-muted rounded-lg">
-                  <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                  <div className="text-lg font-medium text-muted-foreground mb-2">Please select a client</div>
-                  <div className="text-sm text-muted-foreground">
-                    Choose a client from the dropdown above to view their order history and detailed analysis
-                  </div>
-                </div>
-
-                {availableClients.length === 0 && (
-                  <div className="text-center py-8">
-                    <div className="text-muted-foreground mb-2">No clients found</div>
-                    <div className="text-sm text-muted-foreground">Please check back later or contact system administrator</div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  // Client Orders View
+  // Unified View - Always show client selector and orders below
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Header with Back Button */}
-        <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            onClick={resetToClientSelection}
-            className="flex items-center gap-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Client Selection
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">{selectedClient.company_name}</h1>
-            <p className="text-muted-foreground">
-              Order analysis and detailed breakdown
-            </p>
-          </div>
+        {/* Header */}
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Client-Order Analysis</h1>
+          <p className="text-muted-foreground">
+            Select a client to view their orders and detailed analysis
+          </p>
         </div>
 
-        {/* Client Information Card */}
+        {/* Client Selection - Always Visible */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
-              Client Information
+              Select Client
             </CardTitle>
+            <CardDescription>
+              Choose a client to analyze their order history and performance ({availableClients.length} clients available)
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <h4 className="font-medium text-sm text-muted-foreground">Contact Details</h4>
-                <div className="mt-2 space-y-1">
-                  {selectedClient.contact_person && (
-                    <div className="text-sm">Contact: {selectedClient.contact_person}</div>
+            <div className="max-w-md">
+              <label className="text-sm font-medium">Select Client</label>
+              <Select
+                value={selectedClient?.id || ""}
+                onValueChange={(value) => {
+                  if (value === "none") {
+                    setSelectedClient(null);
+                    return;
+                  }
+                  const client = availableClients.find(c => c.id === value);
+                  if (client) {
+                    setSelectedClient(client);
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a client..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">-- No Client Selected --</SelectItem>
+                  {availableClients.length === 0 ? (
+                    <SelectItem value="no-clients" disabled>No clients found</SelectItem>
+                  ) : (
+                    availableClients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{client.company_name}</span>
+                          {client.contact_person && (
+                            <span className="text-xs text-muted-foreground">
+                              Contact: {client.contact_person}
+                            </span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))
                   )}
-                  {selectedClient.phone && (
-                    <div className="text-sm">Phone: {selectedClient.phone}</div>
-                  )}
-                  {selectedClient.email && (
-                    <div className="text-sm">Email: {selectedClient.email}</div>
-                  )}
-                </div>
-              </div>
-              <div>
-                <h4 className="font-medium text-sm text-muted-foreground">Business Details</h4>
-                <div className="mt-2 space-y-1">
-                  {selectedClient.gst_number && (
-                    <div className="text-sm">GST: <span className="font-mono">{selectedClient.gst_number}</span></div>
-                  )}
-                </div>
-              </div>
-              <div>
-                <h4 className="font-medium text-sm text-muted-foreground">Address</h4>
-                <div className="mt-2">
-                  {selectedClient.address && (
-                    <div className="text-sm">{selectedClient.address}</div>
-                  )}
-                </div>
-              </div>
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
 
+        {/* Show content based on client selection */}
+        {!selectedClient ? (
+          /* No Client Selected Message */
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center py-8">
+                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                <div className="text-lg font-medium text-muted-foreground mb-2">Please select a client</div>
+                <div className="text-sm text-muted-foreground">
+                  Choose a client from the dropdown above to view their order history and detailed analysis
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          /* Client Orders Content */
+          <>
+
+            {/* Client Information Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Client Information - {selectedClient.company_name}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div>
+                    <h4 className="font-medium text-sm text-muted-foreground">Contact Details</h4>
+                    <div className="mt-2 space-y-1">
+                      {selectedClient.contact_person && (
+                        <div className="text-sm">Contact: {selectedClient.contact_person}</div>
+                      )}
+                      {selectedClient.phone && (
+                        <div className="text-sm">Phone: {selectedClient.phone}</div>
+                      )}
+                      {selectedClient.email && (
+                        <div className="text-sm">Email: {selectedClient.email}</div>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-sm text-muted-foreground">Business Details</h4>
+                    <div className="mt-2 space-y-1">
+                      {selectedClient.gst_number && (
+                        <div className="text-sm">GST: <span className="font-mono">{selectedClient.gst_number}</span></div>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-sm text-muted-foreground">Address</h4>
+                    <div className="mt-2">
+                      {selectedClient.address && (
+                        <div className="text-sm">{selectedClient.address}</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
         {/* Client Summary Cards */}
-        {clientSummary && (
+        {/* {clientSummary && (
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -491,7 +455,7 @@ export default function ClientOrdersPage() {
               </CardContent>
             </Card>
           </div>
-        )}
+        )} */}
 
         {/* Filters */}
         <Card>
@@ -564,10 +528,10 @@ export default function ClientOrdersPage() {
                         <th className="text-left p-3">Status</th>
                         <th className="text-left p-3">Priority</th>
                         <th className="text-left p-3">Created Date</th>
-                        <th className="text-left p-3">Delivery Date</th>
-                        <th className="text-left p-3">Progress</th>
-                        <th className="text-left p-3">Value</th>
-                        <th className="text-left p-3">Payment</th>
+                        <th className="text-left p-3">Ordered</th>
+                        <th className="text-left p-3">Pending</th>
+                        <th className="text-left p-3">Cut</th>
+                        <th className="text-left p-3">In Dispatch</th>
                         <th className="text-left p-3">Action</th>
                       </tr>
                     </thead>
@@ -588,47 +552,29 @@ export default function ClientOrdersPage() {
                             </Badge>
                           </td>
                           <td className="p-3">
-                            {new Date(order.created_at).toLocaleDateString()}
-                          </td>
-                          <td className="p-3">
-                            {order.delivery_date ? (
-                              <div className={order.is_overdue ? 'text-red-600' : ''}>
-                                {new Date(order.delivery_date).toLocaleDateString()}
-                                {order.is_overdue && (
-                                  <div className="text-xs text-red-600">⚠️ Overdue</div>
-                                )}
+                            <div className="text-sm">{new Date(order.created_at).toLocaleDateString()}</div>
+                            {order.delivery_date && (
+                              <div className={`text-xs ${order.is_overdue ? 'text-red-600' : 'text-muted-foreground'}`}>
+                                Due: {new Date(order.delivery_date).toLocaleDateString()}
+                                {order.is_overdue && ' ⚠️'}
                               </div>
-                            ) : (
-                              <span className="text-muted-foreground">Not set</span>
                             )}
                           </td>
                           <td className="p-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-16 bg-gray-200 rounded-full h-2">
-                                <div
-                                  className={`h-2 rounded-full ${
-                                    order.fulfillment_percentage === 100 ? 'bg-green-600' :
-                                    order.fulfillment_percentage > 0 ? 'bg-blue-600' : 'bg-gray-400'
-                                  }`}
-                                  style={{ width: `${order.fulfillment_percentage || 0}%` }}
-                                ></div>
-                              </div>
-                              <span className="text-xs">{(order.fulfillment_percentage || 0).toFixed(0)}%</span>
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {order.total_quantity_fulfilled || 0}/{order.total_quantity_ordered || 0} rolls
-                            </div>
+                            <div className="text-lg font-bold text-blue-600">{order.total_quantity_ordered || 0}</div>
+                            <div className="text-xs text-muted-foreground">rolls</div>
                           </td>
                           <td className="p-3">
-                            <div className="font-medium">₹{(order.total_value || 0).toLocaleString()}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {order.total_items} items
-                            </div>
+                            <div className="text-lg font-bold text-yellow-600">{order.total_quantity_pending || 0}</div>
+                            <div className="text-xs text-muted-foreground">rolls</div>
                           </td>
                           <td className="p-3">
-                            <Badge variant="outline">
-                              {order.payment_type || 'bill'}
-                            </Badge>
+                            <div className="text-lg font-bold text-orange-600">{order.total_quantity_cut || 0}</div>
+                            <div className="text-xs text-muted-foreground">rolls</div>
+                          </td>
+                          <td className="p-3">
+                            <div className="text-lg font-bold text-green-600">{order.total_quantity_dispatched || 0}</div>
+                            <div className="text-xs text-muted-foreground">rolls</div>
                           </td>
                           <td className="p-3">
                             <Button
@@ -725,7 +671,7 @@ export default function ClientOrdersPage() {
                               <th className="text-left p-3">Ordered</th>
                               <th className="text-left p-3">Pending</th>
                               <th className="text-left p-3">Cut</th>
-                              <th className="text-left p-3">Dispatched</th>
+                              <th className="text-left p-3">In Dispatch</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -893,6 +839,8 @@ export default function ClientOrdersPage() {
             )}
           </DialogContent>
         </Dialog>
+          </>
+        )}
       </div>
     </DashboardLayout>
   );

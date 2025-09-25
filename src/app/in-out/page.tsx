@@ -504,7 +504,7 @@ export default function InOutPage() {
 
                     {/* Cash */}
                     <div className="flex flex-col space-y-2">
-                      <Label htmlFor="cash">Cash</Label>
+                      <Label htmlFor="cash">Bill/Cash</Label>
                       <Input
                         id="cash"
                         type="number"
