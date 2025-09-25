@@ -22,11 +22,13 @@ export interface CreateMaterialData {
 
 export interface InwardChallan {
   id: string;
+  serial_no?: string;
   date: string;
   party_id: string;
   vehicle_number?: string;
   material_id: string;
   slip_no?: string;
+  rst_no?: string;
   gross_weight?: number;
   report?: number;
   net_weight?: number;
@@ -44,6 +46,7 @@ export interface CreateInwardChallanData {
   vehicle_number?: string;
   material_id: string;
   slip_no?: string;
+  rst_no?: string;
   gross_weight?: number;
   report?: number;
   net_weight?: number;
@@ -57,6 +60,7 @@ export interface CreateInwardChallanData {
 
 export interface OutwardChallan {
   id: string;
+  serial_no?: string;
   date: string;
   vehicle_number?: string;
   driver_name?: string;

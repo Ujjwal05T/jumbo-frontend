@@ -26,12 +26,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -40,21 +34,17 @@ import {
 } from "@/components/ui/select";
 import {
   Truck,
-  Search,
-  MoreHorizontal,
   CheckCircle,
   Clock,
   Package,
   AlertCircle,
-  Eye,
-  MapPin,
   Calendar,
   User,
   Loader2,
   History,
-  Scan,
   X,
   ShoppingCart,
+  Building2,
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DispatchForm } from "@/components/DispatchForm";
@@ -81,8 +71,6 @@ export default function DispatchPage() {
   const [error, setError] = useState<string | null>(null);
   const [warehouseItems, setWarehouseItems] = useState<any[]>([]);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
-  const [barcodeInput, setBarcodeInput] = useState("");
-  const [scanLoading, setScanLoading] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     itemIds: string[];
@@ -123,31 +111,23 @@ export default function DispatchPage() {
     try {
       setLoading(true);
       setError(null);
-      
-      // If no client is selected, don't load any items - require client selection first
-      if (selectedClientId === "none") {
-        setWarehouseItems([]);
-        console.log("No client selected - showing empty list");
-        setLoading(false);
-        return;
-      }
-      
+
       // Build query parameters for filtering
       const params = new URLSearchParams();
       if (selectedClientId && selectedClientId !== "none") params.append('client_id', selectedClientId);
-      
+
       const queryString = params.toString();
       const url = `${API_BASE_URL}/dispatch/warehouse-items?${queryString}`;
-      
+
       const response = await fetch(url, {
         headers: { 'ngrok-skip-browser-warning': 'true' }
       });
-      
+
       if (!response.ok) throw new Error('Failed to load warehouse items');
       const warehouseResponse = await response.json();
-      
+
       setWarehouseItems(warehouseResponse.warehouse_items || []);
-      
+
       console.log("Loaded warehouse items:", warehouseResponse.warehouse_items?.length || 0);
       console.log("Filter applied:", warehouseResponse.dispatch_info);
     } catch (err) {
@@ -161,7 +141,7 @@ export default function DispatchPage() {
 
   useEffect(() => {
     loadClients(); // Load clients on page load
-    loadData(); // Load warehouse items based on initial state (will be empty since no client selected)
+    loadData(); // Load warehouse items (will show all items if no client selected)
   }, []);
 
   // Reload warehouse items when client filter changes
@@ -227,48 +207,6 @@ export default function DispatchPage() {
     handleCompleteItems(selectedItems);
   };
 
-  const handleBarcodeSubmit = async () => {
-    if (!barcodeInput.trim()) {
-      toast.error("Please enter a barcode");
-      return;
-    }
-
-    if (selectedClientId === "none") {
-      toast.error("Please select a client first");
-      return;
-    }
-
-    try {
-      setScanLoading(true);
-      
-      // Find item in current filtered warehouse items
-      const foundItem = warehouseItems.find(item => 
-        item.barcode_id === barcodeInput.trim() || 
-        item.qr_code === barcodeInput.trim()
-      );
-      
-      if (!foundItem) {
-        toast.error("Item not found or doesn't belong to selected client");
-        return;
-      }
-      
-      // Check if already selected
-      if (selectedItems.includes(foundItem.inventory_id)) {
-        toast.error("Item already selected");
-        return;
-      }
-      
-      // Add to selected items
-      setSelectedItems(prev => [...prev, foundItem.inventory_id]);
-      setBarcodeInput("");
-      toast.success(`Item ${foundItem.barcode_id || foundItem.qr_code} selected for dispatch`);
-      
-    } catch (error) {
-      toast.error("Error scanning barcode");
-    } finally {
-      setScanLoading(false);
-    }
-  };
 
   const clearSelectedItems = () => {
     setSelectedItems([]);
@@ -327,18 +265,18 @@ export default function DispatchPage() {
           </Button>
         </div>
 
-        {/* Client Selection & Barcode Scanner */}
+        {/* Client Selection */}
         <Card>
           <CardContent className="pt-3">
-            <div className="grid grid-cols-1 sm:flex sm:flex-row sm:justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               {/* Client Selection */}
-              <div className="space-y-2 max-w-xs sm:w-full">
+              <div className="space-y-2 max-w-xs sm:w-1/2">
                 <label className="text-sm font-medium flex items-center gap-2">
                   <User className="w-4 h-4" />
-                  Client
+                  Filter by Client (Optional)
                 </label>
-                <Select 
-                  value={selectedClientId} 
+                <Select
+                  value={selectedClientId}
                   onValueChange={(value) => {
                     setSelectedClientId(value);
                     setSelectedItems([]);
@@ -346,10 +284,10 @@ export default function DispatchPage() {
                   disabled={clientsLoading}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder={clientsLoading ? "Loading..." : "Select client"} />
+                    <SelectValue placeholder={clientsLoading ? "Loading..." : "All clients"} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Select Client</SelectItem>
+                    <SelectItem value="none">All Clients</SelectItem>
                     {clients.map((client) => (
                       <SelectItem key={client.id} value={client.id}>
                         {client.company_name}
@@ -357,52 +295,25 @@ export default function DispatchPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  Filter items by specific client or view all available items
+                </p>
               </div>
 
-              {/* Barcode Scanner */}
-              <div className="md:col-span-2 space-y-2 sm:h-20  max-w-xl sm:w-full">
-                <label className="text-sm font-medium flex items-center gap-2">
-                  <Scan className="w-4 h-4" />
-                  Scan Barcode
-                </label>
-                <div className="flex gap-2">
-                  <Input
-                    value={barcodeInput}
-                    onChange={(e) => setBarcodeInput(e.target.value)}
-                    placeholder="Scan or enter barcode (e.g., CR_00001)"
-                    onKeyDown={(e) => e.key === 'Enter' && handleBarcodeSubmit()}
-                    className="font-mono py-1"
-                    disabled={selectedClientId === "none"}
-                  />
-                  <Button 
-                    onClick={handleBarcodeSubmit}
-                    disabled={!barcodeInput.trim() || scanLoading || selectedClientId === "none"}
-                  >
-                    {scanLoading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Scan className="w-4 h-4" />
-                    )}
-                  </Button>
-                </div>
-                {selectedClientId === "none" && (
-                  <p className="text-xs text-orange-600">Select a client first</p>
-                )}
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-2">
+              {/* Selection Summary */}
+              <div className="flex items-center gap-4">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-blue-600">{selectedItems.length}</div>
-                  <div className="text-xs text-muted-foreground">Selected</div>
+                  <div className="text-xs text-muted-foreground">Selected Items</div>
                 </div>
                 {selectedItems.length > 0 && (
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     onClick={clearSelectedItems}
                     size="sm"
                   >
-                    <X className="w-4 h-4" />
+                    <X className="w-4 h-4 mr-2" />
+                    Clear All
                   </Button>
                 )}
               </div>
@@ -496,17 +407,29 @@ export default function DispatchPage() {
                   <TableRow>
                     <TableHead className="w-[50px]">
                       <div className="flex items-center justify-center">
-                        <ShoppingCart className="w-4 h-4 text-muted-foreground" />
+                        <Checkbox
+                          checked={filteredItems.length > 0 && selectedItems.length === filteredItems.length}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              const allItemIds = filteredItems.map(item => item.inventory_id);
+                              setSelectedItems(allItemIds);
+                              toast.success(`Selected all ${allItemIds.length} items`);
+                            } else {
+                              setSelectedItems([]);
+                              toast.success("Cleared all selections");
+                            }
+                          }}
+                          className="w-5 h-5"
+                        />
                       </div>
                     </TableHead>
                     <TableHead>S.No</TableHead>
                     <TableHead>QR Code</TableHead>
+                    <TableHead>Client & Order</TableHead>
                     <TableHead>Paper Specs</TableHead>
                     <TableHead>Dimensions</TableHead>
                     <TableHead>Weight</TableHead>
-                    <TableHead>Location</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -518,20 +441,18 @@ export default function DispatchPage() {
                       >
                         <TableCell>
                           <div className="flex items-center justify-center">
-                            {selectedItems.includes(item.inventory_id) ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => removeSelectedItem(item.inventory_id)}
-                                className="h-8 w-8 p-0 text-red-600 border-red-200 hover:bg-red-50"
-                              >
-                                <X className="w-4 h-4" />
-                              </Button>
-                            ) : (
-                              <Badge variant="outline" className="text-xs">
-                                Not Selected
-                              </Badge>
-                            )}
+                            <Checkbox
+                              checked={selectedItems.includes(item.inventory_id)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setSelectedItems(prev => [...prev, item.inventory_id]);
+                                  toast.success(`Selected ${item.barcode_id || item.qr_code}`);
+                                } else {
+                                  removeSelectedItem(item.inventory_id);
+                                }
+                              }}
+                              className="w-5 h-5"
+                            />
                           </div>
                         </TableCell>
                         <TableCell className="font-medium">
@@ -540,8 +461,8 @@ export default function DispatchPage() {
                         <TableCell>
                           <div className="space-y-1">
                             <div className={`font-mono text-sm ${
-                              selectedItems.includes(item.inventory_id) 
-                                ? "font-bold text-blue-700" 
+                              selectedItems.includes(item.inventory_id)
+                                ? "font-bold text-blue-700"
                                 : ""
                             }`}>
                               {item.barcode_id || item.qr_code}
@@ -551,6 +472,17 @@ export default function DispatchPage() {
                             </div>
                             <div className="text-xs text-muted-foreground">
                               Created by: {item.created_by}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="font-medium text-sm flex items-center gap-1">
+                              <Building2 className="w-3 h-3 text-blue-600" />
+                              {item.client_name || "N/A"}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              Order: {item.order_id || "N/A"}
                             </div>
                           </div>
                         </TableCell>
@@ -581,65 +513,27 @@ export default function DispatchPage() {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <div className="text-sm flex items-center gap-1">
-                              <MapPin className="w-3 h-3" />
-                              {item.location}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {new Date(item.production_date).toLocaleDateString()}
-                            </div>
-                          </div>
-                        </TableCell>
                         <TableCell>{getStatusBadge(item.status, "warehouse")}</TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" className="h-8 w-8 p-0">
-                                <span className="sr-only">Open menu</span>
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem>
-                                <Eye className="mr-2 h-4 w-4" />
-                                View QR Code
-                              </DropdownMenuItem>
-                              {item.status === "available" && (
-                                <DropdownMenuItem
-                                  className="text-green-600"
-                                  onClick={() =>
-                                    handleCompleteItems([item.inventory_id])
-                                  }>
-                                  <CheckCircle className="mr-2 h-4 w-4" />
-                                  Mark as Dispatched
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={9} className="h-24 text-center">
+                      <TableCell colSpan={8} className="h-24 text-center">
                         {loading ? (
                           <div className="flex items-center justify-center">
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                             Loading warehouse items...
                           </div>
-                        ) : selectedClientId === "none" ? (
-                          <div className="text-center py-4">
-                            <div className="text-muted-foreground">
-                              <p className="font-medium">Please select a client first</p>
-                              <p className="text-sm">Choose a client from the dropdown above to view their warehouse items ready for dispatch</p>
-                            </div>
-                          </div>
                         ) : (
                           <div className="text-center py-4">
                             <div className="text-muted-foreground">
                               <p className="font-medium">No cut rolls ready for dispatch</p>
+                              <p className="text-sm">
+                                {selectedClientId === "none"
+                                  ? "No warehouse items found for any client"
+                                  : `No warehouse items found for the selected client`
+                                }
+                              </p>
                             </div>
                           </div>
                         )}

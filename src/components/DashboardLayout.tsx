@@ -109,8 +109,8 @@ const navigation = [
     children: [
       { name: "Analytics Dashboard", href: "/reports" },
       { name: "Client-Order Analysis", href: "/reports/client-orders" },
-      { name: "Client Orders with Plans", href: "/reports/client-orders-plans" },
-      { name: "Order Tracking", href: "/reports/order-tracking" },
+      // { name: "Client Orders with Plans", href: "/reports/client-orders-plans" },
+      // { name: "Order Tracking", href: "/reports/order-tracking" },
     ],
   },
   {
