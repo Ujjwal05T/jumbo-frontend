@@ -187,9 +187,19 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true, editingUs
                       <Badge className="bg-purple-100 text-purple-800">Admin</Badge>
                     </div>
                   </SelectItem>
-                  <SelectItem value="supervisor">
+                  <SelectItem value="co_admin">
                     <div className="flex items-center gap-2">
-                      <Badge className="bg-blue-100 text-blue-800">Supervisor</Badge>
+                      <Badge className="bg-purple-100 text-purple-700">Co Admin</Badge>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="order_puncher">
+                    <div className="flex items-center gap-2">
+                      <Badge className="bg-blue-100 text-blue-800">Order Puncher</Badge>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="security">
+                    <div className="flex items-center gap-2">
+                      <Badge className="bg-red-100 text-red-800">Security</Badge>
                     </div>
                   </SelectItem>
                   <SelectItem value="planner">
@@ -197,9 +207,14 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true, editingUs
                       <Badge className="bg-green-100 text-green-800">Planner</Badge>
                     </div>
                   </SelectItem>
-                  <SelectItem value="sales">
+                  <SelectItem value="poduction">
                     <div className="flex items-center gap-2">
-                      <Badge className="bg-orange-100 text-orange-800">Sales</Badge>
+                      <Badge className="bg-yellow-100 text-yellow-800">Production</Badge>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="accountant">
+                    <div className="flex items-center gap-2">
+                      <Badge className="bg-indigo-100 text-indigo-800">Accountant</Badge>
                     </div>
                   </SelectItem>
                 </SelectContent>

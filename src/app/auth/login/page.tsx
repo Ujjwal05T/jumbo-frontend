@@ -46,7 +46,11 @@ export default function LoginPage() {
       localStorage.setItem('user_id', data.id);
       localStorage.setItem('user_name', data.name);
       localStorage.setItem('user_role', data.role);
-      
+
+      // Set cookies for middleware
+      document.cookie = `username=${data.username}; path=/; max-age=${60 * 60 * 24 * 7}`;
+      document.cookie = `user_role=${data.role}; path=/; max-age=${60 * 60 * 24 * 7}`;
+
       // Redirect based on role
     if (data.role?.toLowerCase() === 'planner') {
       router.push('/weight-update');

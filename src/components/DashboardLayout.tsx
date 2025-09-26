@@ -43,83 +43,125 @@ interface DashboardLayoutProps {
   children: React.ReactNode;
 }
 
-const navigation = [
-  {
-    name: "Dashboard",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-  },
-  {
-    name: "Masters",
-    icon: FileText,
-    children: [
-      { name: "Client Master", href: "/masters/clients" },
-      { name: "Order Master", href: "/masters/orders" },
-      { name: "Pending Orders", href: "/masters/pending-orders" },
-      // { name: "Pending Allocation", href: "/masters/pending-orders/allocation" },
-      { name: "Plan Master", href: "/masters/plans" },
-      { name: "User Master", href: "/masters/users" },
-      { name: "Paper Master", href: "/masters/papers" },
-      { name: "Material Master", href: "/masters/materials" },
-    ],
-  },
-  {
-    name: "Stock",
-    href: "/wastage",
-    icon: Recycle,
-  },
-  {
-    name: "Planning",
-    href: "/planning",
-    icon: Scissors,
-  },
-  {
-    name: "Inventory",
-    icon: Package,
-    children: [
-      { name: "Past Inventory", href: "/inventory/past-inventory" },
-    ],
-  },
-  {
-    name: "In/Out",
-    href: "/in-out",
-    icon: Database,
-  },
-  {
-    name: "Dispatch",
-    icon: Truck,
-    children: [
-      { name: "Current Dispatch", href: "/dispatch" },
-      { name: "Past Dispatch", href: "/past-dispatch" },
-      { name: "Plan Weights", href: "/plan-weights" },
-    ],
-  },
-  {
-    name: "Challan",
-    href: "/challan",
-    icon: Receipt,
-  },
-  {
-    name: "QR Scanner",
-    href: "/qr-scanner",
-    icon: QrCode,
-  },
-  {
-    name: "Reports",
-    icon: BarChart3,
-    children: [
-      { name: "Analytics Dashboard", href: "/reports" },
-      { name: "Client-Order Analysis", href: "/reports/client-orders" },
-      { name: "Client Orders with Plans", href: "/reports/client-orders-plans" },
-      // { name: "Order Tracking", href: "/reports/order-tracking" },
-    ],
-  },
-  {
-    name: "Hour Calculator",
-    href: "/hour-calculator",
-    icon: Clock,
-  },
-];
+const getNavigationForRole = (role: string | null) => {
+  const allNavigation = [
+    {
+      name: "Dashboard",
+      href: "/dashboard",
+      icon: LayoutDashboard,
+      roles: ["admin", "co_admin", "poduction", "accountant"],
+    },
+    {
+      name: "Masters",
+      icon: FileText,
+      roles: ["admin", "order_puncher", "co_admin", "accountant"],
+      children: [
+        { name: "Client Master", href: "/masters/clients", roles: ["admin", "order_puncher", "co_admin", "accountant"] },
+        { name: "Order Master", href: "/masters/orders", roles: ["admin", "order_puncher", "co_admin", "accountant"] },
+        { name: "Pending Orders", href: "/masters/pending-orders", roles: ["admin", "poduction"] },
+        { name: "Plan Master", href: "/masters/plans", roles: ["admin"] },
+        { name: "User Master", href: "/masters/users", roles: ["admin", "accountant"] },
+        { name: "Paper Master", href: "/masters/papers", roles: ["admin", "order_puncher", "accountant"] },
+        { name: "Material Master", href: "/masters/materials", roles: ["admin", "accountant"] },
+      ],
+    },
+    {
+      name: "Orders",
+      href: "/orders",
+      icon: FileText,
+      roles: ["admin", "co_admin"],
+    },
+    {
+      name: "Inventory",
+      href: "/inventory",
+      icon: Package,
+      roles: ["admin"],
+    },
+    {
+      name: "Cutting Plans",
+      href: "/cutting-plans",
+      icon: Scissors,
+      roles: ["admin"],
+    },
+    {
+      name: "Planning",
+      href: "/planning",
+      icon: Scissors,
+      roles: ["admin"],
+    },
+    {
+      name: "Stock",
+      href: "/wastage",
+      icon: Recycle,
+      roles: ["admin", "accountant"],
+    },
+    {
+      name: "Weight Update",
+      href: "/weight-update",
+      icon: Database,
+      roles: ["admin", "planner", "accountant"],
+    },
+    {
+      name: "In/Out",
+      href: "/in-out",
+      icon: Database,
+      roles: ["admin", "security"],
+    },
+    {
+      name: "Dispatch",
+      icon: Truck,
+      roles: ["admin", "co_admin", "accountant"],
+      children: [
+        { name: "Current Dispatch", href: "/dispatch", roles: ["admin", "co_admin", "accountant"] },
+        { name: "Past Dispatch", href: "/past-dispatch", roles: ["admin", "accountant"] },
+        { name: "Plan Weights", href: "/plan-weights", roles: ["admin"] },
+      ],
+    },
+    {
+      name: "Challan",
+      href: "/challan",
+      icon: Receipt,
+      roles: ["admin", "security", "accountant"],
+    },
+    {
+      name: "QR Scanner",
+      href: "/qr-scanner",
+      icon: QrCode,
+      roles: ["admin", "poduction"],
+    },
+    {
+      name: "Reports",
+      icon: BarChart3,
+      roles: ["admin", "poduction", "accountant"],
+      children: [
+        { name: "Analytics Dashboard", href: "/reports", roles: ["admin", "poduction", "accountant"] },
+        { name: "Client-Order Analysis", href: "/reports/client-orders", roles: ["admin", "poduction", "accountant"] },
+      ],
+    },
+    {
+      name: "Hour Calculator",
+      href: "/hour-calculator",
+      icon: Clock,
+      roles: ["admin", "order_puncher", "security", "poduction", "accountant"],
+    },
+  ];
+
+  // Filter navigation based on user role
+  return allNavigation.filter(item => {
+    if (!role || !item.roles.includes(role)) return false;
+
+    // Filter children if they exist
+    if (item.children) {
+      item.children = item.children.filter(child =>
+        child.roles.includes(role)
+      );
+      // Only show parent if it has accessible children
+      return item.children.length > 0;
+    }
+
+    return true;
+  });
+};
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -128,6 +170,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
   const user = getCurrentUser();
+  const userRole = typeof window !== "undefined" ? localStorage.getItem("user_role") : null;
+  const navigation = getNavigationForRole(userRole);
 
   const handleLogout = () => {
     console.log('Logout button clicked');

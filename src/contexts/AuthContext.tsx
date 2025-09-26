@@ -26,12 +26,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = (username: string) => {
     localStorage.setItem('username', username);
     setUser(username);
+
+    // Sync auth data to cookies for middleware
+    const role = localStorage.getItem('user_role');
+    if (role) {
+      document.cookie = `username=${username}; path=/; max-age=${60 * 60 * 24 * 7}`;
+      document.cookie = `user_role=${role}; path=/; max-age=${60 * 60 * 24 * 7}`;
+    }
+
     router.push('/dashboard');
   };
 
   const logout = () => {
     localStorage.removeItem('username');
+    localStorage.removeItem('user_role');
     setUser(null);
+
+    // Clear auth cookies
+    document.cookie = 'username=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT';
+    document.cookie = 'user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT';
+
     router.push('/login');
   };
 

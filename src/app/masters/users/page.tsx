@@ -145,20 +145,35 @@ export default function UserMasterPage() {
           <Crown className="w-3 h-3 mr-1" />
           Admin
         </Badge>;
-      case "supervisor":
-        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
+      case "co_admin":
+        return <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100">
           <Shield className="w-3 h-3 mr-1" />
-          Supervisor
+          Co Admin
+        </Badge>;
+      case "order_puncher":
+        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
+          <User className="w-3 h-3 mr-1" />
+          Order Puncher
+        </Badge>;
+      case "security":
+        return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">
+          <Shield className="w-3 h-3 mr-1" />
+          Security
         </Badge>;
       case "planner":
         return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
           <Settings className="w-3 h-3 mr-1" />
           Planner
         </Badge>;
-      case "sales":
-        return <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">
+      case "poduction":
+        return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
           <Settings className="w-3 h-3 mr-1" />
-          Sales
+          Production
+        </Badge>;
+      case "accountant":
+        return <Badge className="bg-indigo-100 text-indigo-800 hover:bg-indigo-100">
+          <Settings className="w-3 h-3 mr-1" />
+          Accountant
         </Badge>;
       default:
         return <Badge variant="secondary">{role}</Badge>;

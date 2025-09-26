@@ -40,6 +40,8 @@ import {
   updateInwardChallan,
   updateOutwardChallan,
   fetchMaterials,
+  fetchNextInwardSerialNumber,
+  fetchNextOutwardSerialNumber,
   InwardChallan,
   OutwardChallan,
   Material,
@@ -67,15 +69,45 @@ export default function InOutPage() {
   const [editingInwardChallan, setEditingInwardChallan] = useState<InwardChallan | null>(null);
   const [editingOutwardChallan, setEditingOutwardChallan] = useState<OutwardChallan | null>(null);
 
+  // Serial number states - fetched from database
+  const [nextInwardSerial, setNextInwardSerial] = useState<string>("00001");
+  const [nextOutwardSerial, setNextOutwardSerial] = useState<string>("00001");
+
+  // Fetch next serial numbers from database
+  const loadNextSerialNumbers = async () => {
+    try {
+      const [inwardSerial, outwardSerial] = await Promise.all([
+        fetchNextInwardSerialNumber(),
+        fetchNextOutwardSerialNumber()
+      ]);
+      setNextInwardSerial(inwardSerial);
+      setNextOutwardSerial(outwardSerial);
+    } catch (error) {
+      console.error("Error loading serial numbers:", error);
+      // Keep default values if API fails
+    }
+  };
+
+  // Get today's date in YYYY-MM-DD format
+  const getTodayDate = () => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  };
+
   // Form states for Inward Challan
-  const [inwardForm, setInwardForm] = useState<Partial<CreateInwardChallanData & { payment_type: string }>>({
+  const [inwardForm, setInwardForm] = useState<Partial<CreateInwardChallanData & { payment_type: string; serial_no: string; date: string }>>({
     party_id: "",
     material_id: "",
     payment_type: "", // Add payment type field
+    serial_no: "",
+    date: "",
   });
 
   // Form states for Outward Challan
-  const [outwardForm, setOutwardForm] = useState<Partial<CreateOutwardChallanData>>({});
+  const [outwardForm, setOutwardForm] = useState<Partial<CreateOutwardChallanData & { serial_no: string; date: string }>>({
+    serial_no: "",
+    date: "",
+  });
 
   // Auto-calculate final weight when net_weight or report changes
   useEffect(() => {
@@ -92,6 +124,7 @@ export default function InOutPage() {
   // Load data on component mount
   useEffect(() => {
     loadData();
+    loadNextSerialNumbers();
   }, []);
 
   const loadData = async () => {
@@ -161,8 +194,27 @@ export default function InOutPage() {
 
       await createInwardChallan(challanData);
       toast.success("Inward challan created successfully!");
+      loadNextSerialNumbers(); // Refresh serial numbers after successful creation
       setShowInwardModal(false);
-      setInwardForm({ party_id: "", material_id: "", payment_type: "" });
+      // Reset form with empty values
+      setInwardForm({
+        party_id: "",
+        material_id: "",
+        payment_type: "",
+        serial_no: "",
+        date: "",
+        vehicle_number: "",
+        slip_no: "",
+        rst_no: "",
+        gross_weight: undefined,
+        net_weight: undefined,
+        final_weight: undefined,
+        rate: undefined,
+        bill_no: "",
+        time_in: "",
+        time_out: "",
+        report: undefined
+      });
       loadData(); // Refresh data
     } catch (error) {
       console.error("Error creating inward challan:", error);
@@ -193,8 +245,23 @@ export default function InOutPage() {
 
       await createOutwardChallan(challanData);
       toast.success("Outward challan created successfully!");
+      loadNextSerialNumbers(); // Refresh serial numbers after successful creation
       setShowOutwardModal(false);
-      setOutwardForm({});
+      // Reset form with empty values
+      setOutwardForm({
+        serial_no: "",
+        date: "",
+        vehicle_number: "",
+        driver_name: "",
+        rst_no: "",
+        purpose: "",
+        time_in: "",
+        time_out: "",
+        party_name: "",
+        gross_weight: undefined,
+        net_weight: undefined,
+        bill_no: ""
+      });
       loadData(); // Refresh data
     } catch (error) {
       console.error("Error creating outward challan:", error);
@@ -286,7 +353,24 @@ export default function InOutPage() {
       toast.success("Inward challan updated successfully!");
       setShowInwardUpdateModal(false);
       setEditingInwardChallan(null);
-      setInwardForm({ party_id: "", material_id: "", payment_type: "" });
+      setInwardForm({
+        party_id: "",
+        material_id: "",
+        payment_type: "",
+        serial_no: "",
+        date: "",
+        vehicle_number: "",
+        slip_no: "",
+        rst_no: "",
+        gross_weight: undefined,
+        net_weight: undefined,
+        final_weight: undefined,
+        rate: undefined,
+        bill_no: "",
+        time_in: "",
+        time_out: "",
+        report: undefined
+      });
       loadData(); // Refresh data
     } catch (error) {
       console.error("Error updating inward challan:", error);
@@ -323,7 +407,20 @@ export default function InOutPage() {
       toast.success("Outward challan updated successfully!");
       setShowOutwardUpdateModal(false);
       setEditingOutwardChallan(null);
-      setOutwardForm({});
+      setOutwardForm({
+        serial_no: "",
+        date: "",
+        vehicle_number: "",
+        driver_name: "",
+        rst_no: "",
+        purpose: "",
+        time_in: "",
+        time_out: "",
+        party_name: "",
+        gross_weight: undefined,
+        net_weight: undefined,
+        bill_no: ""
+      });
       loadData(); // Refresh data
     } catch (error) {
       console.error("Error updating outward challan:", error);
@@ -389,10 +486,37 @@ export default function InOutPage() {
                     </DialogDescription>
                   </DialogHeader>
                   <form onSubmit={handleInwardSubmit} className="grid grid-cols-2 gap-4">
+                    {/* Serial No - Readonly */}
+                    <div className="flex flex-col space-y-2">
+                      <Label htmlFor="serialNo">Serial No.</Label>
+                      <Input
+                        id="serialNo"
+                        placeholder="Auto-generated"
+                        value={inwardForm.serial_no || nextInwardSerial}
+                        readOnly
+                        className="bg-gray-50 cursor-not-allowed"
+                        title="This field is automatically generated"
+                      />
+                    </div>
+
+                    {/* Date - Readonly */}
+                    <div className="flex flex-col space-y-2">
+                      <Label htmlFor="date">Date</Label>
+                      <Input
+                        id="date"
+                        type="date"
+                        value={inwardForm.date || getTodayDate()}
+                        readOnly
+                        className="bg-gray-50 cursor-not-allowed"
+                        title="This field is automatically set to today's date"
+                      />
+                    </div>
+
                     {/* Party Name */}
                     <div className="flex flex-col space-y-2">
                       <Label htmlFor="party">Party Name *</Label>
                       <Select
+                        key={`party-${showInwardModal}-${inwardForm.party_id}`}
                         value={inwardForm.party_id}
                         onValueChange={(value) => setInwardForm({ ...inwardForm, party_id: value })}
                       >
@@ -419,6 +543,7 @@ export default function InOutPage() {
                     <div className="flex flex-col space-y-2">
                       <Label htmlFor="material">Material *</Label>
                       <Select
+                        key={`material-${showInwardModal}-${inwardForm.material_id}`}
                         value={inwardForm.material_id}
                         onValueChange={(value) => setInwardForm({ ...inwardForm, material_id: value })}
                       >
@@ -512,6 +637,7 @@ export default function InOutPage() {
                     <div className="flex flex-col space-y-2">
                       <Label htmlFor="paymentType">Bill/Cash *</Label>
                       <Select
+                        key={`payment-${showInwardModal}-${inwardForm.payment_type}`}
                         value={inwardForm.payment_type || ""}
                         onValueChange={(value) => {
                           setInwardForm({ 
@@ -622,7 +748,28 @@ export default function InOutPage() {
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={() => setShowInwardModal(false)}
+                        onClick={() => {
+                          setShowInwardModal(false);
+                          // Reset form when canceling
+                          setInwardForm({
+                            party_id: "",
+                            material_id: "",
+                            payment_type: "",
+                            serial_no: "",
+                            date: "",
+                            vehicle_number: "",
+                            slip_no: "",
+                            rst_no: "",
+                            gross_weight: undefined,
+                            net_weight: undefined,
+                            final_weight: undefined,
+                            rate: undefined,
+                            bill_no: "",
+                            time_in: "",
+                            time_out: "",
+                            report: undefined
+                          });
+                        }}
                       >
                         Cancel
                       </Button>
@@ -708,6 +855,32 @@ export default function InOutPage() {
                     </DialogDescription>
                   </DialogHeader>
                   <form onSubmit={handleOutwardSubmit} className="grid grid-cols-2 gap-4">
+                    {/* Serial No - Readonly */}
+                    <div className="flex flex-col space-y-2">
+                      <Label htmlFor="outSerialNo">Serial No.</Label>
+                      <Input
+                        id="outSerialNo"
+                        placeholder="Auto-generated"
+                        value={outwardForm.serial_no || nextOutwardSerial}
+                        readOnly
+                        className="bg-gray-50 cursor-not-allowed"
+                        title="This field is automatically generated"
+                      />
+                    </div>
+
+                    {/* Date - Readonly */}
+                    <div className="flex flex-col space-y-2">
+                      <Label htmlFor="outDate">Date</Label>
+                      <Input
+                        id="outDate"
+                        type="date"
+                        value={outwardForm.date || getTodayDate()}
+                        readOnly
+                        className="bg-gray-50 cursor-not-allowed"
+                        title="This field is automatically set to today's date"
+                      />
+                    </div>
+
                     {/* Vehicle Number */}
                     <div className="flex flex-col space-y-2">
                       <Label htmlFor="outVehicle">Vehicle Number</Label>
@@ -827,7 +1000,24 @@ export default function InOutPage() {
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={() => setShowOutwardModal(false)}
+                        onClick={() => {
+                          setShowOutwardModal(false);
+                          // Reset form when canceling
+                          setOutwardForm({
+                            serial_no: "",
+                            date: "",
+                            vehicle_number: "",
+                            driver_name: "",
+                            rst_no: "",
+                            purpose: "",
+                            time_in: "",
+                            time_out: "",
+                            party_name: "",
+                            gross_weight: undefined,
+                            net_weight: undefined,
+                            bill_no: ""
+                          });
+                        }}
                       >
                         Cancel
                       </Button>
@@ -901,6 +1091,32 @@ export default function InOutPage() {
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleInwardUpdate} className="grid grid-cols-2 gap-4">
+              {/* Serial No - Readonly from DB */}
+              <div className="flex flex-col space-y-2">
+                <Label htmlFor="updateSerialNo">Serial No.</Label>
+                <Input
+                  id="updateSerialNo"
+                  placeholder="From database"
+                  value={editingInwardChallan?.serial_no || "N/A"}
+                  readOnly
+                  className="bg-gray-50 cursor-not-allowed"
+                  title="This field is fetched from database"
+                />
+              </div>
+
+              {/* Date - Readonly from DB */}
+              <div className="flex flex-col space-y-2">
+                <Label htmlFor="updateDate">Date</Label>
+                <Input
+                  id="updateDate"
+                  type="date"
+                  value={editingInwardChallan?.date ? new Date(editingInwardChallan.date).toISOString().split('T')[0] : ""}
+                  readOnly
+                  className="bg-gray-50 cursor-not-allowed"
+                  title="This field is fetched from database"
+                />
+              </div>
+
               {/* Party Name */}
               <div className="flex flex-col space-y-2">
                 <Label htmlFor="updateParty">Party Name *</Label>
@@ -1137,7 +1353,24 @@ export default function InOutPage() {
                   onClick={() => {
                     setShowInwardUpdateModal(false);
                     setEditingInwardChallan(null);
-                    setInwardForm({ party_id: "", material_id: "" });
+                    setInwardForm({
+                      party_id: "",
+                      material_id: "",
+                      payment_type: "",
+                      serial_no: "",
+                      date: "",
+                      vehicle_number: "",
+                      slip_no: "",
+                      rst_no: "",
+                      gross_weight: undefined,
+                      net_weight: undefined,
+                      final_weight: undefined,
+                      rate: undefined,
+                      bill_no: "",
+                      time_in: "",
+                      time_out: "",
+                      report: undefined
+                    });
                   }}
                 >
                   Cancel
@@ -1160,6 +1393,32 @@ export default function InOutPage() {
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleOutwardUpdate} className="grid grid-cols-2 gap-4">
+              {/* Serial No - Readonly from DB */}
+              <div className="flex flex-col space-y-2">
+                <Label htmlFor="updateOutSerialNo">Serial No.</Label>
+                <Input
+                  id="updateOutSerialNo"
+                  placeholder="From database"
+                  value={editingOutwardChallan?.serial_no || "N/A"}
+                  readOnly
+                  className="bg-gray-50 cursor-not-allowed"
+                  title="This field is fetched from database"
+                />
+              </div>
+
+              {/* Date - Readonly from DB */}
+              <div className="flex flex-col space-y-2">
+                <Label htmlFor="updateOutDate">Date</Label>
+                <Input
+                  id="updateOutDate"
+                  type="date"
+                  value={editingOutwardChallan?.date ? new Date(editingOutwardChallan.date).toISOString().split('T')[0] : ""}
+                  readOnly
+                  className="bg-gray-50 cursor-not-allowed"
+                  title="This field is fetched from database"
+                />
+              </div>
+
               {/* Vehicle Number */}
               <div className="flex flex-col space-y-2">
                 <Label htmlFor="updateOutVehicle">Vehicle Number</Label>
@@ -1282,7 +1541,20 @@ export default function InOutPage() {
                   onClick={() => {
                     setShowOutwardUpdateModal(false);
                     setEditingOutwardChallan(null);
-                    setOutwardForm({});
+                    setOutwardForm({
+        serial_no: "",
+        date: "",
+        vehicle_number: "",
+        driver_name: "",
+        rst_no: "",
+        purpose: "",
+        time_in: "",
+        time_out: "",
+        party_name: "",
+        gross_weight: undefined,
+        net_weight: undefined,
+        bill_no: ""
+      });
                   }}
                 >
                   Cancel

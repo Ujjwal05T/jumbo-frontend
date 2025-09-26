@@ -362,3 +362,51 @@ export async function deleteOutwardChallan(challanId: string): Promise<{ message
 
   return response.json();
 }
+
+// ============================================================================
+// SERIAL NUMBER API FUNCTIONS
+// ============================================================================
+
+/**
+ * Fetch next available serial number for inward challans
+ */
+export async function fetchNextInwardSerialNumber(): Promise<string> {
+  const response = await fetch(
+    `${MATERIAL_ENDPOINTS.INWARD_CHALLANS}/next-serial`,
+    createRequestOptions('GET')
+  );
+
+  if (!response.ok) {
+    // Fallback to manual generation if API doesn't support it yet
+    console.warn('Next serial API not available, using fallback');
+    const challans = await fetchInwardChallans(0, 1);
+    const lastSerial = challans.length > 0 ? challans[0].serial_no : '00000';
+    const nextNumber = lastSerial ? parseInt(lastSerial) + 1 : 1;
+    return nextNumber.toString().padStart(5, '0');
+  }
+
+  const data = await response.json();
+  return data.next_serial || '00001';
+}
+
+/**
+ * Fetch next available serial number for outward challans
+ */
+export async function fetchNextOutwardSerialNumber(): Promise<string> {
+  const response = await fetch(
+    `${MATERIAL_ENDPOINTS.OUTWARD_CHALLANS}/next-serial`,
+    createRequestOptions('GET')
+  );
+
+  if (!response.ok) {
+    // Fallback to manual generation if API doesn't support it yet
+    console.warn('Next serial API not available, using fallback');
+    const challans = await fetchOutwardChallans(0, 1);
+    const lastSerial = challans.length > 0 ? challans[0].serial_no : '00000';
+    const nextNumber = lastSerial ? parseInt(lastSerial) + 1 : 1;
+    return nextNumber.toString().padStart(5, '0');
+  }
+
+  const data = await response.json();
+  return data.next_serial || '00001';
+}

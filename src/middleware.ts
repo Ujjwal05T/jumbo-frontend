@@ -1,54 +1,114 @@
 /**
- * Middleware to protect routes that require authentication
+ * Middleware to protect routes and implement role-based access control
  */
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// Define protected routes that require authentication
-const protectedRoutes = [
-  '/dashboard',
-  '/orders',
-  '/inventory',
-  '/cutting-plans',
-  '/planning',
-  '/masters',
-  '/reports',
-  '/weight-update', 
-];
+// Define role-based route permissions
+const roleBasedRoutes = {
+  admin: [
+    '/dashboard',
+    '/orders',
+    '/inventory',
+    '/cutting-plans',
+    '/planning',
+    '/masters',
+    '/reports',
+    '/weight-update',
+    '/wastage',
+    '/in-out',
+    '/dispatch',
+    '/past-dispatch',
+    '/plan-weights',
+    '/challan',
+    '/qr-scanner',
+    '/hour-calculator',
+  ],
+  order_puncher: [
+    '/masters/orders',
+    '/masters/clients',
+    '/masters/papers',
+    '/hour-calculator',
+  ],
+  security: [
+    '/challan',
+    '/in-out',
+    '/hour-calculator',
+  ],
+  co_admin: [
+    '/dashboard',
+    '/orders',
+    '/dispatch',
+    '/masters'
+  ],
+  planner: [
+    '/weight-update',
+  ],
+  poduction: [
+    '/dashboard',
+    '/reports',
+    '/masters/pending-orders',
+    '/qr-scanner',
+    '/hour-calculator',
+  ],
+  accountant: [
+    '/dashboard',
+    '/masters',
+    '/weight-update',
+    '/dispatch',
+    '/reports',
+    '/challan',
+    '/past-dispatch',
+    '/hour-calculator',
+    '/wastage',
+  ],
+};
 
 // Define public routes that don't require authentication
 const publicRoutes = [
   '/auth/login',
   '/auth/register',
   '/',
+  '/access-denied',
 ];
 
 export function middleware(request: NextRequest) {
   // Get the path of the request
   const path = request.nextUrl.pathname;
-  
+
   // Check if the path is a public route
-  const isPublicRoute = publicRoutes.some(route => 
+  const isPublicRoute = publicRoutes.some(route =>
     path === route || path.startsWith(`${route}/`)
   );
-  
+
   // If it's a public route, allow the request
   if (isPublicRoute) {
     return NextResponse.next();
   }
-  
-  // Check if the path is a protected route
-  const isProtectedRoute = protectedRoutes.some(route => 
+
+  // Get user role from cookies
+  const userRole = request.cookies.get('user_role')?.value;
+  const username = request.cookies.get('username')?.value;
+
+  // If no auth info, redirect to login
+  if (!username || !userRole) {
+    const loginUrl = new URL('/auth/login', request.url);
+    loginUrl.searchParams.set('redirect', path);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  // Check if user's role has access to this route
+  const allowedRoutes = roleBasedRoutes[userRole as keyof typeof roleBasedRoutes];
+  const hasAccess = allowedRoutes?.some(route =>
     path === route || path.startsWith(`${route}/`)
   );
-  
-  // If it's not a protected route, allow the request
-  if (!isProtectedRoute) {
-    return NextResponse.next();
+
+  // If user doesn't have access, redirect to access denied page
+  if (!hasAccess) {
+    const accessDeniedUrl = new URL('/access-denied', request.url);
+    return NextResponse.redirect(accessDeniedUrl);
   }
-  
-  // For protected routes, we'll handle the redirection in the client-side
-  // since we can't access localStorage in middleware
+
   return NextResponse.next();
 }
 

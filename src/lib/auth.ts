@@ -41,6 +41,11 @@ export async function login(username: string, password: string): Promise<any> {
   localStorage.setItem('user_id', data.id);
   localStorage.setItem('user_name', data.name);
   localStorage.setItem('user_role', data.role);
+
+  // Sync auth data to cookies for middleware
+  document.cookie = `username=${data.username}; path=/; max-age=${60 * 60 * 24 * 7}`;
+  document.cookie = `user_role=${data.role}; path=/; max-age=${60 * 60 * 24 * 7}`;
+
   return data;
 }
 
@@ -72,6 +77,10 @@ export function logout(): void {
   localStorage.removeItem('user_id');
   localStorage.removeItem('user_name');
   localStorage.removeItem('user_role');
+
+  // Clear auth cookies
+  document.cookie = 'username=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT';
+  document.cookie = 'user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT';
 }
 
 /**
