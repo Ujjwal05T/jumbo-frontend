@@ -68,9 +68,10 @@ export default function InOutPage() {
   const [editingOutwardChallan, setEditingOutwardChallan] = useState<OutwardChallan | null>(null);
 
   // Form states for Inward Challan
-  const [inwardForm, setInwardForm] = useState<Partial<CreateInwardChallanData>>({
+  const [inwardForm, setInwardForm] = useState<Partial<CreateInwardChallanData & { payment_type: string }>>({
     party_id: "",
     material_id: "",
+    payment_type: "", // Add payment type field
   });
 
   // Form states for Outward Challan
@@ -128,8 +129,14 @@ export default function InOutPage() {
   // Handle Inward Challan form submission
   const handleInwardSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inwardForm.party_id || !inwardForm.material_id) {
-      toast.error("Party and Material are required");
+    if (!inwardForm.party_id || !inwardForm.material_id || !inwardForm.payment_type) {
+      toast.error("Party, Material, and Payment Type are required");
+      return;
+    }
+
+    // Validate bill number if payment type is bill
+    if (inwardForm.payment_type === "bill" && !inwardForm.bill_no) {
+      toast.error("Bill number is required when payment type is Bill");
       return;
     }
 
@@ -146,16 +153,16 @@ export default function InOutPage() {
         net_weight: inwardForm.net_weight ? Number(inwardForm.net_weight) : undefined,
         final_weight: inwardForm.final_weight ? Number(inwardForm.final_weight) : undefined,
         rate: inwardForm.rate ? Number(inwardForm.rate) : undefined,
-        bill_no: inwardForm.bill_no,
-        cash: inwardForm.cash ? Number(inwardForm.cash) : undefined,
+        bill_no: inwardForm.payment_type === "bill" ? inwardForm.bill_no : undefined,
         time_in: inwardForm.time_in,
         time_out: inwardForm.time_out,
+        payment_type: inwardForm.payment_type as "bill" | "cash", // Ensure correct type
       };
 
       await createInwardChallan(challanData);
       toast.success("Inward challan created successfully!");
       setShowInwardModal(false);
-      setInwardForm({ party_id: "", material_id: "" });
+      setInwardForm({ party_id: "", material_id: "", payment_type: "" });
       loadData(); // Refresh data
     } catch (error) {
       console.error("Error creating inward challan:", error);
@@ -201,6 +208,10 @@ export default function InOutPage() {
   const handleInwardEdit = (challan: InwardChallan) => {
     setEditingInwardChallan(challan);
     const material = materials.find(m => m.id === challan.material_id);
+    
+    // Determine payment type based on existing data
+    const paymentType = challan.bill_no ? "bill" : "cash";
+    
     setInwardForm({
       party_id: challan.party_id,
       material_id: challan.material_id,
@@ -213,9 +224,9 @@ export default function InOutPage() {
       final_weight: challan.final_weight,
       rate: challan.rate,
       bill_no: challan.bill_no,
-      cash: challan.cash,
       time_in: challan.time_in,
       time_out: challan.time_out,
+      payment_type: paymentType, // Set the payment type
     });
     setShowInwardUpdateModal(true);
   };
@@ -241,8 +252,14 @@ export default function InOutPage() {
   // Handle Inward Challan update
   const handleInwardUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingInwardChallan || !inwardForm.party_id || !inwardForm.material_id) {
-      toast.error("Party and Material are required");
+    if (!editingInwardChallan || !inwardForm.party_id || !inwardForm.material_id || !inwardForm.payment_type) {
+      toast.error("Party, Material, and Payment Type are required");
+      return;
+    }
+
+    // Validate bill number if payment type is bill
+    if (inwardForm.payment_type === "bill" && !inwardForm.bill_no) {
+      toast.error("Bill number is required when payment type is Bill");
       return;
     }
 
@@ -259,17 +276,17 @@ export default function InOutPage() {
         net_weight: inwardForm.net_weight ? Number(inwardForm.net_weight) : undefined,
         final_weight: inwardForm.final_weight ? Number(inwardForm.final_weight) : undefined,
         rate: inwardForm.rate ? Number(inwardForm.rate) : undefined,
-        bill_no: inwardForm.bill_no,
-        cash: inwardForm.cash ? Number(inwardForm.cash) : undefined,
+        bill_no: inwardForm.payment_type === "bill" ? inwardForm.bill_no : undefined,
         time_in: inwardForm.time_in,
         time_out: inwardForm.time_out,
+        payment_type: inwardForm.payment_type,
       };
 
       await updateInwardChallan(editingInwardChallan.id, updateData);
       toast.success("Inward challan updated successfully!");
       setShowInwardUpdateModal(false);
       setEditingInwardChallan(null);
-      setInwardForm({ party_id: "", material_id: "" });
+      setInwardForm({ party_id: "", material_id: "", payment_type: "" });
       loadData(); // Refresh data
     } catch (error) {
       console.error("Error updating inward challan:", error);
@@ -491,29 +508,43 @@ export default function InOutPage() {
                       />
                     </div>
 
-                    {/* Bill No */}
+                    {/* Payment Type - Bill/Cash Selection */}
                     <div className="flex flex-col space-y-2">
-                      <Label htmlFor="bill">Bill No.</Label>
-                      <Input
-                        id="bill"
-                        placeholder="Enter bill number"
-                        value={inwardForm.bill_no || ""}
-                        onChange={(e) => setInwardForm({ ...inwardForm, bill_no: e.target.value })}
-                      />
+                      <Label htmlFor="paymentType">Bill/Cash *</Label>
+                      <Select
+                        value={inwardForm.payment_type || ""}
+                        onValueChange={(value) => {
+                          setInwardForm({ 
+                            ...inwardForm, 
+                            payment_type: value,
+                            // Clear bill_no when cash is selected
+                            ...(value === "cash" ? { bill_no: "" } : {})
+                          });
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select payment type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="bill">Bill</SelectItem>
+                          <SelectItem value="cash">Cash</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
 
-                    {/* Cash */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="cash">Bill/Cash</Label>
-                      <Input
-                        id="cash"
-                        type="number"
-                        step="0.01"
-                        placeholder="Enter cash amount"
-                        value={inwardForm.cash || ""}
-                        onChange={(e) => setInwardForm({ ...inwardForm, cash: Number(e.target.value) })}
-                      />
-                    </div>
+                    {/* Conditionally show Bill No. when payment type is bill */}
+                    {inwardForm.payment_type === "bill" && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="bill">Bill No. *</Label>
+                        <Input
+                          id="bill"
+                          placeholder="Enter bill number"
+                          value={inwardForm.bill_no || ""}
+                          onChange={(e) => setInwardForm({ ...inwardForm, bill_no: e.target.value })}
+                          required
+                        />
+                      </div>
+                    )}
 
                     {/* Time In */}
                     <div className="flex flex-col space-y-2">
@@ -989,29 +1020,43 @@ export default function InOutPage() {
                 />
               </div>
 
-              {/* Bill No */}
+              {/* Payment Type - Bill/Cash Selection */}
               <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateBill">Bill No.</Label>
-                <Input
-                  id="updateBill"
-                  placeholder="Enter bill number"
-                  value={inwardForm.bill_no || ""}
-                  onChange={(e) => setInwardForm({ ...inwardForm, bill_no: e.target.value })}
-                />
+                <Label htmlFor="updatePaymentType">Payment Type *</Label>
+                <Select
+                  value={inwardForm.payment_type || ""}
+                  onValueChange={(value) => {
+                    setInwardForm({ 
+                      ...inwardForm, 
+                      payment_type: value,
+                      // Clear bill_no when cash is selected
+                      ...(value === "cash" ? { bill_no: "" } : {})
+                    });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select payment type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bill">Bill</SelectItem>
+                    <SelectItem value="cash">Cash</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
-              {/* Cash */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateCash">Cash</Label>
-                <Input
-                  id="updateCash"
-                  type="number"
-                  step="0.01"
-                  placeholder="Enter cash amount"
-                  value={inwardForm.cash || ""}
-                  onChange={(e) => setInwardForm({ ...inwardForm, cash: Number(e.target.value) })}
-                />
-              </div>
+              {/* Conditionally show Bill No. when payment type is bill */}
+              {inwardForm.payment_type === "bill" && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateBill">Bill No. *</Label>
+                  <Input
+                    id="updateBill"
+                    placeholder="Enter bill number"
+                    value={inwardForm.bill_no || ""}
+                    onChange={(e) => setInwardForm({ ...inwardForm, bill_no: e.target.value })}
+                    required
+                  />
+                </div>
+              )}
 
               {/* Time In */}
               <div className="flex flex-col space-y-2">

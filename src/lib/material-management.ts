@@ -56,6 +56,7 @@ export interface CreateInwardChallanData {
   cash?: number;
   time_in?: string;
   time_out?: string;
+  payment_type?:string| 'bill' | 'cash';
 }
 
 export interface OutwardChallan {
