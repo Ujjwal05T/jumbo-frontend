@@ -56,7 +56,7 @@ export interface CreateInwardChallanData {
   cash?: number;
   time_in?: string;
   time_out?: string;
-  payment_type?:string| 'bill' | 'cash';
+  payment_type?: 'bill' | 'cash'; // Made truly optional, removed string union
 }
 
 export interface OutwardChallan {

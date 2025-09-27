@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
-import { Plus, Calendar, Truck, Weight, Clock, FileText, DollarSign, Edit } from "lucide-react";
+import { Plus, Calendar, Truck, Weight, Clock, FileText, DollarSign, Edit, SplinePointer, LoaderCircle, LogOut } from "lucide-react";
 import {
   fetchInwardChallans,
   fetchOutwardChallans,
@@ -51,6 +51,22 @@ import {
 import { fetchClients, Client } from "@/lib/clients";
 
 export default function InOutPage() {
+  // Get user role for field visibility
+  const userRole = typeof window !== "undefined" ? localStorage.getItem("user_role") : null;
+
+  // Role-based field visibility helper functions
+  const isAdmin = userRole === "admin";
+  const isSecurity = userRole === "security";
+  const isAccountant = userRole === "accountant";
+
+  // Check if field should be visible for current role
+  const canViewField = (fieldType: 'security' | 'accountant' | 'all') => {
+    if (isAdmin) return true; // Admin can see everything
+    if (fieldType === 'security') return isSecurity;
+    if (fieldType === 'accountant') return isAccountant;
+    return false;
+  };
+
   // State for data
   const [inwardChallans, setInwardChallans] = useState<InwardChallan[]>([]);
   const [outwardChallans, setOutwardChallans] = useState<OutwardChallan[]>([]);
@@ -98,7 +114,7 @@ export default function InOutPage() {
   const [inwardForm, setInwardForm] = useState<Partial<CreateInwardChallanData & { payment_type: string; serial_no: string; date: string }>>({
     party_id: "",
     material_id: "",
-    payment_type: "", // Add payment type field
+    payment_type: undefined, // Add payment type field
     serial_no: "",
     date: "",
   });
@@ -162,23 +178,44 @@ export default function InOutPage() {
   // Handle Inward Challan form submission
   const handleInwardSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inwardForm.party_id || !inwardForm.material_id || !inwardForm.payment_type) {
-      toast.error("Party, Material, and Payment Type are required");
-      return;
-    }
 
-    // Validate bill number if payment type is bill
-    if (inwardForm.payment_type === "bill" && !inwardForm.bill_no) {
-      toast.error("Bill number is required when payment type is Bill");
-      return;
+    // Role-based validation
+    if (isSecurity) {
+      if (!inwardForm.party_id || !inwardForm.material_id) {
+        toast.error("Party and Material are required");
+        return;
+      }
+    } else if (isAccountant) {
+      // Accountant can submit without payment type initially
+      // Validation for bill number only if payment type is bill
+      if (inwardForm.payment_type === "bill" && !inwardForm.bill_no) {
+        toast.error("Bill number is required when payment type is Bill");
+        return;
+      }
+    } else if (isAdmin) {
+      // Admin validation - party and material required, payment type optional
+      if (!inwardForm.party_id || !inwardForm.material_id) {
+        toast.error("Party and Material are required");
+        return;
+      }
+      // Bill number validation only if payment type is bill
+      if (inwardForm.payment_type === "bill" && !inwardForm.bill_no) {
+        toast.error("Bill number is required when payment type is Bill");
+        return;
+      }
     }
 
     try {
       setSubmitting(true);
+
+      // Auto-set time_in when security or admin creates the challan
+      const currentTime = new Date().toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' });
+      const autoTimeIn = (isSecurity || isAdmin) && !inwardForm.time_in ? currentTime : inwardForm.time_in;
+
       const challanData: CreateInwardChallanData = {
-        party_id: inwardForm.party_id,
+        party_id: inwardForm.party_id as string,
         vehicle_number: inwardForm.vehicle_number,
-        material_id: inwardForm.material_id,
+        material_id: inwardForm.material_id as string,
         slip_no: inwardForm.slip_no,
         rst_no: inwardForm.rst_no,
         gross_weight: inwardForm.gross_weight ? Number(inwardForm.gross_weight) : undefined,
@@ -187,9 +224,9 @@ export default function InOutPage() {
         final_weight: inwardForm.final_weight ? Number(inwardForm.final_weight) : undefined,
         rate: inwardForm.rate ? Number(inwardForm.rate) : undefined,
         bill_no: inwardForm.payment_type === "bill" ? inwardForm.bill_no : undefined,
-        time_in: inwardForm.time_in,
+        time_in: autoTimeIn,
         time_out: inwardForm.time_out,
-        payment_type: inwardForm.payment_type as "bill" | "cash", // Ensure correct type
+        payment_type: inwardForm.payment_type && inwardForm.payment_type.trim() !== "" ? inwardForm.payment_type as "bill" | "cash" : undefined, // Only send if not empty
       };
 
       await createInwardChallan(challanData);
@@ -200,7 +237,7 @@ export default function InOutPage() {
       setInwardForm({
         party_id: "",
         material_id: "",
-        payment_type: "",
+        payment_type: undefined,
         serial_no: "",
         date: "",
         vehicle_number: "",
@@ -228,14 +265,27 @@ export default function InOutPage() {
   const handleOutwardSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Role-based validation for outward challan
+    if (isSecurity) {
+      if (!outwardForm.vehicle_number || !outwardForm.purpose) {
+        toast.error("Vehicle Number and Purpose are required");
+        return;
+      }
+    }
+
     try {
       setSubmitting(true);
+
+      // Auto-set time_in when security or admin creates the challan
+      const currentTime = new Date().toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' });
+      const autoTimeIn = (isSecurity || isAdmin) && !outwardForm.time_in ? currentTime : outwardForm.time_in;
+
       const challanData: CreateOutwardChallanData = {
         vehicle_number: outwardForm.vehicle_number,
         driver_name: outwardForm.driver_name,
         rst_no: outwardForm.rst_no,
         purpose: outwardForm.purpose,
-        time_in: outwardForm.time_in,
+        time_in: autoTimeIn,
         time_out: outwardForm.time_out,
         party_name: outwardForm.party_name,
         gross_weight: outwardForm.gross_weight ? Number(outwardForm.gross_weight) : undefined,
@@ -319,8 +369,8 @@ export default function InOutPage() {
   // Handle Inward Challan update
   const handleInwardUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingInwardChallan || !inwardForm.party_id || !inwardForm.material_id || !inwardForm.payment_type) {
-      toast.error("Party, Material, and Payment Type are required");
+    if (!editingInwardChallan || !inwardForm.party_id || !inwardForm.material_id) {
+      toast.error("Party and Material are required");
       return;
     }
 
@@ -346,7 +396,7 @@ export default function InOutPage() {
         bill_no: inwardForm.payment_type === "bill" ? inwardForm.bill_no : undefined,
         time_in: inwardForm.time_in,
         time_out: inwardForm.time_out,
-        payment_type: inwardForm.payment_type,
+        payment_type: inwardForm.payment_type && inwardForm.payment_type.trim() !== "" ? inwardForm.payment_type as "bill" | "cash" : undefined, // Only send if not empty
       };
 
       await updateInwardChallan(editingInwardChallan.id, updateData);
@@ -356,7 +406,7 @@ export default function InOutPage() {
       setInwardForm({
         party_id: "",
         material_id: "",
-        payment_type: "",
+        payment_type: undefined,
         serial_no: "",
         date: "",
         vehicle_number: "",
@@ -430,6 +480,48 @@ export default function InOutPage() {
     }
   };
 
+  // Handle TimeOut for Inward Challan
+  const handleInwardTimeOut = async (challan: InwardChallan) => {
+    try {
+      setSubmitting(true);
+      const currentTime = new Date().toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' });
+
+      const updateData: Partial<CreateInwardChallanData> = {
+        time_out: currentTime,
+      };
+
+      await updateInwardChallan(challan.id, updateData);
+      toast.success("Time out recorded successfully!");
+      loadData(); // Refresh data
+    } catch (error) {
+      console.error("Error updating inward challan time out:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to record time out");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Handle TimeOut for Outward Challan
+  const handleOutwardTimeOut = async (challan: OutwardChallan) => {
+    try {
+      setSubmitting(true);
+      const currentTime = new Date().toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' });
+
+      const updateData: Partial<CreateOutwardChallanData> = {
+        time_out: currentTime,
+      };
+
+      await updateOutwardChallan(challan.id, updateData);
+      toast.success("Time out recorded successfully!");
+      loadData(); // Refresh data
+    } catch (error) {
+      console.error("Error updating outward challan time out:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to record time out");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-IN", {
       day: "2-digit",
@@ -450,7 +542,7 @@ export default function InOutPage() {
     return (
       <DashboardLayout>
         <div className="flex justify-center items-center h-64">
-          <div className="text-lg">Loading...</div>
+          <div className="text-lg animate-spin"><LoaderCircle /></div>
         </div>
       </DashboardLayout>
     );
@@ -473,10 +565,10 @@ export default function InOutPage() {
               <h2 className="text-xl font-semibold">Inward Challans</h2>
               <Dialog open={showInwardModal} onOpenChange={setShowInwardModal}>
                 <DialogTrigger asChild>
-                  <Button>
+                  {(isSecurity || isAdmin) && <Button>
                     <Plus className="h-4 w-4 mr-2" />
                     Add Inward Challan
-                  </Button>
+                  </Button>}
                 </DialogTrigger>
                 <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
@@ -512,154 +604,172 @@ export default function InOutPage() {
                       />
                     </div>
 
-                    {/* Party Name */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="party">Party Name *</Label>
-                      <Select
-                        key={`party-${showInwardModal}-${inwardForm.party_id}`}
-                        value={inwardForm.party_id}
-                        onValueChange={(value) => setInwardForm({ ...inwardForm, party_id: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select party" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {clients.length > 0 ? (
-                            clients.map((client) => (
-                              <SelectItem key={client.id} value={client.id}>
-                                {client.company_name}
+                    {/* Party Name - Security & Admin can see */}
+                    {canViewField('security') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="party">Party Name *</Label>
+                        <Select
+                          key={`party-${showInwardModal}-${inwardForm.party_id}`}
+                          value={inwardForm.party_id}
+                          onValueChange={(value) => setInwardForm({ ...inwardForm, party_id: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select party" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {clients.length > 0 ? (
+                              clients.map((client) => (
+                                <SelectItem key={client.id} value={client.id}>
+                                  {client.company_name}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="all" disabled>
+                                {loading ? "Loading clients..." : "No clients available"}
                               </SelectItem>
-                            ))
-                          ) : (
-                            <SelectItem value="all" disabled>
-                              {loading ? "Loading clients..." : "No clients available"}
-                            </SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
 
-                    {/* Material */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="material">Material *</Label>
-                      <Select
-                        key={`material-${showInwardModal}-${inwardForm.material_id}`}
-                        value={inwardForm.material_id}
-                        onValueChange={(value) => setInwardForm({ ...inwardForm, material_id: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select material" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {materials.length > 0 ? (
-                            materials.map((material) => (
-                              <SelectItem key={material.id} value={material.id}>
-                                {material.name} ({material.unit_of_measure})
+                    {/* Vehicle Number - Security & Admin can see */}
+                    {canViewField('security') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="vehicle">Vehicle Number</Label>
+                        <Input
+                          id="vehicle"
+                          placeholder="Enter vehicle number"
+                          value={inwardForm.vehicle_number || ""}
+                          onChange={(e) => setInwardForm({ ...inwardForm, vehicle_number: e.target.value })}
+                        />
+                      </div>
+                    )}
+
+                    {/* Material - Security & Admin can see */}
+                    {canViewField('security') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="material">Material *</Label>
+                        <Select
+                          key={`material-${showInwardModal}-${inwardForm.material_id}`}
+                          value={inwardForm.material_id}
+                          onValueChange={(value) => setInwardForm({ ...inwardForm, material_id: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select material" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {materials.length > 0 ? (
+                              materials.map((material) => (
+                                <SelectItem key={material.id} value={material.id}>
+                                  {material.name} ({material.unit_of_measure})
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="all" disabled>
+                                {loading ? "Loading materials..." : "No materials available"}
                               </SelectItem>
-                            ))
-                          ) : (
-                            <SelectItem value="all" disabled>
-                              {loading ? "Loading materials..." : "No materials available"}
-                            </SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
 
-                    {/* Vehicle Number */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="vehicle">Vehicle Number</Label>
-                      <Input
-                        id="vehicle"
-                        placeholder="Enter vehicle number"
-                        value={inwardForm.vehicle_number || ""}
-                        onChange={(e) => setInwardForm({ ...inwardForm, vehicle_number: e.target.value })}
-                      />
-                    </div>
+                    {/* RST No - Accountant & Admin can see */}
+                    {canViewField('accountant') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="rst">RST No.</Label>
+                        <Input
+                          id="rst"
+                          placeholder="Enter RST number"
+                          value={inwardForm.rst_no || ""}
+                          onChange={(e) => setInwardForm({ ...inwardForm, rst_no: e.target.value })}
+                        />
+                      </div>
+                    )}
 
-                    {/* Slip No */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="slip">Slip No.</Label>
-                      <Input
-                        id="slip"
-                        placeholder="Enter slip number"
-                        value={inwardForm.slip_no || ""}
-                        onChange={(e) => setInwardForm({ ...inwardForm, slip_no: e.target.value })}
-                      />
-                    </div>
+                    {/* Slip No - Accountant & Admin can see */}
+                    {canViewField('accountant') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="slip">Slip No.</Label>
+                        <Input
+                          id="slip"
+                          placeholder="Enter slip number"
+                          value={inwardForm.slip_no || ""}
+                          onChange={(e) => setInwardForm({ ...inwardForm, slip_no: e.target.value })}
+                        />
+                      </div>
+                    )}
 
-                    {/* RST No */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="rst">RST No.</Label>
-                      <Input
-                        id="rst"
-                        placeholder="Enter RST number"
-                        value={inwardForm.rst_no || ""}
-                        onChange={(e) => setInwardForm({ ...inwardForm, rst_no: e.target.value })}
-                      />
-                    </div>
+                    
 
-                    {/* Gross Weight */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="gross">Gross Weight</Label>
-                      <Input
-                        id="gross"
-                        type="number"
-                        step="0.01"
-                        placeholder="Enter gross weight"
-                        value={inwardForm.gross_weight || ""}
-                        onChange={(e) => setInwardForm({ ...inwardForm, gross_weight: Number(e.target.value) })}
-                      />
-                    </div>
+                    {/* Gross Weight - Accountant & Admin can see */}
+                    {canViewField('accountant') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="gross">Gross Weight</Label>
+                        <Input
+                          id="gross"
+                          type="number"
+                          step="0.01"
+                          placeholder="Enter gross weight"
+                          value={inwardForm.gross_weight || ""}
+                          onChange={(e) => setInwardForm({ ...inwardForm, gross_weight: Number(e.target.value) })}
+                        />
+                      </div>
+                    )}
 
-                    {/* Net Weight */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="net">Net Weight</Label>
-                      <Input
-                        id="net"
-                        type="number"
-                        step="0.01"
-                        placeholder="Enter net weight"
-                        value={inwardForm.net_weight || ""}
-                        onChange={(e) => {
-                          const netWeight = Number(e.target.value) || 0;
-                          const report = inwardForm.report || 0;
-                          setInwardForm({
-                            ...inwardForm,
-                            net_weight: netWeight,
-                            final_weight: netWeight - report
-                          });
-                        }}
-                      />
-                    </div>
+                    {/* Net Weight - Accountant & Admin can see */}
+                    {canViewField('accountant') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="net">Net Weight</Label>
+                        <Input
+                          id="net"
+                          type="number"
+                          step="0.01"
+                          placeholder="Enter net weight"
+                          value={inwardForm.net_weight || ""}
+                          onChange={(e) => {
+                            const netWeight = Number(e.target.value) || 0;
+                            const report = inwardForm.report || 0;
+                            setInwardForm({
+                              ...inwardForm,
+                              net_weight: netWeight,
+                              final_weight: netWeight - report
+                            });
+                          }}
+                        />
+                      </div>
+                    )}
 
-                    {/* Payment Type - Bill/Cash Selection */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="paymentType">Bill/Cash *</Label>
-                      <Select
-                        key={`payment-${showInwardModal}-${inwardForm.payment_type}`}
-                        value={inwardForm.payment_type || ""}
-                        onValueChange={(value) => {
-                          setInwardForm({ 
-                            ...inwardForm, 
-                            payment_type: value,
-                            // Clear bill_no when cash is selected
-                            ...(value === "cash" ? { bill_no: "" } : {})
-                          });
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select payment type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="bill">Bill</SelectItem>
-                          <SelectItem value="cash">Cash</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    {/* Payment Type - Accountant & Admin can see */}
+                    {canViewField('accountant') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="paymentType">Bill/Cash *</Label>
+                        <Select
+                          key={`payment-${showInwardModal}-${inwardForm.payment_type}`}
+                          value={inwardForm.payment_type || ""}
+                          onValueChange={(value) => {
+                            setInwardForm({
+                              ...inwardForm,
+                              payment_type: value as 'bill' | 'cash',
+                              // Clear bill_no when cash is selected
+                              ...(value === "cash" ? { bill_no: "" } : {})
+                            });
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select payment type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="bill">Bill</SelectItem>
+                            <SelectItem value="cash">Cash</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
 
-                    {/* Conditionally show Bill No. when payment type is bill */}
-                    {inwardForm.payment_type === "bill" && (
+                    {/* Conditionally show Bill No. when payment type is bill - Accountant & Admin can see */}
+                    {canViewField('accountant') && inwardForm.payment_type === "bill" && (
                       <div className="flex flex-col space-y-2">
                         <Label htmlFor="bill">Bill No. *</Label>
                         <Input
@@ -672,76 +782,86 @@ export default function InOutPage() {
                       </div>
                     )}
 
-                    {/* Time In */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="timeIn">Time In</Label>
-                      <Input
-                        id="timeIn"
-                        type="time"
-                        value={inwardForm.time_in || ""}
-                        onChange={(e) => setInwardForm({ ...inwardForm, time_in: e.target.value })}
-                      />
-                    </div>
+                    {/* Time In - Accountant & Admin can see (Auto-populated for Security) */}
+                    {canViewField('accountant') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="timeIn">Time In</Label>
+                        <Input
+                          id="timeIn"
+                          type="time"
+                          value={inwardForm.time_in || ""}
+                          onChange={(e) => setInwardForm({ ...inwardForm, time_in: e.target.value })}
+                        />
+                      </div>
+                    )}
 
-                    {/* Time Out */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="timeOut">Time Out</Label>
-                      <Input
-                        id="timeOut"
-                        type="time"
-                        value={inwardForm.time_out || ""}
-                        onChange={(e) => setInwardForm({ ...inwardForm, time_out: e.target.value })}
-                      />
-                    </div>
+                    {/* Time Out - Accountant & Admin can see */}
+                    {canViewField('accountant') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="timeOut">Time Out</Label>
+                        <Input
+                          id="timeOut"
+                          type="time"
+                          value={inwardForm.time_out || ""}
+                          onChange={(e) => setInwardForm({ ...inwardForm, time_out: e.target.value })}
+                        />
+                      </div>
+                    )}
 
-                    {/* Report */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="report">Report (Weight Deduction)</Label>
-                      <Input
-                        id="report"
-                        type="number"
-                        step="0.001"
-                        placeholder="Enter weight to deduct"
-                        value={inwardForm.report || ""}
-                        onChange={(e) => {
-                          const report = Number(e.target.value) || 0;
-                          const netWeight = inwardForm.net_weight || 0;
-                          setInwardForm({
-                            ...inwardForm,
-                            report: report,
-                            final_weight: netWeight - report
-                          });
-                        }}
-                      />
-                    </div>
+                    {/* Report - Accountant & Admin can see */}
+                    {canViewField('accountant') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="report">Report (Weight Deduction)</Label>
+                        <Input
+                          id="report"
+                          type="number"
+                          step="0.001"
+                          placeholder="Enter weight to deduct"
+                          value={inwardForm.report || ""}
+                          onChange={(e) => {
+                            const report = Number(e.target.value) || 0;
+                            const netWeight = inwardForm.net_weight || 0;
+                            setInwardForm({
+                              ...inwardForm,
+                              report: report,
+                              final_weight: netWeight - report
+                            });
+                          }}
+                        />
+                      </div>
+                    )}
 
-                    {/* Final Weight */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="finalWeight">Final Weight (Net - Report)</Label>
-                      <Input
-                        id="finalWeight"
-                        type="number"
-                        step="0.001"
-                        placeholder="Auto calculated"
-                        value={inwardForm.final_weight || ""}
-                        readOnly
-                        className="bg-gray-50 cursor-not-allowed"
-                        title="This field is automatically calculated as Net Weight - Report"
-                      />
-                    </div>
+                    {/* Final Weight - Accountant & Admin can see */}
+                    {canViewField('accountant') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="finalWeight">Final Weight (Net - Report)</Label>
+                        <Input
+                          id="finalWeight"
+                          type="number"
+                          step="0.001"
+                          placeholder="Auto calculated"
+                          value={inwardForm.final_weight || ""}
+                          readOnly
+                          className="bg-gray-50 cursor-not-allowed"
+                          title="This field is automatically calculated as Net Weight - Report"
+                        />
+                      </div>
+                    )}
 
-                    {/* Rate */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="rate">Rate per Unit</Label>
-                      <Input
-                        id="rate"
-                        type="number"
-                        step="0.01"
-                        placeholder="Enter rate per unit"
-                        value={inwardForm.rate || ""}
-                        onChange={(e) => setInwardForm({ ...inwardForm, rate: Number(e.target.value) })}
-                      />
-                    </div>
+                    {/* Rate - Accountant & Admin can see */}
+                    {canViewField('accountant') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="rate">Rate per Unit</Label>
+                        <Input
+                          id="rate"
+                          type="number"
+                          step="0.01"
+                          placeholder="Enter rate per unit"
+                          value={inwardForm.rate || ""}
+                          onChange={(e) => setInwardForm({ ...inwardForm, rate: Number(e.target.value) })}
+                        />
+                      </div>
+                    )}
 
                     {/* Submit Button */}
                     <div className="col-span-2 flex justify-end space-x-2">
@@ -754,7 +874,7 @@ export default function InOutPage() {
                           setInwardForm({
                             party_id: "",
                             material_id: "",
-                            payment_type: "",
+                            payment_type: undefined,
                             serial_no: "",
                             date: "",
                             vehicle_number: "",
@@ -815,18 +935,31 @@ export default function InOutPage() {
                         <TableCell>{challan.net_weight || "-"}</TableCell>
                         <TableCell>{challan.final_weight || "-"}</TableCell>
                         <TableCell>{challan.rate ? `₹${challan.rate}` : "-"}</TableCell>
-                        <TableCell>{challan.bill_no || "-"}</TableCell>
+                        <TableCell>{challan.bill_no || "CASH"}</TableCell>
                         <TableCell>
                           {formatTime(challan.time_in)} - {formatTime(challan.time_out)}
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleInwardEdit(challan)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
+                          <div className="flex space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleInwardEdit(challan)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            {isSecurity && !challan.time_out && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleInwardTimeOut(challan)}
+                                disabled={submitting}
+                                title="Record Time Out"
+                              >
+                                <LogOut className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -842,10 +975,10 @@ export default function InOutPage() {
               <h2 className="text-xl font-semibold">Outward Challans</h2>
               <Dialog open={showOutwardModal} onOpenChange={setShowOutwardModal}>
                 <DialogTrigger asChild>
-                  <Button>
+                  {(isSecurity || isAdmin) &&<Button>
                     <Plus className="h-4 w-4 mr-2" />
                     Add Outward Challan
-                  </Button>
+                  </Button>}
                 </DialogTrigger>
                 <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
@@ -881,119 +1014,141 @@ export default function InOutPage() {
                       />
                     </div>
 
-                    {/* Vehicle Number */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="outVehicle">Vehicle Number</Label>
-                      <Input
-                        id="outVehicle"
-                        placeholder="Enter vehicle number"
-                        value={outwardForm.vehicle_number || ""}
-                        onChange={(e) => setOutwardForm({ ...outwardForm, vehicle_number: e.target.value })}
-                      />
-                    </div>
+                    {/* Vehicle Number - Security & Admin can see */}
+                    {canViewField('security') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="outVehicle">Vehicle Number</Label>
+                        <Input
+                          id="outVehicle"
+                          placeholder="Enter vehicle number"
+                          value={outwardForm.vehicle_number || ""}
+                          onChange={(e) => setOutwardForm({ ...outwardForm, vehicle_number: e.target.value })}
+                        />
+                      </div>
+                    )}
 
-                    {/* Driver Name */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="driverName">Driver Name</Label>
-                      <Input
-                        id="driverName"
-                        placeholder="Enter driver name"
-                        value={outwardForm.driver_name || ""}
-                        onChange={(e) => setOutwardForm({ ...outwardForm, driver_name: e.target.value })}
-                      />
-                    </div>
+                    {/* Purpose - Security & Admin can see */}
+                    {canViewField('security') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="purpose">Purpose</Label>
+                        <Input
+                          id="purpose"
+                          placeholder="Enter purpose"
+                          value={outwardForm.purpose || ""}
+                          onChange={(e) => setOutwardForm({ ...outwardForm, purpose: e.target.value })}
+                        />
+                      </div>
+                    )}
 
-                    {/* RST No */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="rstNo">RST No.</Label>
-                      <Input
-                        id="rstNo"
-                        placeholder="Enter RST number"
-                        value={outwardForm.rst_no || ""}
-                        onChange={(e) => setOutwardForm({ ...outwardForm, rst_no: e.target.value })}
-                      />
-                    </div>
+                    {/* Driver Name - Accountant & Admin can see */}
+                    {canViewField('accountant') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="driverName">Driver Name</Label>
+                        <Input
+                          id="driverName"
+                          placeholder="Enter driver name"
+                          value={outwardForm.driver_name || ""}
+                          onChange={(e) => setOutwardForm({ ...outwardForm, driver_name: e.target.value })}
+                        />
+                      </div>
+                    )}
 
-                    {/* Purpose */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="purpose">Purpose</Label>
-                      <Input
-                        id="purpose"
-                        placeholder="Enter purpose"
-                        value={outwardForm.purpose || ""}
-                        onChange={(e) => setOutwardForm({ ...outwardForm, purpose: e.target.value })}
-                      />
-                    </div>
+                    {/* RST No - Accountant & Admin can see */}
+                    {canViewField('accountant') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="rstNo">RST No.</Label>
+                        <Input
+                          id="rstNo"
+                          placeholder="Enter RST number"
+                          value={outwardForm.rst_no || ""}
+                          onChange={(e) => setOutwardForm({ ...outwardForm, rst_no: e.target.value })}
+                        />
+                      </div>
+                    )}
 
-                    {/* Party Name */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="outParty">Party Name</Label>
-                      <Input
-                        id="outParty"
-                        placeholder="Enter party name"
-                        value={outwardForm.party_name || ""}
-                        onChange={(e) => setOutwardForm({ ...outwardForm, party_name: e.target.value })}
-                      />
-                    </div>
+                    {/* Party Name - Accountant & Admin can see */}
+                    {canViewField('accountant') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="outParty">Party Name</Label>
+                        <Input
+                          id="outParty"
+                          placeholder="Enter party name"
+                          value={outwardForm.party_name || ""}
+                          onChange={(e) => setOutwardForm({ ...outwardForm, party_name: e.target.value })}
+                        />
+                      </div>
+                    )}
 
-                    {/* Bill No */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="outBill">Bill No.</Label>
-                      <Input
-                        id="outBill"
-                        placeholder="Enter bill number"
-                        value={outwardForm.bill_no || ""}
-                        onChange={(e) => setOutwardForm({ ...outwardForm, bill_no: e.target.value })}
-                      />
-                    </div>
+                    {/* Bill No - Accountant & Admin can see */}
+                    {canViewField('accountant') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="outBill">Bill No.</Label>
+                        <Input
+                          id="outBill"
+                          placeholder="Enter bill number"
+                          value={outwardForm.bill_no || ""}
+                          onChange={(e) => setOutwardForm({ ...outwardForm, bill_no: e.target.value })}
+                        />
+                      </div>
+                    )}
 
-                    {/* Gross Weight */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="outGross">Gross Weight</Label>
-                      <Input
-                        id="outGross"
-                        type="number"
-                        step="0.01"
-                        placeholder="Enter gross weight"
-                        value={outwardForm.gross_weight || ""}
-                        onChange={(e) => setOutwardForm({ ...outwardForm, gross_weight: Number(e.target.value) })}
-                      />
-                    </div>
+                    {/* Gross Weight - Accountant & Admin can see */}
+                    {canViewField('accountant') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="outGross">Gross Weight</Label>
+                        <Input
+                          id="outGross"
+                          type="number"
+                          step="0.01"
+                          placeholder="Enter gross weight"
+                          value={outwardForm.gross_weight || ""}
+                          onChange={(e) => setOutwardForm({ ...outwardForm, gross_weight: Number(e.target.value) })}
+                        />
+                      </div>
+                    )}
 
-                    {/* Net Weight */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="outNet">Net Weight</Label>
-                      <Input
-                        id="outNet"
-                        type="number"
-                        step="0.01"
-                        placeholder="Enter net weight"
-                        value={outwardForm.net_weight || ""}
-                        onChange={(e) => setOutwardForm({ ...outwardForm, net_weight: Number(e.target.value) })}
-                      />
-                    </div>
+                    {/* Net Weight - Accountant & Admin can see */}
+                    {canViewField('accountant') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="outNet">Net Weight</Label>
+                        <Input
+                          id="outNet"
+                          type="number"
+                          step="0.01"
+                          placeholder="Enter net weight"
+                          value={outwardForm.net_weight || ""}
+                          onChange={(e) => setOutwardForm({ ...outwardForm, net_weight: Number(e.target.value) })}
+                        />
+                      </div>
+                    )}
 
-                    {/* Time In */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="outTimeIn">Time In</Label>
-                      <Input
-                        id="outTimeIn"
-                        type="time"
-                        value={outwardForm.time_in || ""}
-                        onChange={(e) => setOutwardForm({ ...outwardForm, time_in: e.target.value })}
-                      />
-                    </div>
+                    {/* Time In - Accountant & Admin can see */}
+                    {canViewField('accountant') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="outTimeIn">Time In</Label>
+                        <Input
+                          id="outTimeIn"
+                          type="time"
+                          disabled={!isAdmin}
+                          value={outwardForm.time_in || ""}
+                          onChange={(e) => setOutwardForm({ ...outwardForm, time_in: e.target.value })}
+                        />
+                      </div>
+                    )}
 
-                    {/* Time Out */}
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="outTimeOut">Time Out</Label>
-                      <Input
-                        id="outTimeOut"
-                        type="time"
-                        value={outwardForm.time_out || ""}
-                        onChange={(e) => setOutwardForm({ ...outwardForm, time_out: e.target.value })}
-                      />
-                    </div>
+                    {/* Time Out - Accountant & Admin can see */}
+                    {canViewField('accountant') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="outTimeOut">Time Out</Label>
+                        <Input
+                          id="outTimeOut"
+                          type="time"
+                          disabled={!isAdmin}
+                          value={outwardForm.time_out || ""}
+                          onChange={(e) => setOutwardForm({ ...outwardForm, time_out: e.target.value })}
+                        />
+                      </div>
+                    )}
 
                     {/* Submit Button */}
                     <div className="col-span-2 flex justify-end space-x-2">
@@ -1064,13 +1219,26 @@ export default function InOutPage() {
                           {formatTime(challan.time_in)} - {formatTime(challan.time_out)}
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleOutwardEdit(challan)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
+                          <div className="flex space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleOutwardEdit(challan)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            {isSecurity && !challan.time_out && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleOutwardTimeOut(challan)}
+                                disabled={submitting}
+                                title="Record Time Out"
+                              >
+                                <LogOut className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1117,151 +1285,167 @@ export default function InOutPage() {
                 />
               </div>
 
-              {/* Party Name */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateParty">Party Name *</Label>
-                <Select
-                  value={inwardForm.party_id}
-                  onValueChange={(value) => setInwardForm({ ...inwardForm, party_id: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select party" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.length > 0 ? (
-                      clients.map((client) => (
-                        <SelectItem key={client.id} value={client.id}>
-                          {client.company_name}
+              {/* Party Name - Security & Admin can see */}
+              {canViewField('security') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateParty">Party Name *</Label>
+                  <Select
+                    value={inwardForm.party_id}
+                    onValueChange={(value) => setInwardForm({ ...inwardForm, party_id: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select party" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.length > 0 ? (
+                        clients.map((client) => (
+                          <SelectItem key={client.id} value={client.id}>
+                            {client.company_name}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="all" disabled>
+                          {loading ? "Loading clients..." : "No clients available"}
                         </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="all" disabled>
-                        {loading ? "Loading clients..." : "No clients available"}
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
-              {/* Material */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateMaterial">Material *</Label>
-                <Select
-                  value={inwardForm.material_id}
-                  onValueChange={(value) => setInwardForm({ ...inwardForm, material_id: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select material" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {materials.length > 0 ? (
-                      materials.map((material) => (
-                        <SelectItem key={material.id} value={material.id}>
-                          {material.name} ({material.unit_of_measure})
+              {/* Vehicle Number - Security & Admin can see */}
+              {canViewField('security') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateVehicle">Vehicle Number</Label>
+                  <Input
+                    id="updateVehicle"
+                    placeholder="Enter vehicle number"
+                    value={inwardForm.vehicle_number || ""}
+                    onChange={(e) => setInwardForm({ ...inwardForm, vehicle_number: e.target.value })}
+                  />
+                </div>
+              )}
+
+              {/* Material - Security & Admin can see */}
+              {canViewField('security') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateMaterial">Material *</Label>
+                  <Select
+                    value={inwardForm.material_id}
+                    onValueChange={(value) => setInwardForm({ ...inwardForm, material_id: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select material" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {materials.length > 0 ? (
+                        materials.map((material) => (
+                          <SelectItem key={material.id} value={material.id}>
+                            {material.name} ({material.unit_of_measure})
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="all" disabled>
+                          {loading ? "Loading materials..." : "No materials available"}
                         </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="all" disabled>
-                        {loading ? "Loading materials..." : "No materials available"}
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
-              {/* Vehicle Number */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateVehicle">Vehicle Number</Label>
-                <Input
-                  id="updateVehicle"
-                  placeholder="Enter vehicle number"
-                  value={inwardForm.vehicle_number || ""}
-                  onChange={(e) => setInwardForm({ ...inwardForm, vehicle_number: e.target.value })}
-                />
-              </div>
+              {/* RST No - Accountant & Admin can see */}
+              {canViewField('accountant') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateRst">RST No.</Label>
+                  <Input
+                    id="updateRst"
+                    placeholder="Enter RST number"
+                    value={inwardForm.rst_no || ""}
+                    onChange={(e) => setInwardForm({ ...inwardForm, rst_no: e.target.value })}
+                  />
+                </div>
+              )}
 
-              {/* Slip No */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateSlip">Slip No.</Label>
-                <Input
-                  id="updateSlip"
-                  placeholder="Enter slip number"
-                  value={inwardForm.slip_no || ""}
-                  onChange={(e) => setInwardForm({ ...inwardForm, slip_no: e.target.value })}
-                />
-              </div>
+              {/* Slip No - Accountant & Admin can see */}
+              {canViewField('accountant') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateSlip">Slip No.</Label>
+                  <Input
+                    id="updateSlip"
+                    placeholder="Enter slip number"
+                    value={inwardForm.slip_no || ""}
+                    onChange={(e) => setInwardForm({ ...inwardForm, slip_no: e.target.value })}
+                  />
+                </div>
+              )}
 
-              {/* RST No */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateRst">RST No.</Label>
-                <Input
-                  id="updateRst"
-                  placeholder="Enter RST number"
-                  value={inwardForm.rst_no || ""}
-                  onChange={(e) => setInwardForm({ ...inwardForm, rst_no: e.target.value })}
-                />
-              </div>
+              {/* Gross Weight - Accountant & Admin can see */}
+              {canViewField('accountant') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateGross">Gross Weight</Label>
+                  <Input
+                    id="updateGross"
+                    type="number"
+                    step="0.01"
+                    placeholder="Enter gross weight"
+                    value={inwardForm.gross_weight || ""}
+                    onChange={(e) => setInwardForm({ ...inwardForm, gross_weight: Number(e.target.value) })}
+                  />
+                </div>
+              )}
 
-              {/* Gross Weight */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateGross">Gross Weight</Label>
-                <Input
-                  id="updateGross"
-                  type="number"
-                  step="0.01"
-                  placeholder="Enter gross weight"
-                  value={inwardForm.gross_weight || ""}
-                  onChange={(e) => setInwardForm({ ...inwardForm, gross_weight: Number(e.target.value) })}
-                />
-              </div>
+              {/* Net Weight - Accountant & Admin can see */}
+              {canViewField('accountant') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateNet">Net Weight</Label>
+                  <Input
+                    id="updateNet"
+                    type="number"
+                    step="0.01"
+                    placeholder="Enter net weight"
+                    value={inwardForm.net_weight || ""}
+                    onChange={(e) => {
+                      const netWeight = Number(e.target.value) || 0;
+                      const report = inwardForm.report || 0;
+                      setInwardForm({
+                        ...inwardForm,
+                        net_weight: netWeight,
+                        final_weight: netWeight - report
+                      });
+                    }}
+                  />
+                </div>
+              )}
 
-              {/* Net Weight */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateNet">Net Weight</Label>
-                <Input
-                  id="updateNet"
-                  type="number"
-                  step="0.01"
-                  placeholder="Enter net weight"
-                  value={inwardForm.net_weight || ""}
-                  onChange={(e) => {
-                    const netWeight = Number(e.target.value) || 0;
-                    const report = inwardForm.report || 0;
-                    setInwardForm({
-                      ...inwardForm,
-                      net_weight: netWeight,
-                      final_weight: netWeight - report
-                    });
-                  }}
-                />
-              </div>
+              {/* Payment Type - Accountant & Admin can see */}
+              {canViewField('accountant') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updatePaymentType">Payment Type *</Label>
+                  <Select
+                    value={inwardForm.payment_type || ""}
+                    onValueChange={(value) => {
+                      setInwardForm({
+                        ...inwardForm,
+                        payment_type: value as 'bill' | 'cash',
+                        // Clear bill_no when cash is selected
+                        ...(value === "cash" ? { bill_no: "" } : {})
+                      });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select payment type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bill">Bill</SelectItem>
+                      <SelectItem value="cash">Cash</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
-              {/* Payment Type - Bill/Cash Selection */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updatePaymentType">Payment Type *</Label>
-                <Select
-                  value={inwardForm.payment_type || ""}
-                  onValueChange={(value) => {
-                    setInwardForm({ 
-                      ...inwardForm, 
-                      payment_type: value,
-                      // Clear bill_no when cash is selected
-                      ...(value === "cash" ? { bill_no: "" } : {})
-                    });
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select payment type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="bill">Bill</SelectItem>
-                    <SelectItem value="cash">Cash</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Conditionally show Bill No. when payment type is bill */}
-              {inwardForm.payment_type === "bill" && (
+              {/* Conditionally show Bill No. when payment type is bill - Accountant & Admin can see */}
+              {canViewField('accountant') && inwardForm.payment_type === "bill" && (
                 <div className="flex flex-col space-y-2">
                   <Label htmlFor="updateBill">Bill No. *</Label>
                   <Input
@@ -1274,76 +1458,88 @@ export default function InOutPage() {
                 </div>
               )}
 
-              {/* Time In */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateTimeIn">Time In</Label>
-                <Input
-                  id="updateTimeIn"
-                  type="time"
-                  value={inwardForm.time_in || ""}
-                  onChange={(e) => setInwardForm({ ...inwardForm, time_in: e.target.value })}
-                />
-              </div>
+              {/* Time In - Accountant & Admin can see */}
+              {canViewField('accountant') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateTimeIn">Time In</Label>
+                  <Input
+                    id="updateTimeIn"
+                    type="time"
+                    disabled={!isAdmin}
+                    value={inwardForm.time_in || ""}
+                    onChange={(e) => setInwardForm({ ...inwardForm, time_in: e.target.value })}
+                  />
+                </div>
+              )}
 
-              {/* Time Out */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateTimeOut">Time Out</Label>
-                <Input
-                  id="updateTimeOut"
-                  type="time"
-                  value={inwardForm.time_out || ""}
-                  onChange={(e) => setInwardForm({ ...inwardForm, time_out: e.target.value })}
-                />
-              </div>
+              {/* Time Out - Accountant & Admin can see */}
+              {canViewField('accountant') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateTimeOut">Time Out</Label>
+                  <Input
+                    id="updateTimeOut"
+                    type="time"
+                    disabled={!isAdmin}
+                    value={inwardForm.time_out || ""}
+                    onChange={(e) => setInwardForm({ ...inwardForm, time_out: e.target.value })}
+                  />
+                </div>
+              )}
 
-              {/* Report */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateReport">Report (Weight Deduction)</Label>
-                <Input
-                  id="updateReport"
-                  type="number"
-                  step="0.001"
-                  placeholder="Enter weight to deduct"
-                  value={inwardForm.report || ""}
-                  onChange={(e) => {
-                    const report = Number(e.target.value) || 0;
-                    const netWeight = inwardForm.net_weight || 0;
-                    setInwardForm({
-                      ...inwardForm,
-                      report: report,
-                      final_weight: netWeight - report
-                    });
-                  }}
-                />
-              </div>
+              {/* Report - Accountant & Admin can see */}
+              {canViewField('accountant') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateReport">Report (Weight Deduction)</Label>
+                  <Input
+                    id="updateReport"
+                    type="number"
+                    step="0.001"
+                    placeholder="Enter weight to deduct"
+                    value={inwardForm.report || ""}
+                    onChange={(e) => {
+                      const report = Number(e.target.value) || 0;
+                      const netWeight = inwardForm.net_weight || 0;
+                      setInwardForm({
+                        ...inwardForm,
+                        report: report,
+                        final_weight: netWeight - report
+                      });
+                    }}
+                  />
+                </div>
+              )}
 
-              {/* Final Weight */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateFinalWeight">Final Weight (Net - Report)</Label>
-                <Input
-                  id="updateFinalWeight"
-                  type="number"
-                  step="0.001"
-                  placeholder="Auto calculated"
-                  value={inwardForm.final_weight || ""}
-                  readOnly
-                  className="bg-gray-50 cursor-not-allowed"
-                  title="This field is automatically calculated as Net Weight - Report"
-                />
-              </div>
+              {/* Final Weight - Accountant & Admin can see */}
+              {canViewField('accountant') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateFinalWeight">Final Weight (Net - Report)</Label>
+                  <Input
+                    id="updateFinalWeight"
+                    type="number"
+                    step="0.001"
+                    placeholder="Auto calculated"
+                    value={inwardForm.final_weight || ""}
+                    readOnly
+                    className="bg-gray-50 cursor-not-allowed"
+                    title="This field is automatically calculated as Net Weight - Report"
+                  />
+                </div>
+              )}
 
-              {/* Rate */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateRate">Rate per Unit</Label>
-                <Input
-                  id="updateRate"
-                  type="number"
-                  step="0.01"
-                  placeholder="Enter rate per unit"
-                  value={inwardForm.rate || ""}
-                  onChange={(e) => setInwardForm({ ...inwardForm, rate: Number(e.target.value) })}
-                />
-              </div>
+              {/* Rate - Accountant & Admin can see */}
+              {canViewField('accountant') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateRate">Rate per Unit</Label>
+                  <Input
+                    id="updateRate"
+                    type="number"
+                    step="0.01"
+                    placeholder="Enter rate per unit"
+                    value={inwardForm.rate || ""}
+                    onChange={(e) => setInwardForm({ ...inwardForm, rate: Number(e.target.value) })}
+                  />
+                </div>
+              )}
 
               {/* Submit Button */}
               <div className="col-span-2 flex justify-end space-x-2">
@@ -1356,7 +1552,7 @@ export default function InOutPage() {
                     setInwardForm({
                       party_id: "",
                       material_id: "",
-                      payment_type: "",
+                      payment_type: undefined,
                       serial_no: "",
                       date: "",
                       vehicle_number: "",
@@ -1419,119 +1615,141 @@ export default function InOutPage() {
                 />
               </div>
 
-              {/* Vehicle Number */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateOutVehicle">Vehicle Number</Label>
-                <Input
-                  id="updateOutVehicle"
-                  placeholder="Enter vehicle number"
-                  value={outwardForm.vehicle_number || ""}
-                  onChange={(e) => setOutwardForm({ ...outwardForm, vehicle_number: e.target.value })}
-                />
-              </div>
+              {/* Vehicle Number - Security & Admin can see */}
+              {canViewField('security') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateOutVehicle">Vehicle Number</Label>
+                  <Input
+                    id="updateOutVehicle"
+                    placeholder="Enter vehicle number"
+                    value={outwardForm.vehicle_number || ""}
+                    onChange={(e) => setOutwardForm({ ...outwardForm, vehicle_number: e.target.value })}
+                  />
+                </div>
+              )}
 
-              {/* Driver Name */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateDriverName">Driver Name</Label>
-                <Input
-                  id="updateDriverName"
-                  placeholder="Enter driver name"
-                  value={outwardForm.driver_name || ""}
-                  onChange={(e) => setOutwardForm({ ...outwardForm, driver_name: e.target.value })}
-                />
-              </div>
+              {/* Driver Name - Accountant & Admin can see */}
+              {canViewField('accountant') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateDriverName">Driver Name</Label>
+                  <Input
+                    id="updateDriverName"
+                    placeholder="Enter driver name"
+                    value={outwardForm.driver_name || ""}
+                    onChange={(e) => setOutwardForm({ ...outwardForm, driver_name: e.target.value })}
+                  />
+                </div>
+              )}
 
-              {/* RST No */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateRstNo">RST No.</Label>
-                <Input
-                  id="updateRstNo"
-                  placeholder="Enter RST number"
-                  value={outwardForm.rst_no || ""}
-                  onChange={(e) => setOutwardForm({ ...outwardForm, rst_no: e.target.value })}
-                />
-              </div>
+              {/* RST No - Accountant & Admin can see */}
+              {canViewField('accountant') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateRstNo">RST No.</Label>
+                  <Input
+                    id="updateRstNo"
+                    placeholder="Enter RST number"
+                    value={outwardForm.rst_no || ""}
+                    onChange={(e) => setOutwardForm({ ...outwardForm, rst_no: e.target.value })}
+                  />
+                </div>
+              )}
 
-              {/* Purpose */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updatePurpose">Purpose</Label>
-                <Input
-                  id="updatePurpose"
-                  placeholder="Enter purpose"
-                  value={outwardForm.purpose || ""}
-                  onChange={(e) => setOutwardForm({ ...outwardForm, purpose: e.target.value })}
-                />
-              </div>
+              {/* Purpose - Security & Admin can see */}
+              {canViewField('security') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updatePurpose">Purpose</Label>
+                  <Input
+                    id="updatePurpose"
+                    placeholder="Enter purpose"
+                    value={outwardForm.purpose || ""}
+                    onChange={(e) => setOutwardForm({ ...outwardForm, purpose: e.target.value })}
+                  />
+                </div>
+              )}
 
-              {/* Party Name */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateOutParty">Party Name</Label>
-                <Input
-                  id="updateOutParty"
-                  placeholder="Enter party name"
-                  value={outwardForm.party_name || ""}
-                  onChange={(e) => setOutwardForm({ ...outwardForm, party_name: e.target.value })}
-                />
-              </div>
+              {/* Party Name - Accountant & Admin can see */}
+              {canViewField('accountant') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateOutParty">Party Name</Label>
+                  <Input
+                    id="updateOutParty"
+                    placeholder="Enter party name"
+                    value={outwardForm.party_name || ""}
+                    onChange={(e) => setOutwardForm({ ...outwardForm, party_name: e.target.value })}
+                  />
+                </div>
+              )}
 
-              {/* Bill No */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateOutBill">Bill No.</Label>
-                <Input
-                  id="updateOutBill"
-                  placeholder="Enter bill number"
-                  value={outwardForm.bill_no || ""}
-                  onChange={(e) => setOutwardForm({ ...outwardForm, bill_no: e.target.value })}
-                />
-              </div>
+              {/* Bill No - Accountant & Admin can see */}
+              {canViewField('accountant') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateOutBill">Bill No.</Label>
+                  <Input
+                    id="updateOutBill"
+                    placeholder="Enter bill number"
+                    value={outwardForm.bill_no || ""}
+                    onChange={(e) => setOutwardForm({ ...outwardForm, bill_no: e.target.value })}
+                  />
+                </div>
+              )}
 
-              {/* Gross Weight */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateOutGross">Gross Weight</Label>
-                <Input
-                  id="updateOutGross"
-                  type="number"
-                  step="0.01"
-                  placeholder="Enter gross weight"
-                  value={outwardForm.gross_weight || ""}
-                  onChange={(e) => setOutwardForm({ ...outwardForm, gross_weight: Number(e.target.value) })}
-                />
-              </div>
+              {/* Gross Weight - Accountant & Admin can see */}
+              {canViewField('accountant') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateOutGross">Gross Weight</Label>
+                  <Input
+                    id="updateOutGross"
+                    type="number"
+                    step="0.01"
+                    placeholder="Enter gross weight"
+                    value={outwardForm.gross_weight || ""}
+                    onChange={(e) => setOutwardForm({ ...outwardForm, gross_weight: Number(e.target.value) })}
+                  />
+                </div>
+              )}
 
-              {/* Net Weight */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateOutNet">Net Weight</Label>
-                <Input
-                  id="updateOutNet"
-                  type="number"
-                  step="0.01"
-                  placeholder="Enter net weight"
-                  value={outwardForm.net_weight || ""}
-                  onChange={(e) => setOutwardForm({ ...outwardForm, net_weight: Number(e.target.value) })}
-                />
-              </div>
+              {/* Net Weight - Accountant & Admin can see */}
+              {canViewField('accountant') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateOutNet">Net Weight</Label>
+                  <Input
+                    id="updateOutNet"
+                    type="number"
+                    step="0.01"
+                    placeholder="Enter net weight"
+                    value={outwardForm.net_weight || ""}
+                    onChange={(e) => setOutwardForm({ ...outwardForm, net_weight: Number(e.target.value) })}
+                  />
+                </div>
+              )}
 
-              {/* Time In */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateOutTimeIn">Time In</Label>
-                <Input
-                  id="updateOutTimeIn"
-                  type="time"
-                  value={outwardForm.time_in || ""}
-                  onChange={(e) => setOutwardForm({ ...outwardForm, time_in: e.target.value })}
-                />
-              </div>
+              {/* Time In - Accountant & Admin can see */}
+              {canViewField('accountant') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateOutTimeIn">Time In</Label>
+                  <Input
+                    id="updateOutTimeIn"
+                    type="time"
+                    disabled={!isAdmin}
+                    value={outwardForm.time_in || ""}
+                    onChange={(e) => setOutwardForm({ ...outwardForm, time_in: e.target.value })}
+                  />
+                </div>
+              )}
 
-              {/* Time Out */}
-              <div className="flex flex-col space-y-2">
-                <Label htmlFor="updateOutTimeOut">Time Out</Label>
-                <Input
-                  id="updateOutTimeOut"
-                  type="time"
-                  value={outwardForm.time_out || ""}
-                  onChange={(e) => setOutwardForm({ ...outwardForm, time_out: e.target.value })}
-                />
-              </div>
+              {/* Time Out - Accountant & Admin can see */}
+              {canViewField('accountant') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateOutTimeOut">Time Out</Label>
+                  <Input
+                    id="updateOutTimeOut"
+                    type="time"
+                    disabled={!isAdmin}
+                    value={outwardForm.time_out || ""}
+                    onChange={(e) => setOutwardForm({ ...outwardForm, time_out: e.target.value })}
+                  />
+                </div>
+              )}
 
               {/* Submit Button */}
               <div className="col-span-2 flex justify-end space-x-2">

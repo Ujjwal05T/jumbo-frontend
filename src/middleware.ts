@@ -23,6 +23,7 @@ const roleBasedRoutes = {
     '/challan',
     '/qr-scanner',
     '/hour-calculator',
+    '/settings'
   ],
   order_puncher: [
     '/masters/orders',
@@ -34,6 +35,7 @@ const roleBasedRoutes = {
     '/challan',
     '/in-out',
     '/hour-calculator',
+    '/masters/materials',
   ],
   co_admin: [
     '/dashboard',
@@ -59,8 +61,9 @@ const roleBasedRoutes = {
     '/reports',
     '/challan',
     '/past-dispatch',
-    '/hour-calculator',
-    '/wastage',
+    '/masters/',
+    '/wastage/materials',
+    '/in-out',
   ],
 };
 

@@ -54,7 +54,13 @@ export default function LoginPage() {
       // Redirect based on role
     if (data.role?.toLowerCase() === 'planner') {
       router.push('/weight-update');
-    } else {
+    } else if (data.role?.toLowerCase() === 'order_puncher'){
+      router.push('/masters/orders');
+    }else if (data.role?.toLowerCase() === 'security'){
+      router.push('/in-out');
+    }else if (data.role?.toLowerCase() === 'order_puncher'){
+      router.push('/masters/orders');
+    }else {
       router.push('/dashboard');
     }
     } catch (err) {

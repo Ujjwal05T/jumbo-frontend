@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 import { User as ApiUser, fetchUsers, deleteUser, updateUserStatus } from "@/lib/users";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import OTPVerificationModal from "@/components/OTPVerificationModal";
 
 export default function UserMasterPage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -59,6 +60,13 @@ export default function UserMasterPage() {
     userId: string;
     userName: string;
   }>({ open: false, userId: "", userName: "" });
+
+  // OTP verification states
+  const [otpVerification, setOtpVerification] = useState<{
+    open: boolean;
+    action: 'edit' | 'delete' | 'toggle-status' | null;
+    user: ApiUser | null;
+  }>({ open: false, action: null, user: null });
 
   // Load users on component mount
   useEffect(() => {
@@ -85,7 +93,17 @@ export default function UserMasterPage() {
   };
 
   const handleEditUser = (user: ApiUser) => {
-    setEditingUser(user);
+    // Check if current user is admin - if yes, allow direct edit, if no, require OTP
+    const userRole = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('user_role='))
+      ?.split('=')[1];
+
+    if (userRole === 'co_admin') {
+      setEditingUser(user);
+    } else {
+      setOtpVerification({ open: true, action: 'edit', user });
+    }
   };
 
   const handleUserUpdated = async () => {
@@ -95,11 +113,21 @@ export default function UserMasterPage() {
   };
 
   const handleDeleteUser = (user: ApiUser) => {
-    setDeleteDialog({
-      open: true,
-      userId: user.id,
-      userName: user.name,
-    });
+    // Check if current user is admin - if yes, show delete dialog, if no, require OTP
+    const userRole = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('user_role='))
+      ?.split('=')[1];
+
+    if (userRole === 'admin' || userRole === 'co_admin') {
+      setDeleteDialog({
+        open: true,
+        userId: user.id,
+        userName: user.name,
+      });
+    } else {
+      setOtpVerification({ open: true, action: 'delete', user });
+    }
   };
 
   const confirmDeleteUser = async () => {
@@ -113,9 +141,26 @@ export default function UserMasterPage() {
     }
   };
 
-  const handleToggleUserStatus = async (userId: string, currentStatus: string) => {
+  const handleToggleUserStatus = (userId: string, currentStatus: string) => {
+    const user = users.find(u => u.id === userId);
+    if (!user) return;
+
+    // Check if current user is admin - if yes, allow direct toggle, if no, require OTP
+    const userRole = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('user_role='))
+      ?.split('=')[1];
+
+    if (userRole === 'admin' || userRole === 'co_admin') {
+      performToggleUserStatus(userId, currentStatus);
+    } else {
+      setOtpVerification({ open: true, action: 'toggle-status', user });
+    }
+  };
+
+  const performToggleUserStatus = async (userId: string, currentStatus: string) => {
     const newStatus = currentStatus === "active" ? "inactive" : "active";
-    
+
     try {
       await updateUserStatus(userId, newStatus);
       // Refresh the users list
@@ -129,6 +174,35 @@ export default function UserMasterPage() {
     setRefreshing(true);
     await loadUsers();
     setRefreshing(false);
+  };
+
+  // OTP verification handlers
+  const handleOTPVerified = () => {
+    const { action, user } = otpVerification;
+
+    if (!user || !action) return;
+
+    switch (action) {
+      case 'edit':
+        setEditingUser(user);
+        break;
+      case 'delete':
+        setDeleteDialog({
+          open: true,
+          userId: user.id,
+          userName: user.name,
+        });
+        break;
+      case 'toggle-status':
+        performToggleUserStatus(user.id, user.status);
+        break;
+    }
+
+    setOtpVerification({ open: false, action: null, user: null });
+  };
+
+  const handleOTPCancelled = () => {
+    setOtpVerification({ open: false, action: null, user: null });
   };
 
   const filteredUsers = users.filter(user =>
@@ -485,6 +559,16 @@ export default function UserMasterPage() {
         cancelText="Cancel"
         variant="destructive"
         onConfirm={confirmDeleteUser}
+      />
+
+      {/* OTP Verification Modal */}
+      <OTPVerificationModal
+        open={otpVerification.open}
+        onOpenChange={(open) => !open && handleOTPCancelled()}
+        title={`Admin Verification Required - ${otpVerification.action === 'edit' ? 'Edit User' : otpVerification.action === 'delete' ? 'Delete User' : 'Change Status'}`}
+        description={`${otpVerification.action === 'edit' ? 'Editing' : otpVerification.action === 'delete' ? 'Deleting' : 'Changing status for'} user "${otpVerification.user?.name}" requires admin verification. Please ask an administrator to provide their current OTP code.`}
+        onVerified={handleOTPVerified}
+        onCancel={handleOTPCancelled}
       />
     </DashboardLayout>
   );

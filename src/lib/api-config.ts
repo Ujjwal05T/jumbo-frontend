@@ -116,6 +116,14 @@ export const REPORTS_ENDPOINTS = {
   CLIENT_ORDERS_WITH_PLANS: `${API_BASE_URL}/reports/client-orders-with-plans`,
 };
 
+// Order Edit Logs endpoints
+export const ORDER_EDIT_LOG_ENDPOINTS = {
+  ORDER_EDIT_LOGS: `${API_BASE_URL}/order-edit-logs`,
+  ORDER_EDIT_LOGS_BY_ORDER: (orderId: string) => `${API_BASE_URL}/order-edit-logs/order/${orderId}`,
+  RECENT_ORDER_EDIT_LOGS: `${API_BASE_URL}/order-edit-logs/recent`,
+  ORDER_EDIT_LOG_ACTIONS: `${API_BASE_URL}/order-edit-logs/actions`,
+};
+
 // Material Management endpoints
 export const MATERIAL_ENDPOINTS = {
   MATERIALS: `${API_BASE_URL}/materials`,

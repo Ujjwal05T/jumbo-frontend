@@ -291,6 +291,7 @@ export default function EditOrderPage() {
           rate: parseFloat(String(item.rate)), // Backend expects float
           amount: item.amount ? parseFloat(String(item.amount)) : undefined, // Backend expects float or null
         })),
+        edited_by_id: localStorage.getItem("user_id"), // Replace with actual current user ID from auth context/session
       };
 
       console.log("Sending order update data:", JSON.stringify(orderData, null, 2));

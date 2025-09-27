@@ -54,35 +54,26 @@ const getNavigationForRole = (role: string | null) => {
     {
       name: "Masters",
       icon: FileText,
-      roles: ["admin", "order_puncher", "co_admin", "accountant"],
+      roles: ["admin", "order_puncher", "co_admin", "accountant","security"],
       children: [
         { name: "Client Master", href: "/masters/clients", roles: ["admin", "order_puncher", "co_admin", "accountant"] },
         { name: "Order Master", href: "/masters/orders", roles: ["admin", "order_puncher", "co_admin", "accountant"] },
+        { name: "Order Edit Logs", href: "/masters/orders/edit-logs", roles: ["admin", "co_admin"] },
         { name: "Pending Orders", href: "/masters/pending-orders", roles: ["admin", "poduction"] },
         { name: "Plan Master", href: "/masters/plans", roles: ["admin"] },
-        { name: "User Master", href: "/masters/users", roles: ["admin", "accountant"] },
+        { name: "User Master", href: "/masters/users", roles: ["admin"] },
         { name: "Paper Master", href: "/masters/papers", roles: ["admin", "order_puncher", "accountant"] },
-        { name: "Material Master", href: "/masters/materials", roles: ["admin", "accountant"] },
+        { name: "Material Master", href: "/masters/materials", roles: ["admin", "accountant","security"] },
       ],
     },
-    {
-      name: "Orders",
-      href: "/orders",
-      icon: FileText,
-      roles: ["admin", "co_admin"],
-    },
+    
     {
       name: "Inventory",
-      href: "/inventory",
+      href: "/inventory/past-inventory",
       icon: Package,
       roles: ["admin"],
     },
-    {
-      name: "Cutting Plans",
-      href: "/cutting-plans",
-      icon: Scissors,
-      roles: ["admin"],
-    },
+    
     {
       name: "Planning",
       href: "/planning",
@@ -95,17 +86,17 @@ const getNavigationForRole = (role: string | null) => {
       icon: Recycle,
       roles: ["admin", "accountant"],
     },
-    {
-      name: "Weight Update",
-      href: "/weight-update",
-      icon: Database,
-      roles: ["admin", "planner", "accountant"],
-    },
+    // {
+    //   name: "Weight Update",
+    //   href: "/weight-update",
+    //   icon: Database,
+    //   roles: ["admin", "planner", "accountant"],
+    // },
     {
       name: "In/Out",
       href: "/in-out",
       icon: Database,
-      roles: ["admin", "security"],
+      roles: ["admin", "security", "accountant"],
     },
     {
       name: "Dispatch",
@@ -121,7 +112,7 @@ const getNavigationForRole = (role: string | null) => {
       name: "Challan",
       href: "/challan",
       icon: Receipt,
-      roles: ["admin", "security", "accountant"],
+      roles: ["admin", "accountant"],
     },
     {
       name: "QR Scanner",
@@ -142,7 +133,7 @@ const getNavigationForRole = (role: string | null) => {
       name: "Hour Calculator",
       href: "/hour-calculator",
       icon: Clock,
-      roles: ["admin", "order_puncher", "security", "poduction", "accountant"],
+      roles: ["admin"],
     },
   ];
 
