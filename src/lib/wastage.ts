@@ -9,6 +9,8 @@ export interface WastageInventory {
   barcode_id: string;
   width_inches: number;
   paper_id: string;
+  weight_kg?: number;
+  location?: string;
   paper?: {
     id: string;
     type: string;
@@ -146,6 +148,16 @@ export interface CreateWastageRequest {
   reel_no?: string;
 }
 
+export interface UpdateWastageRequest {
+  width_inches?: number;
+  paper_id?: string;
+  weight_kg?: number;
+  status?: string;
+  location?: string;
+  notes?: string;
+  reel_no?: string;
+}
+
 export interface PaperMaster {
   id: string;
   frontend_id: string;
@@ -191,6 +203,31 @@ export async function createManualWastage(wastageData: CreateWastageRequest): Pr
     return await response.json();
   } catch (error) {
     console.error('Error creating manual wastage:', error);
+    throw error;
+  }
+}
+
+export async function updateWastageItem(
+  wastage_id: string,
+  updateData: UpdateWastageRequest
+): Promise<WastageInventory> {
+  try {
+    const response = await fetch(`${BASE_URL}/wastage/${wastage_id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+      },
+      body: JSON.stringify(updateData),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error updating wastage item:', error);
     throw error;
   }
 }

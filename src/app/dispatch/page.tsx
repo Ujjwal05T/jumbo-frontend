@@ -45,6 +45,7 @@ import {
   X,
   ShoppingCart,
   Building2,
+  Search,
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DispatchForm } from "@/components/DispatchForm";
@@ -86,6 +87,23 @@ export default function DispatchPage() {
   const [clients, setClients] = useState<any[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>("none");
   const [clientsLoading, setClientsLoading] = useState(false);
+
+  // Search state
+  const [searchTerm, setSearchTerm] = useState("");
+
+  // Helper function to highlight matching text
+  const highlightText = (text: string, searchTerm: string) => {
+    if (!searchTerm || !text) return text;
+
+    const parts = text.split(new RegExp(`(${searchTerm})`, 'gi'));
+    return parts.map((part, index) =>
+      part.toLowerCase() === searchTerm.toLowerCase() ? (
+        <mark key={index} className="bg-yellow-200 dark:bg-yellow-800 px-0.5 rounded">
+          {part}
+        </mark>
+      ) : part
+    );
+  };
 
   // Load clients on page load
   const loadClients = async () => {
@@ -149,7 +167,19 @@ export default function DispatchPage() {
     loadData();
   }, [selectedClientId]);
 
-  const filteredItems = warehouseItems;
+  // Filter items based on search term
+  const filteredItems = warehouseItems.filter((item) => {
+    if (!searchTerm.trim()) return true;
+
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      (item.barcode_id && item.barcode_id.toLowerCase().includes(searchLower)) ||
+      (item.qr_code && item.qr_code.toLowerCase().includes(searchLower)) ||
+      (item.client_name && item.client_name.toLowerCase().includes(searchLower)) ||
+      (item.order_id && item.order_id.toLowerCase().includes(searchLower)) ||
+      (item.paper_spec && item.paper_spec.toLowerCase().includes(searchLower))
+    );
+  });
 
   const handleCompleteItems = (itemIds: string[]) => {
     // Get selected items data for dispatch form
@@ -381,23 +411,52 @@ export default function DispatchPage() {
         {/* Dispatch Items Table */}
         <Card>
           <CardHeader>
-            <div className="flex justify-between items-center">
-              <div>
-                <CardTitle>Dispatch Queue</CardTitle>
-                <CardDescription>
-                  Manage order items ready for dispatch and delivery
-                </CardDescription>
+            <div className="flex flex-col gap-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>Dispatch Queue</CardTitle>
+                  <CardDescription>
+                    Manage order items ready for dispatch and delivery
+                  </CardDescription>
+                </div>
+                {selectedItems.length > 0 && (
+                  <Button
+                    onClick={handleBulkDispatch}
+                    className="bg-green-600 hover:bg-green-700 text-white shadow-lg"
+                    size="lg"
+                  >
+                    <Truck className="mr-2 h-5 w-5" />
+                    Dispatch {selectedItems.length} Items
+                  </Button>
+                )}
               </div>
-              {selectedItems.length > 0 && (
-                <Button 
-                  onClick={handleBulkDispatch}
-                  className="bg-green-600 hover:bg-green-700 text-white shadow-lg"
-                  size="lg"
-                >
-                  <Truck className="mr-2 h-5 w-5" />
-                  Dispatch {selectedItems.length} Items
-                </Button>
-              )}
+
+              {/* Search Bar */}
+              <div className="flex items-center gap-4">
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-8 pr-8"
+                  />
+                  {searchTerm && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setSearchTerm("")}
+                      className="absolute right-1 top-1 h-6 w-6 p-0"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+                {searchTerm && (
+                  <div className="text-sm text-muted-foreground">
+                    Found {filteredItems.length} of {warehouseItems.length} items
+                  </div>
+                )}
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -465,7 +524,7 @@ export default function DispatchPage() {
                                 ? "font-bold text-blue-700"
                                 : ""
                             }`}>
-                              {item.barcode_id || item.qr_code}
+                              {highlightText(item.barcode_id || item.qr_code, searchTerm)}
                               {selectedItems.includes(item.inventory_id) && (
                                 <Badge className="ml-2 text-xs bg-blue-600">SELECTED</Badge>
                               )}
@@ -479,17 +538,17 @@ export default function DispatchPage() {
                           <div className="space-y-1">
                             <div className="font-medium text-sm flex items-center gap-1">
                               <Building2 className="w-3 h-3 text-blue-600" />
-                              {item.client_name || "N/A"}
+                              {highlightText(item.client_name || "N/A", searchTerm)}
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              Order: {item.order_id || "N/A"}
+                              Order: {highlightText(item.order_id || "N/A", searchTerm)}
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
-                              <span className="font-medium">{item.paper_spec}</span>
+                              <span className="font-medium">{highlightText(item.paper_spec, searchTerm)}</span>
                               <WastageIndicator isWastageRoll={item.is_wastage_roll} />
                             </div>
                             <div className="text-xs text-muted-foreground">

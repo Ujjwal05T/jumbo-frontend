@@ -203,16 +203,16 @@ export default function CreateWastageModal({ onWastageCreated }: CreateWastageMo
                   <SelectValue placeholder="Select paper type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {papers.map((paper) => (
+                    {papers.sort((a, b) => a.gsm - b.gsm).map((paper) => (
                     <SelectItem key={paper.id} value={paper.id}>
                       <div className="flex flex-col">
-                        <span className="font-medium">{paper.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {paper.gsm}GSM • {paper.bf}BF • {paper.shade}
-                        </span>
+                      
+                      <span className="text-sm font-medium">
+                        {paper.gsm}GSM • {paper.bf}BF • {paper.shade}
+                      </span>
                       </div>
                     </SelectItem>
-                  ))}
+                    ))}
                 </SelectContent>
               </Select>
             )}

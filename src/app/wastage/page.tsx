@@ -33,6 +33,7 @@ import {
   Ruler,
   Calendar,
   Plus,
+  Edit,
 } from "lucide-react";
 import {
   WastageInventory,
@@ -41,6 +42,7 @@ import {
   fetchWastageStats,
 } from "@/lib/wastage";
 import CreateWastageModal from "@/components/CreateWastageModal";
+import EditWastageModal from "@/components/EditWastageModal";
 
 export default function WastagePage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -50,6 +52,10 @@ export default function WastagePage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+
+  // Edit modal state
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [selectedWastageItem, setSelectedWastageItem] = useState<WastageInventory | null>(null);
 
   const loadWastageData = async () => {
     try {
@@ -75,6 +81,11 @@ export default function WastagePage() {
     loadWastageData();
   }, [page, searchTerm]);
 
+
+  const handleEditWastage = (item: WastageInventory) => {
+    setSelectedWastageItem(item);
+    setEditModalOpen(true);
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status.toLowerCase()) {
@@ -187,12 +198,13 @@ export default function WastagePage() {
                         <TableHead>Paper Specs</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Created</TableHead>
+                        <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredItems.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                          <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                             No stock items found
                           </TableCell>
                         </TableRow>
@@ -238,6 +250,16 @@ export default function WastagePage() {
                                 {new Date(item.created_at).toLocaleDateString()}
                               </div>
                             </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditWastage(item)}
+                                className="h-8 w-8 p-0"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
                           </TableRow>
                         ))
                       )}
@@ -275,6 +297,14 @@ export default function WastagePage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Edit Modal */}
+        <EditWastageModal
+          open={editModalOpen}
+          onOpenChange={setEditModalOpen}
+          wastageItem={selectedWastageItem}
+          onWastageUpdated={loadWastageData}
+        />
       </div>
     </DashboardLayout>
   );

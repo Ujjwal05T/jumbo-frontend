@@ -744,7 +744,7 @@ export default function InOutPage() {
                     {/* Payment Type - Accountant & Admin can see */}
                     {canViewField('accountant') && (
                       <div className="flex flex-col space-y-2">
-                        <Label htmlFor="paymentType">Bill/Cash *</Label>
+                        <Label htmlFor="paymentType">Bill/Cash </Label>
                         <Select
                           key={`payment-${showInwardModal}-${inwardForm.payment_type}`}
                           value={inwardForm.payment_type || ""}
@@ -778,32 +778,6 @@ export default function InOutPage() {
                           value={inwardForm.bill_no || ""}
                           onChange={(e) => setInwardForm({ ...inwardForm, bill_no: e.target.value })}
                           required
-                        />
-                      </div>
-                    )}
-
-                    {/* Time In - Accountant & Admin can see (Auto-populated for Security) */}
-                    {canViewField('accountant') && (
-                      <div className="flex flex-col space-y-2">
-                        <Label htmlFor="timeIn">Time In</Label>
-                        <Input
-                          id="timeIn"
-                          type="time"
-                          value={inwardForm.time_in || ""}
-                          onChange={(e) => setInwardForm({ ...inwardForm, time_in: e.target.value })}
-                        />
-                      </div>
-                    )}
-
-                    {/* Time Out - Accountant & Admin can see */}
-                    {canViewField('accountant') && (
-                      <div className="flex flex-col space-y-2">
-                        <Label htmlFor="timeOut">Time Out</Label>
-                        <Input
-                          id="timeOut"
-                          type="time"
-                          value={inwardForm.time_out || ""}
-                          onChange={(e) => setInwardForm({ ...inwardForm, time_out: e.target.value })}
                         />
                       </div>
                     )}
@@ -859,6 +833,32 @@ export default function InOutPage() {
                           placeholder="Enter rate per unit"
                           value={inwardForm.rate || ""}
                           onChange={(e) => setInwardForm({ ...inwardForm, rate: Number(e.target.value) })}
+                        />
+                      </div>
+                    )}
+
+                    {/* Time In - Accountant & Admin can see (Auto-populated for Security) */}
+                    {canViewField('accountant') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="timeIn">Time In</Label>
+                        <Input
+                          id="timeIn"
+                          type="time"
+                          value={inwardForm.time_in || ""}
+                          onChange={(e) => setInwardForm({ ...inwardForm, time_in: e.target.value })}
+                        />
+                      </div>
+                    )}
+
+                    {/* Time Out - Accountant & Admin can see */}
+                    {canViewField('accountant') && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="timeOut">Time Out</Label>
+                        <Input
+                          id="timeOut"
+                          type="time"
+                          value={inwardForm.time_out || ""}
+                          onChange={(e) => setInwardForm({ ...inwardForm, time_out: e.target.value })}
                         />
                       </div>
                     )}
@@ -950,11 +950,12 @@ export default function InOutPage() {
                             </Button>
                             {isSecurity && !challan.time_out && (
                               <Button
-                                variant="outline"
+                                variant="destructive"
                                 size="sm"
                                 onClick={() => handleInwardTimeOut(challan)}
                                 disabled={submitting}
                                 title="Record Time Out"
+                                className="bg-red-600 hover:bg-red-700 text-white"
                               >
                                 <LogOut className="h-4 w-4" />
                               </Button>
@@ -1234,6 +1235,7 @@ export default function InOutPage() {
                                 onClick={() => handleOutwardTimeOut(challan)}
                                 disabled={submitting}
                                 title="Record Time Out"
+                                className="bg-red-600 hover:bg-red-700 text-white"
                               >
                                 <LogOut className="h-4 w-4" />
                               </Button>
@@ -1421,7 +1423,7 @@ export default function InOutPage() {
               {/* Payment Type - Accountant & Admin can see */}
               {canViewField('accountant') && (
                 <div className="flex flex-col space-y-2">
-                  <Label htmlFor="updatePaymentType">Payment Type *</Label>
+                  <Label htmlFor="updatePaymentType">Bill/Cash </Label>
                   <Select
                     value={inwardForm.payment_type || ""}
                     onValueChange={(value) => {
@@ -1454,34 +1456,6 @@ export default function InOutPage() {
                     value={inwardForm.bill_no || ""}
                     onChange={(e) => setInwardForm({ ...inwardForm, bill_no: e.target.value })}
                     required
-                  />
-                </div>
-              )}
-
-              {/* Time In - Accountant & Admin can see */}
-              {canViewField('accountant') && (
-                <div className="flex flex-col space-y-2">
-                  <Label htmlFor="updateTimeIn">Time In</Label>
-                  <Input
-                    id="updateTimeIn"
-                    type="time"
-                    disabled={!isAdmin}
-                    value={inwardForm.time_in || ""}
-                    onChange={(e) => setInwardForm({ ...inwardForm, time_in: e.target.value })}
-                  />
-                </div>
-              )}
-
-              {/* Time Out - Accountant & Admin can see */}
-              {canViewField('accountant') && (
-                <div className="flex flex-col space-y-2">
-                  <Label htmlFor="updateTimeOut">Time Out</Label>
-                  <Input
-                    id="updateTimeOut"
-                    type="time"
-                    disabled={!isAdmin}
-                    value={inwardForm.time_out || ""}
-                    onChange={(e) => setInwardForm({ ...inwardForm, time_out: e.target.value })}
                   />
                 </div>
               )}
@@ -1537,6 +1511,34 @@ export default function InOutPage() {
                     placeholder="Enter rate per unit"
                     value={inwardForm.rate || ""}
                     onChange={(e) => setInwardForm({ ...inwardForm, rate: Number(e.target.value) })}
+                  />
+                </div>
+              )}
+
+              {/* Time In - Accountant & Admin can see */}
+              {canViewField('accountant') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateTimeIn">Time In</Label>
+                  <Input
+                    id="updateTimeIn"
+                    type="time"
+                    disabled={!isAdmin}
+                    value={inwardForm.time_in || ""}
+                    onChange={(e) => setInwardForm({ ...inwardForm, time_in: e.target.value })}
+                  />
+                </div>
+              )}
+
+              {/* Time Out - Accountant & Admin can see */}
+              {canViewField('accountant') && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateTimeOut">Time Out</Label>
+                  <Input
+                    id="updateTimeOut"
+                    type="time"
+                    disabled={!isAdmin}
+                    value={inwardForm.time_out || ""}
+                    onChange={(e) => setInwardForm({ ...inwardForm, time_out: e.target.value })}
                   />
                 </div>
               )}
