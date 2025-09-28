@@ -26,6 +26,8 @@ import {
   validateWastageData,
   WastageCalculationResult 
 } from "@/lib/wastage-calculator";
+import { fetchOrder } from "@/lib/orders";
+import { fetchPapers } from "@/lib/papers";
 // Removed old production imports - now using direct API calls
 import { Button } from "@/components/ui/button";
 import {
@@ -191,6 +193,114 @@ function ProductionRecordsErrorBoundary({
   }
 
   return <>{children}</>;
+}
+
+// Wastage Allocation Table Component with enriched data
+function WastageAllocationTable({ wastageAllocations }: { wastageAllocations: any[] }) {
+  const [enrichedData, setEnrichedData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [papersMap, setPapersMap] = useState<Record<string, any>>({});
+  const [ordersMap, setOrdersMap] = useState<Record<string, any>>({});
+
+  useEffect(() => {
+    const enrichWastageData = async () => {
+      if (!wastageAllocations || wastageAllocations.length === 0) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // Fetch all papers first
+        const papers = await fetchPapers();
+        const papersMapping = papers.reduce((acc: any, paper: any) => {
+          acc[paper.id] = paper;
+          return acc;
+        }, {});
+        setPapersMap(papersMapping);
+
+        // Get unique order IDs from wastage allocations
+        const uniqueOrderIds = [...new Set(wastageAllocations.map(w => w.order_id).filter(Boolean))];
+
+        // Fetch order details for each unique order ID
+        const ordersMapping: Record<string, any> = {};
+        await Promise.all(
+          uniqueOrderIds.map(async (orderId) => {
+            try {
+              const order = await fetchOrder(orderId);
+              ordersMapping[orderId] = order;
+            } catch (error) {
+              console.error(`Failed to fetch order ${orderId}:`, error);
+            }
+          })
+        );
+        setOrdersMap(ordersMapping);
+
+        // Enrich wastage data with lookups
+        const enriched = wastageAllocations.map(wastage => ({
+          ...wastage,
+          paperType: `${papersMapping[wastage.paper_id]?.gsm} GSM ${papersMapping[wastage.paper_id]?.bf} BF ${papersMapping[wastage.paper_id]?.shade}` || 'Unknown',
+          orderFrontendId: ordersMapping[wastage.order_id]?.frontend_id || 'N/A',
+          clientName: ordersMapping[wastage.order_id]?.client?.company_name || 'N/A'
+        }));
+
+        setEnrichedData(enriched);
+      } catch (error) {
+        console.error('Failed to enrich wastage data:', error);
+        setEnrichedData(wastageAllocations);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    enrichWastageData();
+  }, [wastageAllocations]);
+
+  if (loading) {
+    return (
+      <div className="text-center py-8">
+        <p>Loading stock allocation details...</p>
+      </div>
+    );
+  }
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Stock ID</TableHead>
+          <TableHead>Paper Type</TableHead>
+          <TableHead>Order Frontend ID</TableHead>
+          <TableHead>Client Name</TableHead>
+          <TableHead>Width (inches)</TableHead>
+          <TableHead>Quantity</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {enrichedData.map((wastage: any, index: number) => (
+          <TableRow key={index}>
+            <TableCell className="font-medium">
+              {wastage.wastage_frontend_id || `W-${index + 1}`}
+            </TableCell>
+            <TableCell>
+              {wastage.paperType}
+            </TableCell>
+            <TableCell>
+              {wastage.orderFrontendId}
+            </TableCell>
+            <TableCell>
+              {wastage.clientName}
+            </TableCell>
+            <TableCell>
+              {wastage.width_inches || 'N/A'}"
+            </TableCell>
+            <TableCell>
+              {wastage.quantity_reduced || 1}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
 }
 
 export default function PlanningPage() {
@@ -2153,10 +2263,13 @@ export default function PlanningPage() {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="orders">Orders</TabsTrigger>
           <TabsTrigger value="cut-rolls" disabled={!planResult}>
             Cut Rolls
+          </TabsTrigger>
+          <TabsTrigger value="stock" disabled={!planResult}>
+            Stock Rolls
           </TabsTrigger>
           <TabsTrigger value="pending-inventory" disabled={!planResult}>
             Pending & Inventory
@@ -3008,6 +3121,40 @@ export default function PlanningPage() {
                 </CardContent>
               </Card>
             </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="stock">
+          {planResult && planResult.wastage_allocations && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Stock Allocations</CardTitle>
+                <CardDescription>
+                  Stock rolls that will be generated from the cutting process
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {Array.isArray(planResult.wastage_allocations) && planResult.wastage_allocations.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <WastageAllocationTable wastageAllocations={planResult.wastage_allocations} />
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>No wastage allocations generated</p>
+                      <p className="text-sm mt-2">Wastage data will appear here after generating a plan</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          {!planResult && (
+            <Card>
+              <CardContent className="text-center py-8">
+                <p className="text-gray-500">Generate a plan first to view stock wastage allocations</p>
+              </CardContent>
+            </Card>
           )}
         </TabsContent>
 

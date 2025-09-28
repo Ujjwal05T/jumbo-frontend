@@ -8,6 +8,7 @@ import jsPDF from "jspdf";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { MASTER_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
+import { cancelPendingOrderItem } from "@/lib/pending-orders";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,9 +38,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { 
-  Clock, 
-  Search, 
+import {
+  Clock,
+  Search,
   AlertTriangle,
   Calendar,
   DollarSign,
@@ -51,7 +52,8 @@ import {
   X,
   ChevronDown,
   ChevronUp,
-  Plus
+  Plus,
+  Trash2
 } from "lucide-react";
 
 interface PendingOrderItem {
@@ -268,6 +270,16 @@ export default function PendingOrderItemsPage() {
   const [widthFilter, setWidthFilter] = useState<string>("");
   const [showFilters, setShowFilters] = useState<boolean>(false);
 
+  // Delete confirmation dialog state
+  const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<{
+    isOpen: boolean;
+    item: PendingOrderItem | null;
+  }>({
+    isOpen: false,
+    item: null
+  });
+  const [deletingItem, setDeletingItem] = useState<boolean>(false);
+
   // Fetch clients for manual cut dialog
   useEffect(() => {
     const fetchClients = async () => {
@@ -399,6 +411,34 @@ export default function PendingOrderItemsPage() {
     const created = new Date(createdAt);
     const now = new Date();
     return Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
+  };
+
+  // Handle delete pending order item
+  const handleDeletePendingItem = async () => {
+    if (!deleteConfirmDialog.item) return;
+
+    setDeletingItem(true);
+    try {
+      // Get current user ID from localStorage or context
+      const currentUserId = localStorage.getItem('userId') || 'system'; // You may need to adjust this based on your auth system
+
+      await cancelPendingOrderItem(deleteConfirmDialog.item.id, currentUserId);
+
+      // Remove the item from the local state
+      setPendingItems(prevItems =>
+        prevItems.filter(item => item.id !== deleteConfirmDialog.item?.id)
+      );
+
+      toast.success(`Pending order item ${deleteConfirmDialog.item.frontend_id} has been cancelled successfully`);
+
+      // Close the dialog
+      setDeleteConfirmDialog({ isOpen: false, item: null });
+    } catch (error) {
+      console.error('Error cancelling pending order item:', error);
+      toast.error(`Failed to cancel pending order item: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setDeletingItem(false);
+    }
   };
 
   const totalPendingQuantity = displayItems.reduce((sum, item) => sum + item.quantity_pending, 0);
@@ -2925,6 +2965,7 @@ const handlePrintPDF = () => {
                     <TableHead>Status</TableHead>
                     <TableHead>Reason</TableHead>
                     <TableHead>Wait Time</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -2965,6 +3006,24 @@ const handlePrintPDF = () => {
                           {daysWaiting} days
                         </Badge>
                       </TableCell>
+                      <TableCell>
+                        {item.status === "pending" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setDeleteConfirmDialog({
+                                isOpen: true,
+                                item: item
+                              });
+                            }}
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-800 hover:bg-red-50"
+                            title="Cancel pending order item"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
                     );
                   })}
@@ -2984,6 +3043,42 @@ const handlePrintPDF = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirmDialog.isOpen} onOpenChange={(open) => {
+        if (!open) {
+          setDeleteConfirmDialog({ isOpen: false, item: null });
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel Pending Order</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to cancel this pending order item? This action will:
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteConfirmDialog({ isOpen: false, item: null })}
+              disabled={deletingItem}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="default"
+              onClick={handleDeletePendingItem}
+              disabled={deletingItem}
+            >
+              {deletingItem ? "Cancelling..." : "Delete Item"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

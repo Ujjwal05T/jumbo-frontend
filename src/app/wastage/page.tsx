@@ -101,11 +101,30 @@ export default function WastagePage() {
   };
 
   const filteredItems = wastageItems?.filter((item) =>
-    item.frontend_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.barcode_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.paper?.type?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.paper?.shade?.toLowerCase().includes(searchTerm.toLowerCase())
+    item.reel_no?.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
+
+  // Component for highlighting search text
+  const HighlightText = ({ text, searchTerm }: { text: string; searchTerm: string }) => {
+    if (!searchTerm || !text) return <span>{text}</span>;
+
+    const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    const parts = text.split(regex);
+
+    return (
+      <span>
+        {parts.map((part, index) =>
+          regex.test(part) ? (
+            <mark key={index} className="bg-yellow-200 text-yellow-900 px-1 rounded">
+              {part}
+            </mark>
+          ) : (
+            <span key={index}>{part}</span>
+          )
+        )}
+      </span>
+    );
+  };
 
   return (
     <DashboardLayout>
@@ -174,7 +193,7 @@ export default function WastagePage() {
             <div className="flex items-center space-x-2 mb-4">
               <Search className="h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by ID, barcode, paper type..."
+                placeholder="Search by reel no..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="max-w-sm"
@@ -212,14 +231,14 @@ export default function WastagePage() {
                         filteredItems.map((item) => (
                           <TableRow key={item.id}>
                             <TableCell className="font-medium px-4">
-                              {item.reel_no || "-"}
+                              <HighlightText text={item.reel_no || "-"} searchTerm={searchTerm} />
                             </TableCell>
                             <TableCell >
-                              {item.frontend_id}
+                              <HighlightText text={item.frontend_id} searchTerm={searchTerm} />
                             </TableCell>
                             <TableCell>
                               <code className="text-sm bg-muted px-2 py-1 rounded">
-                                {item.barcode_id}
+                                <HighlightText text={item.barcode_id} searchTerm={searchTerm} />
                               </code>
                             </TableCell>
                             <TableCell>
@@ -231,10 +250,14 @@ export default function WastagePage() {
                             <TableCell>
                               {item.paper ? (
                                 <div className="text-sm">
-                                  <div className="font-medium">{item.paper.type}</div>
-                                  <div className="text-muted-foreground">
-                                    {item.paper.gsm}GSM • {item.paper.bf}BF • {item.paper.shade}
+                                  <div className="font-medium">
+                                    {item.paper.gsm}GSM • {item.paper.bf}BF • <HighlightText text={item.paper.shade} searchTerm={searchTerm} />
                                   </div>
+                                  {item.paper.type && (
+                                    <div className="text-muted-foreground">
+                                      <HighlightText text={item.paper.type} searchTerm={searchTerm} />
+                                    </div>
+                                  )}
                                 </div>
                               ) : (
                                 <span className="text-muted-foreground">N/A</span>

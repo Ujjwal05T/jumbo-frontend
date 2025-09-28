@@ -148,3 +148,12 @@ export async function acceptCombinations(combinations: any[]): Promise<any> {
   }
   return response.json();
 }
+
+// Cancel/delete a pending order item
+export async function cancelPendingOrderItem(itemId: string, cancelledById: string): Promise<any> {
+  const response = await fetch(`${MASTER_ENDPOINTS.PENDING_ORDERS}/${itemId}/cancel`, createRequestOptions('DELETE', { cancelled_by_id: cancelledById }));
+  if (!response.ok) {
+    throw new Error(`Failed to cancel pending order item: ${response.status}`);
+  }
+  return response.json();
+}
