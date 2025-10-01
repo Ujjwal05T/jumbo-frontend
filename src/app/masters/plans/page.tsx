@@ -302,11 +302,19 @@ export default function PlansPage() {
   const groupCutRollsByJumboWithSequential = (cutRolls: CutRollItem[]): Record<string, { displayId: string; rolls: CutRollItem[] }> => {
     const allJumboIds = cutRolls.map(item => item.jumbo_roll_frontend_id || 'ungrouped');
     const grouped: Record<string, { displayId: string; rolls: CutRollItem[] }> = {};
-    
+
     cutRolls.forEach(item => {
       const originalJumboId = item.jumbo_roll_frontend_id || 'ungrouped';
-      const transformedId = originalJumboId === 'ungrouped' ? 'Ungrouped Items' : transformJumboId(originalJumboId, allJumboIds);
-      
+      let transformedId;
+
+      if (originalJumboId === 'ungrouped') {
+        // Check if this ungrouped item is a wastage cut roll (SCR barcode)
+        const isWastageRoll = item.barcode_id?.startsWith('SCR-');
+        transformedId = isWastageRoll ? 'Cut Rolls from Stock' : 'Ungrouped Items';
+      } else {
+        transformedId = transformJumboId(originalJumboId, allJumboIds);
+      }
+
       if (!grouped[originalJumboId]) {
         grouped[originalJumboId] = {
           displayId: transformedId,
@@ -315,16 +323,16 @@ export default function PlansPage() {
       }
       grouped[originalJumboId].rolls.push(item);
     });
-    
+
     return grouped;
   };
 
  const handleDownloadReport = async (plan: Plan) => {
   try {
     toast.loading('Preparing report download...', { id: `report-${plan.id}` });
-    
+    // console.log('Generating report for plan:', plan);
     const productionSummary = await loadProductionData(plan.id);
-    console.log('Production Summary:', productionSummary);
+    // console.log('Production Summary:', productionSummary);
     if (!productionSummary) {
       toast.error('No production data available for this plan', { id: `report-${plan.id}` });
       return;
@@ -518,18 +526,66 @@ export default function PlansPage() {
     });
     yPosition += 10;
 
-    // Use production data directly - group by jumbo rolls first
-    const jumboRollMapping = groupCutRollsByJumboWithSequential(productionSummary.detailed_items);
-    const jumboMappingEntries = Object.entries(jumboRollMapping);
+    // Separate SCR cut rolls from regular cut rolls for plan details PDF
+    const regularCutRolls = productionSummary.detailed_items.filter(roll => !roll.barcode_id?.startsWith('SCR-'));
+    const scrCutRolls = productionSummary.detailed_items.filter(roll => roll.barcode_id?.startsWith('SCR-'));
 
-    if (jumboMappingEntries.length === 0) {
+    // Add SCR Cut Rolls Summary if any exist
+    if (scrCutRolls.length > 0) {
+      checkPageBreak(80);
+
+      // Summary header
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(40, 40, 40);
+      doc.text('Cut Rolls from Stock Summary', 20, yPosition);
+      yPosition += 12;
+
+      // Summary description
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(60, 60, 60);
+      doc.text(`${scrCutRolls.length} cut rolls sourced from existing stock:`, 20, yPosition);
+      yPosition += 12;
+
+      // List each SCR cut roll
+      scrCutRolls.forEach((roll, index) => {
+        checkPageBreak(8);
+
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        const rollText = `• ${roll.barcode_id} - ${roll.width_inches}" × ${roll.weight_kg}kg - ${roll.client_name || 'Unknown Client'}`;
+        doc.text(rollText, 25, yPosition);
+        yPosition += 6;
+      });
+
+      yPosition += 10;
+    }
+
+    // Use production data directly - group by jumbo rolls first (regular rolls only)
+    const jumboRollMapping = groupCutRollsByJumboWithSequential(regularCutRolls);
+    const sortedJumboMappingEntries = Object.entries(jumboRollMapping).sort(([aId, aGroup], [bId, bGroup]) => {
+      const aDisplayId = aGroup.displayId;
+      const bDisplayId = bGroup.displayId;
+
+      if (aDisplayId === 'Ungrouped Items' || aDisplayId === 'Cut Rolls from Stock') return 1;
+      if (bDisplayId === 'Ungrouped Items' || bDisplayId === 'Cut Rolls from Stock') return -1;
+
+      const aNum = parseInt(aDisplayId.replace('JR-', '')) || 0;
+      const bNum = parseInt(bDisplayId.replace('JR-', '')) || 0;
+
+      return aNum - bNum;
+    });
+
+    if (sortedJumboMappingEntries.length === 0) {
       doc.setFontSize(12);
       doc.setTextColor(100, 100, 100);
       doc.text("No production data available for cutting pattern", 20, yPosition);
       yPosition += 15;
     } else {
       // Process each jumbo roll
-      jumboMappingEntries.forEach(([originalJumboId, jumboGroup], index) => {
+      sortedJumboMappingEntries.forEach(([originalJumboId, jumboGroup], index) => {
         const { displayId: jumboDisplayId, rolls: jumboRolls } = jumboGroup;
         
         // Sort jumbo rolls by individual_roll_number to preserve cutting pattern order
@@ -600,7 +656,7 @@ export default function PlansPage() {
 
           const rectStartX = 40;
           const rectWidth = pageWidth - 65;
-          const rectHeight = 15;
+          const rectHeight = 20;
           let currentX = rectStartX;
 
           const totalUsedWidth = rolls.reduce((sum:number, roll:any) => sum + (roll.width_inches || 0), 0);
@@ -608,8 +664,12 @@ export default function PlansPage() {
           
           // Draw the roll segments
           rolls.forEach((roll:any) => {
-            
-            const sectionWidth = 35
+
+            // Calculate section width based on roll width ratio with min/max constraints
+            const rollRatio = roll.width_inches / 118; // Ratio of this roll to total width
+            const availableWidth = rectWidth * 0.85; // Use 85% of available space for rolls
+            const calculatedWidth = availableWidth * rollRatio;
+            const sectionWidth = Math.max(35, Math.min(55, calculatedWidth))
 
             if (roll.status === 'cutting') {
               doc.setFillColor(189, 189, 189);
@@ -663,6 +723,7 @@ export default function PlansPage() {
                 const bottomTextY = localY + rectHeight/2 + 4;
                 doc.text(clientName, textX, topTextY, { align: 'center' });
                 doc.text(`${roll.width_inches}"`, textX, bottomTextY, { align: 'center' });
+                doc.text(`${roll.barcode_id}`, textX, localY + rectHeight - 2, { align: 'center' });
               } else {
                 const textY = localY + rectHeight/2 + 1;
                 if (clientName) {
@@ -678,7 +739,7 @@ export default function PlansPage() {
 
           // Draw waste section
           if (waste > 0) {
-            const wasteRatio = waste / 119;
+            const wasteRatio = waste / 118;
             const wasteWidth = rectWidth * wasteRatio;
             
             doc.setFillColor(239, 68, 68);

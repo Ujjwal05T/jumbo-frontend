@@ -908,13 +908,14 @@ export default function InOutPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Serial No.</TableHead>
+                      <TableHead>Party Name</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Material</TableHead>
                       <TableHead>Vehicle No.</TableHead>
                       <TableHead>RST No.</TableHead>
                       <TableHead>Net Weight</TableHead>
                       <TableHead>Final Weight</TableHead>
-                      <TableHead>Rate</TableHead>
+                      {/* <TableHead>Rate</TableHead> */}
                       <TableHead>Bill No.</TableHead>
                       <TableHead>Time In/Out</TableHead>
                       <TableHead>Actions</TableHead>
@@ -926,6 +927,9 @@ export default function InOutPage() {
                         <TableCell className="font-mono text-sm">
                           {challan.serial_no || "Auto-generated"}
                         </TableCell>
+                        <TableCell >
+                          {clients.find(c => c.id === challan.party_id)?.company_name || "Unknown"}
+                        </TableCell>
                         <TableCell>{formatDate(challan.date)}</TableCell>
                         <TableCell>
                           {materials.find(m => m.id === challan.material_id)?.name || "Unknown"}
@@ -934,7 +938,7 @@ export default function InOutPage() {
                         <TableCell>{challan.rst_no || "-"}</TableCell>
                         <TableCell>{challan.net_weight || "-"}</TableCell>
                         <TableCell>{challan.final_weight || "-"}</TableCell>
-                        <TableCell>{challan.rate ? `₹${challan.rate}` : "-"}</TableCell>
+                        {/* <TableCell>{challan.rate ? `₹${challan.rate}` : "-"}</TableCell> */}
                         <TableCell>{challan.bill_no || "CASH"}</TableCell>
                         <TableCell>
                           {formatTime(challan.time_in)} - {formatTime(challan.time_out)}
@@ -1192,11 +1196,11 @@ export default function InOutPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Serial No.</TableHead>
+                      <TableHead>Party Name</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Vehicle No.</TableHead>
                       <TableHead>Driver Name</TableHead>
                       <TableHead>RST No.</TableHead>
-                      <TableHead>Party Name</TableHead>
                       <TableHead>Purpose</TableHead>
                       <TableHead>Net Weight</TableHead>
                       <TableHead>Time In/Out</TableHead>
@@ -1209,11 +1213,11 @@ export default function InOutPage() {
                         <TableCell className="font-mono text-sm">
                           {challan.serial_no || "Auto-generated"}
                         </TableCell>
+                        <TableCell>{challan.party_name || "-"}</TableCell>
                         <TableCell>{formatDate(challan.date)}</TableCell>
                         <TableCell>{challan.vehicle_number || "-"}</TableCell>
                         <TableCell>{challan.driver_name || "-"}</TableCell>
                         <TableCell>{challan.rst_no || "-"}</TableCell>
-                        <TableCell>{challan.party_name || "-"}</TableCell>
                         <TableCell>{challan.purpose || "-"}</TableCell>
                         <TableCell>{challan.net_weight || "-"}</TableCell>
                         <TableCell>

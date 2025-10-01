@@ -1,12 +1,35 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle, ArrowLeft } from "lucide-react";
+import { AlertCircle, ArrowLeft, Home } from "lucide-react";
+
+// Role-based route permissions (from middleware)
+const roleBasedRoutes = {
+  admin: ['/dashboard'],
+  order_puncher: ['/masters/orders'],
+  security: ['/in-out'],
+  co_admin: ['/dashboard'],
+  planner: ['/weight-update'],
+  poduction: ['/dashboard'],
+  accountant: ['/dashboard'],
+};
 
 export default function AccessDeniedPage() {
   const router = useRouter();
+  const [defaultRoute, setDefaultRoute] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Get user role from localStorage
+    const userRole = localStorage.getItem('user_role');
+    if (userRole && userRole in roleBasedRoutes) {
+      const routes = roleBasedRoutes[userRole as keyof typeof roleBasedRoutes];
+      // Set the first available route for this role
+      setDefaultRoute(routes[0]);
+    }
+  }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/20 p-4">
@@ -25,19 +48,27 @@ export default function AccessDeniedPage() {
             Your current role doesn't have access to this resource. Please contact your administrator if you believe this is an error.
           </p>
           <div className="flex flex-col gap-2">
+            {defaultRoute && (
+              <Button
+                onClick={() => router.push(defaultRoute)}
+                className="w-full"
+              >
+                <Home className="mr-2 h-4 w-4" />
+                Go to {defaultRoute === '/dashboard' ? 'Dashboard' : 'Home'}
+              </Button>
+            )}
             <Button
-              onClick={() => router.back()}
+              onClick={() => {
+                localStorage.removeItem('username');
+                localStorage.removeItem('user_role');
+                document.cookie = 'username=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT';
+                document.cookie = 'user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT';
+                router.push('/auth/login');
+              }}
               variant="outline"
               className="w-full"
             >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Go Back
-            </Button>
-            <Button
-              onClick={() => router.push("/dashboard")}
-              className="w-full"
-            >
-              Go to Dashboard
+              Logout
             </Button>
           </div>
         </CardContent>

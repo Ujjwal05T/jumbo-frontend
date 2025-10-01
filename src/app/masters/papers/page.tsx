@@ -31,6 +31,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Package,
   Search,
   MoreHorizontal,
@@ -39,6 +46,8 @@ import {
   AlertTriangle,
   CheckCircle,
   Loader2,
+  Filter,
+  X,
 } from "lucide-react";
 import { Paper, fetchPapers, deletePaper } from "@/lib/papers";
 import { PaperForm } from "@/components/PaperForm";
@@ -71,6 +80,7 @@ export default function PaperMasterPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingPaper, setEditingPaper] = useState<Paper | null>(null);
+  const [selectedPaperType, setSelectedPaperType] = useState<string>("all");
   const [deleteDialog, setDeleteDialog] = useState<{
     open: boolean;
     paperId: string;
@@ -123,14 +133,56 @@ export default function PaperMasterPage() {
     loadPapers();
   };
 
-  const filteredPapers = papers.filter(
-    (paper) =>
-      paper.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      paper.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      paper.shade.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      paper.gsm.toString().includes(searchTerm.toLowerCase()) ||
-      paper.bf.toString().includes(searchTerm.toLowerCase())
-  );
+  // Enhanced omni search with fuzzy matching and exact match prioritization
+  const omniSearchFilter = (paper: Paper, term: string) => {
+    if (!term.trim()) return true;
+
+    const searchLower = term.toLowerCase();
+    const fields = [
+      paper.name.toLowerCase(),
+      paper.type.toLowerCase(),
+      paper.shade.toLowerCase(),
+      paper.gsm.toString(),
+      paper.bf.toString(),
+      paper.frontend_id?.toLowerCase() || '',
+    ];
+
+    // Exact match gets highest priority
+    const exactMatch = fields.some(field => field === searchLower);
+    if (exactMatch) return true;
+
+    // Starts with match gets second priority
+    const startsWithMatch = fields.some(field => field.startsWith(searchLower));
+    if (startsWithMatch) return true;
+
+    // Contains match gets third priority
+    const containsMatch = fields.some(field => field.includes(searchLower));
+    if (containsMatch) return true;
+
+    // Fuzzy search for partial matches
+    const words = searchLower.split(' ').filter(w => w.length > 0);
+    return words.every(word =>
+      fields.some(field => field.includes(word))
+    );
+  };
+
+  // Get unique paper types sorted by GSM (average for each type)
+  const paperTypes = Array.from(new Set(papers.map(p => p.type)))
+    .map(type => {
+      const papersOfType = papers.filter(p => p.type === type);
+      const avgGsm = papersOfType.reduce((sum, p) => sum + p.gsm, 0) / papersOfType.length;
+      return { type, avgGsm };
+    })
+    .sort((a, b) => a.avgGsm - b.avgGsm)
+    .map(item => item.type);
+
+  const filteredPapers = papers
+    .filter(paper => omniSearchFilter(paper, searchTerm))
+    .filter(paper => selectedPaperType === "all" || paper.type === selectedPaperType)
+    .sort((a, b) => {
+      // Sort by GSM within the filtered results
+      return a.gsm - b.gsm;
+    });
 
   const getStatusBadge = (status: string) => {
     return status === "active" ? (
@@ -206,17 +258,62 @@ export default function PaperMasterPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center space-x-2 mb-4">
+            <div className="flex flex-col gap-4 mb-4 lg:flex-row lg:items-center">
               <div className="relative flex-1">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search papers by name, type, shade, GSM, or BF..."
+                  placeholder="Omni search: papers by name, type, shade, GSM, BF, or ID..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-8"
                 />
               </div>
+              <div className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                <Select value={selectedPaperType} onValueChange={setSelectedPaperType}>
+                  <SelectTrigger className="w-full min-w-[200px] lg:w-64">
+                    <SelectValue placeholder="Filter by paper type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Paper Types ({papers.length} total)</SelectItem>
+                    {paperTypes.length > 0 ? (
+                      paperTypes.map((type) => {
+                        const papersOfType = papers.filter(p => p.type === type);
+                        const avgGsm = Math.round(papersOfType.reduce((sum, p) => sum + p.gsm, 0) / papersOfType.length);
+                        return (
+                          <SelectItem key={type} value={type}>
+                            {type} (Avg GSM: {avgGsm}, {papersOfType.length} papers)
+                          </SelectItem>
+                        );
+                      })
+                    ) : (
+                      <SelectItem value="no-types" disabled>
+                        No paper types available
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                {selectedPaperType !== "all" && (
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setSelectedPaperType("all")}
+                    className="h-10 w-10 flex-shrink-0"
+                    title="Clear filter"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </div>
+
+            {!loading && (searchTerm || selectedPaperType !== "all") && (
+              <div className="mb-4 text-sm text-muted-foreground">
+                Showing {filteredPapers.length} of {papers.length} papers
+                {searchTerm && ` matching "${searchTerm}"`}
+                {selectedPaperType !== "all" && ` in category "${selectedPaperType}"`}
+              </div>
+            )}
 
             {loading ? (
               <div className="flex justify-center items-center h-40">
@@ -306,7 +403,9 @@ export default function PaperMasterPage() {
                     ) : (
                       <TableRow>
                         <TableCell colSpan={8} className="h-24 text-center">
-                          No papers found.
+                          {searchTerm || selectedPaperType !== "all"
+                            ? "No papers match your current search and filters."
+                            : "No papers found."}
                         </TableCell>
                       </TableRow>
                     )}

@@ -1426,7 +1426,7 @@ export default function PlanDetailsPage() {
               // Draw visual cutting representation for this segment
               const rectStartX = 40;
               const rectWidth = pageWidth - 65;
-              const rectHeight = 15; // Slightly taller for better visibility
+              const rectHeight = 20; // Slightly taller for better visibility
               let currentX = rectStartX;
               
               // Calculate total used width for this segment
@@ -1435,7 +1435,13 @@ export default function PlanDetailsPage() {
               
               // Draw each cut section in this segment
               segment.forEach((roll:any) => {
-                const sectionWidth = 35
+                              
+ const rollRatio = roll.width_inches / 118;
+           const availableWidth = rectWidth * 0.85; 
+             const calculatedWidth = availableWidth *         
+            rollRatio;
+                    const sectionWidth = Math.max(35, 
+            Math.min(55, calculatedWidth))
 
                 // Set color based on status
                 if (roll.status === 'cutting') {
@@ -1493,6 +1499,7 @@ export default function PlanDetailsPage() {
                     const bottomTextY = yPosition + rectHeight/2 + 4;
                     doc.text(clientName, textX, topTextY, { align: 'center' });
                     doc.text(`${roll.width_inches}"`, textX, bottomTextY, { align: 'center' });
+                    doc.text(`${roll.barcode_id}`, textX, bottomTextY + 4, { align: 'center' });
                   } else {
                     // If space is limited, show client name only or width only
                     const textY = yPosition + rectHeight/2 + 1;

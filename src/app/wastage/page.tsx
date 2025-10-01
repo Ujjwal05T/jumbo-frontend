@@ -25,6 +25,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Recycle,
   Search,
   BarChart3,
@@ -34,6 +41,8 @@ import {
   Calendar,
   Plus,
   Edit,
+  Filter,
+  X,
 } from "lucide-react";
 import {
   WastageInventory,
@@ -46,12 +55,11 @@ import EditWastageModal from "@/components/EditWastageModal";
 
 export default function WastagePage() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedPaperType, setSelectedPaperType] = useState<string>("all");
+  const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [wastageItems, setWastageItems] = useState<WastageInventory[]>([]);
   const [stats, setStats] = useState<WastageStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
 
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -61,13 +69,11 @@ export default function WastagePage() {
     try {
       setLoading(true);
       const [wastageResponse, statsResponse] = await Promise.all([
-        fetchWastageInventory(page, 20, searchTerm),
+        fetchWastageInventory(1, 1000), // Get all items without search term - handle search on frontend
         fetchWastageStats(),
       ]);
 
       setWastageItems(wastageResponse.items);
-      setTotalPages(wastageResponse.total_pages);
-      setTotal(wastageResponse.total);
       setStats(statsResponse);
     } catch (error) {
       console.error("Error loading wastage data:", error);
@@ -79,7 +85,7 @@ export default function WastagePage() {
 
   useEffect(() => {
     loadWastageData();
-  }, [page, searchTerm]);
+  }, []); // Only load data once on component mount
 
 
   const handleEditWastage = (item: WastageInventory) => {
@@ -100,9 +106,69 @@ export default function WastagePage() {
     }
   };
 
-  const filteredItems = wastageItems?.filter((item) =>
-    item.reel_no?.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  // Enhanced omni search with fuzzy matching and exact match prioritization
+  const omniSearchFilter = (item: WastageInventory, term: string) => {
+    if (!term.trim()) return true;
+
+    const searchLower = term.toLowerCase();
+    const fields = [
+      item.reel_no?.toLowerCase() || '',
+      item.frontend_id?.toLowerCase() || '',
+      item.barcode_id?.toLowerCase() || '',
+    ];
+
+    // Exact match gets highest priority
+    const exactMatch = fields.some(field => field === searchLower);
+    if (exactMatch) return true;
+
+    // Starts with match gets second priority
+    const startsWithMatch = fields.some(field => field.startsWith(searchLower));
+    if (startsWithMatch) return true;
+
+    // Contains match gets third priority
+    const containsMatch = fields.some(field => field.includes(searchLower));
+    if (containsMatch) return true;
+
+    // Fuzzy search for partial matches
+    const words = searchLower.split(' ').filter(w => w.length > 0);
+    return words.every(word =>
+      fields.some(field => field.includes(word))
+    );
+  };
+
+  // Get unique paper types sorted by GSM (average for each type)
+  const paperTypes = Array.from(new Set(
+    wastageItems
+      .filter(item => item.paper?.type)
+      .map(item => item.paper!.type)
+  ))
+    .map(type => {
+      const itemsOfType = wastageItems.filter(item => item.paper?.type === type);
+      const avgGsm = itemsOfType.reduce((sum, item) => sum + (item.paper?.gsm || 0), 0) / itemsOfType.length;
+      return { type, avgGsm };
+    })
+    .sort((a, b) => a.avgGsm - b.avgGsm)
+    .map(item => item.type);
+
+  // Get unique statuses with counts
+  const statusOptions = Array.from(new Set(wastageItems.map(item => item.status.toLowerCase())))
+    .map(status => ({
+      value: status,
+      label: status.charAt(0).toUpperCase() + status.slice(1),
+      count: wastageItems.filter(item => item.status.toLowerCase() === status).length
+    }))
+    .sort((a, b) => b.count - a.count); // Sort by count (most common first)
+
+  const filteredItems = (wastageItems || [])
+    .filter(item => omniSearchFilter(item, searchTerm))
+    .filter(item => selectedPaperType === "all" || item.paper?.type === selectedPaperType)
+    .filter(item => selectedStatus === "all" || item.status.toLowerCase() === selectedStatus)
+    .sort((a, b) => {
+      // Sort by GSM within the filtered results
+      const aGsm = a.paper?.gsm || 0;
+      const bGsm = b.paper?.gsm || 0;
+      return aGsm - bGsm;
+    });
 
   // Component for highlighting search text
   const HighlightText = ({ text, searchTerm }: { text: string; searchTerm: string }) => {
@@ -190,15 +256,86 @@ export default function WastagePage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center space-x-2 mb-4">
-              <Search className="h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by reel no..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="max-w-sm"
-              />
+            <div className="flex flex-col gap-4 mb-4 lg:flex-row lg:items-center">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Omni search: reel no, barcode, paper specs, GSM, width, status..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+              <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-2">
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  <Select value={selectedPaperType} onValueChange={setSelectedPaperType}>
+                    <SelectTrigger className="w-full min-w-[180px] lg:w-48">
+                      <SelectValue placeholder="Paper type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Paper Types</SelectItem>
+                      {paperTypes.length > 0 ? (
+                        paperTypes.map((type) => {
+                          const itemsOfType = wastageItems.filter(item => item.paper?.type === type);
+                          const avgGsm = Math.round(itemsOfType.reduce((sum, item) => sum + (item.paper?.gsm || 0), 0) / itemsOfType.length);
+                          return (
+                            <SelectItem key={type} value={type}>
+                              {type} (GSM: {avgGsm})
+                            </SelectItem>
+                          );
+                        })
+                      ) : (
+                        <SelectItem value="no-types" disabled>
+                          No paper types available
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                    <SelectTrigger className="w-full min-w-[150px] lg:w-40">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      {statusOptions.map((status) => (
+                        <SelectItem key={status.value} value={status.value}>
+                          {status.label} ({status.count})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {(selectedPaperType !== "all" || selectedStatus !== "all") && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedPaperType("all");
+                      setSelectedStatus("all");
+                    }}
+                    className="flex-shrink-0"
+                    title="Clear all filters"
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Clear
+                  </Button>
+                )}
+              </div>
             </div>
+
+            {!loading && (searchTerm || selectedPaperType !== "all" || selectedStatus !== "all") && (
+              <div className="mb-4 text-sm text-muted-foreground">
+                Showing {filteredItems.length} of {wastageItems.length} items
+                {searchTerm && ` matching "${searchTerm}"`}
+                {selectedPaperType !== "all" && ` • paper type: "${selectedPaperType}"`}
+                {selectedStatus !== "all" && ` • status: "${selectedStatus}"`}
+              </div>
+            )}
 
             {loading ? (
               <div className="flex justify-center items-center py-8">
@@ -224,7 +361,9 @@ export default function WastagePage() {
                       {filteredItems.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                            No stock items found
+                            {searchTerm || selectedPaperType !== "all" || selectedStatus !== "all"
+                              ? "No stock items match your current search and filters."
+                              : "No stock items found"}
                           </TableCell>
                         </TableRow>
                       ) : (
@@ -290,32 +429,13 @@ export default function WastagePage() {
                   </Table>
                 </div>
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between mt-4">
-                    <p className="text-sm text-muted-foreground">
-                      Showing {filteredItems.length} of {total} items
-                    </p>
-                    <div className="flex space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPage(page - 1)}
-                        disabled={page <= 1}
-                      >
-                        Previous
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPage(page + 1)}
-                        disabled={page >= totalPages}
-                      >
-                        Next
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                {/* Item count */}
+                <div className="mt-4">
+                  <p className="text-sm text-muted-foreground">
+                    Showing {filteredItems.length} items
+                    {(searchTerm || selectedPaperType !== "all" || selectedStatus !== "all") && ` (filtered from ${wastageItems.length} total)`}
+                  </p>
+                </div>
               </>
             )}
           </CardContent>
