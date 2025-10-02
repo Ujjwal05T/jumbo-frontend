@@ -32,7 +32,7 @@ export function WastageIndicator({
       className={`inline-flex items-center gap-1 ${className}`}
     >
       {showIcon && <Recycle className="h-3 w-3" />}
-      WASTAGE
+      Stock
     </Badge>
   );
 }

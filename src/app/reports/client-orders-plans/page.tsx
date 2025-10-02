@@ -138,6 +138,8 @@ export default function ClientOrdersPlansPage() {
         setOrdersData(result.data || []);
         setSummary(result.summary);
         setClientInfo(result.client_info);
+
+        
       } else {
         console.error('API error:', result);
         setOrdersData([]);
@@ -399,7 +401,7 @@ export default function ClientOrdersPlansPage() {
                         <th className="text-left p-3">Delivery Date</th>
                         <th className="text-left p-3">Value</th>
                         <th className="text-left p-3">Progress</th>
-                        <th className="text-left p-3">Plans</th>
+                        <th className="text-left p-3">Planned</th>
                         <th className="text-left p-3">Action</th>
                       </tr>
                     </thead>
@@ -457,11 +459,11 @@ export default function ClientOrdersPlansPage() {
                             </td>
                             <td className="p-3">
                               <div className="flex items-center gap-1">
-                                <Badge variant="outline">{order.total_plans}</Badge>
+                                
                                 {order.total_plans > 0 ? (
-                                  <span className="text-xs text-green-600">✓</span>
+                                  <span className="text-sm font-semibold text-green-600">Yes</span>
                                 ) : (
-                                  <span className="text-xs text-muted-foreground">-</span>
+                                  <span className="text-sm font-semibold text-red-600">No</span>
                                 )}
                               </div>
                             </td>
@@ -527,67 +529,39 @@ export default function ClientOrdersPlansPage() {
                                     {/* Associated Plans */}
                                     <div>
                                       <h4 className="font-medium mb-2">
-                                        Associated Plans ({order.associated_plans.length})
+                                        Associated Plans
                                       </h4>
                                       {order.associated_plans.length > 0 ? (
                                         <div className="space-y-2">
-                                          {order.associated_plans.map((plan) => (
-                                            <div key={plan.plan_id} className="rounded-md border bg-white p-3">
-                                              <div className="flex items-center justify-between mb-2">
-                                                <div className="font-mono text-sm font-medium">
-                                                  {plan.plan_frontend_id}
-                                                </div>
-                                                <Badge className={getPlanStatusColor(plan.plan_status)}>
-                                                  {plan.plan_status}
-                                                </Badge>
-                                              </div>
-                                              <div className="grid grid-cols-2 gap-2 text-xs">
-                                                <div>
-                                                  <span className="text-muted-foreground">Name:</span>
-                                                  <div className="font-medium">{plan.name || 'Unnamed Plan'}</div>
-                                                </div>
-                                                <div>
-                                                  <span className="text-muted-foreground">Expected Wastage:</span>
-                                                  <div className="font-medium">{plan.expected_waste_percentage.toFixed(1)}%</div>
-                                                </div>
-                                                <div>
-                                                  <span className="text-muted-foreground">Actual Wastage:</span>
-                                                  <div className="font-medium">
-                                                    {plan.actual_waste_percentage ? `${plan.actual_waste_percentage.toFixed(1)}%` : 'N/A'}
-                                                  </div>
-                                                </div>
-                                                <div>
-                                                  <span className="text-muted-foreground">Created:</span>
-                                                  <div className="font-medium">
-                                                    {new Date(plan.created_at).toLocaleDateString()}
-                                                  </div>
-                                                </div>
-                                                {plan.executed_at && (
-                                                  <div>
-                                                    <span className="text-muted-foreground">Executed:</span>
-                                                    <div className="font-medium">
-                                                      {new Date(plan.executed_at).toLocaleDateString()}
-                                                    </div>
-                                                  </div>
-                                                )}
-                                                {plan.completed_at && (
-                                                  <div>
-                                                    <span className="text-muted-foreground">Completed:</span>
-                                                    <div className="font-medium">
-                                                      {new Date(plan.completed_at).toLocaleDateString()}
-                                                    </div>
-                                                  </div>
-                                                )}
-                                              </div>
-                                              {plan.cut_pattern && (
-                                                <div className="mt-2 text-xs">
-                                                  <span className="text-muted-foreground">Cut Pattern:</span>
-                                                  <div className="mt-1 text-muted-foreground text-xs">
-                                                    {JSON.stringify(plan.cut_pattern).substring(0, 100)}...
-                                                  </div>
-                                                </div>
-                                              )}
+                                          {order.associated_plans
+                                          .filter((plan, index, self) => 
+                                            index === self.findIndex(p => p.plan_id === plan.plan_id)
+                                          )
+                                          .map((plan) => (
+                                          <div key={plan.plan_id} className="rounded-md border bg-white p-3">
+                                            <div className="flex items-center justify-between mb-2">
+                                            <div className="font-mono text-sm font-medium">
+                                              {plan.plan_frontend_id}
                                             </div>
+                                            <Badge className={getPlanStatusColor(plan.plan_status)}>
+                                              {plan.plan_status}
+                                            </Badge>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2 text-xs">
+                                            <div>
+                                              <span className="text-muted-foreground">Name:</span>
+                                              <div className="font-medium">{plan.name || 'Unnamed Plan'}</div>
+                                            </div>
+                                            <div>
+                                              <span className="text-muted-foreground">Created:</span>
+                                              <div className="font-medium">
+                                              {new Date(plan.created_at).toLocaleDateString()}
+                                              </div>
+                                            </div>
+                                            
+                                            
+                                            </div>
+                                          </div>
                                           ))}
                                         </div>
                                       ) : (

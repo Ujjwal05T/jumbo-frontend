@@ -29,9 +29,22 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { Plus, Calendar, Truck, Weight, Clock, FileText, DollarSign, Edit, SplinePointer, LoaderCircle, LogOut } from "lucide-react";
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import {
   fetchInwardChallans,
   fetchOutwardChallans,
@@ -89,6 +102,14 @@ export default function InOutPage() {
   const [nextInwardSerial, setNextInwardSerial] = useState<string>("00001");
   const [nextOutwardSerial, setNextOutwardSerial] = useState<string>("00001");
 
+  // PDF generation states
+  const [pdfDateRange, setPdfDateRange] = useState({
+    from: new Date(new Date().getFullYear(), 0, 1), // Start of current year
+    to: new Date() // Today
+  });
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+
   // Fetch next serial numbers from database
   const loadNextSerialNumbers = async () => {
     try {
@@ -108,6 +129,352 @@ export default function InOutPage() {
   const getTodayDate = () => {
     const today = new Date();
     return today.toISOString().split('T')[0];
+  };
+
+  // Debug function to check data
+  const debugChallanData = () => {
+    console.log("=== CHALLAN DATA DEBUG ===");
+    console.log("Inward Challans Count:", inwardChallans.length);
+    console.log("Outward Challans Count:", outwardChallans.length);
+    console.log("Current Date Range:", {
+      from: pdfDateRange.from.toISOString(),
+      to: pdfDateRange.to.toISOString(),
+      fromDateOnly: new Date(pdfDateRange.from.getFullYear(), pdfDateRange.from.getMonth(), pdfDateRange.from.getDate()),
+      toDateOnly: new Date(pdfDateRange.to.getFullYear(), pdfDateRange.to.getMonth(), pdfDateRange.to.getDate())
+    });
+    
+    if (inwardChallans.length > 0) {
+      console.log("Sample Inward Challan:", inwardChallans[0]);
+      console.log("All Inward Dates:", inwardChallans.map(c => ({
+        original: c.date,
+        parsed: new Date(c.date),
+        dateOnly: new Date(new Date(c.date).getFullYear(), new Date(c.date).getMonth(), new Date(c.date).getDate()),
+        valid: !isNaN(new Date(c.date).getTime())
+      })));
+    }
+    
+    if (outwardChallans.length > 0) {
+      console.log("Sample Outward Challan:", outwardChallans[0]);
+      console.log("All Outward Dates:", outwardChallans.map(c => ({
+        original: c.date,
+        parsed: new Date(c.date),
+        dateOnly: new Date(new Date(c.date).getFullYear(), new Date(c.date).getMonth(), new Date(c.date).getDate()),
+        valid: !isNaN(new Date(c.date).getTime())
+      })));
+    }
+    
+    toast.info("Debug info logged to console - check date formats");
+  };
+
+  // PDF generation function
+  const generateChallanPdf = async (type: 'inward' | 'outward' | 'both', action: 'download' | 'print') => {
+    try {
+      setGeneratingPdf(true);
+      
+      // Debug: Log the current data and date range
+      console.log("PDF Generation Debug:");
+      console.log("Date Range:", pdfDateRange);
+      console.log("Inward Challans:", inwardChallans.length);
+      console.log("Outward Challans:", outwardChallans.length);
+      
+      // Filter data based on date range with more robust date comparison
+      const filterByDate = (challans: any[]) => {
+        return challans.filter(challan => {
+          if (!challan.date) return false;
+          
+          // Handle different date formats
+          const challanDate = new Date(challan.date);
+          
+          // Check if date is valid
+          if (isNaN(challanDate.getTime())) {
+            console.warn("Invalid date found:", challan.date);
+            return false;
+          }
+          
+          // Normalize dates to start of day for comparison
+          const challanDateOnly = new Date(challanDate.getFullYear(), challanDate.getMonth(), challanDate.getDate());
+          const fromDateOnly = new Date(pdfDateRange.from.getFullYear(), pdfDateRange.from.getMonth(), pdfDateRange.from.getDate());
+          const toDateOnly = new Date(pdfDateRange.to.getFullYear(), pdfDateRange.to.getMonth(), pdfDateRange.to.getDate());
+          
+          const isInRange = challanDateOnly >= fromDateOnly && challanDateOnly <= toDateOnly;
+          
+          // Debug individual record
+          if (challans.length <= 5) { // Only log for small datasets to avoid spam
+            console.log(`Challan date: ${challanDate.toDateString()}, In range: ${isInRange}`);
+          }
+          
+          return isInRange;
+        });
+      };
+
+      const filteredInward = filterByDate(inwardChallans);
+      const filteredOutward = filterByDate(outwardChallans);
+
+      // Check if we have any data for the requested type
+      if (type === 'inward' && filteredInward.length === 0) {
+        toast.error(`No inward challans found for the selected date range (${pdfDateRange.from.toLocaleDateString()} to ${pdfDateRange.to.toLocaleDateString()})`);
+        return;
+      }
+      if (type === 'outward' && filteredOutward.length === 0) {
+        toast.error(`No outward challans found for the selected date range (${pdfDateRange.from.toLocaleDateString()} to ${pdfDateRange.to.toLocaleDateString()})`);
+        return;
+      }
+      if (type === 'both' && filteredInward.length === 0 && filteredOutward.length === 0) {
+        toast.error(`No challans found for the selected date range (${pdfDateRange.from.toLocaleDateString()} to ${pdfDateRange.to.toLocaleDateString()})`);
+        return;
+      }
+
+      const pdf = new jsPDF({
+        orientation: 'landscape', // Use landscape for better table fitting
+        unit: 'mm',
+        format: 'a4'
+      });
+      const pageWidth = pdf.internal.pageSize.width;
+      const pageHeight = pdf.internal.pageSize.height;
+      let yPosition = 15; // Start closer to top for more space
+
+      // Helper function to add title
+      const addTitle = (title: string) => {
+        pdf.setFontSize(16);
+        pdf.setFont("helvetica", "bold");
+        pdf.text(title, pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 10;
+        
+        pdf.setFontSize(12);
+        pdf.setFont("helvetica", "normal");
+        pdf.text(
+          `Date Range: ${pdfDateRange.from.toLocaleDateString()} to ${pdfDateRange.to.toLocaleDateString()}`,
+          pageWidth / 2,
+          yPosition,
+          { align: 'center' }
+        );
+        yPosition += 15;
+      };
+
+      // Helper function to check if new page is needed
+      const checkNewPage = (requiredSpace: number) => {
+        if (yPosition + requiredSpace > pageHeight - 15) { // Leave 15mm margin at bottom
+          pdf.addPage();
+          yPosition = 15;
+        }
+      };
+
+      // Generate Inward Challans Table
+      if (type === 'inward' || type === 'both') {
+        addTitle('Inward Challans Report');
+        
+        if (filteredInward.length > 0) {
+          const inwardColumns = [
+            'S.No', 'Party', 'Date', 'Material', 'Vehicle', 'RST', 'Net Wt', 'Final Wt', 'Bill No', 'Time In', 'Time Out'
+          ];
+
+          const inwardRows = filteredInward.map(challan => {
+            const client = clients.find(c => c.id === challan.party_id);
+            const material = materials.find(m => m.id === challan.material_id);
+            
+            return [
+              challan.serial_no || '',
+              client?.company_name || 'Unknown',
+              new Date(challan.date).toLocaleDateString('en-GB'),
+              material?.name || 'Unknown',
+              challan.vehicle_number || '',
+              challan.rst_no || '',
+              challan.net_weight?.toString() || '',
+              challan.final_weight?.toString() || '',
+              challan.bill_no || 'CASH',
+              challan.time_in ? new Date(`1970-01-01T${challan.time_in}`).toLocaleTimeString("en-US", {
+                hour: "numeric",
+                minute: "2-digit",
+                hour12: true
+              }) : '',
+              challan.time_out ? new Date(`1970-01-01T${challan.time_out}`).toLocaleTimeString("en-US", {
+                hour: "numeric",
+                minute: "2-digit",
+                hour12: true
+              }) : ''
+            ];
+          });
+
+          console.log("Generating inward table with", inwardRows.length, "rows");
+          
+          try {
+            autoTable(pdf, {
+              head: [inwardColumns],
+              body: inwardRows,
+              startY: yPosition,
+              theme: 'striped',
+              headStyles: { 
+                fillColor: [128, 128, 128], 
+                textColor: [255, 255, 255],
+                fontSize: 9,
+                fontStyle: 'bold'
+              },
+              styles: { 
+                fontSize: 7, 
+                cellPadding: 2,
+                overflow: 'linebreak',
+                lineWidth: 0.1
+              },
+              alternateRowStyles: { fillColor: [245, 245, 245] },
+              columnStyles: {
+                0: { cellWidth: 18 }, // S.No
+                1: { cellWidth: 35 }, // Party
+                2: { cellWidth: 25 }, // Date
+                3: { cellWidth: 35 }, // Material
+                4: { cellWidth: 25 }, // Vehicle
+                5: { cellWidth: 20 }, // RST
+                6: { cellWidth: 20 }, // Net Wt
+                7: { cellWidth: 20 }, // Final Wt
+                8: { cellWidth: 25 }, // Bill No
+                9: { cellWidth: 20 }, // Time In
+                10: { cellWidth: 20 } // Time Out
+              },
+              margin: { left: 5, right: 5, top: 5, bottom: 5 },
+              didDrawPage: function(data: any) {
+                yPosition = data.cursor.y + 5;
+              }
+            });
+            console.log("Inward table generated successfully");
+          } catch (tableError) {
+            console.error("Error generating inward table:", tableError);
+            pdf.text('Error generating inward table', 20, yPosition);
+            yPosition += 10;
+          }
+        } else {
+          pdf.text('No inward challans found for the selected date range', 20, yPosition);
+          yPosition += 20;
+        }
+      }
+
+      // Generate Outward Challans Table
+      if (type === 'outward' || type === 'both') {
+        if (type === 'both') {
+          checkNewPage(50);
+          yPosition += 20;
+        }
+        
+        if (type === 'outward') {
+          addTitle('Outward Challans Report');
+        } else {
+          pdf.setFontSize(16);
+          pdf.setFont("helvetica", "bold");
+          pdf.text('Outward Challans Report', pageWidth / 2, yPosition, { align: 'center' });
+          yPosition += 15;
+        }
+        
+        if (filteredOutward.length > 0) {
+          const outwardColumns = [
+            'S.No', 'Party', 'Date', 'Vehicle', 'Driver', 'RST', 'Purpose', 'Net Wt', 'Time In', 'Time Out'
+          ];
+
+          const outwardRows = filteredOutward.map(challan => {
+            return [
+              challan.serial_no || '',
+              challan.party_name || '',
+              new Date(challan.date).toLocaleDateString('en-GB'),
+              challan.vehicle_number || '',
+              challan.driver_name || '',
+              challan.rst_no || '',
+              challan.purpose || '',
+              challan.net_weight?.toString() || '',
+              challan.time_in ? new Date(`1970-01-01T${challan.time_in}`).toLocaleTimeString("en-US", {
+                hour: "numeric",
+                minute: "2-digit",
+                hour12: true
+              }) : '',
+              challan.time_out ? new Date(`1970-01-01T${challan.time_out}`).toLocaleTimeString("en-US", {
+                hour: "numeric",
+                minute: "2-digit",
+                hour12: true
+              }) : ''
+            ];
+          });
+
+          console.log("Generating outward table with", outwardRows.length, "rows");
+          
+          try {
+            autoTable(pdf, {
+              head: [outwardColumns],
+              body: outwardRows,
+              startY: yPosition,
+              theme: 'striped',
+              headStyles: { 
+                fillColor: [128, 128, 128], 
+                textColor: [255, 255, 255],
+                fontSize: 9,
+                fontStyle: 'bold'
+              },
+              styles: { 
+                fontSize: 7, 
+                cellPadding: 2,
+                overflow: 'linebreak',
+                lineWidth: 0.1
+              },
+              alternateRowStyles: { fillColor: [245, 245, 245] },
+              columnStyles: {
+                0: { cellWidth: 18 }, // S.No
+                1: { cellWidth: 40 }, // Party
+                2: { cellWidth: 25 }, // Date
+                3: { cellWidth: 30 }, // Vehicle
+                4: { cellWidth: 35 }, // Driver
+                5: { cellWidth: 20 }, // RST
+                6: { cellWidth: 40 }, // Purpose
+                7: { cellWidth: 25 }, // Net Wt
+                8: { cellWidth: 20 }, // Time In
+                9: { cellWidth: 20 }  // Time Out
+              },
+              margin: { left: 5, right: 5, top: 5, bottom: 5 }
+            });
+            console.log("Outward table generated successfully");
+          } catch (tableError) {
+            console.error("Error generating outward table:", tableError);
+            pdf.text('Error generating outward table', 20, yPosition);
+          }
+        } else {
+          pdf.text('No outward challans found for the selected date range', 20, yPosition);
+        }
+      }
+
+      // Execute action
+      console.log("Executing PDF action:", action);
+      
+      if (action === 'download') {
+        const filename = `${type}_challans_${pdfDateRange.from.toISOString().split('T')[0]}_to_${pdfDateRange.to.toISOString().split('T')[0]}.pdf`;
+        console.log("Saving PDF with filename:", filename);
+        pdf.save(filename);
+        toast.success("PDF downloaded successfully");
+      } else {
+        console.log("Opening PDF for printing");
+        try {
+          const blobUrl = pdf.output('bloburl');
+          console.log("Generated blob URL:", blobUrl);
+          
+          // Open in new tab for printing
+          const printWindow = window.open(blobUrl, '_blank');
+          if (printWindow) {
+            printWindow.onload = () => {
+              console.log("PDF loaded, triggering print");
+              printWindow.print();
+            };
+            toast.success("PDF opened for printing");
+          } else {
+            toast.error("Failed to open print window. Please check popup blocker.");
+          }
+        } catch (printError) {
+          console.error("Error opening PDF for printing:", printError);
+          // Fallback: try autoPrint
+          pdf.autoPrint();
+          window.open(pdf.output('bloburl'), '_blank');
+          toast.success("PDF opened for printing (fallback method)");
+        }
+      }
+      
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      toast.error(`Failed to generate PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setGeneratingPdf(false);
+    }
   };
 
   // Form states for Inward Challan
@@ -532,9 +899,10 @@ export default function InOutPage() {
 
   const formatTime = (timeString?: string) => {
     if (!timeString) return "-";
-    return new Date(`1970-01-01T${timeString}`).toLocaleTimeString("en-IN", {
-      hour: "2-digit",
+    return new Date(`1970-01-01T${timeString}`).toLocaleTimeString("en-US", {
+      hour: "numeric",
       minute: "2-digit",
+      hour12: true
     });
   };
 
@@ -551,7 +919,92 @@ export default function InOutPage() {
   return (
     <DashboardLayout>
       <div className="p-6">
-        <h1 className="text-2xl font-bold mb-6">Material In/Out Management</h1>
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-2xl font-bold">Material In/Out Management</h1>
+          
+          {/* PDF Generation Controls */}
+          <div className="flex items-center gap-2">
+            <Popover open={showDatePicker} onOpenChange={setShowDatePicker}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  {pdfDateRange.from.toLocaleDateString()} - {pdfDateRange.to.toLocaleDateString()}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-4">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>From Date</Label>
+                    <Input
+                      type="date"
+                      value={pdfDateRange.from.toISOString().split('T')[0]}
+                      onChange={(e) => setPdfDateRange(prev => ({
+                        ...prev,
+                        from: new Date(e.target.value)
+                      }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>To Date</Label>
+                    <Input
+                      type="date"
+                      value={pdfDateRange.to.toISOString().split('T')[0]}
+                      onChange={(e) => setPdfDateRange(prev => ({
+                        ...prev,
+                        to: new Date(e.target.value)
+                      }))}
+                    />
+                  </div>
+                  <Button onClick={() => setShowDatePicker(false)} className="w-full">
+                    Apply Date Range
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            <Button 
+              size="sm" 
+              disabled={generatingPdf}
+              onClick={() => generateChallanPdf('inward', 'print')}
+              className=" text-white"
+            >
+              {generatingPdf ? (
+                <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <FileText className="h-4 w-4 mr-2" />
+              )}
+              Print Inward
+            </Button>
+
+            <Button 
+              size="sm" 
+              disabled={generatingPdf}
+              onClick={() => generateChallanPdf('outward', 'print')}
+              className=" text-white"
+            >
+              {generatingPdf ? (
+                <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <FileText className="h-4 w-4 mr-2" />
+              )}
+              Print Outward
+            </Button>
+
+            <Button 
+              size="sm" 
+              disabled={generatingPdf}
+              onClick={() => generateChallanPdf('both', 'print')}
+              className=" text-white"
+            >
+              {generatingPdf ? (
+                <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <FileText className="h-4 w-4 mr-2" />
+              )}
+              Print Both
+            </Button>
+          </div>
+        </div>
 
         <Tabs defaultValue="inward" className="w-full">
           <TabsList className="grid w-full grid-cols-2">

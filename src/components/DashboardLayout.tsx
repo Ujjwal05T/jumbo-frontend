@@ -127,6 +127,7 @@ const getNavigationForRole = (role: string | null) => {
       children: [
         { name: "Analytics Dashboard", href: "/reports", roles: ["admin", "poduction", "accountant"] },
         { name: "Client-Order Analysis", href: "/reports/client-orders", roles: ["admin", "poduction", "accountant"] },
+        { name: "Plan Report", href: "/reports/client-orders-plans", roles: ["admin"] },
       ],
     },
     {
@@ -183,7 +184,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   };
 
   const isActive = (href: string) => {
-    return pathname === href || pathname.startsWith(href + "/");
+    return pathname === href;
   };
 
   return (
