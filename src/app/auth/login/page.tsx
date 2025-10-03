@@ -58,7 +58,7 @@ export default function LoginPage() {
       router.push('/masters/orders');
     }else if (data.role?.toLowerCase() === 'security'){
       router.push('/in-out');
-    }else if (data.role?.toLowerCase() === 'order_puncher'){
+    }else if (data.role?.toLowerCase() === 'accountant'){
       router.push('/masters/orders');
     }else {
       router.push('/dashboard');

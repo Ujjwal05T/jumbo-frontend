@@ -597,6 +597,12 @@ export default function PlanDetailsPage() {
           }
 
           const barcodeValue = item.barcode_id || item.qr_code;
+
+          doc.setFontSize(15);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(0, 0, 0);
+          doc.text("Satguru Paper Mill Pvt. Ltd.", pageWidth / 2, yPosition, { align: 'center' });
+          yPosition += 6;
           
           // Generate and add barcode image
           try {

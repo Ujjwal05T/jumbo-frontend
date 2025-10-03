@@ -49,14 +49,14 @@ const getNavigationForRole = (role: string | null) => {
       name: "Dashboard",
       href: "/dashboard",
       icon: LayoutDashboard,
-      roles: ["admin", "co_admin", "poduction", "accountant"],
+      roles: ["admin", "co_admin", "poduction"],
     },
     {
       name: "Masters",
       icon: FileText,
       roles: ["admin", "order_puncher", "co_admin", "accountant","security"],
       children: [
-        { name: "Client Master", href: "/masters/clients", roles: ["admin", "order_puncher", "co_admin", "accountant"] },
+        { name: "Client Master", href: "/masters/clients", roles: ["admin", "order_puncher", "co_admin", "accountant","security"] },
         { name: "Order Master", href: "/masters/orders", roles: ["admin", "order_puncher", "co_admin", "accountant"] },
         { name: "Order Edit Logs", href: "/masters/orders/edit-logs", roles: ["admin", "co_admin"] },
         { name: "Pending Orders", href: "/masters/pending-orders", roles: ["admin", "poduction"] },

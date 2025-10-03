@@ -32,10 +32,10 @@ const roleBasedRoutes = {
     '/hour-calculator',
   ],
   security: [
-    '/challan',
     '/in-out',
     '/hour-calculator',
     '/masters/materials',
+    '/masters/clients',
   ],
   co_admin: [
     '/dashboard',
@@ -54,7 +54,6 @@ const roleBasedRoutes = {
     '/hour-calculator',
   ],
   accountant: [
-    '/dashboard',
     '/masters',
     '/weight-update',
     '/dispatch',
