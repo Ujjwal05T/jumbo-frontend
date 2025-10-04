@@ -423,12 +423,12 @@ export default function ClientOrdersPlansPage() {
                               </Badge>
                             </td>
                             <td className="p-3">
-                              {new Date(order.created_at).toLocaleDateString()}
+                              {new Date(order.created_at).toLocaleDateString('en-GB')}
                             </td>
                             <td className="p-3">
                               {order.delivery_date ? (
                                 <div className={order.is_overdue ? 'text-red-600' : ''}>
-                                  {new Date(order.delivery_date).toLocaleDateString()}
+                                  {new Date(order.delivery_date).toLocaleDateString('en-GB')}
                                   {order.is_overdue && (
                                     <div className="text-xs text-red-600">⚠️ Overdue</div>
                                   )}
@@ -555,7 +555,7 @@ export default function ClientOrdersPlansPage() {
                                             <div>
                                               <span className="text-muted-foreground">Created:</span>
                                               <div className="font-medium">
-                                              {new Date(plan.created_at).toLocaleDateString()}
+                                              {new Date(plan.created_at).toLocaleDateString('en-GB')}
                                               </div>
                                             </div>
                                             

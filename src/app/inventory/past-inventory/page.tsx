@@ -138,7 +138,7 @@ export default function PastInventoryPage() {
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return 'N/A';
-    return new Date(dateStr).toLocaleDateString();
+    return new Date(dateStr).toLocaleDateString('en-GB');
   };
 
   return (

@@ -1711,10 +1711,10 @@ export default function PlanDetailsPage() {
                   Created
                 </label>
                 <p className="text-lg font-medium">
-                  {new Date(plan.created_at).toLocaleDateString()}
+                  {new Date(plan.created_at).toLocaleDateString('en-GB')}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {new Date(plan.created_at).toLocaleTimeString()}
+                  {new Date(plan.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true })}
                 </p>
               </div>
               <div className="space-y-2">
@@ -1995,13 +1995,13 @@ export default function PlanDetailsPage() {
                                       </div>
                                       {item.order_date && (
                                         <div className="text-xs text-muted-foreground">
-                                          Order: {new Date(item.order_date).toLocaleDateString()}
+                                          Order: {new Date(item.order_date).toLocaleDateString('en-GB')}
                                         </div>
                                       )}
                                     </TableCell>
                                     <TableCell>
                                       <div className="text-xs text-muted-foreground">
-                                        {new Date(item.created_at).toLocaleDateString()}
+                                        {new Date(item.created_at).toLocaleDateString('en-GB')}
                                       </div>
                                     </TableCell>
                                     <TableCell>

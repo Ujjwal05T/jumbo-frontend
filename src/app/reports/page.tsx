@@ -508,7 +508,7 @@ export default function ReportsPage() {
       size: 120,
       Cell: ({ cell }) => {
         const date = cell.getValue<string>();
-        return date ? new Date(date).toLocaleDateString() : 'N/A';
+        return date ? new Date(date).toLocaleDateString('en-GB') : 'N/A';
       },
     },
     {
@@ -537,7 +537,7 @@ export default function ReportsPage() {
       size: 120,
       Cell: ({ cell }) => {
         const date = cell.getValue<string>();
-        return new Date(date).toLocaleDateString();
+        return new Date(date).toLocaleDateString('en-GB');
       },
     },
     {
@@ -773,7 +773,7 @@ export default function ReportsPage() {
     doc.setFontSize(18);
     doc.text('Paper-wise Analysis Report', 20, 20);
     doc.setFontSize(12);
-    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 20, 30);
+    doc.text(`Generated on: ${new Date().toLocaleDateString('en-GB')}`, 20, 30);
     
     autoTable(doc, {
       head: [['Paper Name', 'GSM', 'BF', 'Shade', 'Type', 'Orders', 'Quantity (Rolls)', 'Quantity (kg)', 'Total Value', 'Clients', 'Avg Order Value']],
@@ -797,14 +797,14 @@ export default function ReportsPage() {
       row.original.total_value.toFixed(2),
       row.original.unique_papers,
       row.original.avg_order_value.toFixed(2),
-      row.original.last_order_date ? new Date(row.original.last_order_date).toLocaleDateString() : 'N/A',
-      row.original.first_order_date ? new Date(row.original.first_order_date).toLocaleDateString() : 'N/A'
+      row.original.last_order_date ? new Date(row.original.last_order_date).toLocaleDateString('en-GB') : 'N/A',
+      row.original.first_order_date ? new Date(row.original.first_order_date).toLocaleDateString('en-GB') : 'N/A'
     ]);
 
     doc.setFontSize(18);
     doc.text('Client-wise Analysis Report', 20, 20);
     doc.setFontSize(12);
-    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 20, 30);
+    doc.text(`Generated on: ${new Date().toLocaleDateString('en-GB')}`, 20, 30);
     
     autoTable(doc, {
       head: [['Client Name', 'Client ID', 'GST Number', 'Contact Person', 'Orders', 'Quantity (Rolls)', 'Quantity (kg)', 'Total Value', 'Paper Types', 'Avg Order Value', 'Last Order', 'First Order']],
@@ -818,7 +818,7 @@ export default function ReportsPage() {
   const printDateToPDF = (table: any) => {
     const doc = new jsPDF();
     const tableData = table.getCoreRowModel().rows.map((row: any) => [
-      new Date(row.original.date_period).toLocaleDateString(),
+      new Date(row.original.date_period).toLocaleDateString('en-GB'),
       row.original.total_orders,
       row.original.total_quantity_rolls,
       row.original.total_quantity_kg.toFixed(2),
@@ -831,7 +831,7 @@ export default function ReportsPage() {
     doc.setFontSize(18);
     doc.text('Date-wise Analysis Report', 20, 20);
     doc.setFontSize(12);
-    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 20, 30);
+    doc.text(`Generated on: ${new Date().toLocaleDateString('en-GB')}`, 20, 30);
     
     autoTable(doc, {
       head: [['Date', 'Orders', 'Quantity (Rolls)', 'Quantity (kg)', 'Total Value', 'Clients', 'Papers', 'Avg Order Value']],
@@ -1255,7 +1255,7 @@ export default function ReportsPage() {
                     <div className="text-lg font-bold">{clientData[0]?.client_id}</div>
                     <p className="text-xs text-muted-foreground">
                       {clientData[0]?.last_order_date ? 
-                        `Last order: ${new Date(clientData[0].last_order_date).toLocaleDateString()}` : 
+                        `Last order: ${new Date(clientData[0].last_order_date).toLocaleDateString('en-GB')}` : 
                         'No recent orders'
                       }
                     </p>
@@ -1494,7 +1494,7 @@ export default function ReportsPage() {
                   <CardContent>
                     <div className="text-lg font-bold">
                       {dateData.length > 0 ? 
-                        new Date(dateData.reduce((max, item) => item.total_value > max.total_value ? item : max, dateData[0]).date_period).toLocaleDateString() :
+                        new Date(dateData.reduce((max, item) => item.total_value > max.total_value ? item : max, dateData[0]).date_period).toLocaleDateString('en-GB') :
                         'N/A'
                       }
                     </div>
@@ -1549,12 +1549,12 @@ export default function ReportsPage() {
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis 
                               dataKey="date_period" 
-                              tickFormatter={(date) => new Date(date).toLocaleDateString()}
+                              tickFormatter={(date) => new Date(date).toLocaleDateString('en-GB')}
                             />
                             <YAxis yAxisId="left" />
                             <YAxis yAxisId="right" orientation="right" />
                             <Tooltip 
-                              labelFormatter={(date) => new Date(date).toLocaleDateString()}
+                              labelFormatter={(date) => new Date(date).toLocaleDateString('en-GB')}
                               formatter={(value, name) => [
                                 name === 'total_value' ? `₹${Number(value).toLocaleString()}` : value,
                                 name === 'total_value' ? 'Total Value' : 'Orders'
@@ -1572,11 +1572,11 @@ export default function ReportsPage() {
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis 
                               dataKey="date_period" 
-                              tickFormatter={(date) => new Date(date).toLocaleDateString()}
+                              tickFormatter={(date) => new Date(date).toLocaleDateString('en-GB')}
                             />
                             <YAxis domain={[0, 100]} />
                             <Tooltip 
-                              labelFormatter={(date) => new Date(date).toLocaleDateString()}
+                              labelFormatter={(date) => new Date(date).toLocaleDateString('en-GB')}
                               formatter={(value, name) => [
                                 `${Number(value).toFixed(1)}%`,
                                 name === 'completion_rate' ? 'Completion Rate' : 'Fulfillment Rate'
@@ -1718,7 +1718,7 @@ export default function ReportsPage() {
                               <td className="p-3">
                                 {order.delivery_date ? (
                                   <div className={order.is_overdue ? 'text-red-600' : ''}>
-                                    {new Date(order.delivery_date).toLocaleDateString()}
+                                    {new Date(order.delivery_date).toLocaleDateString('en-GB')}
                                     {order.is_overdue && <span className="block text-xs">⚠️ Overdue</span>}
                                   </div>
                                 ) : 'N/A'}
@@ -1929,7 +1929,7 @@ export default function ReportsPage() {
                                       <div>{dispatch.driver_name}</div>
                                       <div className="text-xs text-muted-foreground">{dispatch.driver_mobile}</div>
                                     </td>
-                                    <td className="p-3">{dispatch.dispatch_date ? new Date(dispatch.dispatch_date).toLocaleDateString() : 'N/A'}</td>
+                                    <td className="p-3">{dispatch.dispatch_date ? new Date(dispatch.dispatch_date).toLocaleDateString('en-GB') : 'N/A'}</td>
                                     <td className="p-3">{dispatch.dispatched_items} items</td>
                                   </tr>
                                 ))}

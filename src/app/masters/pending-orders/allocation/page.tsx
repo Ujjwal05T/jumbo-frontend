@@ -388,7 +388,7 @@ export default function PendingOrderAllocationPage() {
                       <TableCell>{getStatusBadge(item.status)}</TableCell>
                       <TableCell>{item.reason}</TableCell>
                       <TableCell>
-                        {new Date(item.created_at).toLocaleDateString()}
+                        {new Date(item.created_at).toLocaleDateString('en-GB')}
                       </TableCell>
                       <TableCell>
                         {item.status === 'pending' && item.quantity_pending > 0 && (

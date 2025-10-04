@@ -31,7 +31,7 @@ export const generateOrderPDF = (order: OrderPDFData, includeRates: boolean = tr
   // Header - Order Details (Line 1)
   doc.setFontSize(12);
   doc.text(`Order ID: ${order.frontend_id || order.id}`, 20, 20);
-  doc.text(`Date: ${new Date(order.created_at).toLocaleDateString()}`, 120, 20);
+  doc.text(`Date: ${new Date(order.created_at).toLocaleDateString('en-GB')}`, 120, 20);
   doc.text(`${order.payment_type.toUpperCase()}`, 170, 20);
   
   // Priority (Line 2)

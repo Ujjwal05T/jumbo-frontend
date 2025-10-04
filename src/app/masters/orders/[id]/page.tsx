@@ -397,7 +397,7 @@ export default function OrderDetailsPage() {
                   {order.delivery_date && (
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">Delivery Date</label>
-                      <p className="text-sm">{new Date(order.delivery_date).toLocaleDateString()}</p>
+                      <p className="text-sm">{new Date(order.delivery_date).toLocaleDateString('en-GB')}</p>
                     </div>
                   )}
                   <div>
@@ -416,13 +416,13 @@ export default function OrderDetailsPage() {
                 <div className="space-y-2">
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Created</label>
-                    <p className="text-sm">{new Date(order.created_at).toLocaleDateString()}</p>
-                    <p className="text-xs text-muted-foreground">{new Date(order.created_at).toLocaleTimeString()}</p>
+                    <p className="text-sm">{new Date(order.created_at).toLocaleDateString('en-GB')}</p>
+                    <p className="text-xs text-muted-foreground">{new Date(order.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true })}</p>
                   </div>
                   {order.updated_at && (
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">Last Updated</label>
-                      <p className="text-sm">{new Date(order.updated_at).toLocaleDateString()}</p>
+                      <p className="text-sm">{new Date(order.updated_at).toLocaleDateString('en-GB')}</p>
                     </div>
                   )}
                 </div>
@@ -522,12 +522,12 @@ export default function OrderDetailsPage() {
                         </TableCell>
                         <TableCell>
                           <div className="text-xs space-y-1">
-                            <div>Created: {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'N/A'}</div>
+                            <div>Created: {item.created_at ? new Date(item.created_at).toLocaleDateString('en-GB') : 'N/A'}</div>
                             {item.started_production_at && (
-                              <div>Started: {new Date(item.started_production_at).toLocaleDateString()}</div>
+                              <div>Started: {new Date(item.started_production_at).toLocaleDateString('en-GB')}</div>
                             )}
                             {item.dispatched_at && (
-                              <div>Dispatched: {new Date(item.dispatched_at).toLocaleDateString()}</div>
+                              <div>Dispatched: {new Date(item.dispatched_at).toLocaleDateString('en-GB')}</div>
                             )}
                           </div>
                         </TableCell>

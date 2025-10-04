@@ -409,7 +409,7 @@ export default function WastagePage() {
                             <TableCell>
                               <div className="flex items-center text-sm text-muted-foreground">
                                 <Calendar className="h-4 w-4 mr-1" />
-                                {new Date(item.created_at).toLocaleDateString()}
+                                {new Date(item.created_at).toLocaleDateString('en-GB')}
                               </div>
                             </TableCell>
                             <TableCell>

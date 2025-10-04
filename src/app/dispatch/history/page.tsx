@@ -624,10 +624,10 @@ export default function DispatchHistoryPage() {
                         <TableCell>
                           <div className="space-y-1">
                             <div className="font-medium">
-                              {new Date(dispatch.dispatch_date).toLocaleDateString()}
+                              {new Date(dispatch.dispatch_date).toLocaleDateString('en-GB')}
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              {new Date(dispatch.dispatch_date).toLocaleTimeString()}
+                              {new Date(dispatch.dispatch_date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true })}
                             </div>
                           </div>
                         </TableCell>
@@ -977,3 +977,4 @@ export default function DispatchHistoryPage() {
     </DashboardLayout>
   );
 }
+

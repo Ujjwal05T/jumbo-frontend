@@ -62,7 +62,7 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
       yPosition += 6;
     }
     
-    doc.text(`Date: ${new Date(data.dispatch_date).toLocaleDateString()}`, leftColX, yPosition);
+    doc.text(`Date: ${new Date(data.dispatch_date).toLocaleDateString('en-GB')}`, leftColX, yPosition);
     yPosition += 6;
 
     // Reset yPosition for right column

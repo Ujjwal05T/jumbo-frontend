@@ -269,13 +269,13 @@ export default function InOutPage() {
       // Check if we have any data for the requested type
       if (type === "inward" && filteredInward.length === 0) {
         toast.error(
-          `No inward challans found for the selected date range (${pdfDateRange.from.toLocaleDateString()} to ${pdfDateRange.to.toLocaleDateString()})`
+          `No inward challans found for the selected date range (${pdfDateRange.from.toLocaleDateString('en-GB')} to ${pdfDateRange.to.toLocaleDateString('en-GB')})`
         );
         return;
       }
       if (type === "outward" && filteredOutward.length === 0) {
         toast.error(
-          `No outward challans found for the selected date range (${pdfDateRange.from.toLocaleDateString()} to ${pdfDateRange.to.toLocaleDateString()})`
+          `No outward challans found for the selected date range (${pdfDateRange.from.toLocaleDateString('en-GB')} to ${pdfDateRange.to.toLocaleDateString('en-GB')})`
         );
         return;
       }
@@ -285,7 +285,7 @@ export default function InOutPage() {
         filteredOutward.length === 0
       ) {
         toast.error(
-          `No challans found for the selected date range (${pdfDateRange.from.toLocaleDateString()} to ${pdfDateRange.to.toLocaleDateString()})`
+          `No challans found for the selected date range (${pdfDateRange.from.toLocaleDateString('en-GB')} to ${pdfDateRange.to.toLocaleDateString('en-GB')})`
         );
         return;
       }
@@ -309,7 +309,7 @@ export default function InOutPage() {
         pdf.setFontSize(12);
         pdf.setFont("helvetica", "normal");
         pdf.text(
-          `Date Range: ${pdfDateRange.from.toLocaleDateString()} to ${pdfDateRange.to.toLocaleDateString()}`,
+          `Date Range: ${pdfDateRange.from.toLocaleDateString('en-GB')} to ${pdfDateRange.to.toLocaleDateString('en-GB')}`,
           pageWidth / 2,
           yPosition,
           { align: "center" }
@@ -1151,8 +1151,8 @@ export default function InOutPage() {
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm">
                   <Calendar className="h-4 w-4 mr-2" />
-                  {pdfDateRange.from.toLocaleDateString()} -{" "}
-                  {pdfDateRange.to.toLocaleDateString()}
+                  {pdfDateRange.from.toLocaleDateString('en-GB')} -{" "}
+                  {pdfDateRange.to.toLocaleDateString('en-GB')}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-4">

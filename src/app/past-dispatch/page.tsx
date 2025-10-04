@@ -400,10 +400,10 @@ export default function PastDispatchListPage() {
                           </TableCell>
                           <TableCell>
                             <div className="text-sm">
-                              {new Date(dispatch.dispatch_date).toLocaleDateString()}
+                              {new Date(dispatch.dispatch_date).toLocaleDateString('en-GB')}
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              {new Date(dispatch.dispatch_date).toLocaleTimeString()}
+                              {new Date(dispatch.dispatch_date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true })}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -513,3 +513,4 @@ export default function PastDispatchListPage() {
     </DashboardLayout>
   );
 }
+

@@ -923,7 +923,7 @@ export default function PlansPage() {
       
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      doc.text(`Generated on: ${new Date().toLocaleString()}`, pageWidth / 2, yPosition, { align: 'center' });
+      doc.text(`Generated on: ${new Date().toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}`, pageWidth / 2, yPosition, { align: 'center' });
       yPosition += 8;
       doc.text(`Total Items: ${filteredCutRolls.length}`, pageWidth / 2, yPosition, { align: 'center' });
       yPosition += 20;
@@ -1101,7 +1101,7 @@ export default function PlansPage() {
       // Date and filters
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      doc.text(`Generated on: ${new Date().toLocaleString()}`, 20, yPosition);
+      doc.text(`Generated on: ${new Date().toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}`, 20, yPosition);
       yPosition += 5;
       doc.text(`Total Plans: ${filteredPlans.length}`, 20, yPosition);
       yPosition += 5;
@@ -1142,7 +1142,7 @@ export default function PlansPage() {
           plan.status,
           `${plan.expected_waste_percentage}%`,
           (user?.name || 'Unknown').substring(0, 20),
-          new Date(plan.created_at).toLocaleDateString()
+          new Date(plan.created_at).toLocaleDateString('en-GB')
         ];
 
         rowData.forEach((data, colIndex) => {
@@ -1373,7 +1373,7 @@ export default function PlansPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {new Date(plan.created_at).toLocaleDateString()}
+                          {new Date(plan.created_at).toLocaleDateString('en-GB')}
                         </TableCell>
                         <TableCell>
                           <DropdownMenu>

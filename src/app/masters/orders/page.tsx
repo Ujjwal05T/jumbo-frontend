@@ -406,7 +406,7 @@ export default function OrderMasterPage() {
                               {order.delivery_date && (
                                 <div className="text-xs text-muted-foreground">
                                   Created:
-                                  <span className="font-bold text-black">{new Date(order.created_at).toLocaleDateString()}</span>
+                                  <span className="font-bold text-black">{new Date(order.created_at).toLocaleDateString('en-GB')}</span>
                                    
                                 </div>
                               )}

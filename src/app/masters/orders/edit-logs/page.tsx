@@ -134,7 +134,7 @@ export default function OrderEditLogsPage() {
 
   const formatDateTime = (dateString: string | null) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleString();
+    return new Date(dateString).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' });
   };
 
 

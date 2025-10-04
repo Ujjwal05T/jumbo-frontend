@@ -442,13 +442,13 @@ export default function ClientOrdersPage() {
               <CardContent>
                 <div className="text-lg font-bold">
                   {clientSummary.last_order_date
-                    ? new Date(clientSummary.last_order_date).toLocaleDateString()
+                    ? new Date(clientSummary.last_order_date).toLocaleDateString('en-GB')
                     : 'N/A'
                   }
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {clientSummary.first_order_date
-                    ? `First: ${new Date(clientSummary.first_order_date).toLocaleDateString()}`
+                    ? `First: ${new Date(clientSummary.first_order_date).toLocaleDateString('en-GB')}`
                     : 'First order date unknown'
                   }
                 </p>
@@ -552,10 +552,10 @@ export default function ClientOrdersPage() {
                             </Badge>
                           </td>
                           <td className="p-3">
-                            <div className="text-sm">{new Date(order.created_at).toLocaleDateString()}</div>
+                            <div className="text-sm">{new Date(order.created_at).toLocaleDateString('en-GB')}</div>
                             {order.delivery_date && (
                               <div className={`text-xs ${order.is_overdue ? 'text-red-600' : 'text-muted-foreground'}`}>
-                                Due: {new Date(order.delivery_date).toLocaleDateString()}
+                                Due: {new Date(order.delivery_date).toLocaleDateString('en-GB')}
                                 {order.is_overdue && ' ⚠️'}
                               </div>
                             )}
@@ -788,7 +788,7 @@ export default function ClientOrdersPage() {
                                   <div>{dispatch.driver_name}</div>
                                   <div className="text-xs text-muted-foreground">{dispatch.driver_mobile}</div>
                                 </td>
-                                <td className="p-3">{dispatch.dispatch_date ? new Date(dispatch.dispatch_date).toLocaleDateString() : 'N/A'}</td>
+                                <td className="p-3">{dispatch.dispatch_date ? new Date(dispatch.dispatch_date).toLocaleDateString('en-GB') : 'N/A'}</td>
                                 <td className="p-3">{dispatch.dispatched_items} items</td>
                               </tr>
                             ))}

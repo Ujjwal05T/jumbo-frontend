@@ -557,7 +557,7 @@ export default function OrderTrackingPage() {
                                 <div className="text-xs space-y-1">
                                   <div>Dispatch ID: {dispatch.dispatch_frontend_id}</div>
                                   <div>Vehicle: {dispatch.vehicle_number} | Quantity: {dispatch.quantity_dispatched}</div>
-                                  <div>Date: {dispatch.dispatch_date ? new Date(dispatch.dispatch_date).toLocaleDateString() : 'N/A'}</div>
+                                  <div>Date: {dispatch.dispatch_date ? new Date(dispatch.dispatch_date).toLocaleDateString('en-GB') : 'N/A'}</div>
                                 </div>
                               </div>
                             ))}

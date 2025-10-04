@@ -285,13 +285,13 @@ export default function PastDispatchDetailPage() {
                     Dispatch Date:
                   </span>
                   <div className="font-medium">
-                    {new Date(dispatch.dispatch_date).toLocaleDateString()}
+                    {new Date(dispatch.dispatch_date).toLocaleDateString('en-GB')}
                   </div>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Created At:</span>
                   <div className="font-medium">
-                    {new Date(dispatch.created_at).toLocaleDateString()}
+                    {new Date(dispatch.created_at).toLocaleDateString('en-GB')}
                   </div>
                 </div>
               </div>

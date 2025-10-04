@@ -392,7 +392,7 @@ export default function PlanWeightsPage() {
                                 {item.client_name || "N/A"}
                               </div>
                               <div className="text-xs text-muted-foreground">
-                                {item.order_date ? new Date(item.order_date).toLocaleDateString() : "N/A"}
+                                {item.order_date ? new Date(item.order_date).toLocaleDateString('en-GB') : "N/A"}
                               </div>
                             </div>
                           </TableCell>

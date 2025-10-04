@@ -265,7 +265,7 @@ export default function MaterialMasterPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {new Date(material.created_at).toLocaleDateString()}
+                          {new Date(material.created_at).toLocaleDateString('en-GB')}
                         </TableCell>
                         <TableCell>
                           <DropdownMenu>

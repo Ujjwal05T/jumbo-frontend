@@ -628,7 +628,7 @@ const handlePrintPDF = () => {
   pdf.text(`Target Width: ${suggestionResult.target_width}" (119" - ${suggestionResult.wastage}" wastage)`, margin, yPosition);
   
   yPosition += 10;
-  pdf.text(`Generated on: ${new Date().toLocaleDateString()}`, margin, yPosition);
+  pdf.text(`Generated on: ${new Date().toLocaleDateString('en-GB')}`, margin, yPosition);
   
   // --- SUMMARY STATISTICS SECTION ---
   yPosition += 20;
@@ -1616,7 +1616,7 @@ const handlePrintPDF = () => {
     
     yPosition += 10;
     pdf.setFontSize(12);
-    pdf.text(`Generated on: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, margin, yPosition);
+    pdf.text(`Generated on: ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true })}`, margin, yPosition);
     pdf.text(`Total Items: ${filteredItems.length}`, pageWidth - margin - 50, yPosition);
     
     yPosition += 12;
@@ -3082,3 +3082,4 @@ const handlePrintPDF = () => {
     </DashboardLayout>
   );
 }
+

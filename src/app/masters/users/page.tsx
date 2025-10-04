@@ -491,7 +491,7 @@ export default function UserMasterPage() {
                         <div className="text-sm">{user.last_login || 'Never'}</div>
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm">{new Date(user.created_at).toLocaleDateString()}</div>
+                        <div className="text-sm">{new Date(user.created_at).toLocaleDateString('en-GB')}</div>
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>

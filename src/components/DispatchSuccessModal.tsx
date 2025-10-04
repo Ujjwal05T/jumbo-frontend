@@ -96,7 +96,8 @@ export function DispatchSuccessModal({
       yPos += 8;
       
       pdf.text(`Client: ${dispatchResult.client_name}`, leftCol, yPos);
-      pdf.text(`Date: ${new Date().toLocaleDateString()}`, rightCol, yPos);
+      // Date
+      pdf.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, rightCol, yPos);
       yPos += 15;
       
       // Vehicle & Driver section
@@ -260,7 +261,7 @@ export function DispatchSuccessModal({
                     <Calendar className="w-3 h-3" />
                     Date
                   </p>
-                  <p className="font-medium">{new Date().toLocaleDateString()}</p>
+                  <p className="font-medium">{new Date().toLocaleDateString('en-GB')}</p>
                 </div>
               </div>
             </CardContent>

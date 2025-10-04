@@ -310,7 +310,7 @@ export default function ClientMasterPage() {
                         </TableCell>
                         <TableCell>
                           <div className="text-sm">
-                            {new Date(client.created_at).toLocaleDateString()}
+                            {new Date(client.created_at).toLocaleDateString('en-GB')}
                           </div>
                         </TableCell>
                         <TableCell>

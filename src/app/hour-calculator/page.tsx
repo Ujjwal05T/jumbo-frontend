@@ -129,7 +129,7 @@ export default function HourCalculatorPage() {
 
   const formatDateTime12Hour = (date: string, time: string, ampm: string) => {
     if (!date || !time) return 'Not set';
-    const formattedDate = new Date(date).toLocaleDateString('en-US');
+    const formattedDate = new Date(date).toLocaleDateString('en-GB');
     return `${formattedDate}, ${time} ${ampm}`;
   };
 

@@ -425,7 +425,7 @@ export function DispatchForm({
                     </div>
                     <div className="rounded-lg bg-primary/10 p-4">
                       <Calendar className="h-8 w-8 mx-auto mb-2 text-primary" />
-                      <div className="text-sm font-bold">{new Date().toLocaleDateString()}</div>
+                      <div className="text-sm font-bold">{new Date().toLocaleDateString('en-GB')}</div>
                       <div className="text-sm text-muted-foreground">Dispatch Date</div>
                     </div>
                     <div className="rounded-lg bg-primary/10 p-4">

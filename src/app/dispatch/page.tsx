@@ -39,7 +39,6 @@ import {
   Package,
   AlertCircle,
   Calendar,
-  User,
   Loader2,
   History,
   X,
@@ -48,7 +47,6 @@ import {
   Search,
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { DispatchForm } from "@/components/DispatchForm";
 import { DispatchSuccessModal } from "@/components/DispatchSuccessModal";
 import { 
   getWarehouseItems,
@@ -77,8 +75,6 @@ export default function DispatchPage() {
     itemIds: string[];
     action: "complete";
   }>({ open: false, itemIds: [], action: "complete" });
-  const [dispatchFormOpen, setDispatchFormOpen] = useState(false);
-  const [selectedItemsForDispatch, setSelectedItemsForDispatch] = useState<any[]>([]);
   const [dispatchLoading, setDispatchLoading] = useState(false);
   const [successModalOpen, setSuccessModalOpen] = useState(false);
   const [dispatchResult, setDispatchResult] = useState<any>(null);
@@ -90,6 +86,17 @@ export default function DispatchPage() {
 
   // Search state
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Dispatch details state (filled first before selecting items)
+  const [dispatchDetails, setDispatchDetails] = useState({
+    vehicle_number: "",
+    driver_name: "",
+    driver_mobile: "",
+    payment_type: "cash",
+    dispatch_number: "",
+    reference_number: "",
+  });
+  const [detailsFilled, setDetailsFilled] = useState(false);
 
   // Helper function to highlight matching text
   const highlightText = (text: string, searchTerm: string) => {
@@ -124,18 +131,13 @@ export default function DispatchPage() {
   };
 
 
-  // Load warehouse items with optional filtering
+  // Load warehouse items - always load all items (no filtering)
   const loadData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Build query parameters for filtering
-      const params = new URLSearchParams();
-      if (selectedClientId && selectedClientId !== "none") params.append('client_id', selectedClientId);
-
-      const queryString = params.toString();
-      const url = `${API_BASE_URL}/dispatch/warehouse-items?${queryString}`;
+      const url = `${API_BASE_URL}/dispatch/warehouse-items`;
 
       const response = await fetch(url, {
         headers: { 'ngrok-skip-browser-warning': 'true' }
@@ -147,7 +149,6 @@ export default function DispatchPage() {
       setWarehouseItems(warehouseResponse.warehouse_items || []);
 
       console.log("Loaded warehouse items:", warehouseResponse.warehouse_items?.length || 0);
-      console.log("Filter applied:", warehouseResponse.dispatch_info);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load data';
       setError(errorMessage);
@@ -159,13 +160,8 @@ export default function DispatchPage() {
 
   useEffect(() => {
     loadClients(); // Load clients on page load
-    loadData(); // Load warehouse items (will show all items if no client selected)
+    loadData(); // Load all warehouse items
   }, []);
-
-  // Reload warehouse items when client filter changes
-  useEffect(() => {
-    loadData();
-  }, [selectedClientId]);
 
   // Filter items based on search term
   const filteredItems = warehouseItems.filter((item) => {
@@ -181,44 +177,81 @@ export default function DispatchPage() {
     );
   });
 
-  const handleCompleteItems = (itemIds: string[]) => {
-    // Get selected items data for dispatch form
-    const selectedItems = warehouseItems.filter(item => 
-      itemIds.includes(item.inventory_id)
-    );
-    
-    setSelectedItemsForDispatch(selectedItems);
-    setDispatchFormOpen(true);
+  const handleSaveDetails = () => {
+    // Validate details
+    if (!dispatchDetails.vehicle_number.trim()) {
+      toast.error("Vehicle number is required");
+      return;
+    }
+    if (!dispatchDetails.driver_name.trim()) {
+      toast.error("Driver name is required");
+      return;
+    }
+    if (!dispatchDetails.driver_mobile.trim()) {
+      toast.error("Driver mobile is required");
+      return;
+    }
+    if (!dispatchDetails.dispatch_number.trim()) {
+      toast.error("Dispatch number is required");
+      return;
+    }
+    if (selectedClientId === "none") {
+      toast.error("Please select a client for the dispatch slip");
+      return;
+    }
+
+    setDetailsFilled(true);
+    toast.success("Details saved! Now select items to dispatch");
+  };
+
+  const handleEditDetails = () => {
+    setDetailsFilled(false);
+    setSelectedItems([]);
+    toast.info("Edit dispatch details");
   };
 
   // Get selected client info for dispatch form
   const selectedClient = selectedClientId && selectedClientId !== "none" ? clients.find(c => c.id === selectedClientId) : null;
 
-  const handleDispatchConfirm = async (formData: any) => {
+  const handleDispatchConfirm = async () => {
+    if (selectedItems.length === 0) {
+      toast.error("Please select at least one item to dispatch");
+      return;
+    }
+
     try {
       setDispatchLoading(true);
-      
+
       const dispatchData = {
-        ...formData,
-        inventory_ids: selectedItemsForDispatch.map(item => item.inventory_id)
+        ...dispatchDetails,
+        client_id: selectedClientId, // Use selected client for dispatch slip
+        inventory_ids: selectedItems
       };
-      
+
       const result = await createDispatchRecord(dispatchData);
-      
+
       // Show success modal with dispatch details
       setDispatchResult(result);
       setSuccessModalOpen(true);
-      
+
       // Reload data and reset selections
       await loadData();
       setSelectedItems([]);
-      setSelectedItemsForDispatch([]);
-      
+      setDispatchDetails({
+        vehicle_number: "",
+        driver_name: "",
+        driver_mobile: "",
+        payment_type: "cash",
+        dispatch_number: "",
+        reference_number: "",
+      });
+      setDetailsFilled(false);
+      setSelectedClientId("none");
+
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to create dispatch';
       toast.error(errorMessage);
       console.error("Dispatch error:", error);
-      throw error; // Re-throw to prevent modal from closing on error
     } finally {
       setDispatchLoading(false);
     }
@@ -230,17 +263,15 @@ export default function DispatchPage() {
   };
 
   const handleBulkDispatch = () => {
+    if (!detailsFilled) {
+      toast.error("Please fill dispatch details first");
+      return;
+    }
     if (selectedItems.length === 0) {
       toast.error("Please select items to dispatch");
       return;
     }
-    handleCompleteItems(selectedItems);
-  };
-
-
-  const clearSelectedItems = () => {
-    setSelectedItems([]);
-    toast.success("Selection cleared");
+    handleDispatchConfirm();
   };
 
   const removeSelectedItem = (inventoryId: string) => {
@@ -295,59 +326,160 @@ export default function DispatchPage() {
           </Button>
         </div>
 
-        {/* Client Selection */}
-        <Card>
-          <CardContent className="pt-3">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              {/* Client Selection */}
-              <div className="space-y-2 max-w-xs sm:w-1/2">
-                <label className="text-sm font-medium flex items-center gap-2">
-                  <User className="w-4 h-4" />
-                  Filter by Client (Optional)
-                </label>
-                <Select
-                  value={selectedClientId}
-                  onValueChange={(value) => {
-                    setSelectedClientId(value);
-                    setSelectedItems([]);
-                  }}
-                  disabled={clientsLoading}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={clientsLoading ? "Loading..." : "All clients"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">All Clients</SelectItem>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.company_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Filter items by specific client or view all available items
-                </p>
-              </div>
-
-              {/* Selection Summary */}
-              <div className="flex items-center gap-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">{selectedItems.length}</div>
-                  <div className="text-xs text-muted-foreground">Selected Items</div>
-                </div>
-                {selectedItems.length > 0 && (
-                  <Button
-                    variant="outline"
-                    onClick={clearSelectedItems}
-                    size="sm"
+        {/* Step 1: Dispatch Details Form */}
+        <Card className={detailsFilled ? "border-green-500 bg-green-50/50" : ""}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold">1</div>
+              Dispatch Details
+              {detailsFilled && <CheckCircle className="w-5 h-5 text-green-600 ml-2" />}
+            </CardTitle>
+            <CardDescription>
+              {detailsFilled ? "Details saved. Select items below to dispatch." : "Fill dispatch information before selecting items"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!detailsFilled ? (
+              <>
+                {/* Client Selection */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <Building2 className="w-4 h-4" />
+                    Select Client for Dispatch Slip *
+                  </label>
+                  <Select
+                    value={selectedClientId}
+                    onValueChange={(value) => {
+                      setSelectedClientId(value);
+                      setSelectedItems([]);
+                    }}
+                    disabled={clientsLoading}
                   >
-                    <X className="w-4 h-4 mr-2" />
-                    Clear All
-                  </Button>
-                )}
+                    <SelectTrigger>
+                      <SelectValue placeholder={clientsLoading ? "Loading..." : "Select a client"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none" disabled>Select a client</SelectItem>
+                      {clients.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.company_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    This client will appear on the dispatch slip. You can still select items from any client below.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Vehicle Number */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Vehicle Number *</label>
+                    <Input
+                      value={dispatchDetails.vehicle_number}
+                      onChange={(e) => setDispatchDetails(prev => ({ ...prev, vehicle_number: e.target.value }))}
+                      placeholder="e.g., MH-12-AB-1234"
+                    />
+                  </div>
+
+                  {/* Driver Name */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Driver Name *</label>
+                    <Input
+                      value={dispatchDetails.driver_name}
+                      onChange={(e) => setDispatchDetails(prev => ({ ...prev, driver_name: e.target.value }))}
+                      placeholder="e.g., John Doe"
+                    />
+                  </div>
+
+                  {/* Driver Mobile */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Driver Mobile *</label>
+                    <Input
+                      value={dispatchDetails.driver_mobile}
+                      onChange={(e) => setDispatchDetails(prev => ({ ...prev, driver_mobile: e.target.value }))}
+                      placeholder="e.g., +91 9876543210"
+                    />
+                  </div>
+
+                  {/* Dispatch Number */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Dispatch Number *</label>
+                    <Input
+                      value={dispatchDetails.dispatch_number}
+                      onChange={(e) => setDispatchDetails(prev => ({ ...prev, dispatch_number: e.target.value }))}
+                      placeholder="e.g., DISP-001"
+                    />
+                  </div>
+
+                  {/* Payment Type */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Payment Type</label>
+                    <Select
+                      value={dispatchDetails.payment_type}
+                      onValueChange={(value) => setDispatchDetails(prev => ({ ...prev, payment_type: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cash">Cash</SelectItem>
+                        <SelectItem value="credit">Credit</SelectItem>
+                        <SelectItem value="online">Online</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Reference Number */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Reference Number (Optional)</label>
+                    <Input
+                      value={dispatchDetails.reference_number}
+                      onChange={(e) => setDispatchDetails(prev => ({ ...prev, reference_number: e.target.value }))}
+                      placeholder="e.g., REF-123"
+                    />
+                  </div>
+                </div>
+
+                <Button onClick={handleSaveDetails} className="w-full">
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Save Details & Continue to Item Selection
+                </Button>
+              </>
+            ) : (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Dispatch Client:</span>
+                    <p className="font-medium">{selectedClient?.company_name}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Vehicle:</span>
+                    <p className="font-medium">{dispatchDetails.vehicle_number}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Driver:</span>
+                    <p className="font-medium">{dispatchDetails.driver_name}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Mobile:</span>
+                    <p className="font-medium">{dispatchDetails.driver_mobile}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Dispatch #:</span>
+                    <p className="font-medium">{dispatchDetails.dispatch_number}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Payment:</span>
+                    <p className="font-medium capitalize">{dispatchDetails.payment_type}</p>
+                  </div>
+                </div>
+                <Button onClick={handleEditDetails} variant="outline" size="sm">
+                  Edit Details
+                </Button>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
 
@@ -408,25 +540,40 @@ export default function DispatchPage() {
           </Card>
         </div>
 
-        {/* Dispatch Items Table */}
-        <Card>
+        {/* Step 2: Item Selection */}
+        <Card className={!detailsFilled ? "opacity-50 pointer-events-none" : ""}>
           <CardHeader>
             <div className="flex flex-col gap-4">
               <div className="flex justify-between items-center">
                 <div>
-                  <CardTitle>Dispatch Queue</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold">2</div>
+                    Select Items to Dispatch
+                  </CardTitle>
                   <CardDescription>
-                    Manage order items ready for dispatch and delivery
+                    {detailsFilled
+                      ? `Showing all warehouse items. Select items to dispatch to ${selectedClient?.company_name}.`
+                      : "Complete step 1 to enable item selection"}
                   </CardDescription>
                 </div>
-                {selectedItems.length > 0 && (
+                {selectedItems.length > 0 && detailsFilled && (
                   <Button
                     onClick={handleBulkDispatch}
                     className="bg-green-600 hover:bg-green-700 text-white shadow-lg"
                     size="lg"
+                    disabled={dispatchLoading}
                   >
-                    <Truck className="mr-2 h-5 w-5" />
-                    Dispatch {selectedItems.length} Items
+                    {dispatchLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        Dispatching...
+                      </>
+                    ) : (
+                      <>
+                        <Truck className="mr-2 h-5 w-5" />
+                        Dispatch {selectedItems.length} Items
+                      </>
+                    )}
                   </Button>
                 )}
               </div>
@@ -468,6 +615,7 @@ export default function DispatchPage() {
                       <div className="flex items-center justify-center">
                         <Checkbox
                           checked={filteredItems.length > 0 && selectedItems.length === filteredItems.length}
+                          disabled={!detailsFilled}
                           onCheckedChange={(checked) => {
                             if (checked) {
                               const allItemIds = filteredItems.map(item => item.inventory_id);
@@ -494,7 +642,7 @@ export default function DispatchPage() {
                 <TableBody>
                   {filteredItems.length > 0 ? (
                     filteredItems.map((item: any, index) => (
-                      <TableRow 
+                      <TableRow
                         key={item.inventory_id || item.id}
                         className={selectedItems.includes(item.inventory_id) ? "bg-blue-50 border-blue-200" : ""}
                       >
@@ -502,6 +650,7 @@ export default function DispatchPage() {
                           <div className="flex items-center justify-center">
                             <Checkbox
                               checked={selectedItems.includes(item.inventory_id)}
+                              disabled={!detailsFilled}
                               onCheckedChange={(checked) => {
                                 if (checked) {
                                   setSelectedItems(prev => [...prev, item.inventory_id]);
@@ -605,25 +754,6 @@ export default function DispatchPage() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Dispatch Form Modal */}
-      <DispatchForm
-        open={dispatchFormOpen}
-        onOpenChange={setDispatchFormOpen}
-        selectedItems={selectedItemsForDispatch.map(item => ({
-          inventory_id: item.inventory_id,
-          qr_code: item.qr_code,
-          barcode_id: item.barcode_id,
-          paper_spec: item.paper_spec,
-          width_inches: item.width_inches,
-          weight_kg: item.weight_kg,
-          location: item.location
-        }))}
-        onConfirmDispatch={handleDispatchConfirm}
-        loading={dispatchLoading}
-        preSelectedClient={selectedClient}
-        preSelectedOrder={null}
-      />
 
       {/* Success Modal */}
       <DispatchSuccessModal
