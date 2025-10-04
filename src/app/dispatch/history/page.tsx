@@ -181,6 +181,22 @@ export default function DispatchHistoryPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [limit] = useState(20);
 
+  // Convert DD/MM/YYYY to YYYY-MM-DD for API
+  const convertToAPIDate = (ddmmyyyy: string): string => {
+    if (!ddmmyyyy || ddmmyyyy.length !== 10) return "";
+    const [day, month, year] = ddmmyyyy.split('/');
+    if (!day || !month || !year) return "";
+    return `${year}-${month}-${day}`;
+  };
+
+  // Convert YYYY-MM-DD to DD/MM/YYYY for display
+  const convertToDisplayDate = (yyyymmdd: string): string => {
+    if (!yyyymmdd) return "";
+    const [year, month, day] = yyyymmdd.split('-');
+    if (!day || !month || !year) return "";
+    return `${day}/${month}/${year}`;
+  };
+
   // Details modal
   const [selectedDispatch, setSelectedDispatch] = useState<DispatchDetails | null>(null);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
@@ -207,8 +223,8 @@ export default function DispatchHistoryPage() {
       
       if (clientFilter && clientFilter !== 'all') params.append('client_id', clientFilter);
       if (statusFilter && statusFilter !== 'all') params.append('status', statusFilter);
-      if (fromDate) params.append('from_date', fromDate);
-      if (toDate) params.append('to_date', toDate);
+      if (fromDate) params.append('from_date', convertToAPIDate(fromDate));
+      if (toDate) params.append('to_date', convertToAPIDate(toDate));
       if (searchTerm.trim()) params.append('search', searchTerm.trim());
 
       const response = await fetch(`${API_BASE_URL}/dispatch/history?${params.toString()}`, {
@@ -235,8 +251,8 @@ export default function DispatchHistoryPage() {
     try {
       setStatsLoading(true);
       const params = new URLSearchParams();
-      if (fromDate) params.append('from_date', fromDate);
-      if (toDate) params.append('to_date', toDate);
+      if (fromDate) params.append('from_date', convertToAPIDate(fromDate));
+      if (toDate) params.append('to_date', convertToAPIDate(toDate));
 
       const response = await fetch(`${API_BASE_URL}/dispatch/stats?${params.toString()}`, {
         headers: { 'ngrok-skip-browser-warning': 'true' }
@@ -474,22 +490,36 @@ export default function DispatchHistoryPage() {
               </div>
 
               {/* From Date */}
-              <div className="space-y-2">
+                <div className="space-y-2">
                 <label className="text-sm font-medium">From Date</label>
                 <Input
-                  type="date"
+                  type="text"
+                  placeholder="DD/MM/YYYY"
                   value={fromDate}
-                  onChange={(e) => setFromDate(e.target.value)}
+                  onChange={(e) => {
+                    let value = e.target.value.replace(/[^0-9]/g, '');
+                    if (value.length >= 2) value = value.slice(0, 2) + '/' + value.slice(2);
+                    if (value.length >= 5) value = value.slice(0, 5) + '/' + value.slice(5, 9);
+                    setFromDate(value);
+                  }}
+                  maxLength={10}
                 />
-              </div>
+                </div>
 
               {/* To Date */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">To Date</label>
                 <Input
-                  type="date"
+                  type="text"
+                  placeholder="DD/MM/YYYY"
                   value={toDate}
-                  onChange={(e) => setToDate(e.target.value)}
+                  onChange={(e) => {
+                    let value = e.target.value.replace(/[^0-9]/g, '');
+                    if (value.length >= 2) value = value.slice(0, 2) + '/' + value.slice(2);
+                    if (value.length >= 5) value = value.slice(0, 5) + '/' + value.slice(5, 9);
+                    setToDate(value);
+                  }}
+                  maxLength={10}
                 />
               </div>
 

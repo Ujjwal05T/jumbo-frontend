@@ -7,8 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Users, Package, TrendingUp, Calendar, BarChart3, Zap, Search, Eye } from 'lucide-react';
+import { Users, Package, TrendingUp, Calendar, BarChart3, Zap, Search, Eye, FileText } from 'lucide-react';
 import { REPORTS_ENDPOINTS, MASTER_ENDPOINTS, createRequestOptions } from '@/lib/api-config';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // Types
 type Client = {
@@ -179,6 +181,89 @@ export default function ClientOrdersPlansPage() {
     fetchAvailableClients();
   }, []);
 
+  // Export to PDF
+  const handleExportPDF = () => {
+    if (!clientInfo || !summary || ordersData.length === 0) return;
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.width;
+    let yPosition = 20;
+
+    // Title
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Plans Report', pageWidth / 2, yPosition, { align: 'center' });
+    yPosition += 10;
+
+    // Date and client info
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Generated on: ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true })}`, pageWidth / 2, yPosition, { align: 'center' });
+    yPosition += 15;
+
+    // Client Information
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Client Information', 20, yPosition);
+    yPosition += 7;
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Company: ${clientInfo.company_name}`, 20, yPosition);
+    yPosition += 5;
+    if (clientInfo.contact_person) {
+      doc.text(`Contact Person: ${clientInfo.contact_person}`, 20, yPosition);
+      yPosition += 5;
+    }
+    if (clientInfo.phone) {
+      doc.text(`Phone: ${clientInfo.phone}`, 20, yPosition);
+      yPosition += 5;
+    }
+    if (clientInfo.gst_number) {
+      doc.text(`GST Number: ${clientInfo.gst_number}`, 20, yPosition);
+      yPosition += 5;
+    }
+    yPosition += 5;
+
+    // Orders Table
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Orders List', 20, yPosition);
+    yPosition += 7;
+
+    const tableData = ordersData.map((order) => [
+      order.frontend_id,
+      order.status,
+      new Date(order.created_at).toLocaleDateString('en-GB'),
+      order.total_plans > 0 ? 'Yes' : 'No',
+      [...new Set(order.associated_plans.map(plan => plan.plan_frontend_id))].join(', ') || 'N/A',
+      `${order.total_items} items`
+    ]);
+
+    autoTable(doc, {
+      head: [['Order ID', 'Status', 'Created Date', 'Planned', 'Plan IDs', 'Items']],
+      body: tableData,
+      startY: yPosition,
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [71, 85, 105], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
+      margin: { left: 20, right: 20 },
+    });
+
+    // Print PDF
+    const pdfBlob = doc.output('blob');
+    const url = URL.createObjectURL(pdfBlob);
+    
+    const printWindow = window.open(url, '_blank');
+    if (printWindow) {
+      printWindow.onload = () => {
+        printWindow.print();
+      };
+    }
+    
+    URL.revokeObjectURL(url);
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
@@ -226,9 +311,9 @@ export default function ClientOrdersPlansPage() {
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Client Orders with Production Plans</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Client Orders with Plans</h1>
           <p className="text-muted-foreground">
-            Analyze client orders and their associated production plans with timeline filters
+            Analyze client orders and their associated plans with timeline filters
           </p>
         </div>
 
@@ -380,13 +465,25 @@ export default function ClientOrdersPlansPage() {
         {ordersData.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5" />
-                Orders with Plans ({ordersData.length})
-              </CardTitle>
-              <CardDescription>
-                Click on any row to expand and view associated production plans
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Package className="h-5 w-5" />
+                    Orders with Plans ({ordersData.length})
+                  </CardTitle>
+                  <CardDescription>
+                    Click on any row to expand and view associated production plans
+                  </CardDescription>
+                </div>
+                <Button
+                  onClick={handleExportPDF}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <FileText className="h-4 w-4" />
+                  Print PDF
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="rounded-md border">
@@ -396,12 +493,9 @@ export default function ClientOrdersPlansPage() {
                       <tr className="border-b">
                         <th className="text-left p-3">Order ID</th>
                         <th className="text-left p-3">Status</th>
-                        <th className="text-left p-3">Priority</th>
                         <th className="text-left p-3">Created Date</th>
-                        <th className="text-left p-3">Delivery Date</th>
-                        <th className="text-left p-3">Value</th>
-                        <th className="text-left p-3">Progress</th>
                         <th className="text-left p-3">Planned</th>
+                        <th className="text-left p-3">Plans</th>
                         <th className="text-left p-3">Action</th>
                       </tr>
                     </thead>
@@ -417,45 +511,9 @@ export default function ClientOrdersPlansPage() {
                                 {order.status}
                               </Badge>
                             </td>
-                            <td className="p-3">
-                              <Badge className={getPriorityColor(order.priority || 'normal')}>
-                                {order.priority || 'normal'}
-                              </Badge>
-                            </td>
+                            
                             <td className="p-3">
                               {new Date(order.created_at).toLocaleDateString('en-GB')}
-                            </td>
-                            <td className="p-3">
-                              {order.delivery_date ? (
-                                <div className={order.is_overdue ? 'text-red-600' : ''}>
-                                  {new Date(order.delivery_date).toLocaleDateString('en-GB')}
-                                  {order.is_overdue && (
-                                    <div className="text-xs text-red-600">⚠️ Overdue</div>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-muted-foreground">Not set</span>
-                              )}
-                            </td>
-                            <td className="p-3">
-                              <div className="font-medium">₹{order.total_value.toLocaleString()}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {order.total_items} items
-                              </div>
-                            </td>
-                            <td className="p-3">
-                              <div className="flex items-center gap-2">
-                                <div className="w-16 bg-gray-200 rounded-full h-2">
-                                  <div
-                                    className={`h-2 rounded-full ${
-                                      order.fulfillment_percentage === 100 ? 'bg-green-600' :
-                                      order.fulfillment_percentage > 0 ? 'bg-blue-600' : 'bg-gray-400'
-                                    }`}
-                                    style={{ width: `${order.fulfillment_percentage || 0}%` }}
-                                  ></div>
-                                </div>
-                                <span className="text-xs">{order.fulfillment_percentage.toFixed(0)}%</span>
-                              </div>
                             </td>
                             <td className="p-3">
                               <div className="flex items-center gap-1">
@@ -466,6 +524,9 @@ export default function ClientOrdersPlansPage() {
                                   <span className="text-sm font-semibold text-red-600">No</span>
                                 )}
                               </div>
+                            </td>
+                            <td className='p-3'>
+                              {[...new Set(order.associated_plans.map(plan => plan.plan_frontend_id))].join(', ') || 'N/A'}
                             </td>
                             <td className="p-3">
                               <Button

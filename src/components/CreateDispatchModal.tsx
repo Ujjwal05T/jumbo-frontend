@@ -488,11 +488,13 @@ export function CreateDispatchModal({
                       <SelectItem value="none" disabled>
                         Select a client
                       </SelectItem>
-                      {clients.map((client) => (
-                        <SelectItem key={client.id} value={client.id}>
+                        {clients
+                        .sort((a, b) => a.company_name.localeCompare(b.company_name))
+                        .map((client) => (
+                          <SelectItem key={client.id} value={client.id}>
                           {client.company_name}
-                        </SelectItem>
-                      ))}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
