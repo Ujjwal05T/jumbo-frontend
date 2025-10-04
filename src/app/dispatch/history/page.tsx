@@ -66,6 +66,7 @@ import {
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/api-config";
 import { generatePackingSlipPDF, convertDispatchToPackingSlip } from "@/lib/packing-slip-pdf";
+import { CreateDispatchModal } from "@/components/CreateDispatchModal";
 
 interface DispatchRecord {
   id: string;
@@ -191,6 +192,9 @@ export default function DispatchHistoryPage() {
 
   // Clients for filter
   const [clients, setClients] = useState<any[]>([]);
+
+  // Create dispatch modal
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   const loadDispatches = async () => {
     try {
@@ -401,65 +405,11 @@ export default function DispatchHistoryPage() {
               View and manage dispatch records and delivery tracking
             </p>
           </div>
-          <Button onClick={() => window.location.href = '/dispatch'} variant="outline">
+          <Button onClick={() => setCreateModalOpen(true)} variant="default">
             <Package className="w-4 h-4 mr-2" />
             Create New Dispatch
           </Button>
         </div>
-
-        {/* Stats Cards */}
-        {stats && (
-          <div className="grid gap-4 md:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Dispatches</CardTitle>
-                <Truck className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.summary.total_dispatches}</div>
-                <p className="text-xs text-muted-foreground">
-                  {fromDate || toDate ? 'In selected period' : 'All time'}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Items Dispatched</CardTitle>
-                <Package className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-blue-600">
-                  {stats.summary.total_items_dispatched}
-                </div>
-                <p className="text-xs text-muted-foreground">Total cut rolls</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Weight</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">
-                  {stats.summary.total_weight_kg.toFixed(1)}kg
-                </div>
-                <p className="text-xs text-muted-foreground">Total dispatched</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Delivered</CardTitle>
-                <CheckCircle className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-orange-600">
-                  {stats.status_breakdown.delivered || 0}
-                </div>
-                <p className="text-xs text-muted-foreground">Successfully delivered</p>
-              </CardContent>
-            </Card>
-          </div>
-        )}
 
         {/* Filters */}
         <Card>
@@ -689,12 +639,12 @@ export default function DispatchHistoryPage() {
                                 <Eye className="mr-2 h-4 w-4" />
                                 View Details
                               </DropdownMenuItem>
-                              <DropdownMenuItem
+                              {/* <DropdownMenuItem
                                 onClick={() => printPDF(dispatch.id, dispatch.dispatch_number)}
                               >
                                 <Download className="mr-2 h-4 w-4" />
                                 Print PDF
-                              </DropdownMenuItem>
+                              </DropdownMenuItem> */}
                               <DropdownMenuItem
                                 onClick={() => downloadPackingSlip(dispatch.id)}
                               >
@@ -974,6 +924,16 @@ export default function DispatchHistoryPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Create Dispatch Modal */}
+      <CreateDispatchModal
+        open={createModalOpen}
+        onOpenChange={setCreateModalOpen}
+        onSuccess={() => {
+          loadDispatches();
+          loadStats();
+        }}
+      />
     </DashboardLayout>
   );
 }

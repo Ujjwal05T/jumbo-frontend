@@ -210,13 +210,6 @@ export default function InOutPage() {
   ) => {
     try {
       setGeneratingPdf(true);
-
-      // Debug: Log the current data and date range
-      console.log("PDF Generation Debug:");
-      console.log("Date Range:", pdfDateRange);
-      console.log("Inward Challans:", inwardChallans.length);
-      console.log("Outward Challans:", outwardChallans.length);
-
       // Filter data based on date range with more robust date comparison
       const filterByDate = (challans: any[]) => {
         return challans.filter((challan) => {
@@ -328,7 +321,7 @@ export default function InOutPage() {
 
       // Generate Inward Challans Table
       if (type === "inward" || type === "both") {
-        addTitle("Inward Challans Report");
+        addTitle("Waste Report");
 
         if (filteredInward.length > 0) {
           const inwardColumns = [
@@ -447,15 +440,15 @@ export default function InOutPage() {
       if (type === "outward" || type === "both") {
         if (type === "both") {
           checkNewPage(50);
-          yPosition += 20;
+          yPosition += 10;
         }
 
         if (type === "outward") {
-          addTitle("Outward Challans Report");
+          addTitle("Waste Report");
         } else {
-          pdf.setFontSize(16);
-          pdf.setFont("helvetica", "bold");
-          pdf.text("Outward Challans Report", pageWidth / 2, yPosition, {
+          pdf.setFontSize(12);
+          pdf.setFont("helvetica", "medium");
+          pdf.text("----------", pageWidth / 2, yPosition, {
             align: "center",
           });
           yPosition += 15;

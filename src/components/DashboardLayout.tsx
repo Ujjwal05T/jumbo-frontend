@@ -103,8 +103,7 @@ const getNavigationForRole = (role: string | null) => {
       icon: Truck,
       roles: ["admin", "co_admin", "accountant"],
       children: [
-        { name: "Current Dispatch", href: "/dispatch", roles: ["admin", "co_admin", "accountant"] },
-        { name: "Past Dispatch", href: "/past-dispatch", roles: ["admin", "accountant"] },
+        { name: "Current Dispatch", href: "/dispatch/history", roles: ["admin", "co_admin", "accountant"] },
         { name: "Plan Weights", href: "/plan-weights", roles: ["admin"] },
       ],
     },
