@@ -64,9 +64,11 @@ export function CreateDispatchModal({
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [warehouseItems, setWarehouseItems] = useState<any[]>([]);
+  const [wastageItems, setWastageItems] = useState<any[]>([]);  // NEW: Wastage items
   const [clients, setClients] = useState<any[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>("none");
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [selectedWastageIds, setSelectedWastageIds] = useState<string[]>([]);  // NEW: Selected wastage IDs
   const [searchTerm, setSearchTerm] = useState("");
   const [dispatchLoading, setDispatchLoading] = useState(false);
   const [successModalOpen, setSuccessModalOpen] = useState(false);
@@ -81,16 +83,18 @@ export function CreateDispatchModal({
     reference_number: "",
   });
 
-  // Load clients and warehouse items
+  // Load clients, warehouse items, and wastage items
   useEffect(() => {
     if (open) {
       loadClients();
       loadWarehouseItems();
+      loadWastageItems();  // NEW: Load wastage items
     } else {
       // Reset on close
       setStep(1);
       setSelectedClientId("none");
       setSelectedItems([]);
+      setSelectedWastageIds([]);  // NEW: Reset wastage selection
       setSearchTerm("");
       setDispatchDetails({
         vehicle_number: "",
@@ -137,6 +141,26 @@ export function CreateDispatchModal({
     }
   };
 
+  const loadWastageItems = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(
+        `${API_BASE_URL}/dispatch/wastage-inventory-items`,
+        {
+          headers: { "ngrok-skip-browser-warning": "true" },
+        }
+      );
+      if (!response.ok) throw new Error("Failed to load wastage items");
+      const data = await response.json();
+      setWastageItems(data.wastage_items || []);
+    } catch (err) {
+      console.error("Error loading wastage items:", err);
+      toast.error("Failed to load Stock items");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSaveDetails = () => {
     // Validate details
     if (!dispatchDetails.vehicle_number.trim()) {
@@ -162,7 +186,7 @@ export function CreateDispatchModal({
   };
 
   const handleDispatchConfirm = async () => {
-    if (selectedItems.length === 0) {
+    if (selectedItems.length === 0 && selectedWastageIds.length === 0) {
       toast.error("Please select at least one item to dispatch");
       return;
     }
@@ -174,6 +198,7 @@ export function CreateDispatchModal({
         ...dispatchDetails,
         client_id: selectedClientId,
         inventory_ids: selectedItems,
+        wastage_ids: selectedWastageIds,  // NEW: Include wastage IDs
       };
 
       const result = await createDispatchRecord(dispatchData);
@@ -240,6 +265,18 @@ export function CreateDispatchModal({
     );
   });
 
+  const filteredWastageItems = wastageItems.filter((item) => {
+    if (!searchTerm.trim()) return true;
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      (item.barcode_id &&
+        item.barcode_id.toLowerCase().includes(searchLower)) ||
+      (item.reel_no && item.reel_no.toLowerCase().includes(searchLower)) ||
+      (item.frontend_id && item.frontend_id.toLowerCase().includes(searchLower)) ||
+      (item.paper_spec && item.paper_spec.toLowerCase().includes(searchLower))
+    );
+  });
+
   const highlightText = (text: string, searchTerm: string) => {
     if (!searchTerm || !text) return text;
     const parts = text.split(new RegExp(`(${searchTerm})`, "gi"));
@@ -296,6 +333,142 @@ export function CreateDispatchModal({
       </Badge>
     );
   };
+
+  const renderWastageItemsTable = (items: any[]) => (
+    <div className="rounded-md border max-h-[400px] overflow-y-auto">
+      <Table>
+        <TableHeader className="sticky top-0 bg-white z-10">
+          <TableRow>
+            <TableHead className="w-[50px]">
+              <div className="flex items-center justify-center">
+                <Checkbox
+                  checked={items.length > 0 && selectedWastageIds.length === items.length}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      const allItemIds = items.map((item) => item.id);
+                      setSelectedWastageIds(allItemIds);
+                      toast.success(`Selected all ${allItemIds.length} wastage items`);
+                    } else {
+                      setSelectedWastageIds([]);
+                      toast.success("Cleared all Stock selections");
+                    }
+                  }}
+                  className="w-5 h-5"
+                />
+              </div>
+            </TableHead>
+            <TableHead>S.No</TableHead>
+            <TableHead>Reel No / Barcode</TableHead>
+            <TableHead>ID</TableHead>
+            <TableHead>Paper Specs</TableHead>
+            <TableHead>Width</TableHead>
+            <TableHead>Weight</TableHead>
+            <TableHead>Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {items.length > 0 ? (
+            items.map((item: any, index) => (
+              <TableRow
+                key={item.id}
+                className={
+                  selectedWastageIds.includes(item.id)
+                    ? "bg-orange-50 border-orange-200"
+                    : ""
+                }
+              >
+                <TableCell>
+                  <div className="flex items-center justify-center">
+                    <Checkbox
+                      checked={selectedWastageIds.includes(item.id)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedWastageIds((prev) => [...prev, item.id]);
+                          toast.success(`Selected Stock ${item.reel_no || item.frontend_id}`);
+                        } else {
+                          setSelectedWastageIds((prev) => prev.filter((id) => id !== item.id));
+                          toast.success(`Removed Stock ${item.reel_no || item.frontend_id}`);
+                        }
+                      }}
+                      className="w-5 h-5"
+                    />
+                  </div>
+                </TableCell>
+                <TableCell className="font-medium">{index + 1}</TableCell>
+                <TableCell>
+                  <div className="space-y-1">
+                    <div
+                      className={`font-mono text-sm ${
+                        selectedWastageIds.includes(item.id)
+                          ? "font-bold text-orange-700"
+                          : ""
+                      }`}
+                    >
+                      {highlightText(item.reel_no || item.barcode_id || "N/A", searchTerm)}
+                      {selectedWastageIds.includes(item.id) && (
+                        <Badge className="ml-2 text-xs bg-orange-600">SELECTED</Badge>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      By: {item.created_by || "Unknown"}
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="text-sm font-mono">
+                    {highlightText(item.frontend_id || "N/A", searchTerm)}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">
+                        {highlightText(item.paper_spec, searchTerm)}
+                      </span>
+                      <Badge variant="outline" className="text-xs bg-orange-100">
+                        Stock
+                      </Badge>
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="text-center">
+                    <div className="font-medium">{item.width_inches}"</div>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="text-center">
+                    <div className="font-medium">{item.weight_kg}kg</div>
+                  </div>
+                </TableCell>
+                <TableCell>{getStatusBadge(item.status)}</TableCell>
+              </TableRow>
+            ))
+          ) : (
+            <TableRow>
+              <TableCell colSpan={8} className="h-24 text-center">
+                {loading ? (
+                  <div className="flex items-center justify-center">
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Loading Stock items...
+                  </div>
+                ) : (
+                  <div className="text-muted-foreground">
+                    <p className="font-medium">No Stock items found</p>
+                    <p className="text-sm">
+                      {searchTerm
+                        ? "Try adjusting your search"
+                        : "No Stock items available"}
+                    </p>
+                  </div>
+                )}
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    </div>
+  );
 
   const renderItemsTable = (items: any[], showClientColumn: boolean = false) => (
     <div className="rounded-md border max-h-[400px] overflow-y-auto">
@@ -663,21 +836,25 @@ export function CreateDispatchModal({
                 </div>
 
                 {/* Stats */}
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-4 gap-3">
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
                     <div className="text-2xl font-bold text-blue-600">
-                      {selectedItems.length}
+                      {selectedItems.length + selectedWastageIds.length}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      Items Selected
+                      Total Selected
                     </div>
                   </div>
                   <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
                     <div className="text-2xl font-bold text-green-600">
-                      {warehouseItems
-                        .filter((item) => selectedItems.includes(item.inventory_id))
-                        .reduce((sum, item) => sum + (item.weight_kg || 0), 0)
-                        .toFixed(1)}
+                      {(
+                        warehouseItems
+                          .filter((item) => selectedItems.includes(item.inventory_id))
+                          .reduce((sum, item) => sum + (item.weight_kg || 0), 0) +
+                        wastageItems
+                          .filter((item) => selectedWastageIds.includes(item.id))
+                          .reduce((sum, item) => sum + (item.weight_kg || 0), 0)
+                      ).toFixed(1)}
                       kg
                     </div>
                     <div className="text-xs text-muted-foreground">
@@ -686,10 +863,18 @@ export function CreateDispatchModal({
                   </div>
                   <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-center">
                     <div className="text-2xl font-bold text-purple-600">
-                      {clientItems.length}
+                      {selectedItems.length}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      Client Items
+                      Regular Items
+                    </div>
+                  </div>
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-orange-600">
+                      {selectedWastageIds.length}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Stock Items
                     </div>
                   </div>
                 </div>
@@ -715,9 +900,9 @@ export function CreateDispatchModal({
                   )}
                 </div>
 
-                {/* Tabs for Client Items vs All Items */}
+                {/* Tabs for Client Items vs All Items vs Wastage */}
                 <Tabs defaultValue="client" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
+                  <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="client" className="flex items-center gap-2">
                       <Building2 className="w-4 h-4" />
                       {selectedClient?.company_name} ({clientItems.length})
@@ -726,6 +911,10 @@ export function CreateDispatchModal({
                       <Package className="w-4 h-4" />
                       All Clients ({warehouseItems.length})
                     </TabsTrigger>
+                    <TabsTrigger value="wastage" className="flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" />
+                      Stock ({wastageItems.length})
+                    </TabsTrigger>
                   </TabsList>
                   <TabsContent value="client" className="mt-4">
                     {renderItemsTable(filteredClientItems, false)}
@@ -733,12 +922,15 @@ export function CreateDispatchModal({
                   <TabsContent value="all" className="mt-4">
                     {renderItemsTable(filteredAllItems, true)}
                   </TabsContent>
+                  <TabsContent value="wastage" className="mt-4">
+                    {renderWastageItemsTable(filteredWastageItems)}
+                  </TabsContent>
                 </Tabs>
 
                 {/* Dispatch Button */}
                 <Button
                   onClick={handleDispatchConfirm}
-                  disabled={selectedItems.length === 0 || dispatchLoading}
+                  disabled={(selectedItems.length === 0 && selectedWastageIds.length === 0) || dispatchLoading}
                   className="w-full bg-green-600 hover:bg-green-700"
                   size="lg"
                 >
@@ -750,7 +942,7 @@ export function CreateDispatchModal({
                   ) : (
                     <>
                       <Truck className="mr-2 h-5 w-5" />
-                      Dispatch {selectedItems.length} Items
+                      Dispatch {selectedItems.length + selectedWastageIds.length} Items
                     </>
                   )}
                 </Button>

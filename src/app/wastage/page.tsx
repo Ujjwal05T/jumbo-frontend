@@ -56,7 +56,7 @@ import EditWastageModal from "@/components/EditWastageModal";
 export default function WastagePage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPaperType, setSelectedPaperType] = useState<string>("all");
-  const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [selectedStatus, setSelectedStatus] = useState<string>("available");
   const [wastageItems, setWastageItems] = useState<WastageInventory[]>([]);
   const [stats, setStats] = useState<WastageStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -210,6 +210,16 @@ export default function WastagePage() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Available</CardTitle>
+                <Recycle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.available_rolls}</div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Rolls</CardTitle>
                 <Package className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
@@ -226,15 +236,7 @@ export default function WastagePage() {
                 <div className="text-2xl font-bold">{stats.total_width_inches}"</div>
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Available</CardTitle>
-                <Recycle className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.available_rolls}</div>
-              </CardContent>
-            </Card>
+            
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Average Width</CardTitle>
@@ -268,42 +270,16 @@ export default function WastagePage() {
               </div>
               <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-2">
                 <div className="flex items-center gap-2">
-                  <Filter className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                  <Select value={selectedPaperType} onValueChange={setSelectedPaperType}>
-                    <SelectTrigger className="w-full min-w-[180px] lg:w-48">
-                      <SelectValue placeholder="Paper type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Paper Types</SelectItem>
-                      {paperTypes.length > 0 ? (
-                        paperTypes.map((type) => {
-                          const itemsOfType = wastageItems.filter(item => item.paper?.type === type);
-                          const avgGsm = Math.round(itemsOfType.reduce((sum, item) => sum + (item.paper?.gsm || 0), 0) / itemsOfType.length);
-                          return (
-                            <SelectItem key={type} value={type}>
-                              {type} (GSM: {avgGsm})
-                            </SelectItem>
-                          );
-                        })
-                      ) : (
-                        <SelectItem value="no-types" disabled>
-                          No paper types available
-                        </SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex items-center gap-2">
                   <Select value={selectedStatus} onValueChange={setSelectedStatus}>
                     <SelectTrigger className="w-full min-w-[150px] lg:w-40">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="available">Available</SelectItem>
                       {statusOptions.map((status) => (
                         <SelectItem key={status.value} value={status.value}>
-                          {status.label} ({status.count})
+                          {status.label} 
                         </SelectItem>
                       ))}
                     </SelectContent>

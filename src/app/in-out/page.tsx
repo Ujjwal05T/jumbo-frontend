@@ -146,62 +146,6 @@ export default function InOutPage() {
     return today.toISOString().split("T")[0];
   };
 
-  // Debug function to check data
-  const debugChallanData = () => {
-    console.log("=== CHALLAN DATA DEBUG ===");
-    console.log("Inward Challans Count:", inwardChallans.length);
-    console.log("Outward Challans Count:", outwardChallans.length);
-    console.log("Current Date Range:", {
-      from: pdfDateRange.from.toISOString(),
-      to: pdfDateRange.to.toISOString(),
-      fromDateOnly: new Date(
-        pdfDateRange.from.getFullYear(),
-        pdfDateRange.from.getMonth(),
-        pdfDateRange.from.getDate()
-      ),
-      toDateOnly: new Date(
-        pdfDateRange.to.getFullYear(),
-        pdfDateRange.to.getMonth(),
-        pdfDateRange.to.getDate()
-      ),
-    });
-
-    if (inwardChallans.length > 0) {
-      console.log("Sample Inward Challan:", inwardChallans[0]);
-      console.log(
-        "All Inward Dates:",
-        inwardChallans.map((c) => ({
-          original: c.date,
-          parsed: new Date(c.date),
-          dateOnly: new Date(
-            new Date(c.date).getFullYear(),
-            new Date(c.date).getMonth(),
-            new Date(c.date).getDate()
-          ),
-          valid: !isNaN(new Date(c.date).getTime()),
-        }))
-      );
-    }
-
-    if (outwardChallans.length > 0) {
-      console.log("Sample Outward Challan:", outwardChallans[0]);
-      console.log(
-        "All Outward Dates:",
-        outwardChallans.map((c) => ({
-          original: c.date,
-          parsed: new Date(c.date),
-          dateOnly: new Date(
-            new Date(c.date).getFullYear(),
-            new Date(c.date).getMonth(),
-            new Date(c.date).getDate()
-          ),
-          valid: !isNaN(new Date(c.date).getTime()),
-        }))
-      );
-    }
-
-    toast.info("Debug info logged to console - check date formats");
-  };
 
   // PDF generation function
   const generateChallanPdf = async (
@@ -262,13 +206,13 @@ export default function InOutPage() {
       // Check if we have any data for the requested type
       if (type === "inward" && filteredInward.length === 0) {
         toast.error(
-          `No inward challans found for the selected date range (${pdfDateRange.from.toLocaleDateString('en-GB')} to ${pdfDateRange.to.toLocaleDateString('en-GB')})`
+          `No purchase challans found for the selected date range (${pdfDateRange.from.toLocaleDateString('en-GB')} to ${pdfDateRange.to.toLocaleDateString('en-GB')})`
         );
         return;
       }
       if (type === "outward" && filteredOutward.length === 0) {
         toast.error(
-          `No outward challans found for the selected date range (${pdfDateRange.from.toLocaleDateString('en-GB')} to ${pdfDateRange.to.toLocaleDateString('en-GB')})`
+          `No sales challans found for the selected date range (${pdfDateRange.from.toLocaleDateString('en-GB')} to ${pdfDateRange.to.toLocaleDateString('en-GB')})`
         );
         return;
       }
@@ -377,11 +321,6 @@ export default function InOutPage() {
             ];
           });
 
-          console.log(
-            "Generating inward table with",
-            inwardRows.length,
-            "rows"
-          );
 
           try {
             autoTable(pdf, {
@@ -420,15 +359,15 @@ export default function InOutPage() {
                 yPosition = data.cursor.y + 5;
               },
             });
-            console.log("Inward table generated successfully");
+            console.log("purchase table generated successfully");
           } catch (tableError) {
-            console.error("Error generating inward table:", tableError);
-            pdf.text("Error generating inward table", 20, yPosition);
+            console.error("Error generating purchase table:", tableError);
+            pdf.text("Error generating purchase table", 20, yPosition);
             yPosition += 10;
           }
         } else {
           pdf.text(
-            "No inward challans found for the selected date range",
+            "No purchase challans found for the selected date range",
             20,
             yPosition
           );
@@ -501,11 +440,6 @@ export default function InOutPage() {
             ];
           });
 
-          console.log(
-            "Generating outward table with",
-            outwardRows.length,
-            "rows"
-          );
 
           try {
             autoTable(pdf, {
@@ -542,12 +476,12 @@ export default function InOutPage() {
             });
             console.log("Outward table generated successfully");
           } catch (tableError) {
-            console.error("Error generating outward table:", tableError);
-            pdf.text("Error generating outward table", 20, yPosition);
+            console.error("Error generating sales table:", tableError);
+            pdf.text("Error generating sales table", 20, yPosition);
           }
         } else {
           pdf.text(
-            "No outward challans found for the selected date range",
+            "No sales challans found for the selected date range",
             20,
             yPosition
           );
@@ -754,7 +688,7 @@ export default function InOutPage() {
       };
 
       await createInwardChallan(challanData);
-      toast.success("Inward challan created successfully!");
+      toast.success("Purchase challan created successfully!");
       loadNextSerialNumbers(); // Refresh serial numbers after successful creation
       setShowInwardModal(false);
       // Reset form with empty values
@@ -778,11 +712,11 @@ export default function InOutPage() {
       });
       loadData(); // Refresh data
     } catch (error) {
-      console.error("Error creating inward challan:", error);
+      console.error("Error creating purchase challan:", error);
       toast.error(
         error instanceof Error
           ? error.message
-          : "Failed to create inward challan"
+          : "Failed to create purchase challan"
       );
     } finally {
       setSubmitting(false);
@@ -857,7 +791,7 @@ export default function InOutPage() {
       toast.error(
         error instanceof Error
           ? error.message
-          : "Failed to create outward challan"
+          : "Failed to create sales challan"
       );
     } finally {
       setSubmitting(false);
@@ -984,7 +918,7 @@ export default function InOutPage() {
       toast.error(
         error instanceof Error
           ? error.message
-          : "Failed to update inward challan"
+          : "Failed to update purchase challan"
       );
     } finally {
       setSubmitting(false);
@@ -1042,7 +976,7 @@ export default function InOutPage() {
       toast.error(
         error instanceof Error
           ? error.message
-          : "Failed to update outward challan"
+          : "Failed to update sales challan"
       );
     } finally {
       setSubmitting(false);
@@ -1067,7 +1001,7 @@ export default function InOutPage() {
       toast.success("Time out recorded successfully!");
       loadData(); // Refresh data
     } catch (error) {
-      console.error("Error updating inward challan time out:", error);
+      console.error("Error updating purchase challan time out:", error);
       toast.error(
         error instanceof Error ? error.message : "Failed to record time out"
       );
@@ -1094,7 +1028,7 @@ export default function InOutPage() {
       toast.success("Time out recorded successfully!");
       loadData(); // Refresh data
     } catch (error) {
-      console.error("Error updating outward challan time out:", error);
+      console.error("Error updating sales challan time out:", error);
       toast.error(
         error instanceof Error ? error.message : "Failed to record time out"
       );
@@ -1195,7 +1129,7 @@ export default function InOutPage() {
               ) : (
                 <FileText className="h-4 w-4 mr-2" />
               )}
-              Print Inward
+              Print Purchase
             </Button>
 
             <Button
@@ -1208,7 +1142,7 @@ export default function InOutPage() {
               ) : (
                 <FileText className="h-4 w-4 mr-2" />
               )}
-              Print Outward
+              Print Sale
             </Button>
 
             <Button
@@ -1228,26 +1162,26 @@ export default function InOutPage() {
 
         <Tabs defaultValue="inward" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="inward">Inward Challan</TabsTrigger>
-            <TabsTrigger value="outward">Outward Challan</TabsTrigger>
+            <TabsTrigger value="inward">Purchase Challan</TabsTrigger>
+            <TabsTrigger value="outward">Sales Challan</TabsTrigger>
           </TabsList>
 
           {/* Inward Challan Tab */}
           <TabsContent value="inward" className="space-y-4">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">Inward Challans</h2>
+              <h2 className="text-xl font-semibold">Purchase Challans</h2>
               <Dialog open={showInwardModal} onOpenChange={setShowInwardModal}>
                 <DialogTrigger asChild>
                   {(isSecurity || isAdmin) && (
                     <Button>
                       <Plus className="h-4 w-4 mr-2" />
-                      Add Inward Challan
+                      Add Purchase Challan
                     </Button>
                   )}
                 </DialogTrigger>
                 <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>Create Inward Challan</DialogTitle>
+                    <DialogTitle>Create Purchase Challan</DialogTitle>
                     <DialogDescription>
                       Add details for material coming in
                     </DialogDescription>
@@ -1738,7 +1672,7 @@ export default function InOutPage() {
           {/* Outward Challan Tab */}
           <TabsContent value="outward" className="space-y-4">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">Outward Challans</h2>
+              <h2 className="text-xl font-semibold">Sales Challans</h2>
               <Dialog
                 open={showOutwardModal}
                 onOpenChange={setShowOutwardModal}>
@@ -1746,13 +1680,13 @@ export default function InOutPage() {
                   {(isSecurity || isAdmin) && (
                     <Button>
                       <Plus className="h-4 w-4 mr-2" />
-                      Add Outward Challan
+                      Add Sales Challan
                     </Button>
                   )}
                 </DialogTrigger>
                 <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>Create Outward Challan</DialogTitle>
+                    <DialogTitle>Create Sales Challan</DialogTitle>
                     <DialogDescription>
                       Add details for material going out
                     </DialogDescription>
@@ -2076,9 +2010,9 @@ export default function InOutPage() {
           onOpenChange={setShowInwardUpdateModal}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Update Inward Challan</DialogTitle>
+              <DialogTitle>Update Purchase Challan</DialogTitle>
               <DialogDescription>
-                Modify details for the inward challan
+                Modify details for the purchase challan
               </DialogDescription>
             </DialogHeader>
             <form
@@ -2475,9 +2409,9 @@ export default function InOutPage() {
           onOpenChange={setShowOutwardUpdateModal}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Update Outward Challan</DialogTitle>
+              <DialogTitle>Update Sales Challan</DialogTitle>
               <DialogDescription>
-                Modify details for the outward challan
+                Modify details for the sales challan
               </DialogDescription>
             </DialogHeader>
             <form

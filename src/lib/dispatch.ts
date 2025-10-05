@@ -64,6 +64,7 @@ export interface DispatchFormData {
   client_id: string;
   primary_order_id?: string;
   inventory_ids: string[];
+  wastage_ids?: string[];  // NEW: Wastage inventory IDs
 }
 
 export interface CompletePendingItemRequest {
@@ -86,6 +87,7 @@ export async function fetchWarehouseItems(): Promise<WarehouseItem[]> {
 
 /**
  * Create dispatch record with vehicle/driver details and complete items
+ * Supports both regular inventory and wastage items
  */
 export async function createDispatchRecord(dispatchData: {
   vehicle_number: string;
@@ -97,12 +99,15 @@ export async function createDispatchRecord(dispatchData: {
   client_id: string;
   primary_order_id?: string;
   inventory_ids: string[];
+  wastage_ids?: string[];  // NEW: Wastage inventory IDs
 }): Promise<{
   dispatch_id: string;
   dispatch_number: string;
   message: string;
   summary: {
     dispatched_items: number;
+    regular_items?: number;
+    wastage_items?: number;
     orders_completed: number;
     total_weight: number;
   };
@@ -124,12 +129,13 @@ export async function createDispatchRecord(dispatchData: {
     client_id: dispatchData.client_id,
     primary_order_id: dispatchData.primary_order_id || null,
     order_date: null,
-    inventory_ids: dispatchData.inventory_ids,
+    inventory_ids: dispatchData.inventory_ids || [],
+    wastage_ids: dispatchData.wastage_ids || [],  // NEW: Include wastage IDs
     created_by_id: userId
   };
 
   console.log('Sending dispatch request:', request);
-  
+
   const response = await fetch(DISPATCH_ENDPOINTS.CREATE_DISPATCH, createRequestOptions('POST', request));
 
   if (!response.ok) {
