@@ -35,6 +35,7 @@ export interface InwardChallan {
   final_weight?: number;
   rate?: number;
   bill_no?: string;
+  payment_type?:string;
   cash?: number;
   time_in?: string;
   time_out?: string;

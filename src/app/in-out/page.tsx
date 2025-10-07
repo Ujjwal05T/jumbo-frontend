@@ -119,7 +119,7 @@ export default function InOutPage() {
 
   // PDF generation states
   const [pdfDateRange, setPdfDateRange] = useState({
-    from: new Date(new Date().getFullYear(), 0, 1), // Start of current year
+    from: new Date(), // Today
     to: new Date(), // Today
   });
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -265,7 +265,7 @@ export default function InOutPage() {
 
       // Generate Inward Challans Table
       if (type === "inward" || type === "both") {
-        addTitle("Waste Report");
+        addTitle("Purchase Report");
 
         if (filteredInward.length > 0) {
           const inwardColumns = [
@@ -297,7 +297,7 @@ export default function InOutPage() {
               challan.rst_no || "",
               challan.net_weight?.toString() || "",
               challan.final_weight?.toString() || "",
-              challan.bill_no || "CASH",
+              challan.payment_type === 'bill'?(challan.bill_no || "bill"):"CASH",
               challan.time_in
                 ? new Date(`1970-01-01T${challan.time_in}`).toLocaleTimeString(
                     "en-US",
@@ -383,7 +383,7 @@ export default function InOutPage() {
         }
 
         if (type === "outward") {
-          addTitle("Waste Report");
+          addTitle("Sales Report");
         } else {
           pdf.setFontSize(12);
           pdf.setFont("helvetica", "medium");
@@ -626,24 +626,13 @@ export default function InOutPage() {
         toast.error("Party and Material are required");
         return;
       }
-    } else if (isAccountant) {
-      // Accountant can submit without payment type initially
-      // Validation for bill number only if payment type is bill
-      if (inwardForm.payment_type === "bill" && !inwardForm.bill_no) {
-        toast.error("Bill number is required when payment type is Bill");
-        return;
-      }
-    } else if (isAdmin) {
+    }  else if (isAdmin) {
       // Admin validation - party and material required, payment type optional
       if (!inwardForm.party_id || !inwardForm.material_id) {
         toast.error("Party and Material are required");
         return;
       }
-      // Bill number validation only if payment type is bill
-      if (inwardForm.payment_type === "bill" && !inwardForm.bill_no) {
-        toast.error("Bill number is required when payment type is Bill");
-        return;
-      }
+     
     }
 
     try {
@@ -855,11 +844,7 @@ export default function InOutPage() {
       return;
     }
 
-    // Validate bill number if payment type is bill
-    if (inwardForm.payment_type === "bill" && !inwardForm.bill_no) {
-      toast.error("Bill number is required when payment type is Bill");
-      return;
-    }
+    
 
     try {
       setSubmitting(true);
@@ -1261,24 +1246,6 @@ export default function InOutPage() {
                       </div>
                     )}
 
-                    {/* Vehicle Number - Security & Admin can see */}
-                    {canViewField("security") && (
-                      <div className="flex flex-col space-y-2">
-                        <Label htmlFor="vehicle">Vehicle Number</Label>
-                        <Input
-                          id="vehicle"
-                          placeholder="Enter vehicle number"
-                          value={inwardForm.vehicle_number || ""}
-                          onChange={(e) =>
-                            setInwardForm({
-                              ...inwardForm,
-                              vehicle_number: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                    )}
-
                     {/* Material - Security & Admin can see */}
                     {canViewField("security") && (
                       <div className="flex flex-col space-y-2">
@@ -1316,6 +1283,26 @@ export default function InOutPage() {
                         </Select>
                       </div>
                     )}
+
+                    {/* Vehicle Number - Security & Admin can see */}
+                    {canViewField("security") && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="vehicle">Vehicle Number</Label>
+                        <Input
+                          id="vehicle"
+                          placeholder="Enter vehicle number"
+                          value={inwardForm.vehicle_number || ""}
+                          onChange={(e) =>
+                            setInwardForm({
+                              ...inwardForm,
+                              vehicle_number: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                    )}
+
+                    
 
                     {/* RST No - Accountant & Admin can see */}
                     {canViewField("accountant") && (
@@ -1416,7 +1403,7 @@ export default function InOutPage() {
                     {canViewField("accountant") &&
                       inwardForm.payment_type === "bill" && (
                         <div className="flex flex-col space-y-2">
-                          <Label htmlFor="bill">Bill No. *</Label>
+                          <Label htmlFor="bill">Bill No. </Label>
                           <Input
                             id="bill"
                             placeholder="Enter bill number"
@@ -1427,7 +1414,6 @@ export default function InOutPage() {
                                 bill_no: e.target.value,
                               })
                             }
-                            required
                           />
                         </div>
                       )}
@@ -1632,7 +1618,7 @@ export default function InOutPage() {
                           </TableCell>
                         )}
                         {!isSecurity && (
-                          <TableCell>{challan.bill_no || "CASH"}</TableCell>
+                          <TableCell>{challan.payment_type === 'bill'?(challan.bill_no || "bill"):"CASH"}</TableCell>
                         )}
                         <TableCell>
                           {formatTime(challan.time_in)} -{" "}
@@ -2051,11 +2037,12 @@ export default function InOutPage() {
               </div>
 
               {/* Party Name - Security & Admin can see */}
-              {canViewField("security") && (
+              {canViewField("security")||canViewField("accountant") && (
                 <div className="flex flex-col space-y-2">
                   <Label htmlFor="updateParty">Party Name *</Label>
                   <Select
                     value={inwardForm.party_id}
+                    disabled={isAccountant}
                     onValueChange={(value) =>
                       setInwardForm({ ...inwardForm, party_id: value })
                     }>
@@ -2093,30 +2080,13 @@ export default function InOutPage() {
                 </div>
               )}
 
-              {/* Vehicle Number - Security & Admin can see */}
-              {canViewField("security") && (
-                <div className="flex flex-col space-y-2">
-                  <Label htmlFor="updateVehicle">Vehicle Number</Label>
-                  <Input
-                    id="updateVehicle"
-                    placeholder="Enter vehicle number"
-                    value={inwardForm.vehicle_number || ""}
-                    onChange={(e) =>
-                      setInwardForm({
-                        ...inwardForm,
-                        vehicle_number: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-              )}
-
               {/* Material - Security & Admin can see */}
-              {canViewField("security") && (
+              {canViewField("security")||canViewField("accountant") && (
                 <div className="flex flex-col space-y-2">
                   <Label htmlFor="updateMaterial">Material *</Label>
                   <Select
                     value={inwardForm.material_id}
+                    disabled={isAccountant}
                     onValueChange={(value) =>
                       setInwardForm({ ...inwardForm, material_id: value })
                     }>
@@ -2147,6 +2117,27 @@ export default function InOutPage() {
                   </Select>
                 </div>
               )}
+
+              {/* Vehicle Number - Security & Admin can see */}
+              {canViewField("security")||canViewField("accountant") && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateVehicle">Vehicle Number</Label>
+                  <Input
+                    id="updateVehicle"
+                    placeholder="Enter vehicle number"
+                    disabled={isAccountant}
+                    value={inwardForm.vehicle_number || ""}
+                    onChange={(e) =>
+                      setInwardForm({
+                        ...inwardForm,
+                        vehicle_number: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              )}
+
+              
 
               {/* RST No - Accountant & Admin can see */}
               {canViewField("accountant") && (
@@ -2239,7 +2230,7 @@ export default function InOutPage() {
               {canViewField("accountant") &&
                 inwardForm.payment_type === "bill" && (
                   <div className="flex flex-col space-y-2">
-                    <Label htmlFor="updateBill">Bill No. *</Label>
+                    <Label htmlFor="updateBill">Bill No.</Label>
                     <Input
                       id="updateBill"
                       placeholder="Enter bill number"
@@ -2250,7 +2241,6 @@ export default function InOutPage() {
                           bill_no: e.target.value,
                         })
                       }
-                      required
                     />
                   </div>
                 )}

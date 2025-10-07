@@ -259,6 +259,21 @@ export default function PendingOrderItemsPage() {
   });
   const [modifiedSuggestions, setModifiedSuggestions] = useState<Map<string, any>>(new Map());
   const [clients, setClients] = useState<any[]>([]);
+  
+  // Edit manual cut state
+  const [editManualCutDialog, setEditManualCutDialog] = useState<{
+    isOpen: boolean;
+    cut: any | null;
+    suggestionId: string;
+    jumboId: string;
+    setId: string;
+  }>({
+    isOpen: false,
+    cut: null,
+    suggestionId: '',
+    jumboId: '',
+    setId: ''
+  });
 
   // Filter states
   const [clientFilter, setClientFilter] = useState<string>("");
@@ -1205,6 +1220,443 @@ const handlePrintPDF = () => {
     });
     toast.success('Manual cut added successfully');
   };
+
+  // Handler to open edit dialog for manual cuts
+  const handleEditManualCut = (suggestionId: string, jumboId: string, setId: string, cut: any) => {
+    // Find the suggestion and available waste
+    let suggestion, paperSpecs;
+
+    if (suggestionResult?.spec_suggestions) {
+      const specSuggestion = suggestionResult.spec_suggestions.find(s => s.spec_id === suggestionId);
+      if (specSuggestion) {
+        paperSpecs = specSuggestion.paper_spec;
+        suggestion = specSuggestion;
+      } else {
+        for (const specSuggestion of suggestionResult.spec_suggestions) {
+          suggestion = specSuggestion.order_suggestions?.find(s => s.suggestion_id === suggestionId);
+          if (suggestion) {
+            paperSpecs = specSuggestion.paper_spec;
+            break;
+          }
+        }
+      }
+    } else if (suggestionResult?.order_suggestions) {
+      suggestion = suggestionResult.order_suggestions?.find(s => s.suggestion_id === suggestionId);
+      paperSpecs = suggestion?.paper_spec;
+    }
+
+    const jumboRoll = suggestion?.jumbo_rolls?.find((jr: any) => jr.jumbo_id === jumboId);
+    const rollSet = jumboRoll?.sets?.find((s: any) => s.set_id === setId);
+    
+    // Calculate available waste including current cut's width
+    const currentAvailableWaste = rollSet?.summary?.total_waste || 0;
+    const totalAvailableWaste = currentAvailableWaste + cut.width_inches;
+
+    setEditManualCutDialog({
+      isOpen: true,
+      cut: cut,
+      suggestionId,
+      jumboId,
+      setId
+    });
+
+    setManualRollData({
+      suggestionId,
+      jumboId,
+      setId,
+      width: cut.width_inches.toString(),
+      description: cut.description || 'Manual Cut',
+      availableWaste: totalAvailableWaste,
+      selectedClient: cut.client_id || '',
+      paperSpecs: paperSpecs || { gsm: 0, bf: 0, shade: '' }
+    });
+  };
+
+  // Handler to save edited manual cut
+  const handleSaveEditedManualCut = () => {
+    const width = parseFloat(manualRollData.width);
+    if (isNaN(width) || width <= 0) {
+      toast.error('Please enter a valid width');
+      return;
+    }
+
+    if (width > manualRollData.availableWaste) {
+      toast.error(`Width cannot exceed available waste of ${manualRollData.availableWaste.toFixed(1)}"`);
+      return;
+    }
+
+    if (!manualRollData.selectedClient) {
+      toast.error('Please select a client for the manual cut');
+      return;
+    }
+
+    const selectedClient = clients?.find(client => client.id === manualRollData.selectedClient);
+
+    // Update the cut in the suggestion result
+    if (suggestionResult?.spec_suggestions) {
+      const updatedSpecSuggestions = suggestionResult.spec_suggestions.map(specSuggestion => {
+        if (specSuggestion.spec_id === manualRollData.suggestionId) {
+          const updatedSpecSuggestion = { ...specSuggestion };
+          
+          if (updatedSpecSuggestion.jumbo_rolls) {
+            updatedSpecSuggestion.jumbo_rolls = updatedSpecSuggestion.jumbo_rolls.map(jumboRoll => {
+              if (jumboRoll.jumbo_id === manualRollData.jumboId) {
+                const updatedJumboRoll = { ...jumboRoll };
+                updatedJumboRoll.sets = jumboRoll.sets?.map((rollSet: any) => {
+                  if (rollSet.set_id === manualRollData.setId) {
+                    const updatedRollSet = { ...rollSet };
+                    
+                    // Find and update the specific cut
+                    updatedRollSet.cuts = rollSet.cuts?.map((c: any) => {
+                      if (c.cut_id === editManualCutDialog.cut.cut_id) {
+                        return {
+                          ...c,
+                          width_inches: width,
+                          description: `${manualRollData.description}: ${width}"`,
+                          client_id: manualRollData.selectedClient,
+                          client_name: selectedClient?.company_name || 'Unknown',
+                          paper_specs: {
+                            gsm: manualRollData.paperSpecs.gsm,
+                            bf: manualRollData.paperSpecs.bf,
+                            shade: manualRollData.paperSpecs.shade
+                          }
+                        };
+                      }
+                      return c;
+                    });
+
+                    // Recalculate summary
+                    const totalActualWidth = updatedRollSet.cuts.reduce((sum: any, c: any) => {
+                      if (c.used_widths && Object.keys(c.used_widths).length > 0) {
+                        return sum + Object.entries(c.used_widths).reduce((widthSum, [width, qty]: [any, any]) =>
+                          widthSum + (parseFloat(width) * qty), 0);
+                      }
+                      return sum + c.width_inches;
+                    }, 0);
+
+                    updatedRollSet.summary = {
+                      ...updatedRollSet.summary,
+                      total_actual_width: totalActualWidth,
+                      total_waste: rollSet.target_width - totalActualWidth,
+                      efficiency: Math.round((totalActualWidth / rollSet.target_width) * 100)
+                    };
+
+                    return updatedRollSet;
+                  }
+                  return rollSet;
+                });
+                
+                return updatedJumboRoll;
+              }
+              return jumboRoll;
+            });
+          }
+          
+          return updatedSpecSuggestion;
+        }
+        
+        return {
+          ...specSuggestion,
+          order_suggestions: specSuggestion.order_suggestions?.map(suggestion => {
+            if (suggestion.suggestion_id === manualRollData.suggestionId) {
+              const updatedSuggestion = { ...suggestion };
+              updatedSuggestion.jumbo_rolls = suggestion.jumbo_rolls?.map(jumboRoll => {
+                if (jumboRoll.jumbo_id === manualRollData.jumboId) {
+                  const updatedJumboRoll = { ...jumboRoll };
+                  updatedJumboRoll.sets = jumboRoll.sets?.map(rollSet => {
+                    if (rollSet.set_id === manualRollData.setId) {
+                      const updatedRollSet = { ...rollSet };
+                      
+                      updatedRollSet.cuts = rollSet.cuts?.map((c: any) => {
+                        if (c.cut_id === editManualCutDialog.cut.cut_id) {
+                          return {
+                            ...c,
+                            width_inches: width,
+                            description: `${manualRollData.description}: ${width}"`,
+                            client_id: manualRollData.selectedClient,
+                            client_name: selectedClient?.company_name || 'Unknown'
+                          };
+                        }
+                        return c;
+                      });
+
+                      const totalActualWidth = updatedRollSet.cuts.reduce((sum: any, c: any) => {
+                        if (c.used_widths && Object.keys(c.used_widths).length > 0) {
+                          return sum + Object.entries(c.used_widths).reduce((widthSum, [width, qty]:[width:any,qty:any]) =>
+                            widthSum + (parseFloat(width) * qty), 0);
+                        }
+                        return sum + c.width_inches;
+                      }, 0);
+
+                      updatedRollSet.summary = {
+                        ...updatedRollSet.summary,
+                        total_actual_width: totalActualWidth,
+                        total_waste: rollSet.target_width - totalActualWidth,
+                        efficiency: Math.round((totalActualWidth / rollSet.target_width) * 100)
+                      };
+
+                      return updatedRollSet;
+                    }
+                    return rollSet;
+                  });
+                  return updatedJumboRoll;
+                }
+                return jumboRoll;
+              });
+              return updatedSuggestion;
+            }
+            return suggestion;
+          })
+        };
+      });
+
+      setSuggestionResult(prev => prev ? { ...prev, spec_suggestions: updatedSpecSuggestions } : null);
+    } else if (suggestionResult?.order_suggestions) {
+      const updatedSuggestions = suggestionResult.order_suggestions?.map(suggestion => {
+        if (suggestion.suggestion_id === manualRollData.suggestionId) {
+          const updatedSuggestion = { ...suggestion };
+          updatedSuggestion.jumbo_rolls = suggestion.jumbo_rolls?.map(jumboRoll => {
+            if (jumboRoll.jumbo_id === manualRollData.jumboId) {
+              const updatedJumboRoll = { ...jumboRoll };
+              updatedJumboRoll.sets = jumboRoll.sets?.map(rollSet => {
+                if (rollSet.set_id === manualRollData.setId) {
+                  const updatedRollSet = { ...rollSet };
+                  
+                  updatedRollSet.cuts = rollSet.cuts?.map((c: any) => {
+                    if (c.cut_id === editManualCutDialog.cut.cut_id) {
+                      return {
+                        ...c,
+                        width_inches: width,
+                        description: `${manualRollData.description}: ${width}"`,
+                        client_id: manualRollData.selectedClient,
+                        client_name: selectedClient?.company_name || 'Unknown'
+                      };
+                    }
+                    return c;
+                  });
+
+                  const totalActualWidth = updatedRollSet.cuts.reduce((sum, c) => {
+                    if (c.used_widths && Object.keys(c.used_widths).length > 0) {
+                      return sum + Object.entries(c.used_widths).reduce((widthSum, [width, qty]) =>
+                        widthSum + (parseFloat(width) * qty), 0);
+                    }
+                    return sum + c.width_inches;
+                  }, 0);
+
+                  updatedRollSet.summary = {
+                    ...updatedRollSet.summary,
+                    total_actual_width: totalActualWidth,
+                    total_waste: rollSet.target_width - totalActualWidth,
+                    efficiency: Math.round((totalActualWidth / rollSet.target_width) * 100)
+                  };
+
+                  return updatedRollSet;
+                }
+                return rollSet;
+              });
+              
+              updatedJumboRoll.summary = {
+                ...updatedJumboRoll.summary,
+                total_actual_width: updatedJumboRoll.sets.reduce((sum, s) => sum + s.summary.total_actual_width, 0),
+                total_waste: updatedJumboRoll.sets.reduce((sum, s) => sum + s.summary.total_waste, 0),
+                efficiency: Math.round((updatedJumboRoll.sets.reduce((sum, s) => sum + s.summary.total_actual_width, 0) / (jumboRoll.target_width * updatedJumboRoll.sets.length)) * 100)
+              };
+              
+              return updatedJumboRoll;
+            }
+            return jumboRoll;
+          });
+          return updatedSuggestion;
+        }
+        return suggestion;
+      });
+
+      setSuggestionResult(prev => prev ? { ...prev, order_suggestions: updatedSuggestions } : null);
+    }
+
+    setEditManualCutDialog({ isOpen: false, cut: null, suggestionId: '', jumboId: '', setId: '' });
+    setManualRollData({ 
+      suggestionId: '', 
+      jumboId: '', 
+      setId: '', 
+      width: '', 
+      description: 'Manual Cut', 
+      availableWaste: 0,
+      selectedClient: '',
+      paperSpecs: { gsm: 0, bf: 0, shade: '' }
+    });
+    toast.success('Manual cut updated successfully');
+  };
+
+  // Handler to delete manual cut
+  const handleDeleteManualCut = (suggestionId: string, jumboId: string, setId: string, cutId: string) => {
+    if (suggestionResult?.spec_suggestions) {
+      const updatedSpecSuggestions = suggestionResult.spec_suggestions.map(specSuggestion => {
+        if (specSuggestion.spec_id === suggestionId) {
+          const updatedSpecSuggestion = { ...specSuggestion };
+          
+          if (updatedSpecSuggestion.jumbo_rolls) {
+            updatedSpecSuggestion.jumbo_rolls = updatedSpecSuggestion.jumbo_rolls.map(jumboRoll => {
+              if (jumboRoll.jumbo_id === jumboId) {
+                const updatedJumboRoll = { ...jumboRoll };
+                updatedJumboRoll.sets = jumboRoll.sets?.map((rollSet: any) => {
+                  if (rollSet.set_id === setId) {
+                    const updatedRollSet = { ...rollSet };
+                    
+                    // Remove the cut
+                    updatedRollSet.cuts = rollSet.cuts?.filter((c: any) => c.cut_id !== cutId);
+
+                    // Recalculate summary
+                    const totalActualWidth = updatedRollSet.cuts.reduce((sum: any, c: any) => {
+                      if (c.used_widths && Object.keys(c.used_widths).length > 0) {
+                        return sum + Object.entries(c.used_widths).reduce((widthSum, [width, qty]: [any, any]) =>
+                          widthSum + (parseFloat(width) * qty), 0);
+                      }
+                      return sum + c.width_inches;
+                    }, 0);
+
+                    updatedRollSet.summary = {
+                      ...updatedRollSet.summary,
+                      total_cuts: updatedRollSet.cuts.reduce((sum: any, c: any) => {
+                        if (c.used_widths && Object.keys(c.used_widths).length > 0) {
+                          return sum + Object.values(c.used_widths).reduce((a: any, b: any) => a + b, 0);
+                        }
+                        return sum + 1;
+                      }, 0),
+                      total_actual_width: totalActualWidth,
+                      total_waste: rollSet.target_width - totalActualWidth,
+                      efficiency: Math.round((totalActualWidth / rollSet.target_width) * 100)
+                    };
+                    
+                    // Re-enable manual addition if waste is sufficient
+                    if (updatedRollSet.summary.total_waste >= 5) {
+                      updatedRollSet.manual_addition_available = true;
+                    }
+
+                    return updatedRollSet;
+                  }
+                  return rollSet;
+                });
+                
+                return updatedJumboRoll;
+              }
+              return jumboRoll;
+            });
+          }
+          
+          return updatedSpecSuggestion;
+        }
+        
+        return {
+          ...specSuggestion,
+          order_suggestions: specSuggestion.order_suggestions?.map(suggestion => {
+            if (suggestion.suggestion_id === manualRollData.suggestionId) {
+              const updatedSuggestion = { ...suggestion };
+              updatedSuggestion.jumbo_rolls = suggestion.jumbo_rolls?.map(jumboRoll => {
+                if (jumboRoll.jumbo_id === manualRollData.jumboId) {
+                  const updatedJumboRoll = { ...jumboRoll };
+                  updatedJumboRoll.sets = jumboRoll.sets?.map(rollSet => {
+                    if (rollSet.set_id === manualRollData.setId) {
+                      const updatedRollSet = { ...rollSet };
+                      
+                      updatedRollSet.cuts = rollSet.cuts?.filter((c: any) => c.cut_id !== cutId);
+
+                      const totalActualWidth = updatedRollSet.cuts.reduce((sum: any, c: any) => {
+                        if (c.used_widths && Object.keys(c.used_widths).length > 0) {
+                          return sum + Object.entries(c.used_widths).reduce((widthSum, [width, qty]:[width:any,qty:any]) =>
+                            widthSum + (parseFloat(width) * qty), 0);
+                        }
+                        return sum + c.width_inches;
+                      }, 0);
+
+                      updatedRollSet.summary = {
+                        ...updatedRollSet.summary,
+                        total_cuts: updatedRollSet.cuts.reduce((sum: any, c: any) => {
+                          if (c.used_widths && Object.keys(c.used_widths).length > 0) {
+                            return sum + Object.values(c.used_widths).reduce((a: any, b: any) => a + b, 0);
+                          }
+                          return sum + 1;
+                        }, 0),
+                        total_actual_width: totalActualWidth,
+                        total_waste: rollSet.target_width - totalActualWidth,
+                        efficiency: Math.round((totalActualWidth / rollSet.target_width) * 100)
+                      };
+                      
+                      if (updatedRollSet.summary.total_waste >= 5) {
+                        updatedRollSet.manual_addition_available = true;
+                      }
+
+                      return updatedRollSet;
+                    }
+                    return rollSet;
+                  });
+                  return updatedJumboRoll;
+                }
+                return jumboRoll;
+              });
+              return updatedSuggestion;
+            }
+            return suggestion;
+          })
+        };
+      });
+
+      setSuggestionResult(prev => prev ? { ...prev, spec_suggestions: updatedSpecSuggestions } : null);
+    } else if (suggestionResult?.order_suggestions) {
+      const updatedSuggestions = suggestionResult.order_suggestions?.map(suggestion => {
+        if (suggestion.suggestion_id === suggestionId) {
+          const updatedSuggestion = { ...suggestion };
+          updatedSuggestion.jumbo_rolls = suggestion.jumbo_rolls?.map(jumboRoll => {
+            if (jumboRoll.jumbo_id === jumboId) {
+              const updatedJumboRoll = { ...jumboRoll };
+              updatedJumboRoll.sets = jumboRoll.sets?.map(rollSet => {
+                if (rollSet.set_id === setId) {
+                  const updatedRollSet = { ...rollSet };
+                  
+                  updatedRollSet.cuts = rollSet.cuts?.filter((c: any) => c.cut_id !== cutId);
+
+                  const totalActualWidth = updatedRollSet.cuts.reduce((sum, c) => {
+                    if (c.used_widths && Object.keys(c.used_widths).length > 0) {
+                      return sum + Object.entries(c.used_widths).reduce((widthSum, [width, qty]) =>
+                        widthSum + (parseFloat(width) * qty), 0);
+                    }
+                    return sum + c.width_inches;
+                  }, 0);
+
+                  updatedRollSet.summary = {
+                    ...updatedRollSet.summary,
+                    total_cuts: updatedRollSet.cuts.length,
+                    total_actual_width: totalActualWidth,
+                    total_waste: rollSet.target_width - totalActualWidth,
+                    efficiency: Math.round((totalActualWidth / rollSet.target_width) * 100)
+                  };
+
+                  return updatedRollSet;
+                }
+                return rollSet;
+              });
+              
+              updatedJumboRoll.summary = {
+                ...updatedJumboRoll.summary,
+                total_cuts: updatedJumboRoll.sets.reduce((sum, s) => sum + s.summary.total_cuts, 0),
+                total_actual_width: updatedJumboRoll.sets.reduce((sum, s) => sum + s.summary.total_actual_width, 0),
+                total_waste: updatedJumboRoll.sets.reduce((sum, s) => sum + s.summary.total_waste, 0)
+              };
+              
+              return updatedJumboRoll;
+            }
+            return jumboRoll;
+          });
+          return updatedSuggestion;
+        }
+        return suggestion;
+      });
+
+      setSuggestionResult(prev => prev ? { ...prev, order_suggestions: updatedSuggestions } : null);
+    }
+
+    toast.success('Manual cut removed successfully');
+  };
   
 
   const handleStartProduction = async () => {
@@ -1997,6 +2449,114 @@ const handlePrintPDF = () => {
           </DialogContent>
         </Dialog>
 
+        {/* Edit Manual Cut Dialog */}
+        <Dialog open={editManualCutDialog.isOpen} onOpenChange={(open) => {
+          if (!open) {
+            setEditManualCutDialog({ isOpen: false, cut: null, suggestionId: '', jumboId: '', setId: '' });
+          }
+        }}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Edit Manual Cut</DialogTitle>
+              <DialogDescription>
+                Modify the custom cut details. Changes will update the roll set calculations.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-manual-width" className="text-right">
+                  Width (inches)
+                </Label>
+                <Input
+                  id="edit-manual-width"
+                  type="number"
+                  min="1"
+                  max={manualRollData.availableWaste}
+                  step="0.1"
+                  value={manualRollData.width}
+                  onChange={(e) => setManualRollData(prev => ({ ...prev, width: e.target.value }))}
+                  className="col-span-3"
+                  placeholder={`Max: ${manualRollData.availableWaste.toFixed(1)}"`}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-manual-description" className="text-right">
+                  Description
+                </Label>
+                <Input
+                  id="edit-manual-description"
+                  value={manualRollData.description}
+                  onChange={(e) => setManualRollData(prev => ({ ...prev, description: e.target.value }))}
+                  className="col-span-3"
+                  placeholder="e.g., Additional cut for order"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-client-select" className="text-right">
+                  Client
+                </Label>
+                <Select 
+                  value={manualRollData.selectedClient} 
+                  onValueChange={(value) => setManualRollData(prev => ({ ...prev, selectedClient: value }))}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select a client" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients?.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.company_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="text-sm text-muted-foreground space-y-3">
+                <div className="bg-blue-50 p-3 rounded text-center">
+                  <div className="font-medium text-blue-800">Available Waste Space</div>
+                  <div className="text-lg font-bold text-blue-600">{manualRollData.availableWaste.toFixed(1)}"</div>
+                  <div className="text-xs text-blue-600">Maximum cut width allowed (including current cut)</div>
+                </div>
+                <div className="bg-gray-50 p-3 rounded">
+                  <div className="font-medium text-gray-800 mb-2">Paper Specifications</div>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <div className="text-gray-600">GSM:</div>
+                      <div className="font-medium">{manualRollData.paperSpecs.gsm}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-600">BF:</div>
+                      <div className="font-medium">{manualRollData.paperSpecs.bf}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-600">Shade:</div>
+                      <div className="font-medium">{manualRollData.paperSpecs.shade}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {manualRollData.width && !isNaN(parseFloat(manualRollData.width)) && (
+                <div className="text-sm text-muted-foreground text-center">
+                  This will update the cut to {manualRollData.width}"
+                  {parseFloat(manualRollData.width) > manualRollData.availableWaste && (
+                    <div className="text-red-500 text-xs mt-1">
+                      ⚠️ Width exceeds available waste space
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditManualCutDialog({ isOpen: false, cut: null, suggestionId: '', jumboId: '', setId: '' })}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveEditedManualCut}>
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Roll Suggestions Results */}
         {showSuggestions && suggestionResult && (
           <div className="space-y-4">
@@ -2261,9 +2821,30 @@ const handlePrintPDF = () => {
                                                   </Badge>
                                                 )}
                                                 {cut.is_manual_cut && (
-                                                  <Badge variant="outline" className="text-xs bg-orange-50 text-orange-600 border-orange-200">
-                                                    Manual: {cut.client_name}
-                                                  </Badge>
+                                                  <>
+                                                    <Badge variant="outline" className="text-xs bg-orange-50 text-orange-600 border-orange-200">
+                                                      Manual: {cut.client_name}
+                                                    </Badge>
+                                                    {/* Edit and Delete buttons for manual cuts */}
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="sm"
+                                                      className="h-7 w-7 p-0 text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                                                      onClick={() => handleEditManualCut(specSuggestion.spec_id, jumboRoll.jumbo_id, rollSet.set_id, cut)}
+                                                      title="Edit manual cut"
+                                                    >
+                                                      <Settings className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="sm"
+                                                      className="h-7 w-7 p-0 text-red-600 hover:text-red-800 hover:bg-red-50"
+                                                      onClick={() => handleDeleteManualCut(specSuggestion.spec_id, jumboRoll.jumbo_id, rollSet.set_id, cut.cut_id)}
+                                                      title="Delete manual cut"
+                                                    >
+                                                      <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                  </>
                                                 )}
                                               </div>
                                             </div>
@@ -2483,12 +3064,37 @@ const handlePrintPDF = () => {
                                                 : 'bg-orange-50 border-orange-200'
                                             }`}>
                                               <div className="flex items-center justify-between">
-                                                <div className="font-medium">
-                                                  Cut #{cutIndex + 1}: {cut.width_inches}" ({cut.uses_existing ? 'From Pending' : 'Manual'})
+                                                <div className="flex-1">
+                                                  <div className="font-medium">
+                                                    Cut #{cutIndex + 1}: {cut.width_inches}" ({cut.uses_existing ? 'From Pending' : 'Manual'})
+                                                  </div>
+                                                  <div className="text-xs text-muted-foreground">
+                                                    {cut.description}
+                                                  </div>
                                                 </div>
-                                                <div className="text-xs text-muted-foreground">
-                                                  {cut.description}
-                                                </div>
+                                                {/* Edit and Delete buttons for manual cuts */}
+                                                {cut.is_manual_cut && (
+                                                  <div className="flex items-center gap-1 ml-2">
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="sm"
+                                                      className="h-7 w-7 p-0 text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                                                      onClick={() => handleEditManualCut(orderSuggestion.suggestion_id, jumboRoll.jumbo_id, rollSet.set_id, cut)}
+                                                      title="Edit manual cut"
+                                                    >
+                                                      <Settings className="h-3 w-3" />
+                                                    </Button>
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="sm"
+                                                      className="h-7 w-7 p-0 text-red-600 hover:text-red-800 hover:bg-red-50"
+                                                      onClick={() => handleDeleteManualCut(orderSuggestion.suggestion_id, jumboRoll.jumbo_id, rollSet.set_id, cut.cut_id)}
+                                                      title="Delete manual cut"
+                                                    >
+                                                      <Trash2 className="h-3 w-3" />
+                                                    </Button>
+                                                  </div>
+                                                )}
                                               </div>
                                             </div>
                                           ))}

@@ -779,14 +779,16 @@ export default function PlansPage() {
           if (bKey === "No Roll #") return -1;
           return parseInt(aKey) - parseInt(bKey);
         });
-
+        let index_set = 1;
         sortedRollEntries.forEach(([rollNumber, rollsInNumber]:[any, any]) => {
           checkPageBreak(80);
+          
 
           doc.setFontSize(14);
           doc.setFont('helvetica', 'bold');
           doc.setTextColor(60, 60, 60);
-          const rollTitle = rollNumber === "No Roll #" ? "Unassigned Roll" : `Roll #${rollNumber}`;
+          const rollTitle = rollNumber === "No Roll #" ? "Unassigned Roll" : `Set #${index_set}`;
+          index_set = index_set + 1;
           doc.text(rollTitle, 35, yPosition);
           yPosition += 12;
           
