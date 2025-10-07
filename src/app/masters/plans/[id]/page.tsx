@@ -187,6 +187,9 @@ interface CutRollItem {
   qr_code: string;
   barcode_id?: string;
   created_at: string;
+  gsm?: number;
+  bf?: number;
+  shade?: string;
   paper_specs?: {
     gsm: number;
     bf: number;
@@ -503,169 +506,184 @@ export default function PlanDetailsPage() {
         return;
       }
 
-      const doc = new jsPDF();
-      const pageWidth = doc.internal.pageSize.width;
-      const pageHeight = doc.internal.pageSize.height;
-      
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'cm',
+        format: [15.00, 10.13]
+      });
+
       // Group cut rolls by jumbo for organized PDF output (including SCR barcodes)
       const jumboGroups = groupCutRollsByJumboWithSequential(filteredCutRolls);
-      
+
       // Sort jumbo groups for consistent PDF ordering
       const sortedJumboEntries = Object.entries(jumboGroups).sort(([aId, aGroup], [bId, bGroup]) => {
         const aDisplayId = aGroup.displayId;
         const bDisplayId = bGroup.displayId;
-        
+
         if (aDisplayId === 'Ungrouped Items' || aDisplayId === 'Cut Rolls from Stock') return 1;
         if (bDisplayId === 'Ungrouped Items' || bDisplayId === 'Cut Rolls from Stock') return -1;
-        
+
         const aNum = parseInt(aDisplayId.replace('JR-', '')) || 0;
         const bNum = parseInt(bDisplayId.replace('JR-', '')) || 0;
-        
+
         return aNum - bNum;
       });
-      
-      // Single column layout configuration
-      const marginX = 20;
-      const marginY = 20;
-      const labelWidth = pageWidth - (marginX * 2);
-      const itemsPerPage = 8; // Fewer items per page for grouping headers
-      
-      let yPosition = marginY;
-      let itemCount = 0;
-      let pageCount = 1;
 
-      // Title on first page
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Barcode Labels - ${plan?.name || 'Plan Details'}`, pageWidth / 2, yPosition, { align: 'center' });
-      yPosition += 15;
-      
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Generated on: ${new Date().toLocaleString()}`, pageWidth / 2, yPosition, { align: 'center' });
-      yPosition += 8;
-      doc.text(`Total Items: ${filteredCutRolls.length}`, pageWidth / 2, yPosition, { align: 'center' });
-      yPosition += 20;
-      
+      let isFirstLabel = true;
+
       // Process each jumbo group in sorted order
       sortedJumboEntries.forEach(([originalJumboId, jumboGroup]) => {
         const { displayId: jumboDisplayName, rolls: jumboRolls } = jumboGroup;
-        
-        // Check if we need a new page for jumbo header
-        if (itemCount >= itemsPerPage || yPosition > pageHeight - 100) {
-          doc.addPage();
-          pageCount++;
-          yPosition = marginY;
-          itemCount = 0;
-        }
-        
-        // Jumbo roll header
-        doc.setFontSize(18);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(40, 40, 40);
-        doc.text(jumboDisplayName, pageWidth / 2, yPosition, { align: 'center' });
-        yPosition += 8;
-        
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(100, 100, 100);
-        doc.text(`${jumboRolls.length} cut rolls - Total Weight: ${jumboRolls.reduce((sum, roll) => sum + roll.weight_kg, 0).toFixed(1)} kg`, pageWidth / 2, yPosition, { align: 'center' });
-        yPosition += 15;
-        
+
         // Sort cut rolls within this jumbo group and process them
         jumboRolls
           .sort((a, b) => {
             const aRollNum = a.individual_roll_number || 999;
             const bRollNum = b.individual_roll_number || 999;
             if (aRollNum !== bRollNum) return aRollNum - bRollNum;
-            
+
             if (a.width_inches !== b.width_inches) {
               return a.width_inches - b.width_inches;
             }
-            
+
             const aCode = a.barcode_id || a.qr_code;
             const bCode = b.barcode_id || b.qr_code;
             return aCode.localeCompare(bCode);
           })
-          .forEach((item, index) => {
-          // Check if we need a new page for this item
-          if (itemCount >= itemsPerPage || yPosition > pageHeight - 80) {
+          .forEach((item) => {
+          // Add new page for each label (except first)
+          if (!isFirstLabel) {
             doc.addPage();
-            pageCount++;
-            yPosition = marginY;
-            itemCount = 0;
           }
+          isFirstLabel = false;
 
           const barcodeValue = item.barcode_id || item.qr_code;
 
-          doc.setFontSize(15);
+          // Draw border
+          doc.setDrawColor(51, 51, 51);
+          doc.setLineWidth(0.03);
+          doc.rect(0, 0, 15.00, 10.13);
+
+          // Header section (1.2cm height)
+          doc.setFillColor(233, 233, 233);
+          doc.rect(0, 0, 15.00, 1.2, 'F');
+          doc.setDrawColor(191, 191, 191);
+          doc.line(0, 1.2, 15.00, 1.2);
+
+          // Logo placeholder
+          doc.setFontSize(8);
           doc.setFont('helvetica', 'bold');
           doc.setTextColor(0, 0, 0);
-          doc.text("Satguru Paper Mill Pvt. Ltd.", pageWidth / 2, yPosition, { align: 'center' });
-          yPosition += 6;
-          
-          // Generate and add barcode image
+          doc.text('GPH', 0.6, 0.5);
+          doc.setFontSize(6);
+          doc.text('PAPER', 0.5, 0.75);
+
+          // Company name
+          doc.setFontSize(18);
+          doc.setFont('helvetica', 'bold');
+          doc.text('SatGuru Papers Pvt. Ltd.', 7.5, 0.65, { align: 'center' });
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'normal');
+          doc.text('Kraft paper Mill', 11.5, 0.65, { align: 'left' });
+
+          // Plant address
+          doc.setFontSize(8);
+          // doc.setTextColor(102, 102, 102);
+          doc.setFont('helvetica', 'bold');
+          doc.text('Plant Address - Sector 3 Pithampur Dhar (M.P.)', 14.6, 1.0, { align: 'right' });
+
+          // Content area - Left column (labels)
+          doc.setFontSize(15);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(34, 34, 34);
+
+          let yPos = 2.1;
+          doc.text('SHADE :', 0.8, yPos);
+          yPos += 1.1;
+          doc.text('SIZE (Inch) :', 0.8, yPos);
+          yPos += 1.1;
+          doc.text('GSM :', 0.8, yPos);
+          yPos += 1.1;
+          doc.text('BF :', 0.8, yPos);
+          yPos += 1.1;
+          doc.text('Batch No. :', 0.8, yPos);
+
+          // Content area - Right column (values)
+          doc.setFontSize(15);
+          doc.setFont('helvetica', 'bold');
+
+          yPos = 2.1;
+          const rightX = 14.4;
+
+          // PLAN NO
+          doc.setFontSize(15);
+          doc.text(`PLAN NO. : ${plan?.frontend_id || ''}`, rightX, yPos, { align: 'right' });
+          yPos += 1.1;
+
+          // DATE
+          const formattedDate = item.order_date ? new Date(item.order_date).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB');
+          doc.text(`DATE : ${formattedDate}`, rightX, yPos, { align: 'right' });
+          yPos += 1.1;
+
+          // ROLL NO
+          doc.text(`REEL NO. : ${barcodeValue}`, rightX, yPos, { align: 'right' });
+          yPos += 1.1;
+
+          // WEIGHT
+          doc.text(`WEIGHT : ${item.weight_kg}kg`, rightX, yPos, { align: 'right' });
+
+          // Left column values (shade, size, gsm, bf)
+          doc.setFontSize(15);
+          yPos = 2.1;
+          const leftValueX = 4.5;
+
+          doc.text(item.paper_specs?.shade || item.shade || '', leftValueX, yPos);
+          yPos += 1.1;
+          doc.text(`${item.width_inches}"`, leftValueX, yPos);
+          yPos += 1.1;
+          doc.text(`${item.paper_specs?.gsm || item.gsm || ''}`, leftValueX, yPos);
+          yPos += 1.1;
+          doc.text(`${item.paper_specs?.bf || item.bf || ''}`, leftValueX, yPos);
+          yPos += 1.1;
+          doc.text(" ", leftValueX, yPos);
+
+          // Barcode area (10cm x 2cm) at bottom-right
           try {
             const canvas = generateBarcodeCanvas(barcodeValue);
             const barcodeDataUrl = canvas.toDataURL('image/png');
-            
-            // Barcode at full width, centered
-            const barcodeWidth = labelWidth * 0.8; // 80% of available width
-            const barcodeHeight = 25;
-            const barcodeX = marginX + (labelWidth - barcodeWidth) / 2;
-            const barcodeY = yPosition;
-            
-            doc.addImage(barcodeDataUrl, 'PNG', barcodeX, barcodeY, barcodeWidth, barcodeHeight);
-            yPosition += barcodeHeight + 8;
-            
+
+            // Position barcode at bottom-right
+            const barcodeX = 4.4; // right margin 0.6cm
+            const barcodeY = 7.63; // bottom margin 0.5cm
+            const barcodeWidth = 10.0;
+            const barcodeHeight = 2.0;
+
+            // Draw border around barcode
+            doc.setDrawColor(153, 153, 153);
+            doc.setLineWidth(0.03);
+            doc.rect(barcodeX, barcodeY, barcodeWidth, barcodeHeight);
+
+            // Add barcode image
+            doc.addImage(barcodeDataUrl, 'PNG', barcodeX + 0.2, barcodeY + 0.2, barcodeWidth - 0.4, barcodeHeight - 0.4);
+
           } catch (error) {
             console.error('Error adding barcode:', error);
-            // Fallback: text representation
-            doc.setFontSize(12);
-            doc.setFont('courier', 'bold');
+            // Fallback: draw box with text
+            const barcodeX = 4.4;
+            const barcodeY = 7.63;
+            const barcodeWidth = 10.0;
+            const barcodeHeight = 2.0;
+
+            doc.setDrawColor(153, 153, 153);
+            doc.rect(barcodeX, barcodeY, barcodeWidth, barcodeHeight);
+
+            doc.setFontSize(20);
+            doc.setFont('helvetica', 'bold');
             doc.setTextColor(0, 0, 0);
-            doc.text(`|||| ${barcodeValue} ||||`, pageWidth / 2, yPosition, { align: 'center' });
-            yPosition += 12;
+            doc.text(barcodeValue, barcodeX + barcodeWidth / 2, barcodeY + barcodeHeight / 2, { align: 'center' });
           }
-
-          // Paper specifications and dimensions (only if available)
-          doc.setFontSize(10);
-          doc.setFont('helvetica', 'normal');
-          doc.setTextColor(60, 60, 60);
-          
-          let infoLine = `${item.width_inches}" x ${item.weight_kg}kg`;
-          if (item.paper_specs) {
-            infoLine += ` | ${item.paper_specs.gsm}gsm, BF:${item.paper_specs.bf}, ${item.paper_specs.shade}`;
-          }
-          
-          doc.text(infoLine, pageWidth / 2, yPosition, { align: 'center' });
-          yPosition += 12;
-
-          // Separation line (except for last item in group)
-          if (index < jumboRolls.length - 1) {
-            doc.setDrawColor(200, 200, 200);
-            doc.setLineWidth(0.3);
-            doc.line(marginX + 40, yPosition, pageWidth - marginX - 40, yPosition);
-            yPosition += 10;
-          }
-
-          itemCount++;
         });
-        
-        // Larger separation between jumbo groups
-        yPosition += 20;
       });
-
-
-      // Add page numbers
-      const totalPages = doc.getNumberOfPages();
-      for (let i = 1; i <= totalPages; i++) {
-        doc.setPage(i);
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(100, 100, 100);
-        doc.text(`Page ${i} of ${totalPages}`, pageWidth - 20, pageHeight - 10, { align: 'right' });
-      }
 
       openPDFForPrint(doc, `barcode-labels-${plan?.name || 'plan'}-${new Date().toISOString().split('T')[0]}.pdf`);
       toast.success('Barcode labels opened for printing!');
