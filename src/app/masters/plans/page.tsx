@@ -103,6 +103,23 @@ interface ProductionSummary {
       roll_count: number;
     }[];
   };
+  wastage_allocations: {
+    id: string;
+    frontend_id: string;
+    barcode_id: string;
+    width_inches: number;
+    weight_kg: number;
+    reel_no: string;
+    status: string;
+    location: string;
+    paper_specs: {
+      gsm: number;
+      bf: number;
+      shade: string;
+    } | null;
+    created_at: string | null;
+    client_name: string | null;
+  }[];
   detailed_items: CutRollItem[];
 }
 
@@ -238,6 +255,7 @@ export default function PlansPage() {
         throw new Error(`Failed to load production data: ${response.status}`);
       }
       const data = await response.json();
+      console.log('Loaded production data:', data);
       return data;
     } catch (err) {
       console.error('Error loading production data:', err);
@@ -330,9 +348,9 @@ export default function PlansPage() {
  const handleDownloadReport = async (plan: Plan) => {
   try {
     toast.loading('Preparing report download...', { id: `report-${plan.id}` });
-    // console.log('Generating report for plan:', plan);
+    console.log('Generating report for plan:', plan);
     const productionSummary = await loadProductionData(plan.id);
-    // console.log('Production Summary:', productionSummary);
+    console.log('Production Summary:', productionSummary);
     if (!productionSummary) {
       toast.error('No production data available for this plan', { id: `report-${plan.id}` });
       return;
@@ -531,7 +549,7 @@ export default function PlansPage() {
     const scrCutRolls = productionSummary.detailed_items.filter(roll => roll.barcode_id?.startsWith('SCR-'));
 
     // Add SCR Cut Rolls Summary if any exist
-    if (scrCutRolls.length > 0) {
+    if (productionSummary.wastage_allocations.length > 0) {
       checkPageBreak(80);
 
       // Summary header
@@ -545,17 +563,17 @@ export default function PlansPage() {
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(60, 60, 60);
-      doc.text(`${scrCutRolls.length} cut rolls sourced from existing stock:`, 20, yPosition);
+      doc.text(`${productionSummary.wastage_allocations.length} cut rolls sourced from existing stock:`, 20, yPosition);
       yPosition += 12;
 
       // List each SCR cut roll
-      scrCutRolls.forEach((roll, index) => {
+      productionSummary.wastage_allocations.forEach((roll, index) => {
         checkPageBreak(8);
 
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0, 0, 0);
-        const rollText = `• ${roll.barcode_id} - ${roll.width_inches}" × ${roll.weight_kg}kg - ${roll.client_name || 'Unknown Client'}`;
+        const rollText = `Reel No.: ${roll.reel_no || roll.frontend_id} - ${roll.width_inches}" × ${roll.weight_kg}kg - ${roll.paper_specs?.gsm || '?'}gsm, ${roll.paper_specs?.bf || '?'}bf, ${roll.paper_specs?.shade || 'Unknown'} - ${roll.client_name}`;
         doc.text(rollText, 25, yPosition);
         yPosition += 6;
       });

@@ -277,11 +277,7 @@ export default function WastagePage() {
                     <SelectContent>
                       <SelectItem value="all">All</SelectItem>
                       <SelectItem value="available">Available</SelectItem>
-                      {statusOptions.map((status) => (
-                        <SelectItem key={status.value} value={status.value}>
-                          {status.label} 
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="used">Used</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

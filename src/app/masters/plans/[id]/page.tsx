@@ -115,6 +115,7 @@ const groupCutRollsForUIDisplay = (cutRolls: CutRollItem[]): Record<string, { di
     } else {
       transformedId = transformJumboId(originalJumboId, allJumboIds);
     }
+    
 
     console.log(`🔍 GROUPING: Item ${index + 1} - Barcode: ${item.barcode_id}, Jumbo ID: ${originalJumboId}, Is Wastage: ${isWastageRoll}, Transformed: ${transformedId}`);
 
@@ -258,23 +259,27 @@ export default function PlanDetailsPage() {
 
   const loadPlanDetails = async () => {
     try {
+      console.log('📋 Loading plan details for:', planId);
       setLoading(true);
       setError(null);
-      
+
       const response = await fetch(`${MASTER_ENDPOINTS.PLANS}/${planId}`, createRequestOptions('GET'));
+      console.log('Plan details response status:', response.status);
 
       if (!response.ok) {
         throw new Error('Failed to load plan details');
       }
 
       const data = await response.json();
+      console.log('✅ Plan details loaded:', data);
       setPlan(data);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load plan details';
       setError(errorMessage);
       toast.error(errorMessage);
-      console.error(err);
+      console.error('❌ Error loading plan details:', err);
     } finally {
+      console.log('Setting loading to false');
       setLoading(false);
     }
   };
@@ -283,10 +288,31 @@ export default function PlanDetailsPage() {
     try {
       setLoadingSummary(true);
       setProductionSummary(null);
-      
+
       console.log(`Loading production summary for plan: ${planId}`);
-      
-      const response = await fetch(PRODUCTION_ENDPOINTS.CUT_ROLLS_PLAN(planId), createRequestOptions('GET'));
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.error('❌ Request timed out after 30 seconds');
+        controller.abort();
+      }, 30000);
+
+      const url = PRODUCTION_ENDPOINTS.CUT_ROLLS_PLAN(planId);
+      console.log('Fetching from URL:', url);
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+        },
+        signal: controller.signal,
+        cache: 'no-store',
+        next: { revalidate: 0 }
+      });
+
+      clearTimeout(timeoutId);
+      console.log('✅ Response received, status:', response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -294,22 +320,29 @@ export default function PlanDetailsPage() {
         throw new Error(`Failed to load production summary: ${response.status}`);
       }
 
+      console.log('Parsing JSON...');
       const data = await response.json();
+      console.log('✅ Data parsed successfully, items:', data.detailed_items?.length);
+      console.log('Setting production summary...');
 
       setProductionSummary(data);
-      
+      console.log('Production summary set successfully');
+
       if (data.detailed_items && data.detailed_items.length > 0) {
         toast.success(`Loaded ${data.detailed_items.length} cut rolls for this plan`);
       } else {
         toast.info('No cut rolls found for this plan yet');
       }
+      console.log('About to exit try block');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load cut roll details';
       console.error('Error loading production summary:', err);
       toast.error(errorMessage);
       setProductionSummary(null);
     } finally {
+      console.log('In finally block, setting loadingSummary to false');
       setLoadingSummary(false);
+      console.log('LoadingSummary set to false');
     }
   };
 

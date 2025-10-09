@@ -1,0 +1,142 @@
+[
+  {
+    "wastage_id": "8fcb3b40-1f7a-4d0f-8400-4f70be5bb21f",
+    "wastage_frontend_id": "WS-00269",
+    "order_id": "73fed158-0e45-4767-abcf-5e635fcbf869",
+    "order_item_id": "85231ad5-ccd2-4cd3-8889-b648563f9d54",
+    "paper_id": "966821f1-10da-4efb-baff-0ed93e10e8e3",
+    "width_inches": 48,
+    "weight_kg": 645,
+    "quantity_reduced": 1
+  },
+  {
+    "wastage_id": "ab9bfcfc-da14-4d8c-83f3-ebcd8e367e91",
+    "wastage_frontend_id": "WS-00329",
+    "order_id": "73fed158-0e45-4767-abcf-5e635fcbf869",
+    "order_item_id": "85231ad5-ccd2-4cd3-8889-b648563f9d54",
+    "paper_id": "966821f1-10da-4efb-baff-0ed93e10e8e3",
+    "width_inches": 48,
+    "weight_kg": 577,
+    "quantity_reduced": 1
+  },
+  {
+    "wastage_id": "e7633f68-aec1-407b-94a5-73f3061d309a",
+    "wastage_frontend_id": "WS-00139",
+    "order_id": "73fed158-0e45-4767-abcf-5e635fcbf869",
+    "order_item_id": "1055726d-13b4-49b4-a855-a004c96091e5",
+    "paper_id": "966821f1-10da-4efb-baff-0ed93e10e8e3",
+    "width_inches": 52,
+    "weight_kg": 668,
+    "quantity_reduced": 1
+  },
+  {
+    "wastage_id": "a7a68a38-badb-4cfe-80e9-c4810190656e",
+    "wastage_frontend_id": "WS-00261",
+    "order_id": "73fed158-0e45-4767-abcf-5e635fcbf869",
+    "order_item_id": "f144a25b-9785-4e88-ac0f-a7c9b2457af1",
+    "paper_id": "e6a5ad41-4eda-4509-ac38-b93f90ae6139",
+    "width_inches": 48,
+    "weight_kg": 636,
+    "quantity_reduced": 1
+  },
+  {
+    "wastage_id": "a1ce2579-4ee1-4f39-a92f-99ac1df140b3",
+    "wastage_frontend_id": "WS-00294",
+    "order_id": "c67e8d53-9a54-4e79-bfe0-74db7802708f",
+    "order_item_id": "fe04046a-1053-4ee1-8280-57cef8c47129",
+    "paper_id": "e6a5ad41-4eda-4509-ac38-b93f90ae6139",
+    "width_inches": 31,
+    "weight_kg": 384,
+    "quantity_reduced": 1
+  },
+  {
+    "wastage_id": "1767502f-587d-4514-81f2-78cd33abaec1",
+    "wastage_frontend_id": "WS-00101",
+    "order_id": "c67e8d53-9a54-4e79-bfe0-74db7802708f",
+    "order_item_id": "3df1a7d9-baff-4765-8385-78220cb7cac2",
+    "paper_id": "e6a5ad41-4eda-4509-ac38-b93f90ae6139",
+    "width_inches": 52,
+    "weight_kg": 667,
+    "quantity_reduced": 1
+  },
+  {
+    "wastage_id": "9a42239e-6748-4b67-b449-2116404dab33",
+    "wastage_frontend_id": "WS-00265",
+    "order_id": "c67e8d53-9a54-4e79-bfe0-74db7802708f",
+    "order_item_id": "3df1a7d9-baff-4765-8385-78220cb7cac2",
+    "paper_id": "e6a5ad41-4eda-4509-ac38-b93f90ae6139",
+    "width_inches": 52,
+    "weight_kg": 666,
+    "quantity_reduced": 1
+  },
+  {
+    "wastage_id": "804b1f0b-2fb0-4f9a-a001-ab011dcc9606",
+    "wastage_frontend_id": "WS-00221",
+    "order_id": "323cf955-d813-4660-a4f1-7cd3a8d2c858",
+    "order_item_id": "8258e76b-9f94-4b15-8fe1-c88eeadfe287",
+    "paper_id": "e6a5ad41-4eda-4509-ac38-b93f90ae6139",
+    "width_inches": 40,
+    "weight_kg": 582,
+    "quantity_reduced": 1
+  },
+  {
+    "wastage_id": "c986966a-15ec-435e-9869-da868325e071",
+    "wastage_frontend_id": "WS-00157",
+    "order_id": "323cf955-d813-4660-a4f1-7cd3a8d2c858",
+    "order_item_id": "8258e76b-9f94-4b15-8fe1-c88eeadfe287",
+    "paper_id": "e6a5ad41-4eda-4509-ac38-b93f90ae6139",
+    "width_inches": 40,
+    "weight_kg": 446,
+    "quantity_reduced": 1
+  },
+  {
+    "wastage_id": "ed7d92bb-07c9-44a4-9fc8-51de9e9e5d73",
+    "wastage_frontend_id": "WS-00317",
+    "order_id": "c56b3585-f84e-4568-8ca7-b12d13e97980",
+    "order_item_id": "edd19957-e979-4e79-8c2a-d34650223599",
+    "paper_id": "51880940-e6e4-4fa8-b0b2-b87fd41a75fc",
+    "width_inches": 52,
+    "weight_kg": 716,
+    "quantity_reduced": 1
+  },
+  {
+    "wastage_id": "54b8cd62-2417-4ade-8ca4-f40862df33b8",
+    "wastage_frontend_id": "WS-00370",
+    "order_id": "c56b3585-f84e-4568-8ca7-b12d13e97980",
+    "order_item_id": "edd19957-e979-4e79-8c2a-d34650223599",
+    "paper_id": "51880940-e6e4-4fa8-b0b2-b87fd41a75fc",
+    "width_inches": 52,
+    "weight_kg": 559,
+    "quantity_reduced": 1
+  },
+  {
+    "wastage_id": "9dad846d-25c9-424c-993c-6e4847df9568",
+    "wastage_frontend_id": "WS-00172",
+    "order_id": "9011b10c-3d66-4653-87cc-c3c166f0fa56",
+    "order_item_id": "369a9dcd-f0bb-4ff2-9752-333a93440718",
+    "paper_id": "3a2e29eb-1454-40c1-9eb6-9af5ff01f829",
+    "width_inches": 34,
+    "weight_kg": 425,
+    "quantity_reduced": 1
+  },
+  {
+    "wastage_id": "804b1f0b-2fb0-4f9a-a001-ab011dcc9606",
+    "wastage_frontend_id": "WS-00221",
+    "order_id": "9011b10c-3d66-4653-87cc-c3c166f0fa56",
+    "order_item_id": "b27a1ade-45c8-4d79-9f40-8979cc34d813",
+    "paper_id": "e6a5ad41-4eda-4509-ac38-b93f90ae6139",
+    "width_inches": 40,
+    "weight_kg": 582,
+    "quantity_reduced": 1
+  },
+  {
+    "wastage_id": "c986966a-15ec-435e-9869-da868325e071",
+    "wastage_frontend_id": "WS-00157",
+    "order_id": "9011b10c-3d66-4653-87cc-c3c166f0fa56",
+    "order_item_id": "b27a1ade-45c8-4d79-9f40-8979cc34d813",
+    "paper_id": "e6a5ad41-4eda-4509-ac38-b93f90ae6139",
+    "width_inches": 40,
+    "weight_kg": 446,
+    "quantity_reduced": 1
+  }
+]

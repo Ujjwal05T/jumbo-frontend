@@ -239,6 +239,8 @@ export default function PendingOrderItemsPage() {
   
   // Selection and production state
   const [selectedSuggestions, setSelectedSuggestions] = useState<Set<string>>(new Set());
+  // Granular selection: tracks spec_id, jumbo_id, and set_id combinations
+  const [selectedSets, setSelectedSets] = useState<Set<string>>(new Set()); // Format: "spec_id|jumbo_id|set_id"
   const [productionLoading, setProductionLoading] = useState(false);
   
   // Manual cut addition state
@@ -294,6 +296,22 @@ export default function PendingOrderItemsPage() {
     item: null
   });
   const [deletingItem, setDeletingItem] = useState<boolean>(false);
+
+  // Collapse/expand state for suggestions
+  const [expandedSuggestions, setExpandedSuggestions] = useState<Set<string>>(new Set());
+
+  // Toggle collapse/expand for a suggestion
+  const toggleSuggestionExpand = (suggestionId: string) => {
+    setExpandedSuggestions(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(suggestionId)) {
+        newSet.delete(suggestionId);
+      } else {
+        newSet.add(suggestionId);
+      }
+      return newSet;
+    });
+  };
 
   // Fetch clients for manual cut dialog
   useEffect(() => {
@@ -893,15 +911,23 @@ const handlePrintPDF = () => {
   const handleSelectAllSuggestions = (checked: boolean) => {
     if (checked) {
       if (suggestionResult?.spec_suggestions) {
-        // Use spec_id for the new simplified structure
-        const allSpecIds = suggestionResult.spec_suggestions?.map(spec => spec.spec_id);
-        setSelectedSuggestions(new Set(allSpecIds));
+        // Select all sets from all jumbo rolls from all specs
+        const allSetKeys = new Set<string>();
+        suggestionResult.spec_suggestions.forEach(spec => {
+          spec.jumbo_rolls?.forEach(jumbo => {
+            jumbo.sets?.forEach((set:any) => {
+              allSetKeys.add(`${spec.spec_id}|${jumbo.jumbo_id}|${set.set_id}`);
+            });
+          });
+        });
+        setSelectedSets(allSetKeys);
       } else if (suggestionResult?.order_suggestions) {
         setSelectedSuggestions(new Set(suggestionResult.order_suggestions?.map(s => s.suggestion_id)));
       } else if (suggestionResult?.jumbo_suggestions) {
         setSelectedSuggestions(new Set(suggestionResult.jumbo_suggestions?.map(s => s.suggestion_id)));
       }
     } else {
+      setSelectedSets(new Set());
       setSelectedSuggestions(new Set());
     }
   };
@@ -1074,21 +1100,21 @@ const handlePrintPDF = () => {
         // Otherwise check order_suggestions
         return {
           ...specSuggestion,
-          order_suggestions: specSuggestion.order_suggestions?.map(suggestion => {
+          order_suggestions: specSuggestion.order_suggestions?.map((suggestion:any) => {
             if (suggestion.suggestion_id === manualRollData.suggestionId) {
               const updatedSuggestion = { ...suggestion };
-              updatedSuggestion.jumbo_rolls = suggestion.jumbo_rolls?.map(jumboRoll => {
+              updatedSuggestion.jumbo_rolls = suggestion.jumbo_rolls?.map((jumboRoll:any) => {
                 if (jumboRoll.jumbo_id === manualRollData.jumboId) {
                   const updatedJumboRoll = { ...jumboRoll };
-                  updatedJumboRoll.sets = jumboRoll.sets?.map(rollSet => {
+                  updatedJumboRoll.sets = jumboRoll.sets?.map((rollSet:any) => {
                     if (rollSet.set_id === manualRollData.setId) {
                       const updatedRollSet = { ...rollSet };
                       updatedRollSet.cuts = [...(rollSet.cuts || []), manualCut];
   
                       // Update summary - Account for used_widths quantities
-                      const totalActualWidth = updatedRollSet.cuts.reduce((sum, c) => {
+                      const totalActualWidth = updatedRollSet.cuts.reduce((sum:any, c:any) => {
                         if (c.used_widths && Object.keys(c.used_widths).length > 0) {
-                          return sum + Object.entries(c.used_widths).reduce((widthSum, [width, qty]) =>
+                          return sum + Object.entries(c.used_widths).reduce((widthSum, [width, qty]:[width:any,qty:any]) =>
                             widthSum + (parseFloat(width) * qty), 0);
                         }
                         return sum + c.width_inches;
@@ -1096,9 +1122,9 @@ const handlePrintPDF = () => {
   
                       updatedRollSet.summary = {
                         ...updatedRollSet.summary,
-                        total_cuts: updatedRollSet.cuts.reduce((sum, c) => {
+                        total_cuts: updatedRollSet.cuts.reduce((sum:any, c:any) => {
                           if (c.used_widths && Object.keys(c.used_widths).length > 0) {
-                            return sum + Object.values(c.used_widths).reduce((a, b) => a + b, 0);
+                            return sum + Object.values(c.used_widths).reduce((a:any, b:any) => a + b, 0);
                           }
                           return sum + 1;
                         }, 0),
@@ -1660,45 +1686,65 @@ const handlePrintPDF = () => {
   
 
   const handleStartProduction = async () => {
-    if (!suggestionResult || selectedSuggestions.size === 0) {
-      toast.error('Please select at least one suggestion');
+    if (!suggestionResult || selectedSets.size === 0) {
+      toast.error('Please select at least one set');
       return;
     }
 
     try {
       setProductionLoading(true);
-      
-      // Debug log the selected suggestions
-      console.log('🔍 Selected suggestions count:', selectedSuggestions.size);
-      console.log('🔍 Selected suggestions:', Array.from(selectedSuggestions));
-      
+
+      // Debug log the selected sets
+      console.log('🔍 Selected sets count:', selectedSets.size);
+      console.log('🔍 Selected sets:', Array.from(selectedSets));
+
       // Get user ID from localStorage
       const userId = localStorage.getItem('user_id');
       if (!userId) {
         toast.error('User not authenticated');
         return;
       }
-      
+
       // Filter selected suggestions - handle spec-based, order-based and legacy formats
+      // IMPORTANT: Keep the same data structure, just filter out unselected jumbo rolls and sets
       let selectedSuggestionData;
       if (suggestionResult.spec_suggestions) {
-        // New spec-based format - get selected specs directly
-        selectedSuggestionData = suggestionResult.spec_suggestions.filter(
-          spec => selectedSuggestions.has(spec.spec_id)
-        );
+        // New spec-based format - filter specs, then filter jumbo rolls and sets within
+        selectedSuggestionData = suggestionResult.spec_suggestions
+          .map(spec => {
+            // Filter jumbo rolls that have selected sets
+            const filteredJumboRolls = spec.jumbo_rolls?.map(jumbo => {
+              // Filter sets that are selected
+              const filteredSets = jumbo.sets?.filter((set:any) =>
+                selectedSets.has(`${spec.spec_id}|${jumbo.jumbo_id}|${set.set_id}`)
+              );
+
+              // Only include jumbo if it has selected sets
+              if (filteredSets && filteredSets.length > 0) {
+                return { ...jumbo, sets: filteredSets };
+              }
+              return null;
+            }).filter(Boolean); // Remove null entries
+
+            // Only include spec if it has selected jumbo rolls
+            if (filteredJumboRolls && filteredJumboRolls.length > 0) {
+              return { ...spec, jumbo_rolls: filteredJumboRolls };
+            }
+            return null;
+          })
+          .filter(Boolean); // Remove null entries
       } else if (suggestionResult.order_suggestions) {
-        // Legacy order-based format
+        // Legacy order-based format - keep old behavior for backward compatibility
         selectedSuggestionData = suggestionResult.order_suggestions.filter(
           suggestion => selectedSuggestions.has(suggestion.suggestion_id)
         );
       } else {
-        // Legacy jumbo suggestions format
+        // Legacy jumbo suggestions format - keep old behavior
         selectedSuggestionData = suggestionResult.jumbo_suggestions?.filter(
           suggestion => selectedSuggestions.has(suggestion.suggestion_id)
         ) || [];
       }
-      console.log('🔧 SELECTED SUGGESTIONS DATA:', selectedSuggestions);
-      console.log(selectedSuggestionData)
+      console.log('🔧 SELECTED SUGGESTIONS DATA (FILTERED):', selectedSuggestionData);
 
       // Extract all pending order IDs from selected suggestions
       const allSelectedPendingIds = selectedSuggestionData.flatMap(
@@ -2618,35 +2664,74 @@ const handlePrintPDF = () => {
                         <div className="flex items-center space-x-2">
                           <Checkbox
                             id="select-all-spec-suggestions"
-                            checked={selectedSuggestions.size === suggestionResult.spec_suggestions.length}
+                            checked={(() => {
+                              // Calculate total sets across all specs
+                              const totalSets = suggestionResult.spec_suggestions.reduce((sum, spec) => {
+                                return sum + (spec.jumbo_rolls?.reduce((jSum, jumbo) => jSum + (jumbo.sets?.length || 0), 0) || 0);
+                              }, 0);
+                              return selectedSets.size === totalSets;
+                            })()}
                             onCheckedChange={handleSelectAllSuggestions}
                           />
                           <label htmlFor="select-all-spec-suggestions" className="text-sm font-medium">
-                            Select All ({selectedSuggestions.size}/{suggestionResult.spec_suggestions.length})
+                            Select All Sets ({selectedSets.size}/{(() => {
+                              const totalSets = suggestionResult.spec_suggestions.reduce((sum, spec) => {
+                                return sum + (spec.jumbo_rolls?.reduce((jSum, jumbo) => jSum + (jumbo.sets?.length || 0), 0) || 0);
+                              }, 0);
+                              return totalSets;
+                            })()})
                           </label>
                         </div>
                         <Button
                           onClick={handleStartProduction}
-                          disabled={selectedSuggestions.size === 0 || productionLoading}
+                          disabled={selectedSets.size === 0 || productionLoading}
                           className="bg-green-600 hover:bg-green-700"
                         >
-                          {productionLoading ? 'Starting Production...' : `Start Production (${selectedSuggestions.size})`}
+                          {productionLoading ? 'Starting Production...' : `Start Production (${selectedSets.size} sets)`}
                         </Button>
                       </div>
                     </div>
 
                     {/* Display each paper spec group */}
-                    {suggestionResult.spec_suggestions?.map((specSuggestion, specIndex) => (
+                    {suggestionResult.spec_suggestions?.map((specSuggestion, specIndex) => {
+                      // Check if all sets in this spec are selected
+                      const allSpecSetsSelected = specSuggestion.jumbo_rolls?.every((jumbo:any) =>
+                        jumbo.sets?.every((set:any) =>
+                          selectedSets.has(`${specSuggestion.spec_id}|${jumbo.jumbo_id}|${set.set_id}`)
+                        )
+                      ) || false;
+                      const someSpecSetsSelected = specSuggestion.jumbo_rolls?.some((jumbo:any) =>
+                        jumbo.sets?.some((set:any) =>
+                          selectedSets.has(`${specSuggestion.spec_id}|${jumbo.jumbo_id}|${set.set_id}`)
+                        )
+                      ) || false;
+
+                      return (
                       <Card key={specSuggestion.spec_id} className={`bg-gradient-to-r from-amber-50 to-orange-50 border-2 ${
-                        selectedSuggestions.has(specSuggestion.spec_id) ? 'border-green-400 ring-2 ring-green-200' : 'border-amber-200'
+                        allSpecSetsSelected ? 'border-green-400 ring-2 ring-green-200' : 'border-amber-200'
                       }`}>
                         <CardHeader className="pb-4">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                               <Checkbox
                                 id={`spec-suggestion-${specSuggestion.spec_id}`}
-                                checked={selectedSuggestions.has(specSuggestion.spec_id)}
-                                onCheckedChange={(checked) => handleSuggestionToggle(specSuggestion.spec_id, checked as boolean)}
+                                checked={allSpecSetsSelected}
+                                onCheckedChange={(checked) => {
+                                  const newSelectedSets = new Set(selectedSets);
+                                  // Select/deselect all sets in all jumbo rolls for this spec
+                                  specSuggestion.jumbo_rolls?.forEach((jumbo:any) => {
+                                    jumbo.sets?.forEach((set:any) => {
+                                      const setKey = `${specSuggestion.spec_id}|${jumbo.jumbo_id}|${set.set_id}`;
+                                      if (checked) {
+                                        newSelectedSets.add(setKey);
+                                      } else {
+                                        newSelectedSets.delete(setKey);
+                                      }
+                                    });
+                                  });
+                                  setSelectedSets(newSelectedSets);
+                                }}
+                                className={someSpecSetsSelected && !allSpecSetsSelected ? "data-[state=unchecked]:bg-amber-200" : ""}
                               />
                               <div>
                                 <CardTitle className="text-xl flex items-center gap-3">
@@ -2669,16 +2754,57 @@ const handlePrintPDF = () => {
                                 </CardDescription>
                               </div>
                             </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => toggleSuggestionExpand(specSuggestion.spec_id)}
+                              className="ml-2"
+                            >
+                              {expandedSuggestions.has(specSuggestion.spec_id) ? (
+                                <ChevronUp className="h-5 w-5" />
+                              ) : (
+                                <ChevronDown className="h-5 w-5" />
+                              )}
+                            </Button>
                           </div>
                         </CardHeader>
-                        <CardContent>
-                          <div className="space-y-6">
-                            {/* Display jumbo rolls directly (no order grouping) */}
-                            {specSuggestion.jumbo_rolls?.map((jumboRoll:any, jumboIndex:any) => (
+                        {expandedSuggestions.has(specSuggestion.spec_id) && (
+                          <CardContent>
+                            <div className="space-y-6">
+                              {/* Display jumbo rolls directly (no order grouping) */}
+                              {specSuggestion.jumbo_rolls?.map((jumboRoll:any, jumboIndex:any) => {
+                                // Check if all sets in this jumbo are selected
+                                const allSetsSelected = jumboRoll.sets?.every((set:any) =>
+                                  selectedSets.has(`${specSuggestion.spec_id}|${jumboRoll.jumbo_id}|${set.set_id}`)
+                                ) || false;
+                                const someSetsSelected = jumboRoll.sets?.some((set:any) =>
+                                  selectedSets.has(`${specSuggestion.spec_id}|${jumboRoll.jumbo_id}|${set.set_id}`)
+                                ) || false;
+
+                                return (
                               <div key={jumboRoll.jumbo_id} className="p-4 rounded-lg border-2 bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
                                 <div className="flex items-center justify-between mb-3">
-                                  <div className="font-medium text-purple-800">
-                                    Jumbo Roll #{jumboRoll.jumbo_number} ({jumboRoll.summary.efficiency}% efficient)
+                                  <div className="flex items-center gap-3">
+                                    <Checkbox
+                                      id={`jumbo-${jumboRoll.jumbo_id}`}
+                                      checked={allSetsSelected}
+                                      onCheckedChange={(checked) => {
+                                        const newSelectedSets = new Set(selectedSets);
+                                        jumboRoll.sets?.forEach((set:any) => {
+                                          const setKey = `${specSuggestion.spec_id}|${jumboRoll.jumbo_id}|${set.set_id}`;
+                                          if (checked) {
+                                            newSelectedSets.add(setKey);
+                                          } else {
+                                            newSelectedSets.delete(setKey);
+                                          }
+                                        });
+                                        setSelectedSets(newSelectedSets);
+                                      }}
+                                      className={someSetsSelected && !allSetsSelected ? "data-[state=unchecked]:bg-blue-200" : ""}
+                                    />
+                                    <div className="font-medium text-purple-800">
+                                      Jumbo Roll #{jumboRoll.jumbo_number} ({jumboRoll.summary.efficiency}% efficient)
+                                    </div>
                                   </div>
                                   <Badge className="bg-purple-100 text-purple-800">
                                     {jumboRoll.summary.total_sets} sets | {jumboRoll.summary.total_waste.toFixed(1)}" total waste
@@ -2686,11 +2812,30 @@ const handlePrintPDF = () => {
                                 </div>
                                 {/* 118" Roll Sets in this Jumbo */}
                                 <div className="space-y-3">
-                                  {jumboRoll.sets?.map((rollSet:any, setIndex:any) => (
-                                    <div key={rollSet.set_id} className="p-3 rounded-lg border bg-white border-blue-200">
+                                  {jumboRoll.sets?.map((rollSet:any, setIndex:any) => {
+                                    const setKey = `${specSuggestion.spec_id}|${jumboRoll.jumbo_id}|${rollSet.set_id}`;
+                                    const isSelected = selectedSets.has(setKey);
+
+                                    return (
+                                    <div key={rollSet.set_id} className={`p-3 rounded-lg border ${isSelected ? 'border-green-400 ring-2 ring-green-200 bg-green-50' : 'border-blue-200 bg-white'}`}>
                                       <div className="flex items-center justify-between mb-2">
-                                        <div className="font-medium text-blue-800">
-                                          118" Roll Set #{rollSet.set_number} ({rollSet.summary.efficiency}% efficient)
+                                        <div className="flex items-center gap-3">
+                                          <Checkbox
+                                            id={`set-${rollSet.set_id}`}
+                                            checked={isSelected}
+                                            onCheckedChange={(checked) => {
+                                              const newSelectedSets = new Set(selectedSets);
+                                              if (checked) {
+                                                newSelectedSets.add(setKey);
+                                              } else {
+                                                newSelectedSets.delete(setKey);
+                                              }
+                                              setSelectedSets(newSelectedSets);
+                                            }}
+                                          />
+                                          <div className="font-medium text-blue-800">
+                                            118" Roll Set #{rollSet.set_number} ({rollSet.summary.efficiency}% efficient)
+                                          </div>
                                         </div>
                                         <Badge className="bg-blue-100 text-blue-800">
                                           {rollSet.summary.total_cuts} cuts | {rollSet.summary.total_waste.toFixed(1)}" waste
@@ -2867,14 +3012,18 @@ const handlePrintPDF = () => {
                                         </div>
                                       )}
                                     </div>
-                                  ))}
+                                    );
+                                  })}
                                 </div>
                               </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </CardContent>
+                        )}
                       </Card>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : suggestionResult.order_suggestions && suggestionResult.order_suggestions.length > 0 ? (
                   <div className="space-y-6">
@@ -2928,17 +3077,32 @@ const handlePrintPDF = () => {
                                   </CardDescription>
                                 </div>
                               </div>
-                              <div className="text-right">
-                                <div className="text-sm text-muted-foreground">
-                                  {orderSuggestion.summary.total_jumbo_rolls} jumbo rolls | {orderSuggestion.summary.total_118_sets} sets | {orderSuggestion.summary.total_cuts} cuts
+                              <div className="flex items-center gap-4">
+                                <div className="text-right">
+                                  <div className="text-sm text-muted-foreground">
+                                    {orderSuggestion.summary.total_jumbo_rolls} jumbo rolls | {orderSuggestion.summary.total_118_sets} sets | {orderSuggestion.summary.total_cuts} cuts
+                                  </div>
+                                  <div className="text-sm text-muted-foreground">
+                                    {orderSuggestion.summary.using_existing_cuts} using existing cuts
+                                  </div>
                                 </div>
-                                <div className="text-sm text-muted-foreground">
-                                  {orderSuggestion.summary.using_existing_cuts} using existing cuts
-                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => toggleSuggestionExpand(orderSuggestion.suggestion_id)}
+                                  className="ml-2"
+                                >
+                                  {expandedSuggestions.has(orderSuggestion.suggestion_id) ? (
+                                    <ChevronUp className="h-5 w-5" />
+                                  ) : (
+                                    <ChevronDown className="h-5 w-5" />
+                                  )}
+                                </Button>
                               </div>
                             </div>
                           </CardHeader>
-                          <CardContent className="space-y-4">
+                          {expandedSuggestions.has(orderSuggestion.suggestion_id) && (
+                            <CardContent className="space-y-4">
                             {/* Jumbo Rolls for this Order */}
                             <div className="grid gap-4">
                               {orderSuggestion.jumbo_rolls?.map((jumboRoll, jumboIndex) => (
@@ -3154,6 +3318,7 @@ const handlePrintPDF = () => {
                               </div>
                             </div>
                           </CardContent>
+                          )}
                         </Card>
                       ))}
                     </div>
@@ -3204,17 +3369,32 @@ const handlePrintPDF = () => {
                                   </CardDescription>
                                 </div>
                               </div>
-                              <div className="text-right">
-                                <div className="text-sm text-muted-foreground">
-                                  {jumbo.summary.using_existing} existing + {jumbo.summary.new_rolls_needed} new
+                              <div className="flex items-center gap-4">
+                                <div className="text-right">
+                                  <div className="text-sm text-muted-foreground">
+                                    {jumbo.summary.using_existing} existing + {jumbo.summary.new_rolls_needed} new
+                                  </div>
+                                  <div className="text-sm text-muted-foreground">
+                                    Avg {jumbo.summary.avg_waste <= 5 ? 'waste' : 'needed'}: {jumbo.summary.avg_waste}"
+                                  </div>
                                 </div>
-                                <div className="text-sm text-muted-foreground">
-                                  Avg {jumbo.summary.avg_waste <= 5 ? 'waste' : 'needed'}: {jumbo.summary.avg_waste}"
-                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => toggleSuggestionExpand(jumbo.suggestion_id)}
+                                  className="ml-2"
+                                >
+                                  {expandedSuggestions.has(jumbo.suggestion_id) ? (
+                                    <ChevronUp className="h-5 w-5" />
+                                  ) : (
+                                    <ChevronDown className="h-5 w-5" />
+                                  )}
+                                </Button>
                               </div>
                             </div>
                           </CardHeader>
-                          <CardContent className="space-y-4">
+                          {expandedSuggestions.has(jumbo.suggestion_id) && (
+                            <CardContent className="space-y-4">
                             {/* Individual Rolls in this Jumbo */}
                             <div className="grid gap-3">
                               {jumbo.rolls?.map((roll, rollIndex) => (
@@ -3333,6 +3513,7 @@ const handlePrintPDF = () => {
                               </div>
                             </div>
                           </CardContent>
+                          )}
                         </Card>
                       ))}
                     </div>
