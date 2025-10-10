@@ -381,8 +381,8 @@ export default function WastageMOUPage() {
           </Card>
         </div>
 
-        {/* Pending Inward Challans Table */}
-        <Card>
+        {/* Pending Inward Challans - Desktop Table */}
+        <Card className="hidden md:block">
           <CardHeader>
             <CardTitle>Pending Inward Challans</CardTitle>
             <CardDescription>
@@ -439,6 +439,57 @@ export default function WastageMOUPage() {
             </Table>
           </CardContent>
         </Card>
+
+        {/* Pending Inward Challans - Mobile Cards */}
+        <div className="md:hidden space-y-4">
+          <div className="px-1">
+            <h2 className="text-lg font-semibold">Pending Inward Challans</h2>
+            <p className="text-sm text-muted-foreground">
+              Tap a card to add wastage report
+            </p>
+          </div>
+          {inwardChallans.length === 0 ? (
+            <Card>
+              <CardContent className="text-center py-8 text-muted-foreground">
+                No pending inward challans found
+              </CardContent>
+            </Card>
+          ) : (
+            inwardChallans.map((challan) => (
+              <Card
+                key={challan.id}
+                className="cursor-pointer hover:border-primary transition-colors"
+                onClick={() => handleAddWastageClick(challan)}
+              >
+                <CardContent className="p-4">
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Building2 className="h-4 w-4 text-primary" />
+                          <span className="font-semibold text-base">
+                            {getClientName(challan.party_id)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Truck className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm font-medium">
+                            {challan.vehicle_number || "-"}
+                          </span>
+                        </div>
+                      </div>
+                      {challansWithWastage.has(challan.id) && (
+                        <Badge variant="outline" className="text-xs">
+                          Has Wastage
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
 
         {/* Modal with Form */}
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
@@ -602,6 +653,7 @@ export default function WastageMOUPage() {
                     name="imageFiles"
                     type="file"
                     accept="image/*"
+                    capture="environment"
                     multiple
                     className="hidden"
                     onChange={handleImageSelect}

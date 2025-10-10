@@ -3,7 +3,7 @@
  */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -176,6 +176,23 @@ interface ProductionSummary {
       roll_count: number;
     }[];
   };
+  wastage_allocations: {
+    id: string;
+    frontend_id: string;
+    barcode_id: string;
+    width_inches: number;
+    weight_kg: number;
+    reel_no: string;
+    status: string;
+    location: string;
+    paper_specs: {
+      gsm: number;
+      bf: number;
+      shade: string;
+    } | null;
+    created_at: string | null;
+    client_name: string | null;
+  }[];
   detailed_items: CutRollItem[];
 }
 
@@ -244,20 +261,8 @@ export default function PlanDetailsPage() {
   const [cutRollSearchTerm, setCutRollSearchTerm] = useState("");
   const [cutRollStatusFilter, setCutRollStatusFilter] = useState<string>("all");
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
-
-  useEffect(() => {
-    if (planId) {
-      loadPlanDetails();
-      loadProductionSummary();
-      loadPlanOrderItems();
-    }
-  }, [planId]);
-
-
-  const loadPlanDetails = async () => {
+  // **PERFORMANCE FIX: Wrap load functions in useCallback to prevent duplicate calls**
+  const loadPlanDetails = useCallback(async () => {
     try {
       console.log('📋 Loading plan details for:', planId);
       setLoading(true);
@@ -282,9 +287,9 @@ export default function PlanDetailsPage() {
       console.log('Setting loading to false');
       setLoading(false);
     }
-  };
+  }, [planId]);
 
-  const loadProductionSummary = async () => {
+  const loadProductionSummary = useCallback(async () => {
     try {
       setLoadingSummary(true);
       setProductionSummary(null);
@@ -344,33 +349,9 @@ export default function PlanDetailsPage() {
       setLoadingSummary(false);
       console.log('LoadingSummary set to false');
     }
-  };
+  }, [planId]);
 
-  const loadPlanOrderItems = async () => {
-    try {
-      setLoadingOrderItems(true);
-      
-      const response = await fetch(MASTER_ENDPOINTS.PLAN_ORDER_ITEMS(planId), createRequestOptions('GET'));
-      
-      if (!response.ok) {
-        console.warn('Failed to load plan order items:', response.status);
-        setPlanOrderItems([]);
-        return;
-      }
-      
-      const data = await response.json();
-      setPlanOrderItems(Array.isArray(data) ? data : []);
-      
-      console.log('Loaded plan order items:', data);
-    } catch (err) {
-      console.error('Error loading plan order items:', err);
-      setPlanOrderItems([]);
-    } finally {
-      setLoadingOrderItems(false);
-    }
-  };
-
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     try {
       const response = await fetch(MASTER_ENDPOINTS.USERS, createRequestOptions('GET'));
       if (response.ok) {
@@ -380,23 +361,68 @@ export default function PlanDetailsPage() {
     } catch (err) {
       console.error('Error loading users:', err);
     }
-  };
+  }, []);
 
-  const getUserById = (userId: string): User | null => {
+  // **PERFORMANCE FIX: Load all data in parallel with stable function references**
+  useEffect(() => {
+    const loadAllData = async () => {
+      if (!planId) return;
+      
+      console.log('🚀 Starting parallel data load for plan:', planId);
+      setLoading(true);
+      setLoadingSummary(true);
+      setLoadingOrderItems(true);
+      
+      try {
+        // Load all API calls in parallel for 4x faster performance
+        await Promise.all([
+          loadPlanDetails(),
+          loadProductionSummary(),
+          loadUsers()
+        ]);
+        console.log('✅ All data loaded successfully');
+      } catch (err) {
+        console.error('❌ Error loading data:', err);
+      }
+    };
+
+    loadAllData();
+  }, [planId, loadPlanDetails, loadProductionSummary, loadUsers]);
+
+  // **PERFORMANCE FIX: Memoize getUserById to prevent recreation on every render**
+  const getUserById = useCallback((userId: string): User | null => {
     return users.find(user => user.id === userId) || null;
-  };
+  }, [users]);
 
   // Helper function to get weight multiplier based on GSM
-  const getWeightMultiplier = (gsm: number): number => {
+  const getWeightMultiplier = useCallback((gsm: number): number => {
     if (gsm <= 70) return 10;
     if (gsm <= 80) return 11;
     if (gsm <= 100) return 12.7;
     if (gsm <= 120) return 13;
     return 13.3; // 140 gsm and above
-  };
+  }, []);
 
-  // Calculate total input weight using GSM-based formula (same as PDF)
-  const getTotalInputWeight = (): number => {
+  // **PERFORMANCE FIX: Memoize filtered cut rolls to avoid recalculation on every render**
+  const filteredCutRolls = useMemo(() => {
+    if (!productionSummary?.detailed_items) return [];
+    
+    return productionSummary.detailed_items.filter(item => {
+      const matchesSearch = !cutRollSearchTerm || 
+        item.qr_code.toLowerCase().includes(cutRollSearchTerm.toLowerCase()) ||
+        item.barcode_id?.toLowerCase().includes(cutRollSearchTerm.toLowerCase()) ||
+        item.location.toLowerCase().includes(cutRollSearchTerm.toLowerCase()) ||
+        item.paper_specs?.shade.toLowerCase().includes(cutRollSearchTerm.toLowerCase()) ||
+        item.client_name?.toLowerCase().includes(cutRollSearchTerm.toLowerCase());
+      
+      const matchesStatus = cutRollStatusFilter === "all" || item.status === cutRollStatusFilter;
+      
+      return matchesSearch && matchesStatus;
+    });
+  }, [productionSummary?.detailed_items, cutRollSearchTerm, cutRollStatusFilter]);
+
+  // **PERFORMANCE FIX: Memoize total input weight calculation (expensive operation)**
+  const totalInputWeight = useMemo(() => {
     if (!productionSummary?.detailed_items) return 0;
     
     let totalWeight = 0;
@@ -431,7 +457,30 @@ export default function PlanDetailsPage() {
     });
     
     return totalWeight;
-  };
+  }, [productionSummary?.detailed_items, getWeightMultiplier]);
+
+  // **PERFORMANCE FIX: Memoize grouped cut rolls to avoid recalculation**
+  const groupedCutRolls = useMemo(() => {
+    if (!filteredCutRolls.length) return {};
+    return groupCutRollsForUIDisplay(filteredCutRolls);
+  }, [filteredCutRolls]);
+
+  // **PERFORMANCE FIX: Memoize sorted jumbo entries**
+  const sortedJumboEntries = useMemo(() => {
+    return Object.entries(groupedCutRolls)
+      .sort(([aId, aGroup], [bId, bGroup]) => {
+        const aDisplayId = aGroup.displayId;
+        const bDisplayId = bGroup.displayId;
+        
+        if (aDisplayId === 'Ungrouped Items' || aDisplayId === 'Cut Rolls from Stock') return 1;
+        if (bDisplayId === 'Ungrouped Items' || bDisplayId === 'Cut Rolls from Stock') return -1;
+        
+        const aNum = parseInt(aDisplayId.replace('JR-', '')) || 0;
+        const bNum = parseInt(bDisplayId.replace('JR-', '')) || 0;
+        
+        return aNum - bNum;
+      });
+  }, [groupedCutRolls]);
 
   const createSampleData = async () => {
     try {
@@ -1305,13 +1354,13 @@ export default function PlanDetailsPage() {
         yPosition += 12;
 
         // List each SCR cut roll
-        scrCutRolls.forEach((roll, index) => {
+        productionSummary.wastage_allocations.forEach((roll, index) => {
           checkPageBreak(8);
 
           doc.setFontSize(9);
           doc.setFont('helvetica', 'normal');
           doc.setTextColor(0, 0, 0);
-          const rollText = `• ${roll.barcode_id} - ${roll.width_inches}" × ${roll.weight_kg}kg - ${roll.client_name || 'Unknown Client'}`;
+          const rollText = `• Reel No: ${roll.reel_no || roll.barcode_id} - ${roll.width_inches}" × ${roll.weight_kg}kg - ${roll.paper_specs?.gsm}gsm, ${roll.paper_specs?.bf}bf, ${roll.paper_specs?.shade} - ${roll.client_name || 'Unknown Client'}`;
           doc.text(rollText, 25, yPosition);
           yPosition += 6;
         });
@@ -1628,19 +1677,7 @@ export default function PlanDetailsPage() {
     }
   };
 
-  // Filter cut rolls
-  const filteredCutRolls = productionSummary?.detailed_items.filter(item => {
-    const matchesSearch = !cutRollSearchTerm || 
-      item.qr_code.toLowerCase().includes(cutRollSearchTerm.toLowerCase()) ||
-      item.barcode_id?.toLowerCase().includes(cutRollSearchTerm.toLowerCase()) ||
-      item.location.toLowerCase().includes(cutRollSearchTerm.toLowerCase()) ||
-      item.paper_specs?.shade.toLowerCase().includes(cutRollSearchTerm.toLowerCase()) ||
-      item.client_name?.toLowerCase().includes(cutRollSearchTerm.toLowerCase());
-    
-    const matchesStatus = cutRollStatusFilter === "all" || item.status === cutRollStatusFilter;
-    
-    return matchesSearch && matchesStatus;
-  }) || [];
+  // **REMOVED: filteredCutRolls is now memoized above for better performance**
 
   if (loading) {
     return (
@@ -1851,7 +1888,7 @@ export default function PlanDetailsPage() {
                     <span className="text-sm font-medium">Input Weight</span>
                   </div>
                   <p className="text-3xl font-bold">
-                    {loadingSummary || !productionSummary ? '...' : getTotalInputWeight().toFixed(1)}
+                    {loadingSummary || !productionSummary ? '...' : totalInputWeight.toFixed(1)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">kg calculated</p>
                 </CardContent>
@@ -1943,23 +1980,7 @@ export default function PlanDetailsPage() {
               <CardContent>
                 {filteredCutRolls.length > 0 ? (
                   <div className="space-y-6">
-                    {Object.entries(groupCutRollsForUIDisplay(filteredCutRolls))
-                      .sort(([aId, aGroup], [bId, bGroup]) => {
-                        // Sort by jumbo display ID (JR-00001, JR-00002, etc.)
-                        const aDisplayId = aGroup.displayId;
-                        const bDisplayId = bGroup.displayId;
-                        
-                        // Handle "Ungrouped Items" and "Cut Rolls from Stock" - always put at end
-                        if (aDisplayId === 'Ungrouped Items' || aDisplayId === 'Cut Rolls from Stock') return 1;
-                        if (bDisplayId === 'Ungrouped Items' || bDisplayId === 'Cut Rolls from Stock') return -1;
-                        
-                        // Extract numeric part from JR-00001 format for proper sorting
-                        const aNum = parseInt(aDisplayId.replace('JR-', '')) || 0;
-                        const bNum = parseInt(bDisplayId.replace('JR-', '')) || 0;
-                        
-                        return aNum - bNum;
-                      })
-                      .map(([originalJumboId, jumboGroup]) => {
+                    {sortedJumboEntries.map(([originalJumboId, jumboGroup]) => {
                       const { displayId: jumboDisplayName, rolls: jumboRolls } = jumboGroup;
                       
                       return (

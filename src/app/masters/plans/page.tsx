@@ -472,11 +472,13 @@ export default function PlansPage() {
         let totalWeight = 0;
         let totalRolls = 0;
         
+        // Filter out SCR (stock/wastage) rolls - only include regular production rolls
         const specItems = productionSummary.detailed_items.filter((item: any) => 
           item.paper_specs && 
           item.paper_specs.gsm === specGroup.gsm &&
           item.paper_specs.bf === specGroup.bf &&
-          item.paper_specs.shade === specGroup.shade
+          item.paper_specs.shade === specGroup.shade &&
+          !item.barcode_id?.startsWith('SCR-')  // Exclude stock/wastage rolls
         );
         
         // Track widths in order of appearance instead of using an object
@@ -573,7 +575,7 @@ export default function PlansPage() {
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0, 0, 0);
-        const rollText = `Reel No.: ${roll.reel_no || roll.frontend_id} - ${roll.width_inches}" × ${roll.weight_kg}kg - ${roll.paper_specs?.gsm || '?'}gsm, ${roll.paper_specs?.bf || '?'}bf, ${roll.paper_specs?.shade || 'Unknown'} - ${roll.client_name}`;
+        const rollText = `Reel No.: ${roll.reel_no || roll.barcode_id} - ${roll.width_inches}" × ${roll.weight_kg}kg - ${roll.paper_specs?.gsm || '?'}gsm, ${roll.paper_specs?.bf || '?'}bf, ${roll.paper_specs?.shade || 'Unknown'} - ${roll.client_name}`;
         doc.text(rollText, 25, yPosition);
         yPosition += 6;
       });

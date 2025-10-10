@@ -1054,17 +1054,20 @@ export default function InOutPage() {
   return (
     <DashboardLayout>
       <div className="p-6">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-4 gap-4">
           <h1 className="text-2xl font-bold">Material In/Out Management</h1>
 
           {/* PDF Generation Controls */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Popover open={showDatePicker} onOpenChange={setShowDatePicker}>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  {pdfDateRange.from.toLocaleDateString('en-GB')} -{" "}
-                  {pdfDateRange.to.toLocaleDateString('en-GB')}
+                <Button variant="outline" size="sm" className="text-xs">
+                  <Calendar className="h-4 w-4 mr-1" />
+                  <span className="hidden sm:inline">
+                    {pdfDateRange.from.toLocaleDateString('en-GB')} -{" "}
+                    {pdfDateRange.to.toLocaleDateString('en-GB')}
+                  </span>
+                  <span className="sm:hidden">Date Range</span>
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-4">
@@ -1108,39 +1111,42 @@ export default function InOutPage() {
               size="sm"
               disabled={generatingPdf}
               onClick={() => generateChallanPdf("inward", "print")}
-              className=" text-white">
+              className="text-white text-xs">
               {generatingPdf ? (
-                <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />
+                <LoaderCircle className="h-4 w-4 mr-1 animate-spin" />
               ) : (
-                <FileText className="h-4 w-4 mr-2" />
+                <FileText className="h-4 w-4 mr-1" />
               )}
-              Print Purchase
+              <span className="hidden sm:inline">Print Purchase</span>
+              <span className="sm:hidden">Purchase</span>
             </Button>
 
             <Button
               size="sm"
               disabled={generatingPdf}
               onClick={() => generateChallanPdf("outward", "print")}
-              className=" text-white">
+              className="text-white text-xs">
               {generatingPdf ? (
-                <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />
+                <LoaderCircle className="h-4 w-4 mr-1 animate-spin" />
               ) : (
-                <FileText className="h-4 w-4 mr-2" />
+                <FileText className="h-4 w-4 mr-1" />
               )}
-              Print Sale
+              <span className="hidden sm:inline">Print Sale</span>
+              <span className="sm:hidden">Sale</span>
             </Button>
 
             <Button
               size="sm"
               disabled={generatingPdf}
               onClick={() => generateChallanPdf("both", "print")}
-              className=" text-white">
+              className="text-white text-xs">
               {generatingPdf ? (
-                <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />
+                <LoaderCircle className="h-4 w-4 mr-1 animate-spin" />
               ) : (
-                <FileText className="h-4 w-4 mr-2" />
+                <FileText className="h-4 w-4 mr-1" />
               )}
-              Print Both
+              <span className="hidden sm:inline">Print Both</span>
+              <span className="sm:hidden">Both</span>
             </Button>
           </div>
         </div>
@@ -1173,7 +1179,7 @@ export default function InOutPage() {
                   </DialogHeader>
                   <form
                     onSubmit={handleInwardSubmit}
-                    className="grid grid-cols-2 gap-4">
+                    className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Serial No - Readonly */}
                     <div className="flex flex-col space-y-2">
                       <Label htmlFor="serialNo">Serial No.</Label>
@@ -1537,7 +1543,7 @@ export default function InOutPage() {
                     )}
 
                     {/* Submit Button */}
-                    <div className="col-span-2 flex justify-end space-x-2">
+                    <div className="col-span-1 md:col-span-2 flex justify-end space-x-2">
                       <Button
                         type="button"
                         variant="outline"
@@ -1574,7 +1580,8 @@ export default function InOutPage() {
               </Dialog>
             </div>
 
-            <Card>
+            {/* Desktop Table */}
+            <Card className="hidden md:block">
               <CardContent className="p-0">
                 <Table>
                   <TableHeader>
@@ -1653,6 +1660,94 @@ export default function InOutPage() {
                 </Table>
               </CardContent>
             </Card>
+
+            {/* Mobile Cards */}
+            <div className="md:hidden space-y-3">
+              {inwardChallans.length === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-8 text-muted-foreground">
+                    No purchase challans found
+                  </CardContent>
+                </Card>
+              ) : (
+                inwardChallans.map((challan) => (
+                  <Card key={challan.id} className="hover:border-primary transition-colors">
+                    <CardContent className="p-4">
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="text-xs text-muted-foreground">Serial No.</div>
+                            <div className="font-mono font-semibold">{challan.serial_no || "Auto"}</div>
+                          </div>
+                          <div className="text-xs text-muted-foreground">{formatDate(challan.date)}</div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <div className="text-xs text-muted-foreground">Party</div>
+                            <div className="font-medium">
+                              {clients.find((c) => c.id === challan.party_id)?.company_name || "Unknown"}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">Material</div>
+                            <div className="font-medium">
+                              {materials.find((m) => m.id === challan.material_id)?.name || "Unknown"}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">Vehicle</div>
+                            <div>{challan.vehicle_number || "-"}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">Net Weight</div>
+                            <div>{challan.net_weight || "-"}</div>
+                          </div>
+                          {!isSecurity && (
+                            <>
+                              <div>
+                                <div className="text-xs text-muted-foreground">Rate</div>
+                                <div>{challan.rate ? `₹${challan.rate}` : "-"}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-muted-foreground">Payment</div>
+                                <div>{challan.payment_type === 'bill'?(challan.bill_no || "bill"):"CASH"}</div>
+                              </div>
+                            </>
+                          )}
+                          <div className="col-span-2">
+                            <div className="text-xs text-muted-foreground">Time In/Out</div>
+                            <div>{formatTime(challan.time_in)} - {formatTime(challan.time_out)}</div>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 pt-2 border-t">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => handleInwardEdit(challan)}>
+                            <Edit className="h-4 w-4 mr-2" />
+                            Edit
+                          </Button>
+                          {isSecurity && challan.rst_no && !challan.time_out && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleInwardTimeOut(challan)}
+                              disabled={submitting}
+                              className="bg-red-600 hover:bg-red-700 text-white">
+                              <LogOut className="h-4 w-4 mr-2" />
+                              Time Out
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
           </TabsContent>
 
           {/* Outward Challan Tab */}
@@ -1679,7 +1774,7 @@ export default function InOutPage() {
                   </DialogHeader>
                   <form
                     onSubmit={handleOutwardSubmit}
-                    className="grid grid-cols-2 gap-4">
+                    className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Serial No - Readonly */}
                     <div className="flex flex-col space-y-2">
                       <Label htmlFor="outSerialNo">Serial No.</Label>
@@ -1893,7 +1988,7 @@ export default function InOutPage() {
                     )}
 
                     {/* Submit Button */}
-                    <div className="col-span-2 flex justify-end space-x-2">
+                    <div className="col-span-1 md:col-span-2 flex justify-end space-x-2">
                       <Button
                         type="button"
                         variant="outline"
@@ -1926,7 +2021,8 @@ export default function InOutPage() {
               </Dialog>
             </div>
 
-            <Card>
+            {/* Desktop Table */}
+            <Card className="hidden md:block">
               <CardContent className="p-0">
                 <Table>
                   <TableHeader>
@@ -1987,6 +2083,86 @@ export default function InOutPage() {
                 </Table>
               </CardContent>
             </Card>
+
+            {/* Mobile Cards */}
+            <div className="md:hidden space-y-3">
+              {outwardChallans.length === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-8 text-muted-foreground">
+                    No sales challans found
+                  </CardContent>
+                </Card>
+              ) : (
+                outwardChallans.map((challan) => (
+                  <Card key={challan.id} className="hover:border-primary transition-colors">
+                    <CardContent className="p-4">
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="text-xs text-muted-foreground">Serial No.</div>
+                            <div className="font-mono font-semibold">{challan.serial_no || "Auto"}</div>
+                          </div>
+                          <div className="text-xs text-muted-foreground">{formatDate(challan.date)}</div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <div className="text-xs text-muted-foreground">Party</div>
+                            <div className="font-medium">{challan.party_name || "-"}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">Vehicle</div>
+                            <div>{challan.vehicle_number || "-"}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">Driver</div>
+                            <div>{challan.driver_name || "-"}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">Purpose</div>
+                            <div>{challan.purpose || "-"}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">Net Weight</div>
+                            <div>{challan.net_weight || "-"}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">RST No.</div>
+                            <div>{challan.rst_no || "-"}</div>
+                          </div>
+                          <div className="col-span-2">
+                            <div className="text-xs text-muted-foreground">Time In/Out</div>
+                            <div>{formatTime(challan.time_in)} - {formatTime(challan.time_out)}</div>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 pt-2 border-t">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => handleOutwardEdit(challan)}>
+                            <Edit className="h-4 w-4 mr-2" />
+                            Edit
+                          </Button>
+                          {isSecurity && !challan.time_out && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleOutwardTimeOut(challan)}
+                              disabled={submitting}
+                              className="bg-red-600 hover:bg-red-700 text-white">
+                              <LogOut className="h-4 w-4 mr-2" />
+                              Time Out
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
           </TabsContent>
         </Tabs>
 
@@ -2003,7 +2179,7 @@ export default function InOutPage() {
             </DialogHeader>
             <form
               onSubmit={handleInwardUpdate}
-              className="grid grid-cols-2 gap-4">
+              className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Serial No - Readonly from DB */}
               <div className="flex flex-col space-y-2">
                 <Label htmlFor="updateSerialNo">Serial No.</Label>
@@ -2357,7 +2533,7 @@ export default function InOutPage() {
               )}
 
               {/* Submit Button */}
-              <div className="col-span-2 flex justify-end space-x-2">
+              <div className="col-span-1 md:col-span-2 flex justify-end space-x-2">
                 <Button
                   type="button"
                   variant="outline"
@@ -2406,7 +2582,7 @@ export default function InOutPage() {
             </DialogHeader>
             <form
               onSubmit={handleOutwardUpdate}
-              className="grid grid-cols-2 gap-4">
+              className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Serial No - Readonly from DB */}
               <div className="flex flex-col space-y-2">
                 <Label htmlFor="updateOutSerialNo">Serial No.</Label>
@@ -2623,7 +2799,7 @@ export default function InOutPage() {
               )}
 
               {/* Submit Button */}
-              <div className="col-span-2 flex justify-end space-x-2">
+              <div className="col-span-1 md:col-span-2 flex justify-end space-x-2">
                 <Button
                   type="button"
                   variant="outline"
