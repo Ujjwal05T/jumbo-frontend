@@ -496,7 +496,7 @@ export default function NewOrderPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {clients.map((client) => (
+                    {clients.sort((a, b) => a.company_name.localeCompare(b.company_name)).map((client) => (
                       <SelectItem key={client.id} value={client.id}>
                         {client.company_name}
                       </SelectItem>

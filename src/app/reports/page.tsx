@@ -931,7 +931,7 @@ export default function ReportsPage() {
                         {availablePapers.length === 0 ? (
                           <SelectItem value="none" disabled>No papers found</SelectItem>
                         ) : (
-                          availablePapers.map((paper) => (
+                          availablePapers.sort((a, b) => a.gsm - b.gsm).map((paper) => (
                             <SelectItem key={paper.id} value={JSON.stringify({name: paper.name, gsm: paper.gsm, bf: paper.bf, shade: paper.shade})}>
                               {paper.name} - {paper.gsm}GSM - {paper.bf}BF - {paper.shade}
                             </SelectItem>

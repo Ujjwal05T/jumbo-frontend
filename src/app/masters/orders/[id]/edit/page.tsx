@@ -396,7 +396,7 @@ export default function EditOrderPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {clients.map((client) => (
+                    {clients.sort((a, b) => a.company_name.localeCompare(b.company_name)).map((client) => (
                       <SelectItem key={client.id} value={client.id}>
                         {client.company_name}
                       </SelectItem>
@@ -487,7 +487,7 @@ export default function EditOrderPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {papers.map((paper) => (
+                          {papers.sort((a, b) => a.gsm - b.gsm).map((paper) => (
                             <SelectItem key={paper.id} value={paper.id}>
                               {paper.name} ({paper.gsm}gsm, {paper.bf}bf, {paper.shade})
                             </SelectItem>

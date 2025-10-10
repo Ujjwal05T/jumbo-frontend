@@ -365,7 +365,7 @@ export function DispatchForm({
                         <SelectValue placeholder={loadingClients ? "Loading clients..." : "Choose client"} />
                       </SelectTrigger>
                       <SelectContent>
-                        {clients.map((client) => (
+                        {clients.sort((a, b) => a.company_name.localeCompare(b.company_name)).map((client) => (
                           <SelectItem key={client.id} value={client.id}>
                             <div className="flex items-center gap-2">
                               <Building2 className="h-3 w-3" />

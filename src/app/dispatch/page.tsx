@@ -360,7 +360,7 @@ export default function DispatchPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none" disabled>Select a client</SelectItem>
-                      {clients.map((client) => (
+                      {clients.sort((a, b) => a.company_name.localeCompare(b.company_name)).map((client) => (
                         <SelectItem key={client.id} value={client.id}>
                           {client.company_name}
                         </SelectItem>

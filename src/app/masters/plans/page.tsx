@@ -1283,7 +1283,7 @@ export default function PlansPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Clients</SelectItem>
-                    {clients.map((client) => (
+                    {clients.sort((a, b) => a.company_name.localeCompare(b.company_name)).map((client) => (
                       <SelectItem key={client.id} value={client.id}>
                         {client.company_name}
                       </SelectItem>
