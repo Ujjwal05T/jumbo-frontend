@@ -27,8 +27,10 @@ import {
   Download,
   Maximize2,
   Package,
-  X
+  X,
+  Printer
 } from "lucide-react";
+import { downloadWastageReportPDF } from "@/lib/wastage-pdf";
 import { toast } from "sonner";
 
 interface WastageReport {
@@ -36,9 +38,7 @@ interface WastageReport {
   inwardChallanId: string;
   partyName: string;
   vehicleNo: string;
-  slipNo: string;
   date: string;
-  netWeight: number;
   mouReport: number[];
   imageUrls: string[];
   createdAt: string;
@@ -119,6 +119,16 @@ export default function WastageReportDetailPage() {
     return mouReport.reduce((sum, value) => sum + value, 0).toFixed(2);
   };
 
+  const handleDownloadPDF = async () => {
+    if (!report) return;
+    
+    try {
+      await downloadWastageReportPDF(report);
+    } catch (error) {
+      console.error("Error downloading PDF:", error);
+    }
+  };
+
   const getFullImageUrl = (imageUrl: string) => {
     if (imageUrl.startsWith("http")) {
       return imageUrl;
@@ -175,19 +185,25 @@ export default function WastageReportDetailPage() {
     <DashboardLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div>
-          <Button
-            variant="ghost"
-            className="mb-4"
-            onClick={() => router.push("/mou-reports")}
-          >
-            <ChevronLeft className="h-4 w-4 mr-2" />
-            Back to Reports
+        <div className="flex items-center justify-between">
+          <div>
+            <Button
+              variant="ghost"
+              className="mb-4"
+              onClick={() => router.push("/mou-reports")}
+            >
+              <ChevronLeft className="h-4 w-4 mr-2" />
+              Back to Reports
+            </Button>
+            <h1 className="text-3xl font-bold">Wastage Report Details</h1>
+            <p className="text-muted-foreground mt-1">
+              Complete information for challan {report.inwardChallanId}
+            </p>
+          </div>
+          <Button onClick={handleDownloadPDF} size="lg">
+            <Printer className="h-4 w-4 mr-2" />
+            Download PDF
           </Button>
-          <h1 className="text-3xl font-bold">Wastage Report Details</h1>
-          <p className="text-muted-foreground mt-1">
-            Complete information for challan
-          </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -217,24 +233,10 @@ export default function WastageReportDetailPage() {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                      <FileText className="h-4 w-4" />
-                      Slip Number
-                    </label>
-                    <p className="text-lg mt-1">{report.slipNo || "N/A"}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                       <Calendar className="h-4 w-4" />
                       Date
                     </label>
                     <p className="text-lg mt-1">{formatDate(report.date)}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                      <Weight className="h-4 w-4" />
-                      Net Weight
-                    </label>
-                    <p className="text-lg font-bold mt-1">{report.netWeight} kg</p>
                   </div>
                 </div>
               </CardContent>
@@ -372,10 +374,6 @@ export default function WastageReportDetailPage() {
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Total MOU</span>
                   <span className="font-bold">{calculateTotalMOU(report.mouReport)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Net Weight</span>
-                  <span className="font-bold">{report.netWeight} kg</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Images</span>

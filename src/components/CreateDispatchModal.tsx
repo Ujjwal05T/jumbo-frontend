@@ -73,6 +73,7 @@ export function CreateDispatchModal({
   const [dispatchLoading, setDispatchLoading] = useState(false);
   const [successModalOpen, setSuccessModalOpen] = useState(false);
   const [dispatchResult, setDispatchResult] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<"client" | "all" | "wastage">("client");
 
   const [dispatchDetails, setDispatchDetails] = useState({
     vehicle_number: "",
@@ -231,51 +232,77 @@ export function CreateDispatchModal({
 
      console.log("Selected Client ID:", warehouseItems);
      console.log("Selected Client:", selectedClient);
-  // Filter items based on selected tab and search
   
+  // Separate client items from other warehouse items
   const clientItems = warehouseItems.filter(
     (item) => item.client_name === (selectedClient ? selectedClient.company_name : "")
   );
+  const otherWarehouseItems = warehouseItems.filter(
+    (item) => item.client_name !== (selectedClient ? selectedClient.company_name : "")
+  );
+
+  // Unified search filter that works across all item types
+  const matchesSearch = (item: any, isWastage: boolean) => {
+    if (!searchTerm.trim()) return true;
+    const searchLower = searchTerm.toLowerCase();
+    
+    if (isWastage) {
+      // Search in wastage-specific fields
+      return (
+        (item.barcode_id && item.barcode_id.toLowerCase().includes(searchLower)) ||
+        (item.reel_no && item.reel_no.toLowerCase().includes(searchLower)) ||
+        (item.frontend_id && item.frontend_id.toLowerCase().includes(searchLower)) ||
+        (item.paper_spec && item.paper_spec.toLowerCase().includes(searchLower)) ||
+        (item.created_by && item.created_by.toLowerCase().includes(searchLower))
+      );
+    } else {
+      // Search in warehouse item fields
+      return (
+        (item.barcode_id && item.barcode_id.toLowerCase().includes(searchLower)) ||
+        (item.qr_code && item.qr_code.toLowerCase().includes(searchLower)) ||
+        (item.client_name && item.client_name.toLowerCase().includes(searchLower)) ||
+        (item.order_id && item.order_id.toLowerCase().includes(searchLower)) ||
+        (item.paper_spec && item.paper_spec.toLowerCase().includes(searchLower)) ||
+        (item.created_by && item.created_by.toLowerCase().includes(searchLower))
+      );
+    }
+  };
+
+  // Combine all items with priority based on active tab and unified search
+  const getCombinedItems = () => {
+    // Apply search filter to all item types
+    const filteredClient = clientItems.filter(item => matchesSearch(item, false));
+    const filteredOther = otherWarehouseItems.filter(item => matchesSearch(item, false));
+    const filteredWastage = wastageItems.filter(item => matchesSearch(item, true));
+
+    // Prioritize based on active tab
+    if (activeTab === "client") {
+      return [
+        ...filteredClient.map(item => ({ ...item, type: "warehouse", priority: 1, matchScore: 3 })),
+        ...filteredOther.map(item => ({ ...item, type: "warehouse", priority: 2, matchScore: 2 })),
+        ...filteredWastage.map(item => ({ ...item, type: "wastage", priority: 3, matchScore: 1 }))
+      ];
+    } else if (activeTab === "all") {
+      return [
+        ...filteredOther.map(item => ({ ...item, type: "warehouse", priority: 1, matchScore: 3 })),
+        ...filteredClient.map(item => ({ ...item, type: "warehouse", priority: 2, matchScore: 2 })),
+        ...filteredWastage.map(item => ({ ...item, type: "wastage", priority: 3, matchScore: 1 }))
+      ];
+    } else { // activeTab === "wastage"
+      return [
+        ...filteredWastage.map(item => ({ ...item, type: "wastage", priority: 1, matchScore: 3 })),
+        ...filteredClient.map(item => ({ ...item, type: "warehouse", priority: 2, matchScore: 2 })),
+        ...filteredOther.map(item => ({ ...item, type: "warehouse", priority: 3, matchScore: 1 }))
+      ];
+    }
+  };
+
+  const combinedItems = getCombinedItems();
   
-  
-
-  const filteredClientItems = clientItems.filter((item) => {
-    if (!searchTerm.trim()) return true;
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      (item.barcode_id &&
-        item.barcode_id.toLowerCase().includes(searchLower)) ||
-      (item.qr_code && item.qr_code.toLowerCase().includes(searchLower)) ||
-      (item.order_id && item.order_id.toLowerCase().includes(searchLower)) ||
-      (item.paper_spec && item.paper_spec.toLowerCase().includes(searchLower))
-    );
-  });
-
-  const filteredAllItems = warehouseItems.filter((item) => {
-    if (!searchTerm.trim()) return true;
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      (item.barcode_id &&
-        item.barcode_id.toLowerCase().includes(searchLower)) ||
-      (item.qr_code && item.qr_code.toLowerCase().includes(searchLower)) ||
-      (item.client_name &&
-        item.client_name.toLowerCase().includes(searchLower)) ||
-      (item.order_id && item.order_id.toLowerCase().includes(searchLower)) ||
-      (item.paper_spec && item.paper_spec.toLowerCase().includes(searchLower))
-    );
-  });
-
-  const filteredWastageItems = wastageItems.filter((item) => {
-    if (!searchTerm.trim()) return true;
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      (item.barcode_id &&
-        item.barcode_id.toLowerCase().includes(searchLower)) ||
-      (item.reel_no && item.reel_no.toLowerCase().includes(searchLower)) ||
-      (item.frontend_id && item.frontend_id.toLowerCase().includes(searchLower)) ||
-      (item.paper_spec && item.paper_spec.toLowerCase().includes(searchLower))
-    );
-  });
+  // Get counts for each category after search filter
+  const searchedClientCount = clientItems.filter(item => matchesSearch(item, false)).length;
+  const searchedOtherCount = otherWarehouseItems.filter(item => matchesSearch(item, false)).length;
+  const searchedWastageCount = wastageItems.filter(item => matchesSearch(item, true)).length;
 
   const highlightText = (text: string, searchTerm: string) => {
     if (!searchTerm || !text) return text;
@@ -334,32 +361,17 @@ export function CreateDispatchModal({
     );
   };
 
-  const renderWastageItemsTable = (items: any[]) => (
+  // Unified rendering function for combined items
+  const renderCombinedItemsTable = (items: any[]) => (
     <div className="rounded-md border max-h-[400px] overflow-y-auto">
       <Table>
         <TableHeader className="sticky top-0 bg-white z-10">
           <TableRow>
-            <TableHead className="w-[50px]">
-              <div className="flex items-center justify-center">
-                <Checkbox
-                  checked={items.length > 0 && selectedWastageIds.length === items.length}
-                  onCheckedChange={(checked) => {
-                    if (checked) {
-                      const allItemIds = items.map((item) => item.id);
-                      setSelectedWastageIds(allItemIds);
-                      toast.success(`Selected all ${allItemIds.length} wastage items`);
-                    } else {
-                      setSelectedWastageIds([]);
-                      toast.success("Cleared all Stock selections");
-                    }
-                  }}
-                  className="w-5 h-5"
-                />
-              </div>
-            </TableHead>
+            <TableHead className="w-[50px]">Select</TableHead>
             <TableHead>S.No</TableHead>
-            <TableHead>Reel No / Barcode</TableHead>
-            <TableHead>ID</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>ID / Barcode</TableHead>
+            <TableHead>Client & Order</TableHead>
             <TableHead>Paper Specs</TableHead>
             <TableHead>Width</TableHead>
             <TableHead>Weight</TableHead>
@@ -368,97 +380,147 @@ export function CreateDispatchModal({
         </TableHeader>
         <TableBody>
           {items.length > 0 ? (
-            items.map((item: any, index) => (
-              <TableRow
-                key={item.id}
-                className={
-                  selectedWastageIds.includes(item.id)
-                    ? "bg-orange-50 border-orange-200"
-                    : ""
-                }
-              >
-                <TableCell>
-                  <div className="flex items-center justify-center">
-                    <Checkbox
-                      checked={selectedWastageIds.includes(item.id)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSelectedWastageIds((prev) => [...prev, item.id]);
-                          toast.success(`Selected Stock ${item.reel_no || item.frontend_id}`);
-                        } else {
-                          setSelectedWastageIds((prev) => prev.filter((id) => id !== item.id));
-                          toast.success(`Removed Stock ${item.reel_no || item.frontend_id}`);
-                        }
-                      }}
-                      className="w-5 h-5"
-                    />
-                  </div>
-                </TableCell>
-                <TableCell className="font-medium">{index + 1}</TableCell>
-                <TableCell>
-                  <div className="space-y-1">
-                    <div
-                      className={`font-mono text-sm ${
-                        selectedWastageIds.includes(item.id)
-                          ? "font-bold text-orange-700"
-                          : ""
-                      }`}
-                    >
-                      {highlightText(item.reel_no || item.barcode_id || "N/A", searchTerm)}
-                      {selectedWastageIds.includes(item.id) && (
-                        <Badge className="ml-2 text-xs bg-orange-600">SELECTED</Badge>
-                      )}
+            items.map((item: any, index) => {
+              const isWastageItem = item.type === "wastage";
+              const isSelected = isWastageItem 
+                ? selectedWastageIds.includes(item.id)
+                : selectedItems.includes(item.inventory_id);
+              
+              return (
+                <TableRow
+                  key={isWastageItem ? `wastage-${item.id}` : `warehouse-${item.inventory_id}`}
+                  className={`${
+                    isSelected
+                      ? isWastageItem
+                        ? "bg-orange-50 border-orange-200"
+                        : "bg-blue-50 border-blue-200"
+                      : ""
+                  } ${item.priority === 1 ? "border-l-4 border-l-green-500" : ""}`}
+                >
+                  <TableCell>
+                    <div className="flex items-center justify-center">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) => {
+                          if (isWastageItem) {
+                            if (checked) {
+                              setSelectedWastageIds((prev) => [...prev, item.id]);
+                              toast.success(`Selected Stock ${item.reel_no || item.frontend_id}`);
+                            } else {
+                              setSelectedWastageIds((prev) => prev.filter((id) => id !== item.id));
+                              toast.success(`Removed Stock ${item.reel_no || item.frontend_id}`);
+                            }
+                          } else {
+                            if (checked) {
+                              setSelectedItems((prev) => [...prev, item.inventory_id]);
+                              toast.success(`Selected ${item.barcode_id || item.qr_code}`);
+                            } else {
+                              removeSelectedItem(item.inventory_id);
+                            }
+                          }
+                        }}
+                        className="w-5 h-5"
+                      />
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      By: {item.created_by || "Unknown"}
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="text-sm font-mono">
-                    {highlightText(item.frontend_id || "N/A", searchTerm)}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">
-                        {highlightText(item.paper_spec, searchTerm)}
-                      </span>
-                      <Badge variant="outline" className="text-xs bg-orange-100">
+                  </TableCell>
+                  <TableCell className="font-medium">{index + 1}</TableCell>
+                  <TableCell>
+                    {isWastageItem ? (
+                      <Badge variant="outline" className="text-xs bg-orange-100 text-orange-700">
                         Stock
                       </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-xs bg-blue-100 text-blue-700">
+                        Warehouse
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      <div
+                        className={`font-mono text-sm ${
+                          isSelected
+                            ? isWastageItem
+                              ? "font-bold text-orange-700"
+                              : "font-bold text-blue-700"
+                            : ""
+                        }`}
+                      >
+                        {highlightText(
+                          isWastageItem
+                            ? (item.reel_no || item.barcode_id || item.frontend_id || "N/A")
+                            : (item.barcode_id || item.qr_code),
+                          searchTerm
+                        )}
+                        {isSelected && (
+                          <Badge className={`ml-2 text-xs ${
+                            isWastageItem ? "bg-orange-600" : "bg-blue-600"
+                          }`}>
+                            SELECTED
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        By: {item.created_by || "Unknown"}
+                      </div>
                     </div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="text-center">
-                    <div className="font-medium">{item.width_inches}"</div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="text-center">
-                    <div className="font-medium">{item.weight_kg}kg</div>
-                  </div>
-                </TableCell>
-                <TableCell>{getStatusBadge(item.status)}</TableCell>
-              </TableRow>
-            ))
+                  </TableCell>
+                  <TableCell>
+                    {isWastageItem ? (
+                      <div className="text-sm text-muted-foreground">-</div>
+                    ) : (
+                      <div className="space-y-1">
+                        <div className="font-medium text-sm flex items-center gap-1">
+                          <Building2 className="w-3 h-3 text-blue-600" />
+                          {highlightText(item.client_name || "N/A", searchTerm)}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Order: {highlightText(item.order_id || "N/A", searchTerm)}
+                        </div>
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">
+                          {highlightText(item.paper_spec, searchTerm)}
+                        </span>
+                        {!isWastageItem && (
+                          <WastageIndicator isWastageRoll={item.is_wastage_roll} />
+                        )}
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-center">
+                      <div className="font-medium">{item.width_inches}"</div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-center">
+                      <div className="font-medium">{item.weight_kg}kg</div>
+                    </div>
+                  </TableCell>
+                  <TableCell>{getStatusBadge(item.status)}</TableCell>
+                </TableRow>
+              );
+            })
           ) : (
             <TableRow>
-              <TableCell colSpan={8} className="h-24 text-center">
+              <TableCell colSpan={9} className="h-24 text-center">
                 {loading ? (
                   <div className="flex items-center justify-center">
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Loading Stock items...
+                    Loading items...
                   </div>
                 ) : (
                   <div className="text-muted-foreground">
-                    <p className="font-medium">No Stock items found</p>
+                    <p className="font-medium">No items found</p>
                     <p className="text-sm">
                       {searchTerm
                         ? "Try adjusting your search"
-                        : "No Stock items available"}
+                        : "No items available"}
                     </p>
                   </div>
                 )}
@@ -879,51 +941,86 @@ export function CreateDispatchModal({
                   </div>
                 </div>
 
-                {/* Search */}
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Search by QR code, barcode, order, paper spec..."
-                    className="pl-8 pr-8"
-                  />
-                  {searchTerm && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setSearchTerm("")}
-                      className="absolute right-1 top-1 h-6 w-6 p-0"
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  )}
+                {/* Search - Works across all tabs */}
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      placeholder="Search across all items: QR code, barcode, reel no, order, paper spec, creator..."
+                      className="pl-8 pr-8"
+                    />
+                    {searchTerm && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setSearchTerm("")}
+                        className="absolute right-1 top-1 h-6 w-6 p-0"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Tabs for Client Items vs All Items vs Wastage */}
-                <Tabs defaultValue="client" className="w-full">
-                  <TabsList className="grid w-full grid-cols-3">
+                <Tabs value={activeTab} onValueChange={(value: any) => setActiveTab(value)} className="w-full">
+                  {/* <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="client" className="flex items-center gap-2">
                       <Building2 className="w-4 h-4" />
-                      {selectedClient?.company_name} ({clientItems.length})
+                      {selectedClient?.company_name || "Client"} 
+                      <Badge variant="secondary" className="ml-1">
+                        {searchTerm ? searchedClientCount : clientItems.length}
+                      </Badge>
                     </TabsTrigger>
                     <TabsTrigger value="all" className="flex items-center gap-2">
                       <Package className="w-4 h-4" />
-                      All Clients ({warehouseItems.length})
+                      All Other Clients
+                      <Badge variant="secondary" className="ml-1">
+                        {searchTerm ? searchedOtherCount : otherWarehouseItems.length}
+                      </Badge>
                     </TabsTrigger>
                     <TabsTrigger value="wastage" className="flex items-center gap-2">
                       <AlertCircle className="w-4 h-4" />
-                      Stock ({wastageItems.length})
+                      Stock
+                      <Badge variant="secondary" className="ml-1">
+                        {searchTerm ? searchedWastageCount : wastageItems.length}
+                      </Badge>
                     </TabsTrigger>
-                  </TabsList>
+                  </TabsList> */}
                   <TabsContent value="client" className="mt-4">
-                    {renderItemsTable(filteredClientItems, false)}
+                    <div className="mb-2 text-sm text-muted-foreground flex items-center justify-between">
+                      <span>
+                        <span className="font-medium text-green-600">●</span> Green border = Priority items from {selectedClient?.company_name}
+                      </span>
+                      <span className="font-medium">
+                        Showing {combinedItems.length} total items
+                      </span>
+                    </div>
+                    {renderCombinedItemsTable(combinedItems)}
                   </TabsContent>
                   <TabsContent value="all" className="mt-4">
-                    {renderItemsTable(filteredAllItems, true)}
+                    <div className="mb-2 text-sm text-muted-foreground flex items-center justify-between">
+                      <span>
+                        <span className="font-medium text-green-600">●</span> Green border = Priority items from other clients
+                      </span>
+                      <span className="font-medium">
+                        Showing {combinedItems.length} total items
+                      </span>
+                    </div>
+                    {renderCombinedItemsTable(combinedItems)}
                   </TabsContent>
                   <TabsContent value="wastage" className="mt-4">
-                    {renderWastageItemsTable(filteredWastageItems)}
+                    <div className="mb-2 text-sm text-muted-foreground flex items-center justify-between">
+                      <span>
+                        <span className="font-medium text-green-600">●</span> Green border = Priority stock items
+                      </span>
+                      <span className="font-medium">
+                        Showing {combinedItems.length} total items
+                      </span>
+                    </div>
+                    {renderCombinedItemsTable(combinedItems)}
                   </TabsContent>
                 </Tabs>
 

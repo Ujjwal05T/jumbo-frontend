@@ -17,18 +17,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Calendar, Upload, Plus, X, AlertCircle, PackageX, Trash2, Image as ImageIcon, Truck, Building2, FileText, LoaderCircle } from "lucide-react";
+import { Calendar, Upload, Plus, X, AlertCircle, PackageX, Trash2, Image as ImageIcon, Truck, Building2, FileText, LoaderCircle, Download } from "lucide-react";
 import { fetchInwardChallans, fetchMaterials, InwardChallan, Material } from "@/lib/material-management";
 import { fetchClients, Client } from "@/lib/clients";
+import { downloadWastageReportPDF } from "@/lib/wastage-pdf";
 
 interface ExistingWastage {
   id: number;
   inwardChallanId: string;
   partyName: string;
   vehicleNo: string;
-  slipNo?: string;
   date: string;
-  netWeight: number;
   mouReport: number[];
   imageUrls: string[];
 }
@@ -130,6 +129,42 @@ export default function WastageMOUPage() {
   };
 
   const handleAddWastageClick = async (challan: InwardChallan) => {
+    // Check if wastage already exists for this challan
+    if (challansWithWastage.has(challan.id)) {
+      // If wastage exists, fetch data and download PDF
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_DOTNET_URL}/wastage/by-challan/${challan.id}`
+        );
+
+        if (response.ok) {
+          const wastageData = await response.json();
+          
+          // Map PascalCase from .NET to camelCase for PDF generator
+          const pdfData = {
+            id: wastageData.Id || wastageData.id,
+            inwardChallanId: wastageData.InwardChallanId || wastageData.inwardChallanId,
+            partyName: wastageData.PartyName || wastageData.partyName,
+            vehicleNo: wastageData.VehicleNo || wastageData.vehicleNo,
+            date: wastageData.Date || wastageData.date,
+            mouReport: wastageData.MouReport || wastageData.mouReport || [],
+            imageUrls: wastageData.ImageUrls || wastageData.imageUrls || [],
+            createdAt: wastageData.CreatedAt || wastageData.createdAt,
+            updatedAt: wastageData.UpdatedAt || wastageData.updatedAt,
+          };
+
+          await downloadWastageReportPDF(pdfData);
+          toast.success("Opening wastage report for printing...");
+        } else {
+          toast.error("Failed to fetch wastage report data");
+        }
+      } catch (error) {
+        console.error("Error downloading PDF:", error);
+        toast.error("Failed to download PDF. Please try again.");
+      }
+      return;
+    }
+
     setSelectedChallan(challan);
     setCheckingExisting(true);
 
@@ -140,31 +175,26 @@ export default function WastageMOUPage() {
       );
 
       if (response.ok) {
-        const existingData = await response.json();
-        console.log("Existing wastage data from backend:", existingData);
-
-        // Map PascalCase from .NET to camelCase for frontend
-        const mappedData: ExistingWastage = {
-          id: existingData.Id || existingData.id,
-          inwardChallanId: existingData.InwardChallanId || existingData.inwardChallanId,
-          partyName: existingData.PartyName || existingData.partyName,
-          vehicleNo: existingData.VehicleNo || existingData.vehicleNo,
-          slipNo: existingData.SlipNo || existingData.slipNo,
-          date: existingData.Date || existingData.date,
-          netWeight: existingData.NetWeight || existingData.netWeight,
-          mouReport: existingData.MouReport || existingData.mouReport || [],
-          imageUrls: existingData.ImageUrls || existingData.imageUrls || [],
+        // Wastage exists - mark it and download PDF
+        setChallansWithWastage(prev => new Set(prev).add(challan.id));
+        
+        const wastageData = await response.json();
+        const pdfData = {
+          id: wastageData.Id || wastageData.id,
+          inwardChallanId: wastageData.InwardChallanId || wastageData.inwardChallanId,
+          partyName: wastageData.PartyName || wastageData.partyName,
+          vehicleNo: wastageData.VehicleNo || wastageData.vehicleNo,
+          date: wastageData.Date || wastageData.date,
+          mouReport: wastageData.MouReport || wastageData.mouReport || [],
+          imageUrls: wastageData.ImageUrls || wastageData.imageUrls || [],
+          createdAt: wastageData.CreatedAt || wastageData.createdAt,
+          updatedAt: wastageData.UpdatedAt || wastageData.updatedAt,
         };
 
-        setExistingWastage(mappedData);
-        // Pre-fill the form with existing data
-        setMouReports(mappedData.mouReport?.map((r: number) => r.toString()) || [""]);
-        // Don't set imagePreviews - existing images will be shown separately
-        setImagePreviews([]);
-        setImageFiles([]);
-        // Mark this challan as having wastage
-        setChallansWithWastage(prev => new Set(prev).add(challan.id));
-        console.log("Found existing wastage, pre-filling form");
+        await downloadWastageReportPDF(pdfData);
+        toast.success("Opening wastage report for printing...");
+        setCheckingExisting(false);
+        return;
       } else if (response.status === 404) {
         // No existing wastage found - this is expected for first time
         console.log("No existing wastage found, creating new");
@@ -215,9 +245,7 @@ export default function WastageMOUPage() {
     // Append form fields - PascalCase for .NET
     formData.append("PartyName", (formElement.elements.namedItem("partyName") as HTMLInputElement).value);
     formData.append("VehicleNo", (formElement.elements.namedItem("vehicleNo") as HTMLInputElement).value);
-    formData.append("SlipNo", (formElement.elements.namedItem("slipNo") as HTMLInputElement).value || "");
     formData.append("Date", (formElement.elements.namedItem("date") as HTMLInputElement).value);
-    formData.append("NetWeight", (formElement.elements.namedItem("netWeight") as HTMLInputElement).value);
 
     // Append MOU reports as individual form data entries - PascalCase for .NET
     const filteredMouReports = mouReports.filter(r => r).map(r => parseFloat(r));
@@ -267,16 +295,13 @@ export default function WastageMOUPage() {
 
       const data = result.data || result;
 
-      if (data.isUpdate || result.isUpdate) {
-        toast.success("Wastage entry updated successfully!");
-      } else {
-        toast.success("Wastage entry created successfully!");
-      }
+      toast.success("Wastage entry created successfully!");
 
       handleCloseModal();
-      // Don't refresh data since challans without time_out should remain visible
-      // The user can still update their wastage report
-      // Only after security sets time_out will the challan disappear
+      // Mark this challan as having wastage so user cannot edit it again
+      if (selectedChallan) {
+        setChallansWithWastage(prev => new Set(prev).add(selectedChallan.id));
+      }
     } catch (error) {
       console.error("Error submitting form:", error);
       toast.error(`Failed to submit wastage entry: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -330,7 +355,7 @@ export default function WastageMOUPage() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">MOU Wastage Management</h1>
             <p className="text-muted-foreground mt-1">
-              Add wastage reports for pending inward challans
+              Add wastage reports for pending inward challans (cannot be edited once submitted)
             </p>
           </div>
         </div>
@@ -378,7 +403,7 @@ export default function WastageMOUPage() {
           <CardHeader>
             <CardTitle>Pending Inward Challans</CardTitle>
             <CardDescription>
-              Inward challans without time out - click "Add Wastage" to submit wastage report
+              Inward challans without time out - click "Add Wastage" to submit wastage report. Once submitted, you can download the PDF.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -420,8 +445,12 @@ export default function WastageMOUPage() {
                           onClick={() => handleAddWastageClick(challan)}
                           variant={challansWithWastage.has(challan.id) ? "outline" : "default"}
                         >
-                          <Plus className="h-4 w-4 mr-2" />
-                          {challansWithWastage.has(challan.id) ? "Update Wastage" : "Add Wastage"}
+                          {challansWithWastage.has(challan.id) ? (
+                            <Download className="h-4 w-4 mr-2" />
+                          ) : (
+                            <Plus className="h-4 w-4 mr-2" />
+                          )}
+                          {challansWithWastage.has(challan.id) ? "Download PDF" : "Add Wastage"}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -437,7 +466,7 @@ export default function WastageMOUPage() {
           <div className="px-1">
             <h2 className="text-lg font-semibold">Pending Inward Challans</h2>
             <p className="text-sm text-muted-foreground">
-              Tap a card to add wastage report
+              Tap a card to add wastage report. Once submitted, you can download the PDF.
             </p>
           </div>
           {inwardChallans.length === 0 ? (
@@ -489,13 +518,10 @@ export default function WastageMOUPage() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <PackageX className="h-5 w-5 text-primary" />
-                {existingWastage ? "Update" : "Add"} Wastage Entry - {selectedChallan ? getClientName(selectedChallan.party_id) : ""}
+                Add Wastage Entry - {selectedChallan ? getClientName(selectedChallan.party_id) : ""}
               </DialogTitle>
               <DialogDescription>
-                {existingWastage
-                  ? "Update the wastage details for this challan"
-                  : `Fill in the wastage details for ${selectedChallan?.vehicle_number || "this challan"}`
-                }
+                Fill in the wastage details for {selectedChallan?.vehicle_number || "this challan"}
               </DialogDescription>
             </DialogHeader>
             <div className="mt-4">
@@ -530,20 +556,6 @@ export default function WastageMOUPage() {
                 />
               </div>
 
-              {/* Slip No */}
-              <div className="space-y-2">
-                <Label htmlFor="slipNo">
-                  Slip Number
-                </Label>
-                <Input
-                  id="slipNo"
-                  name="slipNo"
-                  placeholder="Enter slip/document number (optional)"
-                  maxLength={50}
-                  defaultValue={existingWastage?.slipNo || selectedChallan?.slip_no || ""}
-                />
-              </div>
-
               {/* Date */}
               <div className="space-y-2">
                 <Label htmlFor="date">
@@ -562,38 +574,13 @@ export default function WastageMOUPage() {
                 </div>
               </div>
 
-              {/* Net Weight */}
-              <div className="space-y-2">
-                <Label htmlFor="netWeight">
-                  Net Weight (kg) <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="netWeight"
-                  name="netWeight"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  placeholder="Enter net weight in kilograms"
-                  required
-                  defaultValue={existingWastage?.netWeight?.toString() || selectedChallan?.net_weight?.toString() || ""}
-                />
-              </div>
-
               {/* MOU Report (Array of floats) */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label>
                     MOU Report Values (Optional)
                   </Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={addMouReportField}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Value
-                  </Button>
+                  
                 </div>
                 <div className="space-y-2">
                   {mouReports.map((value, index) => (
@@ -618,9 +605,18 @@ export default function WastageMOUPage() {
                     </div>
                   ))}
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Add multiple float values for the MOU report
-                </p>
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addMouReportField}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Value
+                  </Button>
+                </div>
+                
               </div>
 
               {/* Image Upload (Multiple) */}
@@ -653,37 +649,8 @@ export default function WastageMOUPage() {
                 </div>
 
                 {/* Image Previews */}
-                {(imagePreviews.length > 0 || (existingWastage && existingWastage.imageUrls.length > 0)) && (
+                {imagePreviews.length > 0 && (
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
-                    {/* Show existing images from server */}
-                    {existingWastage && existingWastage.imageUrls.map((imageUrl, index) => {
-                      // Prepend server URL if the URL is relative
-                      const fullImageUrl = imageUrl.startsWith('http')
-                        ? imageUrl
-                        : `${process.env.NEXT_PUBLIC_DOTNET_URL?.replace('/api', '')}${imageUrl}`;
-
-                      return (
-                        <div key={`existing-${index}`} className="relative group">
-                          <div className="relative aspect-square rounded-lg overflow-hidden border bg-muted">
-                            <img
-                              src={fullImageUrl}
-                              alt={`Existing ${index + 1}`}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                console.error('Failed to load image:', fullImageUrl);
-                                e.currentTarget.src = '/placeholder.svg';
-                              }}
-                            />
-                            <div className="absolute top-2 right-2">
-                              <Badge variant="secondary" className="text-xs">Existing</Badge>
-                            </div>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1 truncate">
-                            Image {index + 1}
-                          </p>
-                        </div>
-                      );
-                    })}
                     {/* Show newly uploaded images */}
                     {imagePreviews.map((preview, index) => (
                       <div key={`new-${index}`} className="relative group">

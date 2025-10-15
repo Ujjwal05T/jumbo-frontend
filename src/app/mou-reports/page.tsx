@@ -28,9 +28,7 @@ interface WastageReport {
   inwardChallanId: string;
   partyName: string;
   vehicleNo: string;
-  slipNo: string;
   date: string;
-  netWeight: number;
   mouReport: number[];
   imageUrls: string[];
   createdAt: string;
@@ -57,7 +55,6 @@ export default function MouReportsPage() {
       const filtered = wastageReports.filter((report) =>
         report.partyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         report.vehicleNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        report.slipNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
         report.inwardChallanId.toLowerCase().includes(searchTerm.toLowerCase())
       );
       setFilteredReports(filtered);
@@ -186,9 +183,7 @@ export default function MouReportsPage() {
                   <TableRow>
                     <TableHead>Party Name</TableHead>
                     <TableHead>Vehicle No</TableHead>
-                    <TableHead>Slip No</TableHead>
                     <TableHead>Date</TableHead>
-                    <TableHead>Net Weight (kg)</TableHead>
                     <TableHead>Total MOU</TableHead>
                     <TableHead>Images</TableHead>
                     <TableHead>Actions</TableHead>
@@ -197,7 +192,7 @@ export default function MouReportsPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="h-24 text-center">
+                      <TableCell colSpan={6} className="h-24 text-center">
                         <div className="flex items-center justify-center">
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Loading wastage reports...
@@ -218,20 +213,8 @@ export default function MouReportsPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-muted-foreground" />
-                            {report.slipNo || "N/A"}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4 text-muted-foreground" />
                             {formatDate(report.date)}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Weight className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">{report.netWeight}</span>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -283,21 +266,6 @@ export default function MouReportsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{filteredReports.length}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Total Net Weight
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {filteredReports
-                    .reduce((sum, r) => sum + r.netWeight, 0)
-                    .toFixed(2)}{" "}
-                  kg
-                </div>
               </CardContent>
             </Card>
             <Card>
