@@ -98,12 +98,15 @@ const getNavigationForRole = (role: string | null) => {
       icon: Database,
       roles: ["admin", "security", "accountant"],
     },
-    // {
-    //   name: "MOU Report",
-    //   href: "/mou",
-    //   icon: Clock,
-    //   roles: ["admin"],
-    // },
+    {
+      name: "MOU",
+      icon: Clock,
+      roles: ["admin", "accountant"],
+      children: [
+        { name: "MOU Entry", href: "/mou", roles: ["admin", "accountant"] },
+        { name: "MOU Reports", href: "/mou-reports", roles: ["admin", "accountant"] },
+      ],
+    },
 
     {
       name: "Dispatch",

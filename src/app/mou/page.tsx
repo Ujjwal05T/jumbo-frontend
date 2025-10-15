@@ -230,14 +230,6 @@ export default function WastageMOUPage() {
       formData.append("ImageFiles", file);
     });
 
-    // Debug: Log what we're sending
-    console.log("Submitting form data:");
-    console.log("InwardChallanId:", selectedChallan.id);
-    console.log("PartyName:", (formElement.elements.namedItem("partyName") as HTMLInputElement).value);
-    console.log("VehicleNo:", (formElement.elements.namedItem("vehicleNo") as HTMLInputElement).value);
-    console.log("Image files count:", imageFiles.length);
-    console.log("MOU reports:", filteredMouReports);
-
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_DOTNET_URL}/wastage`, {
         method: "POST",
