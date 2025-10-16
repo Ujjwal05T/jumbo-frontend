@@ -337,18 +337,15 @@ export default function ClientOrdersPlansPage() {
                     <SelectValue placeholder="Choose a client..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableClients.map((client) => (
+                    {availableClients
+                      .sort((a, b) => a.company_name.localeCompare(b.company_name))
+                      .map((client) => (
                       <SelectItem key={client.id} value={client.id}>
                         <div className="flex flex-col">
-                          <span className="font-medium">{client.company_name}</span>
-                          {client.contact_person && (
-                            <span className="text-xs text-muted-foreground">
-                              Contact: {client.contact_person}
-                            </span>
-                          )}
+                        <span className="font-medium">{client.company_name}</span>
                         </div>
                       </SelectItem>
-                    ))}
+                      ))}
                   </SelectContent>
                 </Select>
               </div>

@@ -58,6 +58,7 @@ export interface DispatchFormData {
   vehicle_number: string;
   driver_name: string;
   driver_mobile: string;
+  locket_no?: string;
   payment_type: string;
   dispatch_number: string;
   reference_number?: string;
@@ -93,6 +94,7 @@ export async function createDispatchRecord(dispatchData: {
   vehicle_number: string;
   driver_name: string;
   driver_mobile: string;
+  locket_no?: string;
   payment_type: string;
   dispatch_number: string;
   reference_number?: string;
@@ -122,6 +124,7 @@ export async function createDispatchRecord(dispatchData: {
     vehicle_number: dispatchData.vehicle_number.trim(),
     driver_name: dispatchData.driver_name.trim(),
     driver_mobile: dispatchData.driver_mobile.trim(),
+    locket_no: dispatchData.locket_no?.trim() || null,
     payment_type: dispatchData.payment_type,
     dispatch_date: new Date().toISOString(),
     dispatch_number: dispatchData.dispatch_number.trim(),

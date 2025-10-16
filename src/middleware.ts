@@ -7,6 +7,7 @@ import type { NextRequest } from 'next/server';
 // Define role-based route permissions
 const roleBasedRoutes = {
   admin: [
+    '/roll-tracking',
     '/mou-reports',
     '/mou',
     '/dashboard',

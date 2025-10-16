@@ -89,7 +89,6 @@ interface DispatchRecord {
   vehicle_number: string;
   driver_name: string;
   driver_mobile: string;
-  payment_type: string;
   status: string;
   total_items: number;
   total_weight_kg: number;
@@ -126,7 +125,6 @@ interface DispatchDetails {
   vehicle_number: string;
   driver_name: string;
   driver_mobile: string;
-  payment_type: string;
   status: string;
   total_items: number;
   total_weight_kg: number;
@@ -157,7 +155,6 @@ interface DispatchStats {
     total_weight_kg: number;
   };
   status_breakdown: Record<string, number>;
-  payment_type_breakdown: Record<string, number>;
   recent_dispatches: Array<{
     id: string;
     dispatch_number: string;
@@ -396,17 +393,7 @@ export default function DispatchHistoryPage() {
     }
   };
 
-  const getPaymentTypeBadge = (paymentType: string) => {
-    switch (paymentType) {
-      case 'bill':
-        return <Badge variant="outline">Bill</Badge>;
-      case 'cash':
-        return <Badge className="bg-green-100 text-green-800">Cash</Badge>;
-      default:
-        return <Badge variant="outline">{paymentType}</Badge>;
-    }
-  };
-
+  
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -573,7 +560,6 @@ export default function DispatchHistoryPage() {
                     <TableHead>Vehicle & Driver</TableHead>
                     <TableHead>Items</TableHead>
                     <TableHead>Weight</TableHead>
-                    <TableHead>Payment</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -581,7 +567,7 @@ export default function DispatchHistoryPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="h-24 text-center">
+                      <TableCell colSpan={8} className="h-24 text-center">
                         <div className="flex items-center justify-center">
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Loading dispatch records...
@@ -648,9 +634,6 @@ export default function DispatchHistoryPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {getPaymentTypeBadge(dispatch.payment_type)}
-                        </TableCell>
-                        <TableCell>
                           {getStatusBadge(dispatch.status)}
                         </TableCell>
                         <TableCell className="text-right">
@@ -706,7 +689,7 @@ export default function DispatchHistoryPage() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={9} className="h-24 text-center">
+                      <TableCell colSpan={8} className="h-24 text-center">
                         <div className="text-center py-4">
                           <div className="text-muted-foreground">
                             <p className="font-medium">No dispatch records found</p>
@@ -795,10 +778,6 @@ export default function DispatchHistoryPage() {
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">Status</label>
                       <div>{getStatusBadge(selectedDispatch.status)}</div>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">Payment Type</label>
-                      <div>{getPaymentTypeBadge(selectedDispatch.payment_type)}</div>
                     </div>
                   </CardContent>
                 </Card>

@@ -92,7 +92,6 @@ export default function DispatchPage() {
     vehicle_number: "",
     driver_name: "",
     driver_mobile: "",
-    payment_type: "cash",
     dispatch_number: "",
     reference_number: "",
   });

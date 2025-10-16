@@ -73,6 +73,7 @@ export const STATUS_ENDPOINTS = {
 export const DISPATCH_ENDPOINTS = {
   WAREHOUSE_ITEMS: `${API_BASE_URL}/dispatch/warehouse-items`,
   WASTAGE_INVENTORY_ITEMS: `${API_BASE_URL}/dispatch/wastage-inventory-items`,  // NEW: Wastage items
+  PREVIEW_DISPATCH_NUMBER: `${API_BASE_URL}/dispatch/preview-number`,  // NEW: Preview dispatch number
   CREATE_DISPATCH: `${API_BASE_URL}/dispatch/create-dispatch`,
   CLIENTS: `${API_BASE_URL}/dispatch/clients`,
   PENDING_ITEMS: `${API_BASE_URL}/dispatch/pending-items`,
@@ -133,6 +134,13 @@ export const MATERIAL_ENDPOINTS = {
   INWARD_CHALLAN_BY_ID: (challanId: string) => `${API_BASE_URL}/inward-challans/${challanId}`,
   OUTWARD_CHALLANS: `${API_BASE_URL}/outward-challans`,
   OUTWARD_CHALLAN_BY_ID: (challanId: string) => `${API_BASE_URL}/outward-challans/${challanId}`,
+};
+
+// Roll Tracking endpoints
+export const ROLL_TRACKING_ENDPOINTS = {
+  TRACK_ROLL: (identifier: string) => `${API_BASE_URL}/track/roll/${encodeURIComponent(identifier)}`,
+  SEARCH_ROLLS: `${API_BASE_URL}/track/search`,
+  SEARCH_BY_SPECS: `${API_BASE_URL}/track/search-by-specs`,
 };
 
 /**

@@ -566,7 +566,8 @@ export default function InOutPage() {
   useEffect(() => {
     const netWeight = inwardForm.net_weight || 0;
     const report = inwardForm.report || 0;
-    const calculatedFinalWeight = netWeight - report;
+    const moureport = inwardForm.moureport || 0;
+    const calculatedFinalWeight = netWeight - report - moureport;
 
     // Only update if the calculated value is different to avoid infinite loops
     if (inwardForm.final_weight !== calculatedFinalWeight) {
@@ -575,7 +576,7 @@ export default function InOutPage() {
         final_weight: calculatedFinalWeight,
       }));
     }
-  }, [inwardForm.net_weight, inwardForm.report]);
+  }, [inwardForm.net_weight, inwardForm.report, inwardForm.moureport]);
 
   // Load data on component mount
   useEffect(() => {
@@ -659,6 +660,7 @@ export default function InOutPage() {
           ? Number(inwardForm.gross_weight)
           : undefined,
         report: inwardForm.report ? Number(inwardForm.report) : undefined,
+        moureport: inwardForm.moureport ? Number(inwardForm.moureport) : undefined,
         net_weight: inwardForm.net_weight
           ? Number(inwardForm.net_weight)
           : undefined,
@@ -698,6 +700,7 @@ export default function InOutPage() {
         time_in: "",
         time_out: "",
         report: undefined,
+        moureport: undefined,
       });
       loadData(); // Refresh data
     } catch (error) {
@@ -803,6 +806,7 @@ export default function InOutPage() {
       rst_no: challan.rst_no,
       gross_weight: challan.gross_weight,
       report: challan.report,
+      moureport: challan.moureport,
       net_weight: challan.net_weight,
       final_weight: challan.final_weight,
       rate: challan.rate,
@@ -858,6 +862,7 @@ export default function InOutPage() {
           ? Number(inwardForm.gross_weight)
           : undefined,
         report: inwardForm.report ? Number(inwardForm.report) : undefined,
+        moureport: inwardForm.moureport ? Number(inwardForm.moureport) : undefined,
         net_weight: inwardForm.net_weight
           ? Number(inwardForm.net_weight)
           : undefined,
@@ -896,6 +901,7 @@ export default function InOutPage() {
         time_in: "",
         time_out: "",
         report: undefined,
+        moureport: undefined,
       });
       loadData(); // Refresh data
     } catch (error) {
@@ -1364,7 +1370,7 @@ export default function InOutPage() {
                             setInwardForm({
                               ...inwardForm,
                               net_weight: netWeight,
-                              final_weight: netWeight - report,
+                              final_weight: netWeight - report - (inwardForm.moureport || 0),
                             });
                           }}
                         />
@@ -1442,6 +1448,32 @@ export default function InOutPage() {
                             setInwardForm({
                               ...inwardForm,
                               report: report,
+                              final_weight: netWeight - report - (inwardForm.moureport || 0),
+                            });
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Mou Report - Accountant & Admin can see */}
+                    {canViewField("accountant") && (
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="moureport">
+                          Mou Report (Additional Weight Deduction)
+                        </Label>
+                        <Input
+                          id="moureport"
+                          type="number"
+                          step="0.001"
+                          placeholder="Enter additional weight to deduct"
+                          value={inwardForm.moureport || ""}
+                          onChange={(e) => {
+                            const moureport = Number(e.target.value) || 0;
+                            const netWeight = inwardForm.net_weight || 0;
+                            const report = inwardForm.report || 0;
+                            setInwardForm({
+                              ...inwardForm,
+                              moureport: moureport,
                               final_weight: netWeight - report,
                             });
                           }}
@@ -1453,7 +1485,7 @@ export default function InOutPage() {
                     {canViewField("accountant") && (
                       <div className="flex flex-col space-y-2">
                         <Label htmlFor="finalWeight">
-                          Final Weight (Net - Report)
+                          Final Weight (Net - Report - Mou Report)
                         </Label>
                         <Input
                           id="finalWeight"
@@ -1463,7 +1495,7 @@ export default function InOutPage() {
                           value={inwardForm.final_weight || ""}
                           readOnly
                           className="bg-gray-50 cursor-not-allowed"
-                          title="This field is automatically calculated as Net Weight - Report"
+                          title="This field is automatically calculated as Net Weight - Report - Mou Report"
                         />
                       </div>
                     )}
@@ -1567,6 +1599,7 @@ export default function InOutPage() {
                             time_in: "",
                             time_out: "",
                             report: undefined,
+        moureport: undefined,
                           });
                         }}>
                         Cancel
@@ -2446,11 +2479,37 @@ export default function InOutPage() {
                 </div>
               )}
 
+              {/* Mou Report - Accountant & Admin can see */}
+              {canViewField("accountant") && (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="updateMouReport">
+                    Mou Report (Additional Weight Deduction)
+                  </Label>
+                  <Input
+                    id="updateMouReport"
+                    type="number"
+                    step="0.001"
+                    placeholder="Enter additional weight to deduct"
+                    value={inwardForm.moureport || ""}
+                    onChange={(e) => {
+                      const moureport = Number(e.target.value) || 0;
+                      const netWeight = inwardForm.net_weight || 0;
+                      const report = inwardForm.report || 0;
+                      setInwardForm({
+                        ...inwardForm,
+                        moureport: moureport,
+                        final_weight: netWeight - report,
+                      });
+                    }}
+                  />
+                </div>
+              )}
+
               {/* Final Weight - Accountant & Admin can see */}
               {canViewField("accountant") && (
                 <div className="flex flex-col space-y-2">
                   <Label htmlFor="updateFinalWeight">
-                    Final Weight (Net - Report)
+                    Final Weight (Net - Report - Mou Report)
                   </Label>
                   <Input
                     id="updateFinalWeight"
@@ -2460,7 +2519,7 @@ export default function InOutPage() {
                     value={inwardForm.final_weight || ""}
                     readOnly
                     className="bg-gray-50 cursor-not-allowed"
-                    title="This field is automatically calculated as Net Weight - Report"
+                    title="This field is automatically calculated as Net Weight - Report - Mou Report"
                   />
                 </div>
               )}
@@ -2557,6 +2616,7 @@ export default function InOutPage() {
                       time_in: "",
                       time_out: "",
                       report: undefined,
+        moureport: undefined,
                     });
                   }}>
                   Cancel

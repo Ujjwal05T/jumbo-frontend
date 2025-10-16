@@ -23,11 +23,17 @@ export default function Navbar() {
               >
                 Planning
               </Link>
-              <Link 
-                href="/qr-scanner" 
+              <Link
+                href="/qr-scanner"
                 className="px-3 py-2 rounded hover:bg-gray-700 transition-colors"
               >
                 QR Scanner
+              </Link>
+              <Link
+                href="/roll-tracking"
+                className="px-3 py-2 rounded hover:bg-gray-700 transition-colors"
+              >
+                Roll Tracking
               </Link>
               <span className="text-gray-300">Welcome, {user}</span>
               <LogoutButton />

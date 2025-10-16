@@ -415,7 +415,6 @@ export default function WastageMOUPage() {
                   <TableHead>Party Name</TableHead>
                   <TableHead>Material</TableHead>
                   <TableHead>Vehicle No.</TableHead>
-                  <TableHead>Net Weight</TableHead>
                   <TableHead>Time In</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -437,7 +436,6 @@ export default function WastageMOUPage() {
                       <TableCell>{getClientName(challan.party_id)}</TableCell>
                       <TableCell>{getMaterialName(challan.material_id)}</TableCell>
                       <TableCell>{challan.vehicle_number || "-"}</TableCell>
-                      <TableCell>{challan.net_weight || "-"}</TableCell>
                       <TableCell>{formatTime(challan.time_in)}</TableCell>
                       <TableCell>
                         <Button
@@ -450,7 +448,7 @@ export default function WastageMOUPage() {
                           ) : (
                             <Plus className="h-4 w-4 mr-2" />
                           )}
-                          {challansWithWastage.has(challan.id) ? "Download PDF" : "Add Wastage"}
+                          {challansWithWastage.has(challan.id) ? "Print PDF" : "Add Wastage"}
                         </Button>
                       </TableCell>
                     </TableRow>

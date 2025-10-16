@@ -31,6 +31,7 @@ export interface InwardChallan {
   rst_no?: string;
   gross_weight?: number;
   report?: number;
+  moureport?: number;
   net_weight?: number;
   final_weight?: number;
   rate?: number;
@@ -50,6 +51,7 @@ export interface CreateInwardChallanData {
   rst_no?: string;
   gross_weight?: number;
   report?: number;
+  moureport?: number;
   net_weight?: number;
   final_weight?: number;
   rate?: number;

@@ -79,17 +79,22 @@ export function CreateDispatchModal({
     vehicle_number: "",
     driver_name: "",
     driver_mobile: "",
-    payment_type: "cash",
+    locket_no: "",
     dispatch_number: "",
     reference_number: "",
   });
 
-  // Load clients, warehouse items, and wastage items
+  // Preview dispatch number state
+  const [previewNumber, setPreviewNumber] = useState<string>("");
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  // Load clients, warehouse items, wastage items, and preview dispatch number
   useEffect(() => {
     if (open) {
       loadClients();
       loadWarehouseItems();
       loadWastageItems();  // NEW: Load wastage items
+      loadPreviewNumber(); // NEW: Load preview number
     } else {
       // Reset on close
       setStep(1);
@@ -97,12 +102,13 @@ export function CreateDispatchModal({
       setSelectedItems([]);
       setSelectedWastageIds([]);  // NEW: Reset wastage selection
       setSearchTerm("");
+      setPreviewNumber(""); // Reset preview (will reload on next open)
       setDispatchDetails({
         vehicle_number: "",
         driver_name: "",
         driver_mobile: "",
-        payment_type: "cash",
-        dispatch_number: "",
+        locket_no: "",
+        dispatch_number: "",  // Will be generated at save time
         reference_number: "",
       });
     }
@@ -162,6 +168,24 @@ export function CreateDispatchModal({
     }
   };
 
+  const loadPreviewNumber = async () => {
+    try {
+      setPreviewLoading(true);
+      const response = await fetch(`${API_BASE_URL}/dispatch/preview-number`, {
+        headers: { "ngrok-skip-browser-warning": "true" },
+      });
+      if (!response.ok) throw new Error("Failed to load preview number");
+      const data = await response.json();
+      setPreviewNumber(data.preview_number || "");
+    } catch (err) {
+      console.error("Error loading preview number:", err);
+      setPreviewNumber("Loading...");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  
   const handleSaveDetails = () => {
     // Validate details
     if (!dispatchDetails.vehicle_number.trim()) {
@@ -170,11 +194,6 @@ export function CreateDispatchModal({
     }
     if (!dispatchDetails.driver_name.trim()) {
       toast.error("Driver name is required");
-      return;
-    }
-    
-    if (!dispatchDetails.dispatch_number.trim()) {
-      toast.error("Dispatch number is required");
       return;
     }
     if (selectedClientId === "none") {
@@ -195,14 +214,16 @@ export function CreateDispatchModal({
     try {
       setDispatchLoading(true);
 
+      // Send data without dispatch_number - backend will generate it atomically
       const dispatchData = {
         ...dispatchDetails,
+        dispatch_number: "",  // Let backend generate this atomically
         client_id: selectedClientId,
         inventory_ids: selectedItems,
         wastage_ids: selectedWastageIds,  // NEW: Include wastage IDs
       };
 
-      const result = await createDispatchRecord(dispatchData);
+      const result = await createDispatchRecord(dispatchData as any);
 
       // Show success modal
       setDispatchResult(result);
@@ -789,42 +810,42 @@ export function CreateDispatchModal({
                     />
                   </div>
 
-                  {/* Dispatch Number */}
+                  {/* Locket Number */}
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Dispatch Number *</label>
+                    <label className="text-sm font-medium">
+                      Dispatch Number (Optional)
+                    </label>
                     <Input
-                      value={dispatchDetails.dispatch_number}
+                      value={dispatchDetails.locket_no}
                       onChange={(e) =>
                         setDispatchDetails((prev) => ({
                           ...prev,
-                          dispatch_number: e.target.value,
+                          locket_no: e.target.value,
                         }))
                       }
                     />
                   </div>
 
-                  {/* Payment Type */}
+                  {/* Dispatch Number */}
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Bill/Cash</label>
-                    <Select
-                      value={dispatchDetails.payment_type}
-                      onValueChange={(value) =>
-                        setDispatchDetails((prev) => ({
-                          ...prev,
-                          payment_type: value,
-                        }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="cash">Cash</SelectItem>
-                        <SelectItem value="credit">Bill</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <label className="text-sm font-medium flex items-center gap-2">
+                      Slip Number *
+                      <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">
+                        Preview
+                      </span>
+                    </label>
+                    <Input
+                      value={previewLoading ? "Loading..." : previewNumber || "Loading..."}
+                      readOnly
+                      className="font-mono bg-gray-50 border-blue-200 text-blue-700"
+                      placeholder="Loading preview..."
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Preview: {previewNumber || "Loading..."} (Actual number generated when saving)
+                    </p>
                   </div>
 
+      
                   {/* Reference Number */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium">
@@ -885,14 +906,12 @@ export function CreateDispatchModal({
                       <p className="font-medium">{dispatchDetails.driver_mobile}</p>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Dispatch #:</span>
-                      <p className="font-medium">{dispatchDetails.dispatch_number}</p>
+                      <span className="text-muted-foreground">Locket #:</span>
+                      <p className="font-medium">{dispatchDetails.locket_no || "-"}</p>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Payment:</span>
-                      <p className="font-medium capitalize">
-                        {dispatchDetails.payment_type}
-                      </p>
+                      <span className="text-muted-foreground">Dispatch #:</span>
+                      <p className="font-medium text-blue-600">{previewNumber || "Loading..."}</p>
                     </div>
                   </div>
                 </div>
