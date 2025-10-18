@@ -566,6 +566,7 @@ export default function WastageMOUPage() {
                     name="date"
                     type="datetime-local"
                     required
+                    disabled
                     className="pl-10"
                     defaultValue={existingWastage?.date ? new Date(existingWastage.date).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16)}
                   />

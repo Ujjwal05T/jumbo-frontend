@@ -388,7 +388,6 @@ export function CreateDispatchModal({
       <Table>
         <TableHeader className="sticky top-0 bg-white z-10">
           <TableRow>
-            <TableHead className="w-[50px]">Select</TableHead>
             <TableHead>S.No</TableHead>
             <TableHead>Type</TableHead>
             <TableHead>ID / Barcode</TableHead>
@@ -396,7 +395,7 @@ export function CreateDispatchModal({
             <TableHead>Paper Specs</TableHead>
             <TableHead>Width</TableHead>
             <TableHead>Weight</TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead className="w-[50px]">Select</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -418,32 +417,6 @@ export function CreateDispatchModal({
                       : ""
                   } ${item.priority === 1 ? "border-l-4 border-l-green-500" : ""}`}
                 >
-                  <TableCell>
-                    <div className="flex items-center justify-center">
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={(checked) => {
-                          if (isWastageItem) {
-                            if (checked) {
-                              setSelectedWastageIds((prev) => [...prev, item.id]);
-                              toast.success(`Selected Stock ${item.reel_no || item.frontend_id}`);
-                            } else {
-                              setSelectedWastageIds((prev) => prev.filter((id) => id !== item.id));
-                              toast.success(`Removed Stock ${item.reel_no || item.frontend_id}`);
-                            }
-                          } else {
-                            if (checked) {
-                              setSelectedItems((prev) => [...prev, item.inventory_id]);
-                              toast.success(`Selected ${item.barcode_id || item.qr_code}`);
-                            } else {
-                              removeSelectedItem(item.inventory_id);
-                            }
-                          }
-                        }}
-                        className="w-5 h-5"
-                      />
-                    </div>
-                  </TableCell>
                   <TableCell className="font-medium">{index + 1}</TableCell>
                   <TableCell>
                     {isWastageItem ? (
@@ -523,13 +496,38 @@ export function CreateDispatchModal({
                       <div className="font-medium">{item.weight_kg}kg</div>
                     </div>
                   </TableCell>
-                  <TableCell>{getStatusBadge(item.status)}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center justify-center">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) => {
+                          if (isWastageItem) {
+                            if (checked) {
+                              setSelectedWastageIds((prev) => [...prev, item.id]);
+                              toast.success(`Selected Stock ${item.reel_no || item.frontend_id}`);
+                            } else {
+                              setSelectedWastageIds((prev) => prev.filter((id) => id !== item.id));
+                              toast.success(`Removed Stock ${item.reel_no || item.frontend_id}`);
+                            }
+                          } else {
+                            if (checked) {
+                              setSelectedItems((prev) => [...prev, item.inventory_id]);
+                              toast.success(`Selected ${item.barcode_id || item.qr_code}`);
+                            } else {
+                              removeSelectedItem(item.inventory_id);
+                            }
+                          }
+                        }}
+                        className="w-5 h-5"
+                      />
+                    </div>
+                  </TableCell>
                 </TableRow>
               );
             })
           ) : (
             <TableRow>
-              <TableCell colSpan={9} className="h-24 text-center">
+              <TableCell colSpan={8} className="h-24 text-center">
                 {loading ? (
                   <div className="flex items-center justify-center">
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -963,21 +961,21 @@ export function CreateDispatchModal({
                 {/* Search - Works across all tabs */}
                 <div className="space-y-2">
                   <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Search className="absolute left-4 top-4 h-6 w-6 text-muted-foreground" />
                     <Input
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       placeholder="Search across all items: QR code, barcode, reel no, order, paper spec, creator..."
-                      className="pl-8 pr-8"
+                      className="pl-12 pr-12 h-14 text-lg"
                     />
                     {searchTerm && (
                       <Button
                         size="sm"
                         variant="ghost"
                         onClick={() => setSearchTerm("")}
-                        className="absolute right-1 top-1 h-6 w-6 p-0"
+                        className="absolute right-2 top-2 h-10 w-10 p-0"
                       >
-                        <X className="h-3 w-3" />
+                        <X className="h-5 w-5" />
                       </Button>
                     )}
                   </div>

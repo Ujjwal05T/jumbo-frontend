@@ -7,14 +7,19 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Label } from '@/components/ui/label';
 import {
   trackRoll,
   searchRolls,
   searchRollsBySpecifications,
   type RollTrackingResponse,
   type SearchResult,
-  type SpecificationSearchResult
+  type SpecificationSearchResult,
+  type SpecificationSearchResponse,
+  type MatchingOrder,
+  type PendingOrderResult
 } from '@/lib/roll-tracking';
+import { PaperSpecSelector, type PaperSpecification } from '@/components/paper-spec-selector';
 import {
   Search,
   Package,
@@ -27,7 +32,10 @@ import {
   User,
   FileText,
   Settings,
-  Ruler
+  Ruler,
+  ShoppingCart,
+  Calendar,
+  DollarSign
 } from 'lucide-react';
 
 export default function RollTrackingPage() {
@@ -37,9 +45,11 @@ export default function RollTrackingPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<(SearchResult | SpecificationSearchResult)[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [specSearchResults, setSpecSearchResults] = useState<SpecificationSearchResponse | null>(null);
 
   // Specification search state
   const [searchMode, setSearchMode] = useState<'barcode' | 'specs'>('barcode');
+  const [selectedPaperSpec, setSelectedPaperSpec] = useState<PaperSpecification | null>(null);
   const [specForm, setSpecForm] = useState({
     widthInches: '',
     gsm: '',
@@ -102,13 +112,35 @@ export default function RollTrackingPage() {
         20
       );
 
-      setSearchResults(results.results);
+      setSpecSearchResults(results);
       setShowSearchResults(true);
-      setError(`Found ${results.total} rolls matching the specifications`);
+      setError(results.message);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to search rolls by specifications. Please try again.');
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  const handlePaperSpecChange = (spec: PaperSpecification | null) => {
+    setSelectedPaperSpec(spec);
+
+    if (spec) {
+      // Auto-fill the form with selected paper specifications
+      setSpecForm(prev => ({
+        ...prev,
+        gsm: spec.gsm.toString(),
+        bf: spec.bf.toString(),
+        shade: spec.shade
+      }));
+    } else {
+      // Clear the paper spec fields
+      setSpecForm(prev => ({
+        ...prev,
+        gsm: '',
+        bf: '',
+        shade: ''
+      }));
     }
   };
 
@@ -244,6 +276,32 @@ export default function RollTrackingPage() {
           {/* Specification Search */}
           {searchMode === 'specs' && (
             <div className="space-y-4">
+              {/* Paper Specification Selector */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground mb-1 block">
+                  Paper Specification (Optional)
+                </label>
+                <PaperSpecSelector
+                  value={selectedPaperSpec?.id || ''}
+                  onValueChange={handlePaperSpecChange}
+                  placeholder="Select paper specification to auto-fill details..."
+                />
+              </div>
+
+              {/* Divider */}
+              {selectedPaperSpec && (
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">
+                      Or manually enter specifications
+                    </span>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <div>
                   <label className="text-sm font-medium text-muted-foreground mb-1 block">
@@ -252,9 +310,10 @@ export default function RollTrackingPage() {
                   <Input
                     type="number"
                     step="0.1"
-                    placeholder="24.0"
+                    placeholder="30.0"
                     value={specForm.widthInches}
                     onChange={(e) => handleSpecFormChange('widthInches', e.target.value)}
+                    onKeyDown={handleKeyDown}
                   />
                 </div>
                 <div>
@@ -263,10 +322,17 @@ export default function RollTrackingPage() {
                   </label>
                   <Input
                     type="number"
-                    placeholder="90"
+                    placeholder="120"
                     value={specForm.gsm}
                     onChange={(e) => handleSpecFormChange('gsm', e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    disabled={!!selectedPaperSpec}
                   />
+                  {selectedPaperSpec && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Auto-filled from paper specification
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground mb-1 block">
@@ -278,17 +344,31 @@ export default function RollTrackingPage() {
                     placeholder="18.0"
                     value={specForm.bf}
                     onChange={(e) => handleSpecFormChange('bf', e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    disabled={!!selectedPaperSpec}
                   />
+                  {selectedPaperSpec && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Auto-filled from paper specification
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground mb-1 block">
                     Shade/Color
                   </label>
                   <Input
-                    placeholder="white"
+                    placeholder="Natural"
                     value={specForm.shade}
                     onChange={(e) => handleSpecFormChange('shade', e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    disabled={!!selectedPaperSpec}
                   />
+                  {selectedPaperSpec && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Auto-filled from paper specification
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground mb-1 block">
@@ -300,11 +380,29 @@ export default function RollTrackingPage() {
                     placeholder="0.1"
                     value={specForm.tolerance}
                     onChange={(e) => handleSpecFormChange('tolerance', e.target.value)}
+                    onKeyDown={handleKeyDown}
                   />
                 </div>
               </div>
+
+              {/* Search Summary */}
+              {(selectedPaperSpec || specForm.gsm || specForm.bf || specForm.shade) && (
+                <div className="p-3 bg-muted/30 rounded-md">
+                  <div className="text-sm font-medium mb-1">Search Summary:</div>
+                  <div className="text-xs text-muted-foreground">
+                    {specForm.widthInches && <span>Width: {specForm.widthInches}" (±{specForm.tolerance || '0.1'})</span>}
+                    {(specForm.gsm || selectedPaperSpec) && <span> • GSM: {specForm.gsm || selectedPaperSpec?.gsm}</span>}
+                    {(specForm.bf || selectedPaperSpec) && <span> • BF: {specForm.bf || selectedPaperSpec?.bf}</span>}
+                    {(specForm.shade || selectedPaperSpec) && <span> • Shade: {specForm.shade || selectedPaperSpec?.shade}</span>}
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-end">
-                <Button onClick={handleSpecSearch} disabled={isSearching}>
+                <Button
+                  onClick={handleSpecSearch}
+                  disabled={isSearching || !specForm.widthInches || !specForm.gsm || !specForm.bf || !specForm.shade}
+                >
                   {isSearching ? 'Searching...' : 'Search by Specifications'}
                 </Button>
               </div>
@@ -321,92 +419,247 @@ export default function RollTrackingPage() {
         </Alert>
       )}
 
-      {/* Search Results */}
-      {showSearchResults && searchResults.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Search Results</CardTitle>
-            <CardDescription>
-              {searchMode === 'specs'
-                ? 'Click on any result to view complete roll details'
-                : 'Click on any result to view details'
-              }
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {searchResults.map((result) => {
-                const isSpecResult = 'match_score' in result;
-                const specResult = result as SpecificationSearchResult;
-
-                return (
-                  <div
-                    key={result.inventory_id}
-                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer"
-                    onClick={() => handleResultClick(result)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Package className="h-4 w-4 text-muted-foreground" />
-                      <div className="flex-1">
-                        <div className="font-medium">
-                          {result.barcode_id || result.frontend_id}
-                          {isSpecResult && (
+      {/* Enhanced Search Results */}
+      {showSearchResults && specSearchResults && (
+        <div className="space-y-4">
+          {/* Inventory Results */}
+          {specSearchResults.inventory_total > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="h-5 w-5" />
+                  Available Inventory Rolls ({specSearchResults.inventory_total})
+                </CardTitle>
+                <CardDescription>
+                  Click on any roll to view complete details
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {specSearchResults.inventory_results.map((result) => (
+                    <div
+                      key={result.inventory_id}
+                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer"
+                      onClick={() => handleResultClick(result)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Package className="h-4 w-4 text-muted-foreground" />
+                        <div className="flex-1">
+                          <div className="font-medium">
+                            {result.barcode_id || result.frontend_id}
                             <Badge variant="secondary" className="ml-2 text-xs">
-                              {Math.round(specResult.match_score * 100)}% match
+                              {Math.round(result.match_score * 100)}% match
                             </Badge>
-                          )}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {result.width_inches}" • {result.weight_kg}kg • {result.paper_name}
-                          {isSpecResult && specResult.width_difference > 0 && (
-                            <span className="ml-2">
-                              (±{specResult.width_difference}" diff)
-                            </span>
-                          )}
-                        </div>
-                        {isSpecResult && specResult.paper_specifications && (
-                          <div className="text-xs text-muted-foreground mt-1">
-                            GSM: {specResult.paper_specifications.gsm} •
-                            BF: {specResult.paper_specifications.bf} •
-                            Shade: {specResult.paper_specifications.shade}
                           </div>
-                        )}
-                        {/* Order and Plan Information */}
-                        {isSpecResult && (specResult.order_info || specResult.plan_info) && (
-                          <div className="text-xs text-muted-foreground mt-1 flex items-center gap-3">
-                            {specResult.order_info && (
-                              <span className="flex items-center gap-1">
-                                <FileText className="h-3 w-3" />
-                                Order: {specResult.order_info.order_frontend_id}
-                              </span>
-                            )}
-                            {specResult.plan_info && (
-                              <span className="flex items-center gap-1">
-                                <Settings className="h-3 w-3" />
-                                Plan: {specResult.plan_info.plan_frontend_id}
+                          <div className="text-sm text-muted-foreground">
+                            {result.width_inches}" • {result.weight_kg}kg • {result.paper_name}
+                            {result.width_difference > 0 && (
+                              <span className="ml-2">
+                                (±{result.width_difference}" diff)
                               </span>
                             )}
                           </div>
-                        )}
+                          {result.paper_specifications && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              GSM: {result.paper_specifications.gsm} •
+                              BF: {result.paper_specifications.bf} •
+                              Shade: {result.paper_specifications.shade}
+                            </div>
+                          )}
+                          {/* Order and Plan Information */}
+                          {(result.order_info || result.plan_info) && (
+                            <div className="text-xs text-muted-foreground mt-1 flex items-center gap-3">
+                              {result.order_info && (
+                                <span className="flex items-center gap-1">
+                                  <FileText className="h-3 w-3" />
+                                  Order: {result.order_info.order_frontend_id}
+                                </span>
+                              )}
+                              {result.plan_info && (
+                                <span className="flex items-center gap-1">
+                                  <Settings className="h-3 w-3" />
+                                  Plan: {result.plan_info.plan_frontend_id}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge className={getStatusColor(result.status)}>
-                        {result.status}
-                      </Badge>
-                      {isSpecResult && (
+                      <div className="flex items-center gap-2">
+                        <Badge className={getStatusColor(result.status)}>
+                          {result.status}
+                        </Badge>
                         <div className="text-xs text-muted-foreground">
                           <Ruler className="h-3 w-3 inline mr-1" />
-                          {specResult.width_inches}"
+                          {result.width_inches}"
                         </div>
-                      )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Matching Orders */}
+          {specSearchResults.matching_orders_total > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ShoppingCart className="h-5 w-5" />
+                  Matching Order Items ({specSearchResults.matching_orders_total})
+                </CardTitle>
+                <CardDescription>
+                  Orders that require rolls with these specifications
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {specSearchResults.matching_orders.map((order) => (
+                    <div key={order.order_item_id} className="border rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">{order.order_frontend_id}</span>
+                          <Badge variant="outline">{order.status}</Badge>
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          <User className="h-3 w-3 inline mr-1" />
+                          {order.client_name}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">Width:</span>
+                          <span className="ml-1 font-medium">{order.width_inches}"</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Quantity:</span>
+                          <span className="ml-1 font-medium">{order.quantity_rolls} rolls</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Fulfilled:</span>
+                          <span className="ml-1 font-medium">{order.quantity_fulfilled}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Remaining:</span>
+                          <span className="ml-1 font-medium">{order.remaining_quantity}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between mt-2 text-sm">
+                        <div className="flex items-center gap-4">
+                          <span className="flex items-center gap-1">
+                            <DollarSign className="h-3 w-3" />
+                            ₹{order.rate}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {order.delivery_date ? new Date(order.delivery_date).toLocaleDateString() : 'No date'}
+                          </span>
+                        </div>
+                        <Badge variant={order.item_status === 'completed' ? 'default' : 'secondary'}>
+                          {order.item_status}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Pending Orders */}
+          {specSearchResults.pending_orders_total > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5" />
+                  Pending Order Items ({specSearchResults.pending_orders_total})
+                </CardTitle>
+                <CardDescription>
+                  Pending orders that require rolls with these specifications
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {specSearchResults.pending_orders.map((pending) => (
+                    <div key={pending.pending_order_id} className="border rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">{pending.pending_order_frontend_id}</span>
+                          <Badge variant="outline">{pending.status}</Badge>
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          <User className="h-3 w-3 inline mr-1" />
+                          {pending.client_name}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">Width:</span>
+                          <span className="ml-1 font-medium">{pending.width_inches}"</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Pending:</span>
+                          <span className="ml-1 font-medium">{pending.quantity_pending} rolls</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Fulfilled:</span>
+                          <span className="ml-1 font-medium">{pending.quantity_fulfilled}</span>
+                        </div>
+                      </div>
+                      <div className="mt-2 text-sm">
+                        <span className="text-muted-foreground">Reason:</span>
+                        <span className="ml-1">{pending.reason}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Legacy Search Results (for barcode search fallback) */}
+          {!specSearchResults && searchResults.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Search Results</CardTitle>
+                <CardDescription>
+                  Click on any result to view details
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {searchResults.map((result) => (
+                    <div
+                      key={result.inventory_id}
+                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer"
+                      onClick={() => handleResultClick(result)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Package className="h-4 w-4 text-muted-foreground" />
+                        <div className="flex-1">
+                          <div className="font-medium">
+                            {result.barcode_id || result.frontend_id}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {result.width_inches}" • {result.weight_kg}kg • {result.paper_name}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge className={getStatusColor(result.status)}>
+                          {result.status}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
 
       {/* Tracking Results */}

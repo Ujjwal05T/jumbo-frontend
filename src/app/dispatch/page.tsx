@@ -227,7 +227,7 @@ export default function DispatchPage() {
         inventory_ids: selectedItems
       };
 
-      const result = await createDispatchRecord(dispatchData);
+      const result = await createDispatchRecord(dispatchData as any);
 
       // Show success modal with dispatch details
       setDispatchResult(result);
@@ -240,7 +240,7 @@ export default function DispatchPage() {
         vehicle_number: "",
         driver_name: "",
         driver_mobile: "",
-        payment_type: "cash",
+        // payment_type: "cash",
         dispatch_number: "",
         reference_number: "",
       });
@@ -415,7 +415,7 @@ export default function DispatchPage() {
                   {/* Payment Type */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Payment Type</label>
-                    <Select
+                    {/* <Select
                       value={dispatchDetails.payment_type}
                       onValueChange={(value) => setDispatchDetails(prev => ({ ...prev, payment_type: value }))}
                     >
@@ -427,7 +427,7 @@ export default function DispatchPage() {
                         <SelectItem value="credit">Credit</SelectItem>
                         <SelectItem value="online">Online</SelectItem>
                       </SelectContent>
-                    </Select>
+                    </Select> */}
                   </div>
 
                   {/* Reference Number */}
@@ -469,10 +469,10 @@ export default function DispatchPage() {
                     <span className="text-muted-foreground">Dispatch #:</span>
                     <p className="font-medium">{dispatchDetails.dispatch_number}</p>
                   </div>
-                  <div>
+                  {/* <div>
                     <span className="text-muted-foreground">Payment:</span>
                     <p className="font-medium capitalize">{dispatchDetails.payment_type}</p>
-                  </div>
+                  </div> */}
                 </div>
                 <Button onClick={handleEditDetails} variant="outline" size="sm">
                   Edit Details

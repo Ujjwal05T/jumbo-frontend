@@ -180,6 +180,40 @@ export interface SearchResponse {
   total: number;
 }
 
+export interface MatchingOrder {
+  type: 'regular_order';
+  order_id: string;
+  order_frontend_id: string;
+  client_name: string;
+  order_item_id: string;
+  order_item_frontend_id: string;
+  quantity_rolls: number;
+  quantity_fulfilled: number;
+  remaining_quantity: number;
+  width_inches: number;
+  rate: number;
+  status: string;
+  item_status: string;
+  delivery_date?: string;
+  created_at: string;
+}
+
+export interface PendingOrderResult {
+  type: 'pending_order';
+  pending_order_id: string;
+  pending_order_frontend_id: string;
+  original_order_id?: string;
+  original_order_frontend_id?: string;
+  client_name: string;
+  quantity_pending: number;
+  quantity_fulfilled: number;
+  width_inches: number;
+  status: string;
+  reason: string;
+  resolved_at?: string;
+  created_at: string;
+}
+
 export interface SpecificationSearchResponse {
   search_criteria: {
     width_inches: number;
@@ -188,8 +222,12 @@ export interface SpecificationSearchResponse {
     shade: string;
     tolerance: number;
   };
-  results: SpecificationSearchResult[];
-  total: number;
+  inventory_results: SpecificationSearchResult[];
+  inventory_total: number;
+  matching_orders: MatchingOrder[];
+  matching_orders_total: number;
+  pending_orders: PendingOrderResult[];
+  pending_orders_total: number;
   message: string;
 }
 
