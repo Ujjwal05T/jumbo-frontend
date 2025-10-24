@@ -52,7 +52,7 @@ export default function LoginPage() {
       document.cookie = `user_role=${data.role}; path=/; max-age=${60 * 60 * 24 * 7}`;
 
       // Redirect based on role
-    if (data.role?.toLowerCase() === 'planner') {
+    if (data.role?.toLowerCase() === 'weight_update') {
       router.push('/weight-update');
     } else if (data.role?.toLowerCase() === 'order_puncher'){
       router.push('/masters/orders');

@@ -234,10 +234,10 @@ export default function UserMasterPage() {
           <Shield className="w-3 h-3 mr-1" />
           Security
         </Badge>;
-      case "planner":
+      case "weight_update":
         return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
           <Settings className="w-3 h-3 mr-1" />
-          Planner
+          Weight Update
         </Badge>;
       case "poduction":
         return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">

@@ -12,7 +12,7 @@ const roleBasedRoutes = {
   order_puncher: ['/masters/orders'],
   security: ['/in-out'],
   co_admin: ['/dashboard'],
-  planner: ['/weight-update'],
+  weight_update: ['/weight-update'],
   poduction: ['/dashboard'],
   accountant: ['/dashboard'],
 };

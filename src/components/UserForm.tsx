@@ -202,9 +202,9 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true, editingUs
                       <Badge className="bg-red-100 text-red-800">Security</Badge>
                     </div>
                   </SelectItem>
-                  <SelectItem value="planner">
+                  <SelectItem value="weight_update">
                     <div className="flex items-center gap-2">
-                      <Badge className="bg-green-100 text-green-800">Planner</Badge>
+                      <Badge className="bg-green-100 text-green-800">Weight Update</Badge>
                     </div>
                   </SelectItem>
                   <SelectItem value="poduction">

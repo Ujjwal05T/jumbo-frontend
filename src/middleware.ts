@@ -46,7 +46,7 @@ const roleBasedRoutes = {
     '/dispatch',
     '/masters'
   ],
-  planner: [
+  weight_update: [
     '/weight-update',
   ],
   poduction: [

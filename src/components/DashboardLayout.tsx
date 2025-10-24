@@ -90,7 +90,7 @@ const getNavigationForRole = (role: string | null) => {
     //   name: "Weight Update",
     //   href: "/weight-update",
     //   icon: Database,
-    //   roles: ["admin", "planner", "accountant"],
+    //   roles: ["admin", "weight_update", "accountant"],
     // },
     {
       name: "In/Out",

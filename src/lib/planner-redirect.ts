@@ -1,12 +1,12 @@
 'use client';
 
-export const redirectPlannerToWeightUpdate = () => {
+export const redirectWeightUpdateToWeightUpdate = () => {
   if (typeof window === 'undefined') return; // Server-side check
-  
+
   try {
     const userRole = localStorage.getItem('user_role');
-    
-    if (userRole?.toLowerCase() === 'planner') {
+
+    if (userRole?.toLowerCase() === 'weight_update') {
       const currentPath = window.location.pathname;
       if (currentPath !== '/weight-update') {
         window.location.href = '/weight-update';
@@ -17,12 +17,12 @@ export const redirectPlannerToWeightUpdate = () => {
   }
 };
 
-export const isPlannerRole = (): boolean => {
+export const isWeightUpdateRole = (): boolean => {
   if (typeof window === 'undefined') return false;
-  
+
   try {
     const userRole = localStorage.getItem('user_role');
-    return userRole?.toLowerCase() === 'planner';
+    return userRole?.toLowerCase() === 'weight_update';
   } catch (error) {
     return false;
   }
