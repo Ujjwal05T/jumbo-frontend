@@ -4,12 +4,15 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlayCircle, Package, CheckCircle } from "lucide-react";
+import { PlayCircle, Package, CheckCircle, RefreshCw, AlertTriangle } from "lucide-react";
 import PartialJumboCompleter from "@/components/PartialJumboCompleter";
+import { RollbackPlanDialog } from "./RollbackPlanDialog";
+import { RollbackApiService } from "@/lib/rollback-api";
+import { startProduction } from "@/lib/production";
 
 interface PlanProductionIntegrationProps {
   planId: string;
@@ -26,23 +29,75 @@ export default function PlanProductionIntegration({
 }: PlanProductionIntegrationProps) {
   const [planData, setPlanData] = useState(initialPlanData);
   const [isStartingProduction, setIsStartingProduction] = useState(false);
+  const [rollbackDialogOpen, setRollbackDialogOpen] = useState(false);
+  const [rollbackAvailable, setRollbackAvailable] = useState(false);
+  const [productionResult, setProductionResult] = useState<any>(null);
+  const [timeRemaining, setTimeRemaining] = useState<number>(0);
 
   const handlePlanUpdate = (updatedPlanData: any) => {
     setPlanData(updatedPlanData);
     toast.success("Plan updated with additional rolls");
   };
 
+  // Check rollback status periodically when production is in progress
+  useEffect(() => {
+    if (productionResult?.rollback_info?.rollback_available) {
+      const interval = setInterval(() => {
+        setTimeRemaining((prev) => {
+          const newTime = prev - 1/60; // Decrease by 1 second
+          if (newTime <= 0) {
+            setRollbackAvailable(false);
+            return 0;
+          }
+          return newTime;
+        });
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [productionResult?.rollback_info?.rollback_available]);
+
   const handleStartProduction = async () => {
     try {
       setIsStartingProduction(true);
-      await onStartProduction(planData);
-      toast.success("Production started successfully!");
+
+      // Use the production API with rollback support
+      const result = await startProduction({
+        plan_id: planId,
+        selected_cut_rolls: planData.selected_cut_rolls || [],
+        wastage_data: planData.wastage_allocations || [],
+        user_id: currentUserId
+      });
+
+      setProductionResult(result);
+
+      // Check if rollback is available
+      if (result.rollback_info?.rollback_available) {
+        setRollbackAvailable(true);
+        setTimeRemaining(result.rollback_info.minutes_remaining || 0);
+
+        toast.success("Production started successfully! Rollback is available for 10 minutes.");
+      } else {
+        toast.success("Production started successfully!");
+      }
     } catch (error) {
       console.error('Error starting production:', error);
       toast.error("Failed to start production");
     } finally {
       setIsStartingProduction(false);
     }
+  };
+
+  const handleRollbackSuccess = () => {
+    setRollbackAvailable(false);
+    setProductionResult(null);
+    setTimeRemaining(0);
+
+    // Refresh the page or update state as needed
+    toast.success("Plan rolled back successfully!");
+
+    // You might want to call a callback to refresh plan data
+    // window.location.reload();
   };
 
   return (
@@ -130,6 +185,57 @@ export default function PlanProductionIntegration({
           </div>
         </CardContent>
       </Card>
+
+      {/* Rollback Availability Notice */}
+      {rollbackAvailable && productionResult?.rollback_info && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-blue-700">
+              <AlertTriangle className="w-5 h-5" />
+              Rollback Available
+            </CardTitle>
+            <CardDescription className="text-blue-600">
+              You can rollback this plan within the next {Math.floor(timeRemaining)} minutes {Math.floor((timeRemaining % 1) * 60)} seconds
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <div className="font-medium text-blue-700">Rollback Window Active</div>
+                <div className="text-sm text-blue-600">
+                  Time remaining: {RollbackApiService.formatTimeRemaining(timeRemaining)}
+                </div>
+                <div className="w-full bg-blue-200 rounded-full h-2">
+                  <div
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-1000"
+                    style={{
+                      width: `${RollbackApiService.getProgressValue(timeRemaining)}%`
+                    }}
+                  />
+                </div>
+              </div>
+              <Button
+                onClick={() => setRollbackDialogOpen(true)}
+                variant="destructive"
+                className="min-w-32"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Rollback Plan
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Rollback Dialog */}
+      <RollbackPlanDialog
+        open={rollbackDialogOpen}
+        onClose={() => setRollbackDialogOpen(false)}
+        planId={planId}
+        planName={planData?.name || `Plan ${planId?.slice(-8)}`}
+        userId={currentUserId}
+        onRollbackSuccess={handleRollbackSuccess}
+      />
     </div>
   );
 }
@@ -139,14 +245,13 @@ export default function PlanProductionIntegration({
 export default function PlanDetailsPage({ planId }: { planId: string }) {
   const [planData, setPlanData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [currentUserId] = useState("your-user-id"); // Get from auth/context
 
   const handleStartProduction = async (finalPlanData: any) => {
-    // Call your existing start production API
-    await fetch(`/api/plans/${planId}/start-production`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(finalPlanData)
-    });
+    // This is now handled internally by PlanProductionIntegration
+    // The component uses the rollback-enabled API automatically
+    // You don't need to implement this function anymore
+    console.log("Production started by PlanProductionIntegration");
   };
 
   return (
@@ -162,7 +267,7 @@ export default function PlanDetailsPage({ planId }: { planId: string }) {
           <PlanProductionIntegration
             planId={planId}
             initialPlanData={planData}
-            currentUserId="current-user-id"
+            currentUserId={currentUserId}
             onStartProduction={handleStartProduction}
           />
         )}

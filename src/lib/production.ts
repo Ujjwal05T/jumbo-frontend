@@ -52,6 +52,11 @@ export interface ProductionStartResponse {
     created_inventory: InventoryItem[];
     updated_pending_orders: string[];
   };
+  rollback_info?: {
+    rollback_available: boolean;
+    expires_at?: string;
+    minutes_remaining: number;
+  };
 }
 
 export interface InventoryItem {
@@ -88,9 +93,41 @@ export interface StatusIssue {
 }
 
 /**
- * Start production for a plan using the new enhanced endpoint
+ * Start production for a plan using the new enhanced endpoint WITH ROLLBACK
  */
 export async function startProduction(request: ProductionStartRequest): Promise<ProductionStartResponse> {
+  // Use the rollback-enabled endpoint
+  const response = await fetch(
+    PRODUCTION_ENDPOINTS.START_PRODUCTION_WITH_BACKUP(request.plan_id),
+    createRequestOptions('POST', {
+      selected_cut_rolls: request.selected_cut_rolls,
+      wastage_data: request.wastage_data || [],
+      user_id: request.user_id,
+      created_by_id: request.user_id  // Add this for snapshot creation
+    })
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || errorData.message || 'Failed to start production');
+  }
+
+  const result = await response.json();
+
+  // Check if rollback is available and log it
+  if (result.rollback_info?.rollback_available) {
+    console.log('✅ Rollback available for plan', request.plan_id, '- expires at', result.rollback_info.expires_at);
+  } else {
+    console.log('❌ Rollback not available for plan', request.plan_id);
+  }
+
+  return result;
+}
+
+/**
+ * Legacy start production without rollback (fallback)
+ */
+export async function startProductionLegacy(request: ProductionStartRequest): Promise<ProductionStartResponse> {
   const response = await fetch(
     PRODUCTION_ENDPOINTS.START_PRODUCTION(request.plan_id),
     createRequestOptions('POST', {

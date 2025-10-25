@@ -16,18 +16,18 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { 
-  Loader2, 
-  AlertCircle, 
-  Play, 
-  CheckCircle, 
-  Factory, 
+import {
+  Loader2,
+  AlertCircle,
+  Play,
+  CheckCircle,
+  Factory,
   QrCode,
-  ScanLine, 
-  Search, 
-  Package, 
-  Weight, 
-  Ruler, 
+  ScanLine,
+  Search,
+  Package,
+  Weight,
+  Ruler,
   ArrowLeft,
   Calendar,
   User,
@@ -36,10 +36,14 @@ import {
   Download,
   FileText,
   BarChart3,
-  Printer
+  Printer,
+  RefreshCw,
+  AlertTriangle
 } from "lucide-react";
 import QRCodeDisplay from "@/components/QRCodeDisplay";
 import BarcodeDisplay from "@/components/BarcodeDisplay";
+import { RollbackPlanDialog } from "@/components/RollbackPlanDialog";
+import { RollbackApiService } from "@/lib/rollback-api";
 import jsPDF from 'jspdf';
 import JsBarcode from 'jsbarcode';
 
@@ -256,7 +260,14 @@ export default function PlanDetailsPage() {
   const [loadingOrderItems, setLoadingOrderItems] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedQRCode, setSelectedQRCode] = useState<string | null>(null);
-  
+
+  // Rollback state
+  const [rollbackDialogOpen, setRollbackDialogOpen] = useState(false);
+  const [rollbackStatus, setRollbackStatus] = useState<any>(null);
+  const [rollbackAvailable, setRollbackAvailable] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState<number>(0);
+  const [checkingRollback, setCheckingRollback] = useState(false);
+
   // Filter states for cut rolls
   const [cutRollSearchTerm, setCutRollSearchTerm] = useState("");
   const [cutRollStatusFilter, setCutRollStatusFilter] = useState<string>("all");
@@ -529,6 +540,72 @@ export default function PlanDetailsPage() {
 
   const handleShowQRCode = (qrCode: string) => {
     setSelectedQRCode(qrCode);
+  };
+
+  // Check rollback status
+  const checkRollbackStatus = useCallback(async () => {
+    if (plan?.status !== 'in_progress') {
+      setRollbackAvailable(false);
+      return;
+    }
+
+    try {
+      setCheckingRollback(true);
+      const status = await RollbackApiService.getRollbackStatus(planId);
+      setRollbackStatus(status);
+
+      const isAvailable = RollbackApiService.isRollbackAvailable(status);
+      setRollbackAvailable(isAvailable);
+
+      if (isAvailable && status.remaining_minutes) {
+        setTimeRemaining(status.remaining_minutes);
+      }
+    } catch (error) {
+      console.error('Error checking rollback status:', error);
+      setRollbackAvailable(false);
+    } finally {
+      setCheckingRollback(false);
+    }
+  }, [planId, plan?.status]);
+
+  // Setup rollback status timer
+  useEffect(() => {
+    if (rollbackAvailable && timeRemaining > 0) {
+      const interval = setInterval(() => {
+        setTimeRemaining((prev) => {
+          const newTime = prev - 1/60; // Decrease by 1 second
+          if (newTime <= 0) {
+            setRollbackAvailable(false);
+            return 0;
+          }
+          return newTime;
+        });
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [rollbackAvailable, timeRemaining]);
+
+  // Check rollback status when plan status changes to in_progress
+  useEffect(() => {
+    if (plan?.status === 'in_progress') {
+      checkRollbackStatus();
+    } else {
+      setRollbackAvailable(false);
+      setTimeRemaining(0);
+    }
+  }, [plan?.status, checkRollbackStatus]);
+
+  const handleRollbackSuccess = () => {
+    setRollbackAvailable(false);
+    setTimeRemaining(0);
+    setRollbackDialogOpen(false);
+
+    // Refresh plan data after rollback
+    loadPlanDetails();
+    loadProductionSummary();
+
+    toast.success('Plan rolled back successfully!');
   };
 
   // Helper function to generate barcode as canvas
@@ -1759,7 +1836,19 @@ export default function PlanDetailsPage() {
                 </Button>
               </>
             )}
-            
+
+            {/* Rollback Button */}
+            {rollbackAvailable && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setRollbackDialogOpen(true)}
+                className="animate-pulse"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Rollback ({Math.floor(timeRemaining)}:{String(Math.floor((timeRemaining % 1) * 60)).padStart(2, '0')})
+              </Button>
+            )}
           </div>
         </div>
 
@@ -1826,6 +1915,55 @@ export default function PlanDetailsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Rollback Availability Notice */}
+        {rollbackAvailable && (
+          <Card className="border-orange-200 bg-orange-50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-orange-700">
+                <AlertTriangle className="w-5 h-5" />
+                Rollback Available
+              </CardTitle>
+              <CardDescription className="text-orange-600">
+                You can rollback this plan within the next {Math.floor(timeRemaining)} minutes {Math.floor((timeRemaining % 1) * 60)} seconds
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div className="space-y-2">
+                  <div className="font-medium text-orange-700">
+                    ⏰ Rollback Window Active
+                  </div>
+                  <div className="text-sm text-orange-600">
+                    Time remaining: {RollbackApiService.formatTimeRemaining(timeRemaining)}
+                  </div>
+                  <div className="w-full bg-orange-200 rounded-full h-2">
+                    <div
+                      className="bg-orange-600 h-2 rounded-full transition-all duration-1000"
+                      style={{
+                        width: `${RollbackApiService.getProgressValue(timeRemaining)}%`
+                      }}
+                    />
+                  </div>
+                  <div className="text-xs text-orange-500">
+                    Rollback will restore this plan to "planned" status and remove all created inventory.
+                  </div>
+                </div>
+                <Button
+                  onClick={() => setRollbackDialogOpen(true)}
+                  variant="destructive"
+                  size="sm"
+                  className="min-w-32"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Rollback Plan
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        
 
         {/* Production Summary */}
         {loadingSummary ? (
@@ -2149,6 +2287,16 @@ export default function PlanDetailsPage() {
             </div>
           </div>
         )}
+
+        {/* Rollback Dialog */}
+        <RollbackPlanDialog
+          open={rollbackDialogOpen}
+          onClose={() => setRollbackDialogOpen(false)}
+          planId={planId}
+          planName={plan?.name || plan?.frontend_id || `Plan ${planId?.slice(-8)}`}
+          userId={users.find(u => u.id === plan?.created_by_id)?.id || 'current-user-id'}
+          onRollbackSuccess={handleRollbackSuccess}
+        />
       </div>
     </DashboardLayout>
   );

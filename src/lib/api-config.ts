@@ -43,7 +43,13 @@ export const PRODUCTION_ENDPOINTS = {
   CUT_ROLLS_PLAN: (planId: string) => `${API_BASE_URL}/cut-rolls/production/${planId}`,
   PLAN_STATUS: (planId: string) => `${API_BASE_URL}/optimizer/plans/${planId}/status`,
   START_PRODUCTION: (planId: string) => `${API_BASE_URL}/plans/${planId}/start-production`,
+  START_PRODUCTION_WITH_BACKUP: (planId: string) => `${API_BASE_URL}/plans/${planId}/start-production-with-backup`,
   COMPLETE_PLAN: (planId: string) => `${API_BASE_URL}/optimizer/plans/${planId}/complete`,
+
+  // Rollback endpoints
+  ROLLBACK_STATUS: (planId: string) => `${API_BASE_URL}/plans/${planId}/rollback-status`,
+  ROLLBACK_PLAN: (planId: string) => `${API_BASE_URL}/plans/${planId}/rollback`,
+  CLEANUP_SNAPSHOTS: `${API_BASE_URL}/cleanup-expired-snapshots`,
 };
 
 // NEW FLOW: Workflow optimization endpoints
