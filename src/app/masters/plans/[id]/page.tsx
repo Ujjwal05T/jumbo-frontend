@@ -601,11 +601,13 @@ export default function PlanDetailsPage() {
     setTimeRemaining(0);
     setRollbackDialogOpen(false);
 
-    // Refresh plan data after rollback
-    loadPlanDetails();
-    loadProductionSummary();
+    toast.success('Plan rolled back successfully! Redirecting to plans list...');
 
-    toast.success('Plan rolled back successfully!');
+    // Redirect to plans list page after successful rollback
+    // The plan has been deleted, so we can't stay on this page
+    setTimeout(() => {
+      window.location.href = '/masters/plans';
+    }, 2000); // 2 second delay to show the success message
   };
 
   // Helper function to generate barcode as canvas

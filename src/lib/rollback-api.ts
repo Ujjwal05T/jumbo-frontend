@@ -13,6 +13,8 @@ export interface RollbackStatus {
   };
   plan_status?: string;
   plan_name?: string;
+  reason?: string;
+  suggestion?: string;
 }
 
 export interface RollbackRequest {

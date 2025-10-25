@@ -93,11 +93,14 @@ export default function PlanProductionIntegration({
     setProductionResult(null);
     setTimeRemaining(0);
 
-    // Refresh the page or update state as needed
-    toast.success("Plan rolled back successfully!");
+    // Notify parent component of successful rollback
+    // Parent component should handle redirection since the plan will be deleted
+    toast.success("Plan rolled back successfully! Redirecting to plans list...");
 
-    // You might want to call a callback to refresh plan data
-    // window.location.reload();
+    // Redirect to plans list page after successful rollback
+    setTimeout(() => {
+      window.location.href = '/masters/plans';
+    }, 2000);
   };
 
   return (
