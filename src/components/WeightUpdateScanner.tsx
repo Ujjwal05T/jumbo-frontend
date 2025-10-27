@@ -179,9 +179,16 @@ function WeightUpdateForm({ scanResult, onUpdate, loading, onReset }: WeightUpda
             <Input
               ref={weightInputRef}
               id="weight"
-              type="number"
+              type="text"
+              inputMode="decimal"
+              pattern="[0-9.]*"
               value={weight}
-              onChange={(e) => setWeight(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                // Allow only numbers and single decimal point
+                const cleanValue = value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+                setWeight(cleanValue);
+              }}
               placeholder="Enter weight in kg"
               className={`text-xl p-4 h-14 ${errors.weight ? 'border-red-500' : 'border-gray-300'}`}
               autoComplete="off"
@@ -243,7 +250,7 @@ function WeightUpdateForm({ scanResult, onUpdate, loading, onReset }: WeightUpda
 export default function WeightUpdateScanner() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [barcodeInput, setBarcodeInput] = useState('');
+  const [barcodeInput, setBarcodeInput] = useState('CR_');
   const [scanResult, setScanResult] = useState<QRScanResult | null>(null);
   const [userName, setUserName] = useState<string>('');
   const barcodeInputRef = useRef<HTMLInputElement>(null);
@@ -276,14 +283,14 @@ export default function WeightUpdateScanner() {
 
   const handleBarcodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!barcodeInput.trim()) {
-      toast.error('Please enter a barcode');
+
+    if (!barcodeInput.trim() || barcodeInput.trim() === 'CR_') {
+      toast.error('Please enter a barcode number');
       return;
     }
-    
+
     const { qrCode, isValid } = parseQRCodeData(barcodeInput);
-    
+
     if (!isValid) {
       toast.error('Invalid barcode format');
       return;
@@ -320,7 +327,7 @@ export default function WeightUpdateScanner() {
 
   const handleReset = () => {
     setScanResult(null);
-    setBarcodeInput('');
+    setBarcodeInput('CR_');
     setError(null);
     // Focus will be set by useEffect
   };
@@ -384,20 +391,31 @@ export default function WeightUpdateScanner() {
                   <Label htmlFor="barcode-input" className="text-lg font-medium mb-3 block">
                     Barcode
                   </Label>
-                  <Input
-                    ref={barcodeInputRef}
-                    id="barcode-input"
-                    value={barcodeInput}
-                    onChange={(e) => setBarcodeInput(e.target.value)}
-                    placeholder="Enter barcode (e.g., CR_00001)"
-                    className="text-xl p-4 h-14"
-                    autoComplete="off"
-                  />
+                  <div className="flex items-center">
+                    <div className="text-xl p-4 h-14 bg-gray-100 border border-gray-300 rounded-l-md flex items-center font-mono">
+                      CR_
+                    </div>
+                    <Input
+                      ref={barcodeInputRef}
+                      id="barcode-input"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={barcodeInput.replace('CR_', '')}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/[^0-9]/g, '');
+                        setBarcodeInput('CR_' + value);
+                      }}
+                      placeholder="Enter barcode number"
+                      className="text-xl p-4 h-14 rounded-l-none"
+                      autoComplete="off"
+                    />
+                  </div>
                 </div>
                 
                 <Button 
                   type="submit" 
-                  disabled={loading || !barcodeInput.trim()}
+                  disabled={loading || !barcodeInput.trim() || barcodeInput.trim() === 'CR_'}
                   className="w-full h-14 text-lg"
                   size="lg"
                 >

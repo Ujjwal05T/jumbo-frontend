@@ -1,9 +1,11 @@
 /**
- * Create Dispatch Modal - Two-step dispatch creation with item selection
+ * Create Dispatch Modal - High Performance Version v2
+ * Optimized to handle large datasets without lag
+ * Updated with larger fonts and removed Type column
  */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback, memo } from "react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -14,7 +16,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
@@ -31,11 +32,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Truck,
   CheckCircle,
-  Clock,
   Package,
   AlertCircle,
   Loader2,
@@ -56,6 +55,131 @@ interface CreateDispatchModalProps {
   onSuccess?: () => void;
 }
 
+// Pure component for checkbox to prevent unnecessary re-renders
+const PureCheckbox = memo(({
+  checked,
+  onChange
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) => (
+  <Checkbox
+    checked={checked}
+    onCheckedChange={onChange}
+    className="w-5 h-5"
+  />
+));
+
+PureCheckbox.displayName = "PureCheckbox";
+
+// Highly optimized row component - minimal re-renders
+const OptimizedRow = memo(({
+  item,
+  index,
+  isSelected,
+  isWastageItem,
+  searchTerm,
+  onToggle
+}: {
+  item: any;
+  index: number;
+  isSelected: boolean;
+  isWastageItem: boolean;
+  searchTerm: string;
+  onToggle: () => void;
+}) => {
+  // Use inline styles for highlighting instead of mark components
+  const getHighlightedText = (text: string, highlight: string) => {
+    if (!highlight || !text) return text;
+
+    const parts = text.split(new RegExp(`(${highlight})`, "gi"));
+    return parts.map((part, idx) =>
+      part.toLowerCase() === highlight.toLowerCase() ? (
+        <span key={idx} style={{ backgroundColor: '#fef08a', padding: '0 2px', borderRadius: '2px' }}>
+          {part}
+        </span>
+      ) : (
+        part
+      )
+    );
+  };
+
+  const itemId = isWastageItem ? item.id : item.inventory_id;
+
+  return (
+    <TableRow
+      style={{
+        backgroundColor: isSelected ? (isWastageItem ? '#fff7ed' : '#eff6ff') : 'transparent',
+        borderLeft: item.priority === 1 ? '4px solid #22c55e' : 'none'
+      }}
+    >
+      <TableCell style={{ fontWeight: 500, fontSize: '16px' }}>{index + 1}</TableCell>
+      <TableCell>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '16px', fontFamily: 'monospace' }}>
+          {getHighlightedText(
+            isWastageItem
+              ? (item.reel_no || item.barcode_id || item.frontend_id || "N/A")
+              : (item.barcode_id || item.qr_code),
+            searchTerm
+          )}
+          {isSelected && (
+            <span style={{
+              marginLeft: '8px',
+              fontSize: '12px',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              backgroundColor: isWastageItem ? '#ea580c' : '#2563eb',
+              color: 'white',
+              fontWeight: 500
+            }}>
+              SELECTED
+            </span>
+          )}
+        </div>
+        <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
+          By: {item.created_by || "Unknown"}
+        </div>
+      </TableCell>
+      <TableCell>
+        {isWastageItem ? (
+          <div style={{ color: '#6b7280', fontSize: '16px' }}>-</div>
+        ) : (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '16px', fontWeight: 500 }}>
+              <Building2 style={{ width: '14px', height: '14px', color: '#2563eb' }} />
+              {getHighlightedText(item.client_name || "N/A", searchTerm)}
+            </div>
+            <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
+              Order: {getHighlightedText(item.order_id || "N/A", searchTerm)}
+            </div>
+          </div>
+        )}
+      </TableCell>
+      <TableCell>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontWeight: 500, fontSize: '16px' }}>
+            {getHighlightedText(item.paper_spec, searchTerm)}
+          </span>
+          {!isWastageItem && (
+            <WastageIndicator isWastageRoll={item.is_wastage_roll} />
+          )}
+        </div>
+      </TableCell>
+      <TableCell style={{ textAlign: 'center', fontWeight: 500, fontSize: '16px' }}>
+        {item.width_inches}"
+      </TableCell>
+      <TableCell style={{ textAlign: 'center', fontWeight: 500, fontSize: '16px' }}>
+        {item.weight_kg}kg
+      </TableCell>
+      <TableCell style={{ display: 'flex', justifyContent: 'center' }}>
+        <PureCheckbox checked={isSelected} onChange={onToggle} />
+      </TableCell>
+    </TableRow>
+  );
+});
+
+OptimizedRow.displayName = "OptimizedRow";
+
 export function CreateDispatchModal({
   open,
   onOpenChange,
@@ -64,11 +188,11 @@ export function CreateDispatchModal({
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [warehouseItems, setWarehouseItems] = useState<any[]>([]);
-  const [wastageItems, setWastageItems] = useState<any[]>([]);  // NEW: Wastage items
+  const [wastageItems, setWastageItems] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>("none");
-  const [selectedItems, setSelectedItems] = useState<string[]>([]);
-  const [selectedWastageIds, setSelectedWastageIds] = useState<string[]>([]);  // NEW: Selected wastage IDs
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [selectedWastageIds, setSelectedWastageIds] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState("");
   const [dispatchLoading, setDispatchLoading] = useState(false);
   const [successModalOpen, setSuccessModalOpen] = useState(false);
@@ -84,31 +208,41 @@ export function CreateDispatchModal({
     reference_number: "",
   });
 
-  // Preview dispatch number state
   const [previewNumber, setPreviewNumber] = useState<string>("");
   const [previewLoading, setPreviewLoading] = useState(false);
 
-  // Load clients, warehouse items, wastage items, and preview dispatch number
+  // Debounce search to reduce re-renders
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm.toLowerCase());
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Load data on mount
   useEffect(() => {
     if (open) {
       loadClients();
       loadWarehouseItems();
-      loadWastageItems();  // NEW: Load wastage items
-      loadPreviewNumber(); // NEW: Load preview number
+      loadWastageItems();
+      loadPreviewNumber();
     } else {
-      // Reset on close
+      // Reset state
       setStep(1);
       setSelectedClientId("none");
-      setSelectedItems([]);
-      setSelectedWastageIds([]);  // NEW: Reset wastage selection
+      setSelectedItems(new Set());
+      setSelectedWastageIds(new Set());
       setSearchTerm("");
-      setPreviewNumber(""); // Reset preview (will reload on next open)
+      setDebouncedSearchTerm("");
+      setPreviewNumber("");
       setDispatchDetails({
         vehicle_number: "",
         driver_name: "",
         driver_mobile: "",
         locket_no: "",
-        dispatch_number: "",  // Will be generated at save time
+        dispatch_number: "",
         reference_number: "",
       });
     }
@@ -185,9 +319,7 @@ export function CreateDispatchModal({
     }
   };
 
-  
-  const handleSaveDetails = () => {
-    // Validate details
+  const handleSaveDetails = useCallback(() => {
     if (!dispatchDetails.vehicle_number.trim()) {
       toast.error("Vehicle number is required");
       return;
@@ -200,13 +332,12 @@ export function CreateDispatchModal({
       toast.error("Please select a client for the dispatch slip");
       return;
     }
-
     setStep(2);
     toast.success("Details saved! Now select items to dispatch");
-  };
+  }, [dispatchDetails, selectedClientId]);
 
-  const handleDispatchConfirm = async () => {
-    if (selectedItems.length === 0 && selectedWastageIds.length === 0) {
+  const handleDispatchConfirm = useCallback(async () => {
+    if (selectedItems.size === 0 && selectedWastageIds.size === 0) {
       toast.error("Please select at least one item to dispatch");
       return;
     }
@@ -214,25 +345,20 @@ export function CreateDispatchModal({
     try {
       setDispatchLoading(true);
 
-      // Send data without dispatch_number - backend will generate it atomically
       const dispatchData = {
         ...dispatchDetails,
-        dispatch_number: "",  // Let backend generate this atomically
+        dispatch_number: "",
         client_id: selectedClientId,
-        inventory_ids: selectedItems,
-        wastage_ids: selectedWastageIds,  // NEW: Include wastage IDs
+        inventory_ids: Array.from(selectedItems),
+        wastage_ids: Array.from(selectedWastageIds),
       };
 
       const result = await createDispatchRecord(dispatchData as any);
 
-      // Show success modal
       setDispatchResult(result);
       setSuccessModalOpen(true);
-
-      // Close the create modal
       onOpenChange(false);
 
-      // Call onSuccess callback to refresh parent data
       if (onSuccess) {
         onSuccess();
       }
@@ -244,523 +370,261 @@ export function CreateDispatchModal({
     } finally {
       setDispatchLoading(false);
     }
-  };
+  }, [dispatchDetails, selectedClientId, selectedItems, selectedWastageIds, onOpenChange, onSuccess]);
 
-  const selectedClient =
-    selectedClientId && selectedClientId !== "none"
+  // Memoize selected client
+  const selectedClient = useMemo(() => {
+    return selectedClientId && selectedClientId !== "none"
       ? clients.find((c) => c.id === selectedClientId)
       : null;
+  }, [selectedClientId, clients]);
 
-     console.log("Selected Client ID:", warehouseItems);
-     console.log("Selected Client:", selectedClient);
-  
-  // Separate client items from other warehouse items
-  const clientItems = warehouseItems.filter(
-    (item) => item.client_name === (selectedClient ? selectedClient.company_name : "")
-  );
-  const otherWarehouseItems = warehouseItems.filter(
-    (item) => item.client_name !== (selectedClient ? selectedClient.company_name : "")
-  );
+  // Memoize filtered items - only recompute when search term changes
+  const filteredData = useMemo(() => {
+    const clientName = selectedClient?.company_name || "";
 
-  // Unified search filter that works across all item types
-  const matchesSearch = (item: any, isWastage: boolean) => {
-    if (!searchTerm.trim()) return true;
-    const searchLower = searchTerm.toLowerCase();
-    
-    if (isWastage) {
-      // Search in wastage-specific fields
-      return (
-        (item.barcode_id && item.barcode_id.toLowerCase().includes(searchLower)) ||
-        (item.reel_no && item.reel_no.toLowerCase().includes(searchLower)) ||
-        (item.frontend_id && item.frontend_id.toLowerCase().includes(searchLower)) ||
-        (item.paper_spec && item.paper_spec.toLowerCase().includes(searchLower)) ||
-        (item.created_by && item.created_by.toLowerCase().includes(searchLower))
+    const clientItems = warehouseItems.filter(item => item.client_name === clientName);
+    const otherItems = warehouseItems.filter(item => item.client_name !== clientName);
+
+    const filterItems = (items: any[], isWastage = false) => {
+      if (!debouncedSearchTerm) return items;
+
+      return items.filter(item => {
+        const fields = isWastage
+          ? [item.barcode_id, item.reel_no, item.frontend_id, item.paper_spec, item.created_by]
+          : [item.barcode_id, item.qr_code, item.client_name, item.order_id, item.paper_spec, item.created_by];
+
+        return fields.some(field =>
+          field && field.toLowerCase().includes(debouncedSearchTerm)
+        );
+      });
+    };
+
+    return {
+      filteredClient: filterItems(clientItems),
+      filteredOther: filterItems(otherItems),
+      filteredWastage: filterItems(wastageItems, true),
+      clientItems,
+      otherItems
+    };
+  }, [warehouseItems, wastageItems, selectedClient?.company_name, debouncedSearchTerm]);
+
+  // Memoize combined items based on active tab
+  const displayItems = useMemo(() => {
+    const { filteredClient, filteredOther, filteredWastage } = filteredData;
+
+    const items = [];
+
+    if (activeTab === "client") {
+      items.push(
+        ...filteredClient.map(item => ({ ...item, type: "warehouse", priority: 1 })),
+        ...filteredOther.map(item => ({ ...item, type: "warehouse", priority: 2 })),
+        ...filteredWastage.map(item => ({ ...item, type: "wastage", priority: 3 }))
+      );
+    } else if (activeTab === "all") {
+      items.push(
+        ...filteredOther.map(item => ({ ...item, type: "warehouse", priority: 1 })),
+        ...filteredClient.map(item => ({ ...item, type: "warehouse", priority: 2 })),
+        ...filteredWastage.map(item => ({ ...item, type: "wastage", priority: 3 }))
       );
     } else {
-      // Search in warehouse item fields
-      return (
-        (item.barcode_id && item.barcode_id.toLowerCase().includes(searchLower)) ||
-        (item.qr_code && item.qr_code.toLowerCase().includes(searchLower)) ||
-        (item.client_name && item.client_name.toLowerCase().includes(searchLower)) ||
-        (item.order_id && item.order_id.toLowerCase().includes(searchLower)) ||
-        (item.paper_spec && item.paper_spec.toLowerCase().includes(searchLower)) ||
-        (item.created_by && item.created_by.toLowerCase().includes(searchLower))
+      items.push(
+        ...filteredWastage.map(item => ({ ...item, type: "wastage", priority: 1 })),
+        ...filteredClient.map(item => ({ ...item, type: "warehouse", priority: 2 })),
+        ...filteredOther.map(item => ({ ...item, type: "warehouse", priority: 3 }))
       );
     }
-  };
 
-  // Combine all items with priority based on active tab and unified search
-  const getCombinedItems = () => {
-    // Apply search filter to all item types
-    const filteredClient = clientItems.filter(item => matchesSearch(item, false));
-    const filteredOther = otherWarehouseItems.filter(item => matchesSearch(item, false));
-    const filteredWastage = wastageItems.filter(item => matchesSearch(item, true));
+    return items;
+  }, [filteredData, activeTab]);
 
-    // Prioritize based on active tab
-    if (activeTab === "client") {
-      return [
-        ...filteredClient.map(item => ({ ...item, type: "warehouse", priority: 1, matchScore: 3 })),
-        ...filteredOther.map(item => ({ ...item, type: "warehouse", priority: 2, matchScore: 2 })),
-        ...filteredWastage.map(item => ({ ...item, type: "wastage", priority: 3, matchScore: 1 }))
-      ];
-    } else if (activeTab === "all") {
-      return [
-        ...filteredOther.map(item => ({ ...item, type: "warehouse", priority: 1, matchScore: 3 })),
-        ...filteredClient.map(item => ({ ...item, type: "warehouse", priority: 2, matchScore: 2 })),
-        ...filteredWastage.map(item => ({ ...item, type: "wastage", priority: 3, matchScore: 1 }))
-      ];
-    } else { // activeTab === "wastage"
-      return [
-        ...filteredWastage.map(item => ({ ...item, type: "wastage", priority: 1, matchScore: 3 })),
-        ...filteredClient.map(item => ({ ...item, type: "warehouse", priority: 2, matchScore: 2 })),
-        ...filteredOther.map(item => ({ ...item, type: "warehouse", priority: 3, matchScore: 1 }))
-      ];
+  // Optimized toggle handler - use Set for O(1) operations
+  const handleToggleItem = useCallback((item: any, isWastageItem: boolean) => {
+    const itemId = isWastageItem ? item.id : item.inventory_id;
+
+    if (isWastageItem) {
+      setSelectedWastageIds(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(itemId)) {
+          newSet.delete(itemId);
+        } else {
+          newSet.add(itemId);
+        }
+        return newSet;
+      });
+    } else {
+      setSelectedItems(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(itemId)) {
+          newSet.delete(itemId);
+        } else {
+          newSet.add(itemId);
+        }
+        return newSet;
+      });
     }
-  };
+  }, []);
 
-  const combinedItems = getCombinedItems();
-  
-  // Get counts for each category after search filter
-  const searchedClientCount = clientItems.filter(item => matchesSearch(item, false)).length;
-  const searchedOtherCount = otherWarehouseItems.filter(item => matchesSearch(item, false)).length;
-  const searchedWastageCount = wastageItems.filter(item => matchesSearch(item, true)).length;
+  // Memoize stats to avoid recalculation
+  const stats = useMemo(() => {
+    const totalSelected = selectedItems.size + selectedWastageIds.size;
 
-  const highlightText = (text: string, searchTerm: string) => {
-    if (!searchTerm || !text) return text;
-    const parts = text.split(new RegExp(`(${searchTerm})`, "gi"));
-    return parts.map((part, index) =>
-      part.toLowerCase() === searchTerm.toLowerCase() ? (
-        <mark
-          key={index}
-          className="bg-yellow-200 dark:bg-yellow-800 px-0.5 rounded"
-        >
-          {part}
-        </mark>
-      ) : (
-        part
-      )
-    );
-  };
-
-  const removeSelectedItem = (inventoryId: string) => {
-    setSelectedItems((prev) => prev.filter((id) => id !== inventoryId));
-    const item = warehouseItems.find(
-      (item) => item.inventory_id === inventoryId
-    );
-    if (item) {
-      toast.success(`Removed ${item.barcode_id || item.qr_code} from selection`);
+    // Calculate total weight only when needed
+    let totalWeight = 0;
+    if (totalSelected > 0) {
+      warehouseItems.forEach(item => {
+        if (selectedItems.has(item.inventory_id)) {
+          totalWeight += item.weight_kg || 0;
+        }
+      });
+      wastageItems.forEach(item => {
+        if (selectedWastageIds.has(item.id)) {
+          totalWeight += item.weight_kg || 0;
+        }
+      });
     }
-  };
 
-  const getStatusBadge = (status: string) => {
-    const badges: Record<string, { variant: string; icon: any; label: string }> = {
-      in_warehouse: {
-        variant: "bg-blue-100 text-blue-800",
-        icon: Package,
-        label: "In Warehouse",
-      },
-      pending: { variant: "bg-yellow-100 text-yellow-800", icon: Clock, label: "Pending" },
-      completed: {
-        variant: "bg-green-100 text-green-800",
-        icon: CheckCircle,
-        label: "Completed",
-      },
+    return {
+      totalSelected,
+      totalWeight,
+      regularCount: selectedItems.size,
+      wastageCount: selectedWastageIds.size
     };
+  }, [selectedItems, selectedWastageIds, warehouseItems, wastageItems]);
 
-    const badge = badges[status] || {
-      variant: "bg-gray-100 text-gray-800",
-      icon: Package,
-      label: status,
-    };
-    const Icon = badge.icon;
+  // Render optimized table
+  const renderTable = useMemo(() => {
+    if (loading) {
+      return (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '96px',
+          border: '1px solid #e5e7eb',
+          borderRadius: '6px'
+        }}>
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Loading items...
+        </div>
+      );
+    }
+
+    if (displayItems.length === 0) {
+      return (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '96px',
+          border: '1px solid #e5e7eb',
+          borderRadius: '6px'
+        }}>
+          <div style={{ textAlign: 'center', color: '#6b7280' }}>
+            <div style={{ fontWeight: 500, fontSize: '16px' }}>No items found</div>
+            <div style={{ fontSize: '14px', marginTop: '4px' }}>
+              {debouncedSearchTerm ? "Try adjusting your search" : "No items available"}
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     return (
-      <Badge className={badge.variant}>
-        <Icon className="w-3 h-3 mr-1" />
-        {badge.label}
-      </Badge>
-    );
-  };
-
-  // Unified rendering function for combined items
-  const renderCombinedItemsTable = (items: any[]) => (
-    <div className="rounded-md border max-h-[400px] overflow-y-auto">
-      <Table>
-        <TableHeader className="sticky top-0 bg-white z-10">
-          <TableRow>
-            <TableHead>S.No</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>ID / Barcode</TableHead>
-            <TableHead>Client & Order</TableHead>
-            <TableHead>Paper Specs</TableHead>
-            <TableHead>Width</TableHead>
-            <TableHead>Weight</TableHead>
-            <TableHead className="w-[50px]">Select</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.length > 0 ? (
-            items.map((item: any, index) => {
+      <div style={{
+        border: '1px solid #e5e7eb',
+        borderRadius: '6px',
+        maxHeight: '400px',
+        overflow: 'auto'
+      }}>
+        <Table>
+          <TableHeader style={{ position: 'sticky', top: 0, backgroundColor: 'white', zIndex: 10 }}>
+            <TableRow>
+              <TableHead style={{ width: '60px', fontSize: '16px', fontWeight: 600 }}>S.No</TableHead>
+              <TableHead style={{ width: '200px', fontSize: '16px', fontWeight: 600 }}>ID / Barcode</TableHead>
+              <TableHead style={{ width: '200px', fontSize: '16px', fontWeight: 600 }}>Client & Order</TableHead>
+              <TableHead style={{ fontSize: '16px', fontWeight: 600 }}>Paper Specs</TableHead>
+              <TableHead style={{ width: '80px', textAlign: 'center', fontSize: '16px', fontWeight: 600 }}>Width</TableHead>
+              <TableHead style={{ width: '80px', textAlign: 'center', fontSize: '16px', fontWeight: 600 }}>Weight</TableHead>
+              <TableHead style={{ width: '60px', fontSize: '16px', fontWeight: 600 }}>Select</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {displayItems.map((item: any, index) => {
               const isWastageItem = item.type === "wastage";
-              const isSelected = isWastageItem 
-                ? selectedWastageIds.includes(item.id)
-                : selectedItems.includes(item.inventory_id);
-              
-              return (
-                <TableRow
-                  key={isWastageItem ? `wastage-${item.id}` : `warehouse-${item.inventory_id}`}
-                  className={`${
-                    isSelected
-                      ? isWastageItem
-                        ? "bg-orange-50 border-orange-200"
-                        : "bg-blue-50 border-blue-200"
-                      : ""
-                  } ${item.priority === 1 ? "border-l-4 border-l-green-500" : ""}`}
-                >
-                  <TableCell className="font-medium">{index + 1}</TableCell>
-                  <TableCell>
-                    {isWastageItem ? (
-                      <Badge variant="outline" className="text-xs bg-orange-100 text-orange-700">
-                        Stock
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-xs bg-blue-100 text-blue-700">
-                        Warehouse
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <div
-                        className={`font-mono text-sm ${
-                          isSelected
-                            ? isWastageItem
-                              ? "font-bold text-orange-700"
-                              : "font-bold text-blue-700"
-                            : ""
-                        }`}
-                      >
-                        {highlightText(
-                          isWastageItem
-                            ? (item.reel_no || item.barcode_id || item.frontend_id || "N/A")
-                            : (item.barcode_id || item.qr_code),
-                          searchTerm
-                        )}
-                        {isSelected && (
-                          <Badge className={`ml-2 text-xs ${
-                            isWastageItem ? "bg-orange-600" : "bg-blue-600"
-                          }`}>
-                            SELECTED
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        By: {item.created_by || "Unknown"}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {isWastageItem ? (
-                      <div className="text-sm text-muted-foreground">-</div>
-                    ) : (
-                      <div className="space-y-1">
-                        <div className="font-medium text-sm flex items-center gap-1">
-                          <Building2 className="w-3 h-3 text-blue-600" />
-                          {highlightText(item.client_name || "N/A", searchTerm)}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Order: {highlightText(item.order_id || "N/A", searchTerm)}
-                        </div>
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">
-                          {highlightText(item.paper_spec, searchTerm)}
-                        </span>
-                        {!isWastageItem && (
-                          <WastageIndicator isWastageRoll={item.is_wastage_roll} />
-                        )}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-center">
-                      <div className="font-medium">{item.width_inches}"</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-center">
-                      <div className="font-medium">{item.weight_kg}kg</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-center">
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={(checked) => {
-                          if (isWastageItem) {
-                            if (checked) {
-                              setSelectedWastageIds((prev) => [...prev, item.id]);
-                              toast.success(`Selected Stock ${item.reel_no || item.frontend_id}`);
-                            } else {
-                              setSelectedWastageIds((prev) => prev.filter((id) => id !== item.id));
-                              toast.success(`Removed Stock ${item.reel_no || item.frontend_id}`);
-                            }
-                          } else {
-                            if (checked) {
-                              setSelectedItems((prev) => [...prev, item.inventory_id]);
-                              toast.success(`Selected ${item.barcode_id || item.qr_code}`);
-                            } else {
-                              removeSelectedItem(item.inventory_id);
-                            }
-                          }
-                        }}
-                        className="w-5 h-5"
-                      />
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })
-          ) : (
-            <TableRow>
-              <TableCell colSpan={8} className="h-24 text-center">
-                {loading ? (
-                  <div className="flex items-center justify-center">
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Loading items...
-                  </div>
-                ) : (
-                  <div className="text-muted-foreground">
-                    <p className="font-medium">No items found</p>
-                    <p className="text-sm">
-                      {searchTerm
-                        ? "Try adjusting your search"
-                        : "No items available"}
-                    </p>
-                  </div>
-                )}
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </div>
-  );
+              const itemId = isWastageItem ? item.id : item.inventory_id;
+              const isSelected = isWastageItem
+                ? selectedWastageIds.has(itemId)
+                : selectedItems.has(itemId);
 
-  const renderItemsTable = (items: any[], showClientColumn: boolean = false) => (
-    <div className="rounded-md border max-h-[400px] overflow-y-auto">
-      <Table>
-        <TableHeader className="sticky top-0 bg-white z-10">
-          <TableRow>
-            <TableHead className="w-[50px]">
-              <div className="flex items-center justify-center">
-                <Checkbox
-                  checked={items.length > 0 && selectedItems.length === items.length}
-                  onCheckedChange={(checked) => {
-                    if (checked) {
-                      const allItemIds = items.map((item) => item.inventory_id);
-                      setSelectedItems(allItemIds);
-                      toast.success(`Selected all ${allItemIds.length} items`);
-                    } else {
-                      setSelectedItems([]);
-                      toast.success("Cleared all selections");
-                    }
-                  }}
-                  className="w-5 h-5"
+              return (
+                <OptimizedRow
+                  key={`${isWastageItem ? 'w' : 'i'}-${itemId}`}
+                  item={item}
+                  index={index}
+                  isSelected={isSelected}
+                  isWastageItem={isWastageItem}
+                  searchTerm={searchTerm}
+                  onToggle={() => handleToggleItem(item, isWastageItem)}
                 />
-              </div>
-            </TableHead>
-            <TableHead>S.No</TableHead>
-            <TableHead>QR Code</TableHead>
-            {showClientColumn && <TableHead>Client & Order</TableHead>}
-            {!showClientColumn && <TableHead>Order</TableHead>}
-            <TableHead>Paper Specs</TableHead>
-            <TableHead>Width</TableHead>
-            <TableHead>Weight</TableHead>
-            <TableHead>Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.length > 0 ? (
-            items.map((item: any, index) => (
-              <TableRow
-                key={item.inventory_id}
-                className={
-                  selectedItems.includes(item.inventory_id)
-                    ? "bg-blue-50 border-blue-200"
-                    : ""
-                }
-              >
-                <TableCell>
-                  <div className="flex items-center justify-center">
-                    <Checkbox
-                      checked={selectedItems.includes(item.inventory_id)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSelectedItems((prev) => [...prev, item.inventory_id]);
-                          toast.success(`Selected ${item.barcode_id || item.qr_code}`);
-                        } else {
-                          removeSelectedItem(item.inventory_id);
-                        }
-                      }}
-                      className="w-5 h-5"
-                    />
-                  </div>
-                </TableCell>
-                <TableCell className="font-medium">{index + 1}</TableCell>
-                <TableCell>
-                  <div className="space-y-1">
-                    <div
-                      className={`font-mono text-sm ${
-                        selectedItems.includes(item.inventory_id)
-                          ? "font-bold text-blue-700"
-                          : ""
-                      }`}
-                    >
-                      {highlightText(item.barcode_id || item.qr_code, searchTerm)}
-                      {selectedItems.includes(item.inventory_id) && (
-                        <Badge className="ml-2 text-xs bg-blue-600">SELECTED</Badge>
-                      )}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      By: {item.created_by}
-                    </div>
-                  </div>
-                </TableCell>
-                {showClientColumn ? (
-                  <TableCell>
-                    <div className="space-y-1">
-                      <div className="font-medium text-sm flex items-center gap-1">
-                        <Building2 className="w-3 h-3 text-blue-600" />
-                        {highlightText(item.client_name || "N/A", searchTerm)}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Order: {highlightText(item.order_id || "N/A", searchTerm)}
-                      </div>
-                    </div>
-                  </TableCell>
-                ) : (
-                  <TableCell>
-                    <div className="text-sm">
-                      {highlightText(item.order_id || "N/A", searchTerm)}
-                    </div>
-                  </TableCell>
-                )}
-                <TableCell>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">
-                        {highlightText(item.paper_spec, searchTerm)}
-                      </span>
-                      <WastageIndicator isWastageRoll={item.is_wastage_roll} />
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="text-center">
-                    <div className="font-medium">{item.width_inches}"</div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="text-center">
-                    <div className="font-medium">{item.weight_kg}kg</div>
-                  </div>
-                </TableCell>
-                <TableCell>{getStatusBadge(item.status)}</TableCell>
-              </TableRow>
-            ))
-          ) : (
-            <TableRow>
-              <TableCell
-                colSpan={showClientColumn ? 9 : 8}
-                className="h-24 text-center"
-              >
-                {loading ? (
-                  <div className="flex items-center justify-center">
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Loading items...
-                  </div>
-                ) : (
-                  <div className="text-muted-foreground">
-                    <p className="font-medium">No items found</p>
-                    <p className="text-sm">
-                      {searchTerm
-                        ? "Try adjusting your search"
-                        : "No warehouse items available"}
-                    </p>
-                  </div>
-                )}
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </div>
-  );
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  }, [loading, displayItems, debouncedSearchTerm, searchTerm, selectedItems, selectedWastageIds, handleToggleItem]);
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogContent style={{ maxWidth: '1200px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Truck className="w-5 h-5" />
+            <DialogTitle style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '20px' }}>
+              <Truck style={{ width: '24px', height: '24px' }} />
               Create New Dispatch
             </DialogTitle>
-            <DialogDescription>
-              {step === 1
-                ? "Step 1: Fill dispatch details"
-                : "Step 2: Select items to dispatch"}
+            <DialogDescription style={{ fontSize: '16px' }}>
+              {step === 1 ? "Step 1: Fill dispatch details" : "Step 2: Select items to dispatch"}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto">
-            {/* Step 1: Dispatch Details */}
-            {step === 1 && (
-              <div className="space-y-4 py-4">
-                {/* Client Selection */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center gap-2">
-                    <Building2 className="w-4 h-4" />
+          <div style={{ flex: 1, overflow: 'auto' }}>
+            {step === 1 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px' }}>
+                {/* Form fields... */}
+                <div>
+                  <label style={{ fontSize: '16px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <Building2 style={{ width: '18px', height: '18px' }} />
                     Select Client for Dispatch Slip *
                   </label>
                   <Select
                     value={selectedClientId}
                     onValueChange={(value) => {
                       setSelectedClientId(value);
-                      setSelectedItems([]);
+                      setSelectedItems(new Set());
                     }}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select a client" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none" disabled>
-                        Select a client
-                      </SelectItem>
-                        {clients
+                      <SelectItem value="none" disabled>Select a client</SelectItem>
+                      {clients
                         .sort((a, b) => a.company_name.localeCompare(b.company_name))
                         .map((client) => (
                           <SelectItem key={client.id} value={client.id}>
-                          {client.company_name}
+                            {client.company_name}
                           </SelectItem>
                         ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">
-                    This client will appear on the dispatch slip
-                  </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Vehicle Number */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium flex items-center gap-2">
-                      <Truck className="w-4 h-4" />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+                  <div>
+                    <label style={{ fontSize: '16px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <Truck style={{ width: '18px', height: '18px' }} />
                       Vehicle Number *
                     </label>
                     <Input
@@ -771,13 +635,13 @@ export function CreateDispatchModal({
                           vehicle_number: e.target.value,
                         }))
                       }
+                      style={{ fontSize: '16px', padding: '12px' }}
                     />
                   </div>
 
-                  {/* Driver Name */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium flex items-center gap-2">
-                      <User className="w-4 h-4" />
+                  <div>
+                    <label style={{ fontSize: '16px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <User style={{ width: '18px', height: '18px' }} />
                       Driver Name *
                     </label>
                     <Input
@@ -788,14 +652,14 @@ export function CreateDispatchModal({
                           driver_name: e.target.value,
                         }))
                       }
+                      style={{ fontSize: '16px', padding: '12px' }}
                     />
                   </div>
 
-                  {/* Driver Mobile */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium flex items-center gap-2">
-                      <Phone className="w-4 h-4" />
-                      Driver Mobile 
+                  <div>
+                    <label style={{ fontSize: '16px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <Phone style={{ width: '18px', height: '18px' }} />
+                      Driver Mobile
                     </label>
                     <Input
                       value={dispatchDetails.driver_mobile}
@@ -805,12 +669,12 @@ export function CreateDispatchModal({
                           driver_mobile: e.target.value,
                         }))
                       }
+                      style={{ fontSize: '16px', padding: '12px' }}
                     />
                   </div>
 
-                  {/* Locket Number */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">
+                  <div>
+                    <label style={{ fontSize: '16px', fontWeight: 500, marginBottom: '8px' }}>
                       Dispatch Number (Optional)
                     </label>
                     <Input
@@ -821,32 +685,40 @@ export function CreateDispatchModal({
                           locket_no: e.target.value,
                         }))
                       }
+                      style={{ fontSize: '16px', padding: '12px' }}
                     />
                   </div>
 
-                  {/* Dispatch Number */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium flex items-center gap-2">
+                  <div>
+                    <label style={{ fontSize: '16px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                       Slip Number *
-                      <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">
+                      <span style={{
+                        fontSize: '12px',
+                        color: '#2563eb',
+                        backgroundColor: '#dbeafe',
+                        padding: '2px 6px',
+                        borderRadius: '4px'
+                      }}>
                         Preview
                       </span>
                     </label>
                     <Input
                       value={previewLoading ? "Loading..." : previewNumber || "Loading..."}
                       readOnly
-                      className="font-mono bg-gray-50 border-blue-200 text-blue-700"
+                      style={{
+                        fontFamily: 'monospace',
+                        backgroundColor: '#f9fafb',
+                        borderColor: '#bfdbfe',
+                        color: '#1d4ed8',
+                        fontSize: '16px',
+                        padding: '12px'
+                      }}
                       placeholder="Loading preview..."
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Preview: {previewNumber || "Loading..."} (Actual number generated when saving)
-                    </p>
                   </div>
 
-      
-                  {/* Reference Number */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">
+                  <div>
+                    <label style={{ fontSize: '16px', fontWeight: 500, marginBottom: '8px' }}>
                       Reference Number (Optional)
                     </label>
                     <Input
@@ -857,206 +729,185 @@ export function CreateDispatchModal({
                           reference_number: e.target.value,
                         }))
                       }
+                      style={{ fontSize: '16px', padding: '12px' }}
                     />
                   </div>
                 </div>
 
-                <Button onClick={handleSaveDetails} className="w-full" size="lg">
-                  <CheckCircle className="w-4 h-4 mr-2" />
+                <Button onClick={handleSaveDetails} style={{ width: '100%', fontSize: '16px', padding: '12px' }} size="lg">
+                  <CheckCircle style={{ width: '20px', height: '20px', marginRight: '8px' }} />
                   Continue to Item Selection
                 </Button>
               </div>
-            )}
-
-            {/* Step 2: Item Selection */}
-            {step === 2 && (
-              <div className="space-y-4 py-4">
-                {/* Summary of Details */}
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold flex items-center gap-2">
-                      <CheckCircle className="w-5 h-5 text-green-600" />
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px' }}>
+                {/* Summary */}
+                <div style={{
+                  backgroundColor: '#f0fdf4',
+                  border: '1px solid #86efac',
+                  borderRadius: '8px',
+                  padding: '16px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <h3 style={{ fontWeight: 600, fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <CheckCircle style={{ width: '20px', height: '20px', color: '#16a34a' }} />
                       Dispatch Details Saved
                     </h3>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setStep(1)}
-                    >
+                    <Button variant="outline" size="sm" onClick={() => setStep(1)}>
                       Edit
                     </Button>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', fontSize: '16px' }}>
                     <div>
-                      <span className="text-muted-foreground">Client:</span>
-                      <p className="font-medium">{selectedClient?.company_name}</p>
+                      <span style={{ color: '#6b7280' }}>Client:</span>
+                      <p style={{ fontWeight: 500 }}>{selectedClient?.company_name}</p>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Vehicle:</span>
-                      <p className="font-medium">{dispatchDetails.vehicle_number}</p>
+                      <span style={{ color: '#6b7280' }}>Vehicle:</span>
+                      <p style={{ fontWeight: 500 }}>{dispatchDetails.vehicle_number}</p>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Driver:</span>
-                      <p className="font-medium">{dispatchDetails.driver_name}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Mobile:</span>
-                      <p className="font-medium">{dispatchDetails.driver_mobile}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Locket #:</span>
-                      <p className="font-medium">{dispatchDetails.locket_no || "-"}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Dispatch #:</span>
-                      <p className="font-medium text-blue-600">{previewNumber || "Loading..."}</p>
+                      <span style={{ color: '#6b7280' }}>Driver:</span>
+                      <p style={{ fontWeight: 500 }}>{dispatchDetails.driver_name}</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Stats */}
-                <div className="grid grid-cols-4 gap-3">
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-blue-600">
-                      {selectedItems.length + selectedWastageIds.length}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+                  <div style={{
+                    backgroundColor: '#eff6ff',
+                    border: '1px solid #93c5fd',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#2563eb' }}>
+                      {stats.totalSelected}
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      Total Selected
-                    </div>
+                    <div style={{ fontSize: '14px', color: '#6b7280' }}>Total Selected</div>
                   </div>
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-green-600">
-                      {(
-                        warehouseItems
-                          .filter((item) => selectedItems.includes(item.inventory_id))
-                          .reduce((sum, item) => sum + (item.weight_kg || 0), 0) +
-                        wastageItems
-                          .filter((item) => selectedWastageIds.includes(item.id))
-                          .reduce((sum, item) => sum + (item.weight_kg || 0), 0)
-                      ).toFixed(1)}
-                      kg
+                  <div style={{
+                    backgroundColor: '#f0fdf4',
+                    border: '1px solid #86efac',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#16a34a' }}>
+                      {stats.totalWeight.toFixed(1)} kg
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      Total Weight
-                    </div>
+                    <div style={{ fontSize: '14px', color: '#6b7280' }}>Total Weight</div>
                   </div>
-                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-purple-600">
-                      {selectedItems.length}
+                  <div style={{
+                    backgroundColor: '#faf5ff',
+                    border: '1px solid #d8b4fe',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#9333ea' }}>
+                      {stats.regularCount}
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      Regular Items
-                    </div>
+                    <div style={{ fontSize: '14px', color: '#6b7280' }}>Regular Items</div>
                   </div>
-                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-orange-600">
-                      {selectedWastageIds.length}
+                  <div style={{
+                    backgroundColor: '#fff7ed',
+                    border: '1px solid #fed7aa',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ea580c' }}>
+                      {stats.wastageCount}
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      Stock Items
-                    </div>
+                    <div style={{ fontSize: '14px', color: '#6b7280' }}>Stock Items</div>
                   </div>
                 </div>
 
-                {/* Search - Works across all tabs */}
-                <div className="space-y-2">
-                  <div className="relative">
-                    <Search className="absolute left-4 top-4 h-6 w-6 text-muted-foreground" />
+                {/* Search */}
+                <div>
+                  <div style={{ position: 'relative' }}>
+                    <Search style={{
+                      position: 'absolute',
+                      left: '16px',
+                      top: '16px',
+                      width: '24px',
+                      height: '24px',
+                      color: '#6b7280'
+                    }} />
                     <Input
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       placeholder="Search across all items: QR code, barcode, reel no, order, paper spec, creator..."
-                      className="pl-12 pr-12 h-14 text-lg"
+                      style={{
+                        paddingLeft: '48px',
+                        paddingRight: '48px',
+                        height: '56px',
+                        fontSize: '16px'
+                      }}
                     />
                     {searchTerm && (
                       <Button
                         size="sm"
                         variant="ghost"
                         onClick={() => setSearchTerm("")}
-                        className="absolute right-2 top-2 h-10 w-10 p-0"
+                        style={{
+                          position: 'absolute',
+                          right: '8px',
+                          top: '8px',
+                          width: '40px',
+                          height: '40px',
+                          padding: 0
+                        }}
                       >
-                        <X className="h-5 w-5" />
+                        <X style={{ width: '20px', height: '20px' }} />
                       </Button>
                     )}
                   </div>
                 </div>
 
-                {/* Tabs for Client Items vs All Items vs Wastage */}
-                <Tabs value={activeTab} onValueChange={(value: any) => setActiveTab(value)} className="w-full">
-                  {/* <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="client" className="flex items-center gap-2">
-                      <Building2 className="w-4 h-4" />
-                      {selectedClient?.company_name || "Client"} 
-                      <Badge variant="secondary" className="ml-1">
-                        {searchTerm ? searchedClientCount : clientItems.length}
-                      </Badge>
-                    </TabsTrigger>
-                    <TabsTrigger value="all" className="flex items-center gap-2">
-                      <Package className="w-4 h-4" />
-                      All Other Clients
-                      <Badge variant="secondary" className="ml-1">
-                        {searchTerm ? searchedOtherCount : otherWarehouseItems.length}
-                      </Badge>
-                    </TabsTrigger>
-                    <TabsTrigger value="wastage" className="flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4" />
-                      Stock
-                      <Badge variant="secondary" className="ml-1">
-                        {searchTerm ? searchedWastageCount : wastageItems.length}
-                      </Badge>
-                    </TabsTrigger>
-                  </TabsList> */}
-                  <TabsContent value="client" className="mt-4">
-                    <div className="mb-2 text-sm text-muted-foreground flex items-center justify-between">
-                      <span>
-                        <span className="font-medium text-green-600">●</span> Green border = Priority items from {selectedClient?.company_name}
-                      </span>
-                      <span className="font-medium">
-                        Showing {combinedItems.length} total items
-                      </span>
-                    </div>
-                    {renderCombinedItemsTable(combinedItems)}
-                  </TabsContent>
-                  <TabsContent value="all" className="mt-4">
-                    <div className="mb-2 text-sm text-muted-foreground flex items-center justify-between">
-                      <span>
-                        <span className="font-medium text-green-600">●</span> Green border = Priority items from other clients
-                      </span>
-                      <span className="font-medium">
-                        Showing {combinedItems.length} total items
-                      </span>
-                    </div>
-                    {renderCombinedItemsTable(combinedItems)}
-                  </TabsContent>
-                  <TabsContent value="wastage" className="mt-4">
-                    <div className="mb-2 text-sm text-muted-foreground flex items-center justify-between">
-                      <span>
-                        <span className="font-medium text-green-600">●</span> Green border = Priority stock items
-                      </span>
-                      <span className="font-medium">
-                        Showing {combinedItems.length} total items
-                      </span>
-                    </div>
-                    {renderCombinedItemsTable(combinedItems)}
-                  </TabsContent>
-                </Tabs>
+                {/* Tab content with optimized table */}
+                <div>
+                  <div style={{
+                    marginBottom: '8px',
+                    fontSize: '14px',
+                    color: '#6b7280',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}>
+                    <span>
+                      <span style={{ color: '#22c55e', fontWeight: 500 }}>●</span> Green border = Priority items
+                    </span>
+                    <span style={{ fontWeight: 500 }}>
+                      Showing {displayItems.length} total items
+                    </span>
+                  </div>
+                  {renderTable}
+                </div>
 
                 {/* Dispatch Button */}
                 <Button
                   onClick={handleDispatchConfirm}
-                  disabled={(selectedItems.length === 0 && selectedWastageIds.length === 0) || dispatchLoading}
-                  className="w-full bg-green-600 hover:bg-green-700"
+                  disabled={stats.totalSelected === 0 || dispatchLoading}
+                  style={{
+                    width: '100%',
+                    backgroundColor: '#16a34a',
+                    fontSize: '16px',
+                    padding: '12px'
+                  }}
                   size="lg"
                 >
                   {dispatchLoading ? (
                     <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      <Loader2 style={{ marginRight: '8px', width: '20px', height: '20px', animation: 'spin 1s linear infinite' }} />
                       Creating Dispatch...
                     </>
                   ) : (
                     <>
-                      <Truck className="mr-2 h-5 w-5" />
-                      Dispatch {selectedItems.length + selectedWastageIds.length} Items
+                      <Truck style={{ marginRight: '8px', width: '20px', height: '20px' }} />
+                      Dispatch {stats.totalSelected} Items
                     </>
                   )}
                 </Button>
@@ -1066,7 +917,6 @@ export function CreateDispatchModal({
         </DialogContent>
       </Dialog>
 
-      {/* Success Modal */}
       <DispatchSuccessModal
         open={successModalOpen}
         onOpenChange={setSuccessModalOpen}

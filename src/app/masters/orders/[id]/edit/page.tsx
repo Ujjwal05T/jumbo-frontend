@@ -41,6 +41,14 @@ import {
   X,
   Edit,
 } from "lucide-react";
+import OTPVerificationModal from "@/components/OTPVerificationModal";
+
+// Extend Window interface to include our temporary storage
+declare global {
+  interface Window {
+    validatedOrderData?: any;
+  }
+}
 
 export default function EditOrderPage() {
   const router = useRouter();
@@ -58,6 +66,7 @@ export default function EditOrderPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [showOTPModal, setShowOTPModal] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -276,12 +285,12 @@ export default function EditOrderPage() {
         }
       }
 
-      // Prepare order data with proper type conversion for backend validation
+      // Store order data for later use after OTP verification
       const orderData: any = {
         priority: formData.priority,
         payment_type: formData.payment_type,
-        delivery_date: formData.delivery_date 
-          ? new Date(formData.delivery_date).toISOString() 
+        delivery_date: formData.delivery_date
+          ? new Date(formData.delivery_date).toISOString()
           : null, // Backend expects ISO datetime string
         order_items: orderItems.map((item: any) => ({
           paper_id: item.paper_id,
@@ -294,14 +303,40 @@ export default function EditOrderPage() {
         edited_by_id: localStorage.getItem("user_id"), // Replace with actual current user ID from auth context/session
       };
 
-      console.log("Sending order update data:", JSON.stringify(orderData, null, 2));
+      console.log("Validated order update data:", JSON.stringify(orderData, null, 2));
+
+      // Store order data temporarily and show OTP verification
+      window.validatedOrderData = orderData;
+      setShowOTPModal(true);
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to update order";
+      setError(errorMessage);
+      toast.error(errorMessage);
+      setSubmitting(false);
+    }
+  };
+
+  const handleOTPVerified = async () => {
+    try {
+      const orderData = (window as any).validatedOrderData;
+
+      if (!orderData) {
+        throw new Error("Order data not found. Please try again.");
+      }
+
+      console.log("Sending order update data after OTP verification:", JSON.stringify(orderData, null, 2));
 
       // Call the update API using the updateOrder function
       await updateOrder(orderId, orderData);
 
       setSuccess("Order updated successfully!");
       toast.success("Order updated successfully!");
-      
+      setShowOTPModal(false);
+
+      // Clear temporary data
+      delete (window as any).validatedOrderData;
+
       // Redirect back to orders list after a delay
       setTimeout(() => {
         router.push("/masters/orders");
@@ -311,9 +346,17 @@ export default function EditOrderPage() {
       const errorMessage = error instanceof Error ? error.message : "Failed to update order";
       setError(errorMessage);
       toast.error(errorMessage);
+      setShowOTPModal(false);
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleOTPCancel = () => {
+    setShowOTPModal(false);
+    setSubmitting(false);
+    // Clear temporary data
+    delete (window as any).validatedOrderData;
   };
 
   if (loading) {
@@ -638,6 +681,16 @@ export default function EditOrderPage() {
           </form>
         </CardContent>
       </Card>
+
+    {/* OTP Verification Modal */}
+    <OTPVerificationModal
+      open={showOTPModal}
+      onOpenChange={setShowOTPModal}
+      title="Admin Verification Required for Order Update"
+      description="This order update operation requires admin verification. Please ask an administrator to provide their OTP code."
+      onVerified={handleOTPVerified}
+      onCancel={handleOTPCancel}
+    />
     </div>
   );
 }
