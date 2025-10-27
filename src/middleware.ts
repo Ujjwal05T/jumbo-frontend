@@ -49,7 +49,12 @@ const roleBasedRoutes = {
   weight_update: [
     '/weight-update',
   ],
-  poduction: [
+  mou: [
+    '/mou',
+    '/mou-reports',
+    '/hour-calculator',
+  ],
+  production: [
     '/dashboard',
     '/reports',
     '/masters/pending-orders',

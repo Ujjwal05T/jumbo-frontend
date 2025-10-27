@@ -56,11 +56,13 @@ export default function LoginPage() {
       router.push('/weight-update');
     } else if (data.role?.toLowerCase() === 'order_puncher'){
       router.push('/masters/orders');
-    }else if (data.role?.toLowerCase() === 'security'){
+    } else if (data.role?.toLowerCase() === 'security'){
       router.push('/in-out');
-    }else if (data.role?.toLowerCase() === 'accountant'){
+    } else if (data.role?.toLowerCase() === 'accountant'){
       router.push('/masters/orders');
-    }else {
+    } else if (data.role?.toLowerCase() === 'mou'){
+      router.push('/mou');
+    } else {
       router.push('/dashboard');
     }
     } catch (err) {

@@ -185,25 +185,27 @@ export function DispatchSuccessModal({
   };
 
   const handleDownloadReport = () => {
-    generateDispatchPDF(false);
+    generateDispatchPDF(true); // Always open print dialog
   };
 
   const handleDownloadPackingSlip = async () => {
     try {
       setPdfLoading(true);
-      
+
       // Fetch detailed dispatch data
       const response = await fetch(`${API_BASE_URL}/dispatch/${dispatchResult.dispatch_id}/details`, {
         headers: { 'ngrok-skip-browser-warning': 'true' }
       });
 
       if (!response.ok) throw new Error('Failed to fetch dispatch details');
-      
+
       const dispatchData = await response.json();
       const packingSlipData = convertDispatchToPackingSlip(dispatchData);
-      generatePackingSlipPDF(packingSlipData);
-      
-      toast.success('Packing slip downloaded successfully');
+
+      // Generate PDF and open print dialog
+      const pdf = generatePackingSlipPDF(packingSlipData, true);
+
+      toast.success('Packing slip opened for printing');
     } catch (error) {
       console.error('Packing slip generation error:', error);
       toast.error('Failed to generate packing slip');
@@ -363,7 +365,7 @@ export function DispatchSuccessModal({
             ) : (
               <Download className="w-4 h-4" />
             )}
-            Download Report
+            Print Report
           </Button>
           <Button
             variant="outline"
@@ -376,7 +378,7 @@ export function DispatchSuccessModal({
             ) : (
               <Package className="w-4 h-4" />
             )}
-            Packing Slip
+            Print Packing Slip
           </Button>
           <Button onClick={() => onOpenChange(false)} className="bg-green-600 hover:bg-green-700">
             <CheckCircle className="w-4 h-4 mr-2" />

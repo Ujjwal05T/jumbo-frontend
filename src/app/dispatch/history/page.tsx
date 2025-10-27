@@ -355,12 +355,12 @@ export default function DispatchHistoryPage() {
       });
 
       if (!response.ok) throw new Error('Failed to fetch dispatch details');
-      
+
       const dispatchData = await response.json();
       const packingSlipData = convertDispatchToPackingSlip(dispatchData);
-      generatePackingSlipPDF(packingSlipData);
-      
-      toast.success('Packing slip downloaded successfully');
+      generatePackingSlipPDF(packingSlipData, false, true); // Open print dialog
+
+      toast.success('Packing slip opened for printing');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate packing slip';
       toast.error(errorMessage);
@@ -662,7 +662,7 @@ export default function DispatchHistoryPage() {
                                 onClick={() => downloadPackingSlip(dispatch.id)}
                               >
                                 <FileText className="mr-2 h-4 w-4" />
-                                Download Packing Slip
+                                Print Packing Slip
                               </DropdownMenuItem>
                               {dispatch.status === 'dispatched' && (
                                 <DropdownMenuItem
@@ -923,7 +923,7 @@ export default function DispatchHistoryPage() {
                   onClick={() => downloadPackingSlip(selectedDispatch.id)}
                 >
                   <FileText className="w-4 h-4 mr-2" />
-                  Packing Slip
+                  Print Packing Slip
                 </Button>
                 <Button onClick={() => setDetailsModalOpen(false)}>
                   Close

@@ -29,7 +29,7 @@ export interface PackingSlipData {
 /**
  * Generate a packing slip PDF for dispatch
  */
-export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean = false): jsPDF | void => {
+export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean = false, printMode: boolean = false): jsPDF | void => {
   try {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -45,8 +45,13 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
     
+    // Define margins
+    const leftMargin = 20;
+    const rightMargin = 20;
+    const usableWidth = pageWidth - leftMargin - rightMargin;
+
     // Left column - Dispatch details
-    const leftColX = 20;
+    const leftColX = leftMargin;
     const rightColX = pageWidth / 2 + 10;
     
     doc.setFont('helvetica', 'bold');
@@ -125,7 +130,8 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
     ]);
 
     // Draw table manually
-    const colWidths = [20, 25, 25, 25, 30, 30, 35]; // Column widths
+    const totalTableWidth = usableWidth - 10; // Leave some extra space on right
+    const colWidths = [totalTableWidth * 0.08, totalTableWidth * 0.12, totalTableWidth * 0.10, totalTableWidth * 0.12, totalTableWidth * 0.20, totalTableWidth * 0.18, totalTableWidth * 0.20]; // Responsive column widths
     const rowHeight = 8;
     const headerHeight = 10;
     let currentY = yPosition;
@@ -224,6 +230,17 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
     // Save or return the PDF
     if (returnDoc) {
       return doc;
+    } else if (printMode) {
+      // Open print dialog
+      const pdfBlob = doc.output('blob');
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      const printWindow = window.open(pdfUrl);
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+          URL.revokeObjectURL(pdfUrl);
+        };
+      }
     } else {
       const fileName = `packing_slip_${data.dispatch_number}_${new Date().toISOString().split('T')[0]}.pdf`;
       doc.save(fileName);

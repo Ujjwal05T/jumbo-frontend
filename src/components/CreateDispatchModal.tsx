@@ -593,35 +593,87 @@ export function CreateDispatchModal({
             {step === 1 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px' }}>
                 {/* Form fields... */}
-                <div>
-                  <label style={{ fontSize: '16px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                    <Building2 style={{ width: '18px', height: '18px' }} />
-                    Select Client for Dispatch Slip *
-                  </label>
-                  <Select
-                    value={selectedClientId}
-                    onValueChange={(value) => {
-                      setSelectedClientId(value);
-                      setSelectedItems(new Set());
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a client" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none" disabled>Select a client</SelectItem>
-                      {clients
-                        .sort((a, b) => a.company_name.localeCompare(b.company_name))
-                        .map((client) => (
-                          <SelectItem key={client.id} value={client.id}>
-                            {client.company_name}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                <div style={{ display: 'grid',gap: '16px' }}>
+                  <div>
+                    <label style={{ fontSize: '16px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <Building2 style={{ width: '18px', height: '18px' }} />
+                      Select Client *
+                    </label>
+                    <Select
+                      value={selectedClientId}
+                      onValueChange={(value) => {
+                        setSelectedClientId(value);
+                        setSelectedItems(new Set());
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a client" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none" disabled>Select a client</SelectItem>
+                        {clients
+                          .sort((a, b) => a.company_name.localeCompare(b.company_name))
+                          .map((client) => (
+                            <SelectItem key={client.id} value={client.id}>
+                              {client.company_name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+
+                  <div>
+                    <label style={{ fontSize: '16px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      Challan Number *
+                      <span style={{
+                        fontSize: '12px',
+                        color: '#2563eb',
+                        backgroundColor: '#dbeafe',
+                        padding: '2px 6px',
+                        borderRadius: '4px'
+                      }}>
+                        Preview
+                      </span>
+                    </label>
+                    <Input
+                      value={previewLoading ? "Loading..." : previewNumber || "Loading..."}
+                      readOnly
+                      style={{
+                        fontFamily: 'monospace',
+                        backgroundColor: '#f9fafb',
+                        borderColor: '#bfdbfe',
+                        color: '#1d4ed8',
+                        fontSize: '16px',
+                        padding: '12px'
+                      }}
+                      placeholder="Loading preview..."
+                    />
+                  </div>
+
+                    <div>
+                    <label style={{ fontSize: '16px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      Date
+                    </label>
+                    <Input
+                      value={new Date().toLocaleDateString('en-GB', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric'
+                      })}
+                      readOnly
+                      style={{
+                        fontSize: '16px',
+                        padding: '12px',
+                        backgroundColor: '#f3f4f6',
+                        cursor: 'not-allowed',
+                        color: '#374151'
+                      }}
+                    />
+                  </div>
+
                   <div>
                     <label style={{ fontSize: '16px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                       <Truck style={{ width: '18px', height: '18px' }} />
@@ -686,34 +738,6 @@ export function CreateDispatchModal({
                         }))
                       }
                       style={{ fontSize: '16px', padding: '12px' }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: '16px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                      Slip Number *
-                      <span style={{
-                        fontSize: '12px',
-                        color: '#2563eb',
-                        backgroundColor: '#dbeafe',
-                        padding: '2px 6px',
-                        borderRadius: '4px'
-                      }}>
-                        Preview
-                      </span>
-                    </label>
-                    <Input
-                      value={previewLoading ? "Loading..." : previewNumber || "Loading..."}
-                      readOnly
-                      style={{
-                        fontFamily: 'monospace',
-                        backgroundColor: '#f9fafb',
-                        borderColor: '#bfdbfe',
-                        color: '#1d4ed8',
-                        fontSize: '16px',
-                        padding: '12px'
-                      }}
-                      placeholder="Loading preview..."
                     />
                   </div>
 
