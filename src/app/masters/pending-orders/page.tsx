@@ -53,7 +53,8 @@ import {
   ChevronDown,
   ChevronUp,
   Plus,
-  Trash2
+  Trash2,
+  Loader2
 } from "lucide-react";
 
 interface PendingOrderItem {
@@ -259,6 +260,11 @@ export default function PendingOrderItemsPage() {
       shade: ''
     }
   });
+
+  // Client suggestions state
+  const [clientSuggestions, setClientSuggestions] = useState<any[]>([]);
+  const [clientSuggestionsLoading, setClientSuggestionsLoading] = useState(false);
+
   const [modifiedSuggestions, setModifiedSuggestions] = useState<Map<string, any>>(new Map());
   const [clients, setClients] = useState<any[]>([]);
   
@@ -933,6 +939,47 @@ const handlePrintPDF = () => {
   };
 
   // Manual cut addition functions
+  const fetchClientSuggestions = async (availableWaste: number, paperSpecs: any) => {
+    if (!availableWaste || availableWaste < 10) {
+      setClientSuggestions([]);
+      return;
+    }
+
+    try {
+      setClientSuggestionsLoading(true);
+      const response = await fetch(`${MASTER_ENDPOINTS.PENDING_ORDERS}/client-suggestions`,
+        createRequestOptions('POST', {
+          available_waste: availableWaste,
+          paper_specs: paperSpecs
+        })
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to get client suggestions: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.status === 'success') {
+        setClientSuggestions(result.suggestions || []);
+        if (result.suggestions.length > 0) {
+          toast.info(`Found ${result.summary.total_clients} client suggestions based on recent orders`);
+        }
+      } else {
+        setClientSuggestions([]);
+        if (result.message) {
+          toast.info(result.message);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching client suggestions:', error);
+      setClientSuggestions([]);
+      // Don't show error toast for suggestions, it's not critical
+    } finally {
+      setClientSuggestionsLoading(false);
+    }
+  };
+
   const handleAddManualCut = (suggestionId: string, jumboId: string, setId: string) => {
     // Find the available waste for this set - handle both spec-based and order-based structures
     let suggestion, paperSpecs;
@@ -986,6 +1033,9 @@ const handlePrintPDF = () => {
       paperSpecs
     });
     setShowManualRollDialog(true);
+
+    // Fetch client suggestions for this waste space
+    fetchClientSuggestions(availableWaste, paperSpecs);
   };
 
   const handleManualRollSubmit = () => {
@@ -1234,16 +1284,17 @@ const handlePrintPDF = () => {
     }
 
     setShowManualRollDialog(false);
-    setManualRollData({ 
-      suggestionId: '', 
-      jumboId: '', 
-      setId: '', 
-      width: '', 
-      description: 'Manual Cut', 
+    setManualRollData({
+      suggestionId: '',
+      jumboId: '',
+      setId: '',
+      width: '',
+      description: 'Manual Cut',
       availableWaste: 0,
       selectedClient: '',
       paperSpecs: { gsm: 0, bf: 0, shade: '' }
     });
+    setClientSuggestions([]);
     toast.success('Manual cut added successfully');
   };
 
@@ -2392,7 +2443,7 @@ const handlePrintPDF = () => {
 
         {/* Manual Cut Addition Dialog */}
         <Dialog open={showManualRollDialog} onOpenChange={setShowManualRollDialog}>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-3xl w-full">
             <DialogHeader>
               <DialogTitle>Add Manual Cut</DialogTitle>
               <DialogDescription>
@@ -2417,18 +2468,6 @@ const handlePrintPDF = () => {
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="manual-description" className="text-right">
-                  Description
-                </Label>
-                <Input
-                  id="manual-description"
-                  value={manualRollData.description}
-                  onChange={(e) => setManualRollData(prev => ({ ...prev, description: e.target.value }))}
-                  className="col-span-3"
-                  placeholder="e.g., Additional cut for order"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="client-select" className="text-right">
                   Client
                 </Label>
@@ -2440,42 +2479,61 @@ const handlePrintPDF = () => {
                     <SelectValue placeholder="Select a client" />
                   </SelectTrigger>
                   <SelectContent>
-                    {clients?.sort((a, b) => a.company_name.localeCompare(b.company_name)).map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.company_name}
-                      </SelectItem>
-                    ))}
+                    {/* Combine original clients with suggested clients */}
+                    {(() => {
+                      const allClients = [...(clients || [])];
+                      const existingIds = new Set(allClients.map(c => c.id.toLowerCase()));
+
+                      // Add suggested clients that aren't already in the array
+                      clientSuggestions.forEach(suggestion => {
+                        if (!existingIds.has(suggestion.client_id.toLowerCase())) {
+                          allClients.push({
+                            id: suggestion.client_id,
+                            company_name: suggestion.client_name
+                          });
+                        }
+                      });
+
+                      return allClients
+                        .sort((a, b) => a.company_name.localeCompare(b.company_name))
+                        .map((client) => (
+                          <SelectItem key={client.id} value={client.id}>
+                            {client.company_name}
+                          </SelectItem>
+                        ));
+                    })()}
                   </SelectContent>
                 </Select>
               </div>
               <div className="text-sm text-muted-foreground space-y-3">
-                <div className="bg-blue-50 p-3 rounded text-center">
-                  <div className="font-medium text-blue-800">Available Waste Space</div>
-                  <div className="text-lg font-bold text-blue-600">{manualRollData.availableWaste.toFixed(1)}"</div>
-                  <div className="text-xs text-blue-600">Maximum cut width allowed</div>
-                </div>
-                <div className="bg-gray-50 p-3 rounded">
-                  <div className="font-medium text-gray-800 mb-2">Paper Specifications</div>
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div>
-                      <div className="text-gray-600">GSM:</div>
-                      <div className="font-medium">{manualRollData.paperSpecs.gsm}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-600">BF:</div>
-                      <div className="font-medium">{manualRollData.paperSpecs.bf}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-600">Shade:</div>
-                      <div className="font-medium">{manualRollData.paperSpecs.shade}</div>
-                    </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-blue-50 p-3 rounded text-center">
+                    <div className="font-medium text-blue-800">Available Waste Space</div>
+                    <div className="text-lg font-bold text-blue-600">{manualRollData.availableWaste.toFixed(1)}"</div>
+                    <div className="text-xs text-blue-600">Maximum cut width allowed</div>
                   </div>
-                  <div className="text-xs text-gray-500 mt-2">Will be used for the manual cut order</div>
+                  <div className="bg-gray-50 p-3 rounded">
+                    <div className="font-medium text-gray-800 mb-2">Paper Specifications</div>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <div className="text-gray-600">GSM:</div>
+                        <div className="font-medium">{manualRollData.paperSpecs.gsm}</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-600">BF:</div>
+                        <div className="font-medium">{manualRollData.paperSpecs.bf}</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-600">Shade:</div>
+                        <div className="font-medium">{manualRollData.paperSpecs.shade}</div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-500 mt-2">Will be used for the manual cut order</div>
+                  </div>
                 </div>
               </div>
               {manualRollData.width && !isNaN(parseFloat(manualRollData.width)) && (
                 <div className="text-sm text-muted-foreground text-center">
-                  This will add a {manualRollData.width}" cut marked as "Manual Cut"
                   {parseFloat(manualRollData.width) > manualRollData.availableWaste && (
                     <div className="text-red-500 text-xs mt-1">
                       ⚠️ Width exceeds available waste space
@@ -2484,8 +2542,89 @@ const handlePrintPDF = () => {
                 </div>
               )}
             </div>
+
+            {/* Client Suggestions Section */}
+            {clientSuggestionsLoading ? (
+              <div className="flex items-center justify-center p-4">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-sm text-muted-foreground">Finding client suggestions...</span>
+              </div>
+            ) : clientSuggestions.length > 0 ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-green-700">
+                  <Target className="h-4 w-4" />
+                  Suggested Clients (based on latest 50 orders)
+                </div>
+                <div className="max-h-40 overflow-y-auto space-y-2 border rounded-lg p-2">
+                  {clientSuggestions.map((suggestion) => (
+                    <div key={suggestion.client_id} className="space-y-2">
+                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <span className="font-medium text-sm">{suggestion.client_name}</span>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={() => {
+                            console.log('🔍 Selecting client:', suggestion.client_id, suggestion.client_name);
+                            setManualRollData(prev => {
+                              const newData = { ...prev, selectedClient: suggestion.client_id.toLowerCase() };
+                              console.log('🔍 Updated manualRollData:', newData);
+                              return newData;
+                            });
+                          }}
+                        >
+                          Select
+                        </Button>
+                      </div>
+                      <div className="ml-4 space-y-1">
+                        {suggestion.suggested_widths.map((widthSuggestion: any, index: number) => (
+                          <div key={index} className="flex items-center justify-between p-1 hover:bg-gray-50 rounded">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground">• {widthSuggestion.width}"</span>
+                              <span className="text-xs text-gray-500">
+                                ({widthSuggestion.frequency} order{widthSuggestion.frequency > 1 ? 's' : ''})
+                              </span>
+                              {widthSuggestion.days_ago !== null && (
+                                <span className="text-xs text-blue-600">
+                                  Last: {widthSuggestion.days_ago === 0 ? 'Today' :
+                                         widthSuggestion.days_ago === 1 ? 'Yesterday' :
+                                         `${widthSuggestion.days_ago} days ago`}
+                                </span>
+                              )}
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-xs"
+                              onClick={() => setManualRollData(prev => ({
+                                ...prev,
+                                width: widthSuggestion.width.toString(),
+                                selectedClient: suggestion.client_id
+                              }))}
+                            >
+                              Use
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center p-3 text-sm text-muted-foreground">
+                No client suggestions available for this waste space
+              </div>
+            )}
+
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowManualRollDialog(false)}>
+              <Button variant="outline" onClick={() => {
+                setShowManualRollDialog(false);
+                setClientSuggestions([]);
+              }}>
                 Cancel
               </Button>
               <Button onClick={handleManualRollSubmit}>
