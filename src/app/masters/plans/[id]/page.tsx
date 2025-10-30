@@ -662,6 +662,8 @@ export default function PlanDetailsPage() {
   };
   const printBarcodesToPDF = () => {
       try {
+        const img = new Image();
+        img.src = '/GPH_LOGO.png'; // Path to your base64 logo file
       if (!productionSummary || filteredCutRolls.length === 0) {
         toast.error('No cut rolls available for export');
         return;
@@ -735,9 +737,7 @@ export default function PlanDetailsPage() {
           doc.setFontSize(8);
           doc.setFont('helvetica', 'bold');
           doc.setTextColor(0, 0, 0);
-          doc.text('GPH', 0.6, 0.5);
-          doc.setFontSize(6);
-          doc.text('PAPER', 0.5, 0.75);
+          doc.addImage(img, 'PNG', 0.5, 0.25, 1.0, 0.7);
 
           // Company name
           doc.setFontSize(18);

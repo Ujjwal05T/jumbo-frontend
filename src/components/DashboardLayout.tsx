@@ -34,7 +34,8 @@ import {
   Recycle,
   Package,
   Database,
-  Clock
+  Clock,
+  Weight
 } from "lucide-react";
 import { getCurrentUser, logout } from "@/lib/auth";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -49,7 +50,7 @@ const getNavigationForRole = (role: string | null) => {
       name: "Dashboard",
       href: "/dashboard",
       icon: LayoutDashboard,
-      roles: ["admin", "co_admin", "poduction"],
+      roles: ["admin", "co_admin", "production"],
     },
     {
       name: "Masters",
@@ -59,7 +60,7 @@ const getNavigationForRole = (role: string | null) => {
         { name: "Client Master", href: "/masters/clients", roles: ["admin", "order_puncher", "co_admin", "accountant","security"] },
         { name: "Order Master", href: "/masters/orders", roles: ["admin", "order_puncher", "co_admin", "accountant"] },
         { name: "Order Edit Logs", href: "/masters/orders/edit-logs", roles: ["admin", "co_admin"] },
-        { name: "Pending Orders", href: "/masters/pending-orders", roles: ["admin", "poduction"] },
+        { name: "Pending Orders", href: "/masters/pending-orders", roles: ["admin", "production"] },
         { name: "Plan Master", href: "/masters/plans", roles: ["admin"] },
         { name: "Deletion Logs", href: "/masters/deletion-logs", roles: ["admin"] },
         { name: "User Master", href: "/masters/users", roles: ["admin"] },
@@ -112,12 +113,15 @@ const getNavigationForRole = (role: string | null) => {
     {
       name: "Dispatch",
       icon: Truck,
-      roles: ["admin", "co_admin", "accountant"],
+      roles: ["admin", "co_admin", "accountant", "dispatch"],
       children: [
         { name: "Current Dispatch", href: "/dispatch/history", roles: ["admin", "co_admin", "accountant"] },
+        { name: "Past Dispatch", href: "/past-dispatch", roles: ["admin", "co_admin", "accountant"] },
         { name: "Plan Weights", href: "/plan-weights", roles: ["admin"] },
       ],
     },
+    { name: "Current Dispatch",icon: Truck, href: "/dispatch/history", roles: ["dispatch"] },
+    { name: "Plan Weights",icon: Weight, href: "/plan-weights", roles: ["dispatch"] },
     {
       name: "Challan",
       href: "/challan",
@@ -128,15 +132,15 @@ const getNavigationForRole = (role: string | null) => {
       name: "QR Scanner",
       href: "/qr-scanner",
       icon: QrCode,
-      roles: ["admin", "poduction"],
+      roles: ["admin", "production"],
     },
     {
       name: "Reports",
       icon: BarChart3,
-      roles: ["admin", "poduction", "accountant"],
+      roles: ["admin", "production", "accountant", "dispatch"],
       children: [
-        { name: "Analytics Dashboard", href: "/reports", roles: ["admin", "poduction", "accountant"] },
-        { name: "Client-Order Analysis", href: "/reports/client-orders", roles: ["admin", "poduction", "accountant"] },
+        { name: "Analytics Dashboard", href: "/reports", roles: ["admin", "production", "accountant"] },
+        { name: "Client-Order Analysis", href: "/reports/client-orders", roles: ["admin", "production", "accountant"] },
         { name: "Plan Report", href: "/reports/client-orders-plans", roles: ["admin"] },
       ],
     },

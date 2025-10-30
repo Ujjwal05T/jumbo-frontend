@@ -59,7 +59,7 @@ export default function NewOrderPage() {
   }>({ type: null, message: "" });
   const [formData, setFormData] = useState({
     client_id: "",
-    payment_type: "",
+    payment_type: "cash",
     min_length: "1500",
     priority: "normal",
     delivery_date: "",

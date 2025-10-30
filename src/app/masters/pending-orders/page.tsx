@@ -2553,7 +2553,7 @@ const handlePrintPDF = () => {
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-sm font-medium text-green-700">
                   <Target className="h-4 w-4" />
-                  Suggested Clients (based on latest 50 orders)
+                  Suggested Clients (based on AI)
                 </div>
                 <div className="max-h-40 overflow-y-auto space-y-2 border rounded-lg p-2">
                   {clientSuggestions.map((suggestion) => (

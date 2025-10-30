@@ -91,11 +91,6 @@ export function middleware(request: NextRequest) {
   // Get the path of the request
   const path = request.nextUrl.pathname;
 
-  // Check if it's a static file (SVG, PNG, JPG, etc.)
-  if (path.match(/.(svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|ttf)$/)) {
-    return NextResponse.next();
-  }
-
   // Check if the path is a public route
   const isPublicRoute = publicRoutes.some(route =>
     path === route || path.startsWith(`${route}/`)

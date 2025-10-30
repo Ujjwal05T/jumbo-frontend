@@ -62,7 +62,9 @@ export default function LoginPage() {
       router.push('/masters/orders');
     } else if (data.role?.toLowerCase() === 'mou'){
       router.push('/mou');
-    } else {
+    } else if (data.role?.toLowerCase() === 'dispatch'){
+      router.push('/dispatch/history');
+    }else {
       router.push('/dashboard');
     }
     } catch (err) {

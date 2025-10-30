@@ -41,7 +41,9 @@ import {
   Crown,
   User,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Truck,
+  Clock
 } from "lucide-react";
 import { User as ApiUser, fetchUsers, deleteUser, updateUserStatus } from "@/lib/users";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -248,6 +250,16 @@ export default function UserMasterPage() {
         return <Badge className="bg-indigo-100 text-indigo-800 hover:bg-indigo-100">
           <Settings className="w-3 h-3 mr-1" />
           Accountant
+        </Badge>;
+      case "dispatch":
+        return <Badge className="bg-teal-100 text-teal-800 hover:bg-teal-100">
+          <Truck className="w-3 h-3 mr-1" />
+          Dispatch
+        </Badge>;
+      case "mou":
+        return <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">
+          <Clock className="w-3 h-3 mr-1" />
+          MOU
         </Badge>;
       default:
         return <Badge variant="secondary">{role}</Badge>;
