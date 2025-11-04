@@ -450,7 +450,7 @@ export default function PlansPage() {
         for (const word of words) {
           const testLine = currentLine + (currentLine ? ' ' : '') + word;
           const textWidth = doc.getTextWidth(testLine);
-          
+
           if (textWidth > maxWidth && currentLine !== '') {
             lines.push(currentLine);
             currentLine = word;
@@ -458,13 +458,17 @@ export default function PlansPage() {
             currentLine = testLine;
           }
         }
-        
+
         if (currentLine) {
           lines.push(currentLine);
         }
-        
+
         return lines;
       };
+
+      // Track grand total weight across all specs
+      let grandTotalWeight = 0;
+      let grandTotalRolls = 0;
 
       Object.entries(specGroups).forEach(([specKey, specGroup]: [string, any], index) => {
         const weightMultiplier = getWeightMultiplier(specGroup.gsm);
@@ -501,27 +505,84 @@ export default function PlansPage() {
           totalRolls += count;
         });
 
+        // Add to grand totals
+        grandTotalWeight += totalWeight;
+        grandTotalRolls += totalRolls;
+
         // Generate width details in original order
         const widthDetails = widthOrderTracker
           .map(({ width, count }) => `${width}"×${count}`)
           .join(', ');
-        
+
         const specText = `• ${specKey} - ${totalRolls} rolls (${widthDetails}) - Weight: ${totalWeight.toFixed(1)}kg`;
-        
+
         const maxLineWidth = pageWidth - 50;
         const wrappedLines = wrapText(specText, maxLineWidth, 10);
-        
+
         checkPageBreak(wrappedLines.length * 6 + 2);
-        
+
         wrappedLines.forEach((line, lineIndex) => {
           const xPos = lineIndex === 0 ? 25 : 30;
           doc.text(line, xPos, yPosition);
           yPosition += 6;
         });
-        
+
         yPosition += 2;
       });
+
+      // Display Grand Total Weight
+      checkPageBreak(20);
+      yPosition += 5;
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(40, 40, 40);
+      doc.text(`Total: ${grandTotalRolls} rolls - ${grandTotalWeight.toFixed(1)}kg`, 25, yPosition);
+      yPosition += 12;
+
+      // ADD THIS: Total Weight Summary Section
+      checkPageBreak(40);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(40, 40, 40);
+      doc.text('Total Weight Summary:', 20, yPosition);
+      yPosition += 15;
+
+      // Summary statistics
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(60, 60, 60);
+
+      // Total weight from all sources (regular + SCR rolls)
+      const totalRegularWeight = grandTotalWeight;
+      const totalScrWeight = productionSummary.wastage_allocations.reduce((sum, roll) => sum + roll.weight_kg, 0);
+      const grandTotalAllWeight = totalRegularWeight + totalScrWeight;
+
+      doc.text(`• Regular Production Rolls: ${totalRegularWeight.toFixed(1)}kg`, 25, yPosition);
       yPosition += 8;
+      doc.text(`• Stock Sourced Rolls (SCR): ${totalScrWeight.toFixed(1)}kg`, 25, yPosition);
+      yPosition += 8;
+
+      // Draw separator line
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(1);
+      doc.line(25, yPosition, pageWidth - 25, yPosition);
+      yPosition += 10;
+
+      // Grand total
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(40, 40, 40);
+      doc.text(`Grand Total Weight: ${grandTotalAllWeight.toFixed(1)}kg`, 25, yPosition);
+      yPosition += 12;
+
+      // Optional: Weight efficiency metrics
+      if (plan.expected_waste_percentage) {
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Expected Waste Efficiency: ${(100 - plan.expected_waste_percentage).toFixed(1)}%`, 25, yPosition);
+        yPosition += 10;
+      }
     }
 
     // Cut Rolls Status Summary
@@ -534,8 +595,6 @@ export default function PlansPage() {
     doc.setFontSize(12);
     doc.setTextColor(60, 60, 60);
     doc.text(`Total Cut Rolls: ${productionSummary.production_summary.total_cut_rolls}`, 20, yPosition);
-    yPosition += 8;
-    doc.text(`Total Weight: ${productionSummary.production_summary.total_weight_kg} kg`, 20, yPosition);
     yPosition += 8;
     doc.text(`Expected Waste: ${plan.expected_waste_percentage}%`, 20, yPosition);
     yPosition += 8;

@@ -64,6 +64,8 @@ export default function LoginPage() {
       router.push('/mou');
     } else if (data.role?.toLowerCase() === 'dispatch'){
       router.push('/dispatch/history');
+    } else if (data.role?.toLowerCase() === 'sales_person'){
+      router.push('/masters/orders');
     }else {
       router.push('/dashboard');
     }

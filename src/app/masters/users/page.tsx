@@ -261,6 +261,11 @@ export default function UserMasterPage() {
           <Clock className="w-3 h-3 mr-1" />
           MOU
         </Badge>;
+      case "sales_person":
+        return <Badge className="bg-pink-100 text-pink-800 hover:bg-pink-100">
+          <User className="w-3 h-3 mr-1" />
+          Sales Person
+        </Badge>;
       default:
         return <Badge variant="secondary">{role}</Badge>;
     }

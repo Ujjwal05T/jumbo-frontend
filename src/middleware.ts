@@ -77,6 +77,12 @@ const roleBasedRoutes = {
     '/plan-weights',
     '/hour-calculator',
   ],
+  sales_person: [
+    '/masters/orders',
+    '/masters/clients',
+    '/masters/pending-orders',
+    '/dispatch/history'
+  ],
 };
 
 // Define public routes that don't require authentication

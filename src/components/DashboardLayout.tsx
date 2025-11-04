@@ -55,12 +55,12 @@ const getNavigationForRole = (role: string | null) => {
     {
       name: "Masters",
       icon: FileText,
-      roles: ["admin", "order_puncher", "co_admin", "accountant","security"],
+      roles: ["admin", "order_puncher", "co_admin", "accountant","security", "sales_person"],
       children: [
-        { name: "Client Master", href: "/masters/clients", roles: ["admin", "order_puncher", "co_admin", "accountant","security"] },
-        { name: "Order Master", href: "/masters/orders", roles: ["admin", "order_puncher", "co_admin", "accountant"] },
+        { name: "Client Master", href: "/masters/clients", roles: ["admin", "order_puncher", "co_admin", "accountant","security", "sales_person"] },
+        { name: "Order Master", href: "/masters/orders", roles: ["admin", "order_puncher", "co_admin", "accountant", "sales_person"] },
         { name: "Order Edit Logs", href: "/masters/orders/edit-logs", roles: ["admin", "co_admin"] },
-        { name: "Pending Orders", href: "/masters/pending-orders", roles: ["admin", "production"] },
+        { name: "Pending Orders", href: "/masters/pending-orders", roles: ["admin", "production", "sales_person"] },
         { name: "Plan Master", href: "/masters/plans", roles: ["admin"] },
         { name: "Deletion Logs", href: "/masters/deletion-logs", roles: ["admin"] },
         { name: "User Master", href: "/masters/users", roles: ["admin"] },
@@ -115,12 +115,12 @@ const getNavigationForRole = (role: string | null) => {
       icon: Truck,
       roles: ["admin", "co_admin", "accountant", "dispatch"],
       children: [
-        { name: "Current Dispatch", href: "/dispatch/history", roles: ["admin", "co_admin", "accountant"] },
+        { name: "Current Dispatch", href: "/dispatch/history", roles: ["admin", "co_admin", "accountant", "sales_person"] },
         { name: "Past Dispatch", href: "/past-dispatch", roles: ["admin", "co_admin", "accountant"] },
         { name: "Plan Weights", href: "/plan-weights", roles: ["admin"] },
       ],
     },
-    { name: "Current Dispatch",icon: Truck, href: "/dispatch/history", roles: ["dispatch"] },
+    { name: "Current Dispatch",icon: Truck, href: "/dispatch/history", roles: ["dispatch", "sales_person"] },
     { name: "Plan Weights",icon: Weight, href: "/plan-weights", roles: ["dispatch"] },
     {
       name: "Challan",

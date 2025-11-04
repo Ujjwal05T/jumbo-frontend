@@ -1399,20 +1399,100 @@ export default function PlanDetailsPage() {
       doc.setTextColor(60, 60, 60);
       doc.text(`Total Cut Rolls: ${productionSummary.production_summary.total_cut_rolls}`, 20, yPosition);
       yPosition += 8;
-      doc.text(`Total Weight: `, 20, yPosition);
-      yPosition += 8;
       doc.text(`Expected Waste: ${plan.expected_waste_percentage}%`, 20, yPosition);
       yPosition += 8;
+
+      // Separate SCR cut rolls from regular cut rolls for plan details PDF
+      const regularCutRolls = productionSummary.detailed_items.filter(roll => !roll.barcode_id?.startsWith('SCR-'));
+      const scrCutRolls = productionSummary.detailed_items.filter(roll => roll.barcode_id?.startsWith('SCR-'));
+
+      // ADD THIS: Total Weight Summary Section
+      checkPageBreak(40);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(40, 40, 40);
+      doc.text('Total Weight Summary:', 20, yPosition);
+      yPosition += 15;
+
+      // Summary statistics
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(60, 60, 60);
+
+      // Calculate total weight from paper specifications (same calculation as above)
+      let totalWeight = 0;
+
+      // Group by paper specs and calculate weight the same way as paper specifications section
+      const specGroupsForWeight = productionSummary.production_summary.paper_specifications.reduce((groups: any, spec: any) => {
+        const key = `${spec.gsm}gsm, BF:${spec.bf}, ${spec.shade}`;
+        if (!groups[key]) {
+          groups[key] = {
+            gsm: spec.gsm,
+            bf: spec.bf,
+            shade: spec.shade,
+          };
+        }
+        return groups;
+      }, {});
+
+      Object.entries(specGroupsForWeight).forEach(([specKey, specGroup]: [string, any]) => {
+        const weightMultiplier = getWeightMultiplier(specGroup.gsm);
+
+        // Get items for this specification
+        const specItems = productionSummary.detailed_items.filter((item: any) =>
+          item.paper_specs &&
+          item.paper_specs.gsm === specGroup.gsm &&
+          item.paper_specs.bf === specGroup.bf &&
+          item.paper_specs.shade === specGroup.shade
+        );
+
+        // Calculate weight for this specification
+        specItems.forEach((item: any) => {
+          totalWeight += weightMultiplier * parseFloat(item.width_inches);
+        });
+      });
+
+      // Calculate SCR weight separately
+      const totalScrWeight = scrCutRolls.length > 0 ? scrCutRolls.reduce((sum, roll) => sum + (roll.weight_kg || 0), 0) : 0;
+      const totalRegularWeight = totalWeight - totalScrWeight;
+
+      // Display the weight breakdown
+      if (scrCutRolls.length > 0) {
+        doc.text(`• Regular Production Rolls: ${totalRegularWeight.toFixed(1)}kg`, 25, yPosition);
+        yPosition += 8;
+        doc.text(`• Stock Sourced Rolls (SCR): ${totalScrWeight.toFixed(1)}kg`, 25, yPosition);
+      } else {
+        doc.text(`• All rolls are new production: ${totalWeight.toFixed(1)}kg`, 25, yPosition);
+      }
+      yPosition += 8;
+
+      // Draw separator line
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(1);
+      doc.line(25, yPosition, pageWidth - 25, yPosition);
+      yPosition += 10;
+
+      // Grand total
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(40, 40, 40);
+      doc.text(`Grand Total Weight: ${totalWeight.toFixed(1)}kg`, 25, yPosition);
+      yPosition += 12;
+
+      // Optional: Weight efficiency metrics
+      if (plan.expected_waste_percentage) {
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Expected Waste Efficiency: ${(100 - plan.expected_waste_percentage).toFixed(1)}%`, 25, yPosition);
+        yPosition += 10;
+      }
 
       Object.entries(productionSummary.production_summary.status_breakdown).forEach(([status, data]) => {
         doc.text(`${status}: ${data.count} rolls (${data.total_weight.toFixed(1)} kg)`, 20, yPosition);
         yPosition += 6;
       });
       yPosition += 10;
-
-      // Separate SCR cut rolls from regular cut rolls for plan details PDF
-      const regularCutRolls = productionSummary.detailed_items.filter(roll => !roll.barcode_id?.startsWith('SCR-'));
-      const scrCutRolls = productionSummary.detailed_items.filter(roll => roll.barcode_id?.startsWith('SCR-'));
 
       // Add SCR Cut Rolls Summary if any exist
       if (scrCutRolls.length > 0) {

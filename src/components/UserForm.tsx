@@ -227,6 +227,11 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true, editingUs
                       <Badge className="bg-teal-100 text-teal-800">Dispatch</Badge>
                     </div>
                   </SelectItem>
+                  <SelectItem value="sales_person">
+                    <div className="flex items-center gap-2">
+                      <Badge className="bg-pink-100 text-pink-800">Sales Person</Badge>
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
