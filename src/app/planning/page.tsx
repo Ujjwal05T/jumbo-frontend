@@ -69,9 +69,11 @@ import {
   FileText,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   ArrowLeft,
   Plus,
   Minus,
+  Package,
 } from "lucide-react";
 import BarcodeDisplay from "@/components/BarcodeDisplay";
 import WastageIndicator from "@/components/WastageIndicator";
@@ -331,6 +333,7 @@ export default function PlanningPage() {
   const [expandedRollSets, setExpandedRollSets] = useState<Set<string>>(
     new Set()
   );
+  const [expandedSpecs, setExpandedSpecs] = useState<Set<string>>(new Set()); // Spec-level collapse/expand
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [generatingBarcodePDF, setGeneratingBarcodePDF] = useState(false);
   const [productionStarted, setProductionStarted] = useState(false);
@@ -377,15 +380,39 @@ export default function PlanningPage() {
     return generateRollKey(cutRoll.gsm, cutRoll.bf, cutRoll.shade, cutRoll.individual_roll_number);
   }, [generateRollKey]);
 
+  // Helper function to get client name from cut roll
+  const getClientNameFromCutRoll = useCallback((roll: CutRoll): string => {
+    let clientName = '';
+
+    // METHOD 1: Try to find client from regular order using order_id
+    const sourceOrder = orders.find(o => o.id === roll.order_id);
+    if (sourceOrder?.client?.company_name) {
+      clientName = sourceOrder.client.company_name;
+    }
+
+    // METHOD 2: For pending orders, check if we have source_pending_id
+    else if (roll.source_type === 'pending_order' && roll.source_pending_id) {
+      const pendingOrder = planResult?.pending_orders?.find((p: any) => p.id === roll.source_pending_id);
+      if (pendingOrder?.original_order_id) {
+        const originalOrder = orders.find(o => o.id === pendingOrder.original_order_id);
+        if (originalOrder?.client?.company_name) {
+          clientName = originalOrder.client.company_name;
+        }
+      }
+    }
+
+    return clientName || 'Unknown';
+  }, [orders, planResult]);
+
   // Helper function to check if a jumbo roll is selected
   const isJumboRollSelected = useCallback((jumboDetail: JumboRollDetail): boolean => {
     if (!planResult?.cut_rolls_generated) return false;
-    
+
     // Get all cut rolls for this jumbo
-    const jumboRolls = planResult.cut_rolls_generated.filter(roll => 
+    const jumboRolls = planResult.cut_rolls_generated.filter(roll =>
       roll.jumbo_roll_id === jumboDetail.jumbo_id
     );
-    
+
     // Check if any 118" roll from this jumbo is selected
     return jumboRolls.some(roll => {
       const rollKey = getRollKeyFromCutRoll(roll);
@@ -1284,6 +1311,19 @@ export default function PlanningPage() {
       newExpanded.add(key);
     }
     setExpandedRollSets(newExpanded);
+  };
+
+  // Toggle collapse/expand for a specification group
+  const toggleSpecExpansion = (specKey: string) => {
+    setExpandedSpecs(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(specKey)) {
+        newSet.delete(specKey);
+      } else {
+        newSet.add(specKey);
+      }
+      return newSet;
+    });
   };
 
   // REMOVED: handleRollSetSelection - only jumbo-level selection now
@@ -2564,41 +2604,53 @@ export default function PlanningPage() {
                         );
 
                         return (
-                          <div
+                          <Card
                             key={specKey}
-                            className="mb-8 border rounded-lg p-4 bg-card">
-                            {/* Specification Header */}
-                            <div className="flex justify-between items-center mb-4 pb-3 border-b">
-                              <div className="flex items-center gap-4">
-                                
-                                <h3 className="text-xl font-bold text-foreground">
-                                  {specKey}
-                                </h3>
+                            className="mb-6 shadow-sm">
+                            <CardHeader>
+                              <div className="flex justify-between items-start">
+                                <div className="flex items-center gap-3">
+                                  <div>
+                                    <CardTitle className="text-xl flex items-center gap-3">
+                                      <Package className="h-6 w-6 text-blue-600" />
+                                      {specKey}
+                                    </CardTitle>
+                                    <CardDescription className="flex items-center gap-2 mt-2">
+                                      <Badge className="bg-blue-100 text-blue-800">
+                                        {rolls.length} Total Rolls
+                                      </Badge>
+                                      <Badge className="bg-blue-100 text-blue-800">
+                                        {Object.keys(rollsByNumber).length} Roll Numbers
+                                      </Badge>
+                                      <Badge className="bg-green-100 text-green-800">
+                                        {rolls.filter((roll) => selectedCutRolls.includes(roll.originalIndex)).length} Selected
+                                      </Badge>
+                                    </CardDescription>
+                                  </div>
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => toggleSpecExpansion(specKey)}
+                                  className="ml-2">
+                                  {expandedSpecs.has(specKey) ? (
+                                    <ChevronUp className="h-5 w-5" />
+                                  ) : (
+                                    <ChevronDown className="h-5 w-5" />
+                                  )}
+                                </Button>
                               </div>
-                              <div className="flex gap-2">
-                                <Badge variant="secondary" className="text-sm">
-                                  {rolls.length} total rolls
-                                </Badge>
-                                <Badge variant="outline" className="text-sm">
-                                  {
-                                    rolls.filter((roll) =>
-                                      selectedCutRolls.includes(
-                                        roll.originalIndex
-                                      )
-                                    ).length
-                                  }{" "}
-                                  selected
-                                </Badge>
-                              </div>
-                            </div>
+                            </CardHeader>
 
-                            {/* Rolls organized by Roll Number */}
+                            {/* Rolls organized by Roll Number - Collapsible */}
+                            {expandedSpecs.has(specKey) && (
+                            <CardContent>
                             <div className="space-y-6">
                               {Object.entries(rollsByNumber).map(
                                 ([rollNumber, rollsInNumber]) => (
                                   <div
                                     key={rollNumber}
-                                    className="bg-background border rounded-lg p-4 shadow-sm">
+                                    className="bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-lg p-4 shadow-sm">
                                     {/* Roll Number Header */}
                                     <div className="flex justify-between items-center mb-3 pb-2 border-b">
                                       <div className="flex items-center gap-3">
@@ -2710,8 +2762,11 @@ export default function PlanningPage() {
                                                         left: `${leftPosition}%`,
                                                         width: `${widthPercentage}%`,
                                                       }}>
-                                                      <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
-                                                        {roll.width}&quot;
+                                                      <div className="absolute inset-0 flex flex-col items-center justify-center text-xs text-white font-bold">
+                                                        <div className="text-[10px] truncate max-w-full px-1">
+                                                          {getClientNameFromCutRoll(roll)}
+                                                        </div>
+                                                        <div>{roll.width}&quot;</div>
                                                         {(roll.source_type === 'pending_order' || roll.source_pending_id) && (
                                                           <div className="absolute -top-1 -right-1 bg-orange-500 text-white rounded-full text-xs px-1 py-0.5 text-[10px] font-bold shadow-lg">
                                                             P
@@ -2832,12 +2887,17 @@ export default function PlanningPage() {
                                                 disabled={true}
                                                 onChange={() => {}}
                                               />
-                                              <div className="flex items-center gap-3">
-                                                <div className="text-xl font-bold text-foreground">
-                                                  {roll.width}&quot;
+                                              <div className="flex flex-col gap-1">
+                                                <div className="flex items-center gap-3">
+                                                  <div className="text-xl font-bold text-foreground">
+                                                    {roll.width}&quot;
+                                                  </div>
+                                                  <div className="text-sm text-muted-foreground">
+                                                    Width
+                                                  </div>
                                                 </div>
-                                                <div className="text-sm text-muted-foreground">
-                                                  Width
+                                                <div className="text-sm font-medium text-blue-600">
+                                                  {getClientNameFromCutRoll(roll)}
                                                 </div>
                                               </div>
                                             </div>
@@ -2881,24 +2941,78 @@ export default function PlanningPage() {
                                 )
                               )}
                             </div>
-                          </div>
+                            </CardContent>
+                            )}
+                          </Card>
                         );
                       }
                     );
                   })()
                   ) : (
-                    // Enhanced Jumbo Hierarchy View
+                    // Enhanced Jumbo Hierarchy View - Grouped by Specification
                     <div className="space-y-8">
                       {planResult.jumbo_roll_details && planResult.jumbo_roll_details.length > 0 ? (
-                        planResult.jumbo_roll_details.map((jumboDetail: JumboRollDetail) => {
+                        (() => {
+                          // Group jumbos by paper specification
+                          const jumbosBySpec = planResult.jumbo_roll_details.reduce((groups, jumbo) => {
+                            const specKey = jumbo.paper_spec;
+                            if (!groups[specKey]) {
+                              groups[specKey] = [];
+                            }
+                            groups[specKey].push(jumbo);
+                            return groups;
+                          }, {} as Record<string, JumboRollDetail[]>);
+
+                          return Object.entries(jumbosBySpec).map(([specKey, jumbosInSpec]) => (
+                            <Card key={specKey} className="mb-6 shadow-sm">
+                              <CardHeader>
+                                <div className="flex justify-between items-start">
+                                  <div className="flex items-center gap-3">
+                                    <div>
+                                      <CardTitle className="text-xl flex items-center gap-3">
+                                        <Package className="h-6 w-6 text-purple-600" />
+                                        {specKey}
+                                      </CardTitle>
+                                      <CardDescription className="flex items-center gap-2 mt-2">
+                                        <Badge className="bg-purple-100 text-purple-800">
+                                          {jumbosInSpec.length} Jumbo Roll{jumbosInSpec.length > 1 ? 's' : ''}
+                                        </Badge>
+                                        <Badge className="bg-purple-100 text-purple-800">
+                                          {jumbosInSpec.reduce((sum, j) => sum + j.roll_count, 0)} Individual Rolls
+                                        </Badge>
+                                        <Badge className="bg-purple-100 text-purple-800">
+                                          {jumbosInSpec.reduce((sum, j) => sum + j.total_cuts, 0)} Total Cuts
+                                        </Badge>
+                                      </CardDescription>
+                                    </div>
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => toggleSpecExpansion(specKey)}
+                                    className="ml-2">
+                                    {expandedSpecs.has(specKey) ? (
+                                      <ChevronUp className="h-5 w-5" />
+                                    ) : (
+                                      <ChevronDown className="h-5 w-5" />
+                                    )}
+                                  </Button>
+                                </div>
+                              </CardHeader>
+
+                              {/* Jumbos within this spec - Collapsible */}
+                              {expandedSpecs.has(specKey) && (
+                                <CardContent>
+                                <div className="space-y-6">
+                                  {jumbosInSpec.map((jumboDetail: JumboRollDetail) => {
                           const isSelected = isJumboRollSelected(jumboDetail);
                           return (
-                          <div 
-                            key={jumboDetail.jumbo_id} 
-                            className={`rounded-lg p-6 bg-card transition-all duration-200 ${
-                              isSelected 
-                                ? "border-2 border-green-500 shadow-lg shadow-green-500/20" 
-                                : "border border-gray-200"
+                          <div
+                            key={jumboDetail.jumbo_id}
+                            className={`rounded-lg p-6 bg-gradient-to-r from-purple-50 to-blue-50 transition-all duration-200 ${
+                              isSelected
+                                ? "border-2 border-green-500 shadow-lg shadow-green-500/20"
+                                : "border-2 border-purple-200"
                             }`}
                           >
                             {/* Jumbo Roll Header */}
@@ -2909,22 +3023,21 @@ export default function PlanningPage() {
                                   onCheckedChange={() => handleJumboRollSelect(jumboDetail)}
                                   className="w-5 h-5"
                                 />
-                                <div className="w-12 h-12 bg-blue-600 text-white rounded-lg flex items-center justify-center text-lg font-bold">
+                                <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-blue-600 text-white rounded-lg flex items-center justify-center text-lg font-bold shadow-md">
                                   📦
                                 </div>
                                 <div>
-                                  <h3 className="text-xl font-bold text-foreground">
+                                  <h3 className="text-xl font-bold text-purple-900">
                                     Jumbo Roll {jumboDetail.jumbo_frontend_id}
                                   </h3>
-                                  <p className="text-sm text-muted-foreground">
-                                    {jumboDetail.paper_spec} • {jumboDetail.roll_count} roll{jumboDetail.roll_count > 1 ? 's' : ''} • {jumboDetail.total_cuts} cuts
+                                  <p className="text-sm text-purple-700">
+                                    {jumboDetail.roll_count} roll{jumboDetail.roll_count > 1 ? 's' : ''} • {jumboDetail.total_cuts} cuts
                                   </p>
                                 </div>
                               </div>
                               <div className="flex items-center gap-3">
-                                <Badge 
-                                  variant={jumboDetail.roll_count === 3 ? "default" : "secondary"}
-                                  className="text-sm">
+                                <Badge
+                                  className={`text-sm ${jumboDetail.roll_count === 3 ? "bg-purple-100 text-purple-800" : "bg-yellow-100 text-yellow-800"}`}>
                                   {jumboDetail.roll_count === 3 ? "Complete" : jumboDetail.roll_count > 0 ? `Partial (${jumboDetail.roll_count}/3 rolls)` : "Empty"}
                                 </Badge>
                                 {jumboDetail.roll_count < 3 && !productionStarted && (
@@ -3041,8 +3154,11 @@ export default function PlanningPage() {
                                                       left: `${leftPosition}%`,
                                                       width: `${widthPercentage}%`,
                                                     }}>
-                                                    <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
-                                                      {roll.width}"
+                                                    <div className="absolute inset-0 flex flex-col items-center justify-center text-xs text-white font-bold">
+                                                      <div className="text-[10px] truncate max-w-full px-1">
+                                                        {getClientNameFromCutRoll(roll)}
+                                                      </div>
+                                                      <div>{roll.width}"</div>
                                                       {(roll.source_type === 'pending_order' || roll.source_pending_id) && (
                                                         <div className="absolute -top-1 -right-1 bg-orange-500 text-white rounded-full text-xs px-1 py-0.5 text-[10px] font-bold shadow-lg">
                                                           P
@@ -3084,22 +3200,27 @@ export default function PlanningPage() {
                                           onClick={() => {
                                             // Individual cut selection disabled - use jumbo buttons instead
                                           }}>
-                                          <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                              <div className="text-sm font-medium">
-                                                {roll.width}" cut
+                                          <div className="flex flex-col gap-1">
+                                            <div className="flex items-center justify-between">
+                                              <div className="flex items-center gap-2">
+                                                <div className="text-sm font-medium">
+                                                  {roll.width}" cut
+                                                </div>
+                                                {(roll.source_type === 'pending_order' || roll.source_pending_id) && (
+                                                  <Badge variant="destructive" className="text-xs bg-orange-500 hover:bg-orange-600">
+                                                    P
+                                                  </Badge>
+                                                )}
                                               </div>
-                                              {(roll.source_type === 'pending_order' || roll.source_pending_id) && (
-                                                <Badge variant="destructive" className="text-xs bg-orange-500 hover:bg-orange-600">
-                                                  P
-                                                </Badge>
-                                              )}
+                                              <Checkbox
+                                                checked={selectedCutRolls.includes(roll.originalIndex)}
+                                                disabled={true}
+                                                onChange={() => {}}
+                                              />
                                             </div>
-                                            <Checkbox
-                                              checked={selectedCutRolls.includes(roll.originalIndex)}
-                                              disabled={true}
-                                              onChange={() => {}}
-                                            />
+                                            <div className="text-xs text-blue-600 font-medium truncate">
+                                              {getClientNameFromCutRoll(roll)}
+                                            </div>
                                           </div>
                                         </div>
                                       ))}
@@ -3110,7 +3231,13 @@ export default function PlanningPage() {
                             </div>
                           </div>
                           );
-                        })
+                        })}
+                                </div>
+                                </CardContent>
+                              )}
+                            </Card>
+                          ));
+                        })()
                       ) : (
                         <div className="text-center py-8 text-muted-foreground">
                           No jumbo roll hierarchy data available

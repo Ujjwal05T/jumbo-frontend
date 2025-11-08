@@ -360,13 +360,13 @@ export default function PlansPage() {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    let yPosition = 20;
+    let yPosition = 30; // Top margin to leave space for stapling
 
     // Helper function to check if we need a new page
     const checkPageBreak = (height: number) => {
       if (yPosition + height > pageHeight - 20) {
         doc.addPage();
-        yPosition = 20;
+        yPosition = 30; // Top margin to leave space for stapling
       }
     };
 
@@ -676,7 +676,7 @@ export default function PlansPage() {
         
         if (index > -1) {
           doc.addPage();
-          yPosition = 20;
+          yPosition = 30; // Top margin to leave space for stapling
         }
         
         const paperSpecs = sortedJumboRolls[0]?.paper_specs;
@@ -695,7 +695,7 @@ export default function PlansPage() {
         const cutCount = sortedJumboRolls.length;
         const productionInfo = { totalWeight, cutCount };
 
-        checkPageBreak(35);
+        checkPageBreak(30);
         doc.setFillColor(240, 240, 240);
         doc.rect(20, yPosition - 5, pageWidth - 40, 20, 'F');
         doc.setDrawColor(100, 100, 100);
@@ -734,7 +734,7 @@ export default function PlansPage() {
           localY += 8;
 
           const rectStartX = 40;
-          const rectWidth = pageWidth - 65;
+          const rectWidth = pageWidth - 85; // Increased right margin to prevent sets from going too far right
           const rectHeight = 20;
           let currentX = rectStartX;
 
@@ -748,7 +748,7 @@ export default function PlansPage() {
             const rollRatio = roll.width_inches / 118; // Ratio of this roll to total width
             const availableWidth = rectWidth * 0.85; // Use 85% of available space for rolls
             const calculatedWidth = availableWidth * rollRatio;
-            const sectionWidth = Math.max(35, Math.min(55, calculatedWidth))
+            const sectionWidth = Math.max(30, Math.min(55, calculatedWidth))
 
             if (roll.status === 'cutting') {
               doc.setFillColor(189, 189, 189);
@@ -868,7 +868,7 @@ export default function PlansPage() {
           doc.setTextColor(60, 60, 60);
           const rollTitle = rollNumber === "No Roll #" ? "Unassigned Roll" : `Set #${index_set}`;
           index_set = index_set + 1;
-          doc.text(rollTitle, 35, yPosition);
+          doc.text(rollTitle, 30, yPosition);
           yPosition += 12;
           
           // Always check if width exceeds 118" and apply automatic segmentation regardless of order type
@@ -988,7 +988,7 @@ export default function PlansPage() {
       
       // Single column layout configuration
       const marginX = 20;
-      const marginY = 20;
+      const marginY = 30; // Top margin to leave space for stapling
       const labelWidth = pageWidth - (marginX * 2);
       const itemsPerPage = 8; // Fewer items per page for grouping headers
       
@@ -1051,7 +1051,7 @@ export default function PlansPage() {
           })
           .forEach((item, index) => {
           // Check if we need a new page for this item
-          if (itemCount >= itemsPerPage || yPosition > pageHeight - 80) {
+          if (itemCount >= itemsPerPage || yPosition > pageHeight - 100) {
             doc.addPage();
             pageCount++;
             yPosition = marginY;
@@ -1171,7 +1171,7 @@ export default function PlansPage() {
     try {
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.width;
-      let yPosition = 20;
+      let yPosition = 30; // Top margin to leave space for stapling
 
       // Title
       doc.setFontSize(20);
@@ -1212,7 +1212,7 @@ export default function PlansPage() {
       filteredPlans.forEach((plan, index) => {
         if (yPosition > 270) { // New page if needed
           doc.addPage();
-          yPosition = 20;
+          yPosition = 30; // Top margin to leave space for stapling
         }
 
         xPosition = 20;

@@ -1214,13 +1214,13 @@ export default function PlanDetailsPage() {
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
-      let yPosition = 20;
+      let yPosition = 30; // Top margin to leave space for stapling
 
       // Helper function to check if we need a new page
       const checkPageBreak = (height: number) => {
         if (yPosition + height > pageHeight - 20) {
           doc.addPage();
-          yPosition = 20;
+          yPosition = 30; // Top margin to leave space for stapling
         }
       };
 
@@ -1555,7 +1555,7 @@ export default function PlanDetailsPage() {
           // Add new page for each jumbo roll (except the first one)
           if (index > -1) {
             doc.addPage();
-            yPosition = 20;
+            yPosition = 30; // Top margin to leave space for stapling
           }
           
           // Get paper specification from first roll (all rolls in jumbo have same specs)
@@ -1608,14 +1608,16 @@ export default function PlanDetailsPage() {
           }, {} as Record<string, CutRollItem[]>);
 
           // LEVEL 2: INDIVIDUAL 118" ROLL SUB-HEADERS + LEVEL 3: VISUAL PATTERNS
+          let index_set = 1;
           Object.entries(rollsByNumber).forEach(([rollNumber, rollsInNumber]:[any, any]) => {
             checkPageBreak(80);
 
-            // LEVEL 2: Roll Sub-header (Roll #1, Roll #2, etc.)
+            // LEVEL 2: Roll Sub-header (Set #1, Set #2, etc.)
             doc.setFontSize(14);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(60, 60, 60);
-            const rollTitle = rollNumber === "No Roll #" ? "Unassigned Roll" : `Roll #${rollNumber}`;
+            const rollTitle = rollNumber === "No Roll #" ? "Unassigned Roll" : `Set #${index_set}`;
+            index_set = index_set + 1;
             doc.text(rollTitle, 35, yPosition);
             yPosition += 12;
 
