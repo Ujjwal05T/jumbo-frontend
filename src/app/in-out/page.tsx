@@ -125,6 +125,12 @@ export default function InOutPage() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
+  // Filter states
+  const [inwardClientFilter, setInwardClientFilter] = useState<string>("all");
+  const [inwardMaterialFilter, setInwardMaterialFilter] = useState<string>("all");
+  const [outwardMaterialFilter, setOutwardMaterialFilter] = useState<string>("all");
+  const [outwardPartyFilter, setOutwardPartyFilter] = useState<string>("all");
+
   // Fetch next serial numbers from database
   const loadNextSerialNumbers = async () => {
     try {
@@ -146,6 +152,69 @@ export default function InOutPage() {
     return today.toISOString().split("T")[0];
   };
 
+  // Filtering functions
+  const getFilteredInwardChallans = () => {
+    return inwardChallans.filter((challan) => {
+      const matchesClient = inwardClientFilter === "all" || challan.party_id === inwardClientFilter;
+      const matchesMaterial = inwardMaterialFilter === "all" || challan.material_id === inwardMaterialFilter;
+
+      // Date range filter
+      if (!challan.date) return false;
+      const challanDate = new Date(challan.date);
+      if (isNaN(challanDate.getTime())) return false;
+
+      const challanDateOnly = new Date(
+        challanDate.getFullYear(),
+        challanDate.getMonth(),
+        challanDate.getDate()
+      );
+      const fromDateOnly = new Date(
+        pdfDateRange.from.getFullYear(),
+        pdfDateRange.from.getMonth(),
+        pdfDateRange.from.getDate()
+      );
+      const toDateOnly = new Date(
+        pdfDateRange.to.getFullYear(),
+        pdfDateRange.to.getMonth(),
+        pdfDateRange.to.getDate()
+      );
+
+      const matchesDate = challanDateOnly >= fromDateOnly && challanDateOnly <= toDateOnly;
+
+      return matchesClient && matchesMaterial && matchesDate;
+    });
+  };
+
+  const getFilteredOutwardChallans = () => {
+    return outwardChallans.filter((challan) => {
+      const matchesParty = outwardPartyFilter === "all" || challan.party_name === outwardPartyFilter;
+
+      // Date range filter
+      if (!challan.date) return false;
+      const challanDate = new Date(challan.date);
+      if (isNaN(challanDate.getTime())) return false;
+
+      const challanDateOnly = new Date(
+        challanDate.getFullYear(),
+        challanDate.getMonth(),
+        challanDate.getDate()
+      );
+      const fromDateOnly = new Date(
+        pdfDateRange.from.getFullYear(),
+        pdfDateRange.from.getMonth(),
+        pdfDateRange.from.getDate()
+      );
+      const toDateOnly = new Date(
+        pdfDateRange.to.getFullYear(),
+        pdfDateRange.to.getMonth(),
+        pdfDateRange.to.getDate()
+      );
+
+      const matchesDate = challanDateOnly >= fromDateOnly && challanDateOnly <= toDateOnly;
+
+      return matchesParty && matchesDate;
+    });
+  };
 
   // PDF generation function
   const generateChallanPdf = async (
@@ -154,65 +223,26 @@ export default function InOutPage() {
   ) => {
     try {
       setGeneratingPdf(true);
-      // Filter data based on date range with more robust date comparison
-      const filterByDate = (challans: any[]) => {
-        return challans.filter((challan) => {
-          if (!challan.date) return false;
 
-          // Handle different date formats
-          const challanDate = new Date(challan.date);
-
-          // Check if date is valid
-          if (isNaN(challanDate.getTime())) {
-            console.warn("Invalid date found:", challan.date);
-            return false;
-          }
-
-          // Normalize dates to start of day for comparison
-          const challanDateOnly = new Date(
-            challanDate.getFullYear(),
-            challanDate.getMonth(),
-            challanDate.getDate()
-          );
-          const fromDateOnly = new Date(
-            pdfDateRange.from.getFullYear(),
-            pdfDateRange.from.getMonth(),
-            pdfDateRange.from.getDate()
-          );
-          const toDateOnly = new Date(
-            pdfDateRange.to.getFullYear(),
-            pdfDateRange.to.getMonth(),
-            pdfDateRange.to.getDate()
-          );
-
-          const isInRange =
-            challanDateOnly >= fromDateOnly && challanDateOnly <= toDateOnly;
-
-          // Debug individual record
-          if (challans.length <= 5) {
-            // Only log for small datasets to avoid spam
-            console.log(
-              `Challan date: ${challanDate.toDateString()}, In range: ${isInRange}`
-            );
-          }
-
-          return isInRange;
-        });
-      };
-
-      const filteredInward = filterByDate(inwardChallans);
-      const filteredOutward = filterByDate(outwardChallans);
+      // Get filtered data and sort by date ascending
+      // The filtering functions already handle client, material, party, and date range filters
+      const filteredInward = getFilteredInwardChallans().sort((a, b) => {
+        return new Date(a.date).getTime() - new Date(b.date).getTime();
+      });
+      const filteredOutward = getFilteredOutwardChallans().sort((a, b) => {
+        return new Date(a.date).getTime() - new Date(b.date).getTime();
+      });
 
       // Check if we have any data for the requested type
       if (type === "inward" && filteredInward.length === 0) {
         toast.error(
-          `No purchase challans found for the selected date range (${pdfDateRange.from.toLocaleDateString('en-GB')} to ${pdfDateRange.to.toLocaleDateString('en-GB')})`
+          `No inward challans found for the selected date range (${pdfDateRange.from.toLocaleDateString('en-GB')} to ${pdfDateRange.to.toLocaleDateString('en-GB')})`
         );
         return;
       }
       if (type === "outward" && filteredOutward.length === 0) {
         toast.error(
-          `No sales challans found for the selected date range (${pdfDateRange.from.toLocaleDateString('en-GB')} to ${pdfDateRange.to.toLocaleDateString('en-GB')})`
+          `No outward challans found for the selected date range (${pdfDateRange.from.toLocaleDateString('en-GB')} to ${pdfDateRange.to.toLocaleDateString('en-GB')})`
         );
         return;
       }
@@ -265,7 +295,7 @@ export default function InOutPage() {
 
       // Generate Inward Challans Table
       if (type === "inward" || type === "both") {
-        addTitle("Purchase Report");
+        addTitle("Inward Report");
 
         if (filteredInward.length > 0) {
           const inwardColumns = [
@@ -359,15 +389,15 @@ export default function InOutPage() {
                 yPosition = data.cursor.y + 5;
               },
             });
-            console.log("purchase table generated successfully");
+            console.log("inward table generated successfully");
           } catch (tableError) {
-            console.error("Error generating purchase table:", tableError);
-            pdf.text("Error generating purchase table", 20, yPosition);
+            console.error("Error generating inward table:", tableError);
+            pdf.text("Error generating inward table", 20, yPosition);
             yPosition += 10;
           }
         } else {
           pdf.text(
-            "No purchase challans found for the selected date range",
+            "No inward challans found for the selected date range",
             20,
             yPosition
           );
@@ -383,7 +413,7 @@ export default function InOutPage() {
         }
 
         if (type === "outward") {
-          addTitle("Sales Report");
+          addTitle("Outward Report");
         } else {
           pdf.setFontSize(12);
           pdf.setFont("helvetica", "medium");
@@ -476,12 +506,12 @@ export default function InOutPage() {
             });
             console.log("Outward table generated successfully");
           } catch (tableError) {
-            console.error("Error generating sales table:", tableError);
-            pdf.text("Error generating sales table", 20, yPosition);
+            console.error("Error generating outward table:", tableError);
+            pdf.text("Error generating outward table", 20, yPosition);
           }
         } else {
           pdf.text(
-            "No sales challans found for the selected date range",
+            "No outward challans found for the selected date range",
             20,
             yPosition
           );
@@ -592,8 +622,8 @@ export default function InOutPage() {
 
       const [inwardData, outwardData, materialsData, clientsData] =
         await Promise.all([
-          fetchInwardChallans(0, 50),
-          fetchOutwardChallans(0, 50),
+          fetchInwardChallans(0, 10000),
+          fetchOutwardChallans(0, 10000),
           fetchMaterials(0, 100),
           fetchClients(0, "active"),
         ]);
@@ -679,7 +709,7 @@ export default function InOutPage() {
       };
 
       await createInwardChallan(challanData);
-      toast.success("Purchase challan created successfully!");
+      toast.success("Inward challan created successfully!");
       loadNextSerialNumbers(); // Refresh serial numbers after successful creation
       setShowInwardModal(false);
       // Reset form with empty values
@@ -704,11 +734,11 @@ export default function InOutPage() {
       });
       loadData(); // Refresh data
     } catch (error) {
-      console.error("Error creating purchase challan:", error);
+      console.error("Error creating inward challan:", error);
       toast.error(
         error instanceof Error
           ? error.message
-          : "Failed to create purchase challan"
+          : "Failed to create inward challan"
       );
     } finally {
       setSubmitting(false);
@@ -783,7 +813,7 @@ export default function InOutPage() {
       toast.error(
         error instanceof Error
           ? error.message
-          : "Failed to create sales challan"
+          : "Failed to create outward challan"
       );
     } finally {
       setSubmitting(false);
@@ -909,7 +939,7 @@ export default function InOutPage() {
       toast.error(
         error instanceof Error
           ? error.message
-          : "Failed to update purchase challan"
+          : "Failed to update inward challan"
       );
     } finally {
       setSubmitting(false);
@@ -967,7 +997,7 @@ export default function InOutPage() {
       toast.error(
         error instanceof Error
           ? error.message
-          : "Failed to update sales challan"
+          : "Failed to update outward challan"
       );
     } finally {
       setSubmitting(false);
@@ -992,7 +1022,7 @@ export default function InOutPage() {
       toast.success("Time out recorded successfully!");
       loadData(); // Refresh data
     } catch (error) {
-      console.error("Error updating purchase challan time out:", error);
+      console.error("Error updating inward challan time out:", error);
       toast.error(
         error instanceof Error ? error.message : "Failed to record time out"
       );
@@ -1019,7 +1049,7 @@ export default function InOutPage() {
       toast.success("Time out recorded successfully!");
       loadData(); // Refresh data
     } catch (error) {
-      console.error("Error updating sales challan time out:", error);
+      console.error("Error updating outward challan time out:", error);
       toast.error(
         error instanceof Error ? error.message : "Failed to record time out"
       );
@@ -1123,8 +1153,8 @@ export default function InOutPage() {
               ) : (
                 <FileText className="h-4 w-4 mr-1" />
               )}
-              <span className="hidden sm:inline">Print Purchase</span>
-              <span className="sm:hidden">Purchase</span>
+              <span className="hidden sm:inline">Print Inward</span>
+              <span className="sm:hidden">Inward</span>
             </Button>
 
             <Button
@@ -1159,26 +1189,26 @@ export default function InOutPage() {
 
         <Tabs defaultValue="inward" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="inward">Purchase Challan</TabsTrigger>
-            <TabsTrigger value="outward">Sales Challan</TabsTrigger>
+            <TabsTrigger value="inward">Inward Challan</TabsTrigger>
+            <TabsTrigger value="outward">Outward Challan</TabsTrigger>
           </TabsList>
 
           {/* Inward Challan Tab */}
           <TabsContent value="inward" className="space-y-4">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">Purchase Challans</h2>
+              <h2 className="text-xl font-semibold">Inward Challans</h2>
               <Dialog open={showInwardModal} onOpenChange={setShowInwardModal}>
                 <DialogTrigger asChild>
                   {(isSecurity || isAdmin) && (
                     <Button>
                       <Plus className="h-4 w-4 mr-2" />
-                      Add Purchase Challan
+                      Add Inward Challan
                     </Button>
                   )}
                 </DialogTrigger>
                 <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>Create Purchase Challan</DialogTitle>
+                    <DialogTitle>Create Inward Challan</DialogTitle>
                     <DialogDescription>
                       Add details for material coming in
                     </DialogDescription>
@@ -1613,6 +1643,67 @@ export default function InOutPage() {
               </Dialog>
             </div>
 
+            {/* Filters */}
+            <Card className="mb-4">
+              <CardContent className="p-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="inwardClientFilter" className="mb-2 block">Filter by Client</Label>
+                    <Select
+                      value={inwardClientFilter}
+                      onValueChange={setInwardClientFilter}
+                    >
+                      <SelectTrigger id="inwardClientFilter">
+                        <SelectValue placeholder="All Clients" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Clients</SelectItem>
+                        {[...clients]
+                          .sort((a, b) => a.company_name.localeCompare(b.company_name, "en", { sensitivity: "base" }))
+                          .map((client) => (
+                            <SelectItem key={client.id} value={client.id}>
+                              {client.company_name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="inwardMaterialFilter" className="mb-2 block">Filter by Material</Label>
+                    <Select
+                      value={inwardMaterialFilter}
+                      onValueChange={setInwardMaterialFilter}
+                    >
+                      <SelectTrigger id="inwardMaterialFilter">
+                        <SelectValue placeholder="All Materials" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Materials</SelectItem>
+                        {materials.map((material) => (
+                          <SelectItem key={material.id} value={material.id}>
+                            {material.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {(inwardClientFilter !== "all" || inwardMaterialFilter !== "all") && (
+                  <div className="mt-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setInwardClientFilter("all");
+                        setInwardMaterialFilter("all");
+                      }}
+                    >
+                      Clear Filters
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Desktop Table */}
             <Card className="hidden md:block">
               <CardContent className="p-0">
@@ -1634,7 +1725,7 @@ export default function InOutPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {inwardChallans.map((challan) => (
+                    {getFilteredInwardChallans().map((challan) => (
                       <TableRow key={challan.id}>
                         <TableCell className="font-mono text-sm">
                           {challan.serial_no || "Auto-generated"}
@@ -1696,14 +1787,14 @@ export default function InOutPage() {
 
             {/* Mobile Cards */}
             <div className="md:hidden space-y-3">
-              {inwardChallans.length === 0 ? (
+              {getFilteredInwardChallans().length === 0 ? (
                 <Card>
                   <CardContent className="text-center py-8 text-muted-foreground">
-                    No purchase challans found
+                    No inward challans found
                   </CardContent>
                 </Card>
               ) : (
-                inwardChallans.map((challan) => (
+                getFilteredInwardChallans().map((challan) => (
                   <Card key={challan.id} className="hover:border-primary transition-colors">
                     <CardContent className="p-4">
                       <div className="space-y-3">
@@ -1786,7 +1877,7 @@ export default function InOutPage() {
           {/* Outward Challan Tab */}
           <TabsContent value="outward" className="space-y-4">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">Sales Challans</h2>
+              <h2 className="text-xl font-semibold">Outward Challans</h2>
               <Dialog
                 open={showOutwardModal}
                 onOpenChange={setShowOutwardModal}>
@@ -1794,13 +1885,13 @@ export default function InOutPage() {
                   {(isSecurity || isAdmin) && (
                     <Button>
                       <Plus className="h-4 w-4 mr-2" />
-                      Add Sales Challan
+                      Add Outward Challan
                     </Button>
                   )}
                 </DialogTrigger>
                 <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>Create Sales Challan</DialogTitle>
+                    <DialogTitle>Create Outward Challan</DialogTitle>
                     <DialogDescription>
                       Add details for material going out
                     </DialogDescription>
@@ -2054,6 +2145,47 @@ export default function InOutPage() {
               </Dialog>
             </div>
 
+            {/* Filters */}
+            <Card className="mb-4">
+              <CardContent className="p-4">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-1">
+                    <Label htmlFor="outwardPartyFilter" className="mb-2 block">Filter by Party Name</Label>
+                    <Select
+                      value={outwardPartyFilter}
+                      onValueChange={setOutwardPartyFilter}
+                    >
+                      <SelectTrigger id="outwardPartyFilter">
+                        <SelectValue placeholder="All Parties" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Parties</SelectItem>
+                        {[...new Set(outwardChallans.map(c => c.party_name).filter(Boolean))]
+                          .sort((a, b) => a!.localeCompare(b!, "en", { sensitivity: "base" }))
+                          .map((partyName) => (
+                            <SelectItem key={partyName} value={partyName!}>
+                              {partyName}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {outwardPartyFilter !== "all" && (
+                    <div className="flex items-end">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setOutwardPartyFilter("all");
+                        }}
+                      >
+                        Clear Filters
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Desktop Table */}
             <Card className="hidden md:block">
               <CardContent className="p-0">
@@ -2073,7 +2205,7 @@ export default function InOutPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {outwardChallans.map((challan) => (
+                    {getFilteredOutwardChallans().map((challan) => (
                       <TableRow key={challan.id}>
                         <TableCell className="font-mono text-sm">
                           {challan.serial_no || "Auto-generated"}
@@ -2119,14 +2251,14 @@ export default function InOutPage() {
 
             {/* Mobile Cards */}
             <div className="md:hidden space-y-3">
-              {outwardChallans.length === 0 ? (
+              {getFilteredOutwardChallans().length === 0 ? (
                 <Card>
                   <CardContent className="text-center py-8 text-muted-foreground">
-                    No sales challans found
+                    No outward challans found
                   </CardContent>
                 </Card>
               ) : (
-                outwardChallans.map((challan) => (
+                getFilteredOutwardChallans().map((challan) => (
                   <Card key={challan.id} className="hover:border-primary transition-colors">
                     <CardContent className="p-4">
                       <div className="space-y-3">
@@ -2205,9 +2337,9 @@ export default function InOutPage() {
           onOpenChange={setShowInwardUpdateModal}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Update Purchase Challan</DialogTitle>
+              <DialogTitle>Update Inward Challan</DialogTitle>
               <DialogDescription>
-                Modify details for the purchase challan
+                Modify details for the inward challan
               </DialogDescription>
             </DialogHeader>
             <form
@@ -2635,9 +2767,9 @@ export default function InOutPage() {
           onOpenChange={setShowOutwardUpdateModal}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Update Sales Challan</DialogTitle>
+              <DialogTitle>Update Outward Challan</DialogTitle>
               <DialogDescription>
-                Modify details for the sales challan
+                Modify details for the outward challan
               </DialogDescription>
             </DialogHeader>
             <form

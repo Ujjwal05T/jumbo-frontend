@@ -393,7 +393,13 @@ export default function PlanningPage() {
     // METHOD 2: For pending orders, check if we have source_pending_id
     else if (roll.source_type === 'pending_order' && roll.source_pending_id) {
       const pendingOrder = planResult?.pending_orders?.find((p: any) => p.id === roll.source_pending_id);
-      if (pendingOrder?.original_order_id) {
+
+      // First try to use client_name from pending order (new feature)
+      if (pendingOrder?.client_name) {
+        clientName = pendingOrder.client_name;
+      }
+      // Fallback to original order lookup
+      else if (pendingOrder?.original_order_id) {
         const originalOrder = orders.find(o => o.id === pendingOrder.original_order_id);
         if (originalOrder?.client?.company_name) {
           clientName = originalOrder.client.company_name;
@@ -982,9 +988,15 @@ export default function PlanningPage() {
 
           // METHOD 2: For pending orders, check if we have source_pending_id
           else if (roll.source_type === 'pending_order' && roll.source_pending_id) {
-            // Find the pending order and then get the original order by original_order_id
-            const pendingOrder  = planResult.pending_orders?.find((p: any) => p.id === roll.source_pending_id);
-            if (pendingOrder?.original_order_id) {
+            // Find the pending order
+            const pendingOrder = planResult.pending_orders?.find((p: any) => p.id === roll.source_pending_id);
+
+            // First try to use client_name from pending order (new feature)
+            if (pendingOrder?.client_name) {
+              companyName = pendingOrder.client_name;
+            }
+            // Fallback to original order lookup
+            else if (pendingOrder?.original_order_id) {
               const originalOrder = orders.find(o => o.id === pendingOrder.original_order_id);
               if (originalOrder?.client?.company_name) {
                 companyName = originalOrder.client.company_name;
@@ -1554,7 +1566,13 @@ export default function PlanningPage() {
                 // METHOD 2: For pending orders, check if we have source_pending_id
                 else if (roll.source_type === 'pending_order' && roll.source_pending_id) {
                   const pendingOrder = planResult?.pending_orders?.find((p: any) => p.id === roll.source_pending_id);
-                  if (pendingOrder?.original_order_id) {
+
+                  // First try to use client_name from pending order (new feature)
+                  if (pendingOrder?.client_name) {
+                    clientName = pendingOrder.client_name.substring(0, 8);
+                  }
+                  // Fallback to original order lookup
+                  else if (pendingOrder?.original_order_id) {
                     const originalOrder = orders.find(o => o.id === pendingOrder.original_order_id);
                     if (originalOrder?.client?.company_name) {
                       clientName = originalOrder.client.company_name.substring(0, 8);
@@ -1766,7 +1784,13 @@ export default function PlanningPage() {
             // METHOD 2: For pending orders, check if we have source_pending_id
             else if (roll.source_type === 'pending_order' && roll.source_pending_id) {
               const pendingOrder = planResult?.pending_orders?.find((p: any) => p.id === roll.source_pending_id);
-              if (pendingOrder?.original_order_id) {
+
+              // First try to use client_name from pending order (new feature)
+              if (pendingOrder?.client_name) {
+                clientName = pendingOrder.client_name.substring(0, 8);
+              }
+              // Fallback to original order lookup
+              else if (pendingOrder?.original_order_id) {
                 const originalOrder = orders.find(o => o.id === pendingOrder.original_order_id);
                 if (originalOrder?.client?.company_name) {
                   clientName = originalOrder.client.company_name.substring(0, 8);
@@ -1893,15 +1917,22 @@ export default function PlanningPage() {
         planResult.pending_orders.forEach((order, index) => {
           checkPageBreak(12);
           
-          // Get client name and order frontend ID from original order
-          let clientName = 'Unknown Client';
+          // Get client name and order frontend ID from pending order data (now includes client info)
+          let clientName = order.client_name || 'Unknown Client';
           let orderFrontendId = 'N/A';
-          
-          if (order.source_order_id && orders.length > 0) {
+
+          // Fallback to original order lookup if client_name is not available
+          if (!order.client_name && order.source_order_id && orders.length > 0) {
             const sourceOrder = orders.find(o => o.id === order.source_order_id);
-            
+
             if (sourceOrder) {
               clientName = sourceOrder.client?.company_name || 'Unknown Client';
+              orderFrontendId = sourceOrder.frontend_id || sourceOrder.id.split("-")[0] || 'N/A';
+            }
+          } else if (order.source_order_id && orders.length > 0) {
+            // Get order frontend ID if available
+            const sourceOrder = orders.find(o => o.id === order.source_order_id);
+            if (sourceOrder) {
               orderFrontendId = sourceOrder.frontend_id || sourceOrder.id.split("-")[0] || 'N/A';
             }
           }
@@ -3301,6 +3332,7 @@ export default function PlanningPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead>Client</TableHead>
                           <TableHead>Width (in)</TableHead>
                           <TableHead>Quantity</TableHead>
                           <TableHead>Paper Spec</TableHead>
@@ -3311,6 +3343,9 @@ export default function PlanningPage() {
                         {planResult.pending_orders.map(
                           (order, index) => (
                             <TableRow key={index}>
+                              <TableCell className="font-medium">
+                                {order.client_name || 'Unknown Client'}
+                              </TableCell>
                               <TableCell>{order.width}&quot;</TableCell>
                               <TableCell>{order.quantity} rolls</TableCell>
                               <TableCell>

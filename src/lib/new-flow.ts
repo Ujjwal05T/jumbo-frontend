@@ -29,6 +29,7 @@ export interface PendingOrder {
   reason: string;
   pending_order_id?: string;
   original_order_id?: string;
+  client_name?: string;
 }
 
 export interface AvailableInventory {
