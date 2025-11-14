@@ -122,6 +122,9 @@ export const REPORTS_ENDPOINTS = {
 
   // Client Orders with Plans endpoint
   CLIENT_ORDERS_WITH_PLANS: `${API_BASE_URL}/reports/client-orders-with-plans`,
+
+  // Order Plan Execution Report endpoint (merged report)
+  ORDER_PLAN_EXECUTION: `${API_BASE_URL}/reports/order-plan-execution`,
 };
 
 // Order Edit Logs endpoints

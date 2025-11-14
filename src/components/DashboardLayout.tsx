@@ -142,6 +142,7 @@ const getNavigationForRole = (role: string | null) => {
         { name: "Analytics Dashboard", href: "/reports", roles: ["admin", "production", "accountant"] },
         { name: "Client-Order Analysis", href: "/reports/client-orders", roles: ["admin", "production", "accountant"] },
         { name: "Plan Report", href: "/reports/client-orders-plans", roles: ["admin"] },
+        { name: "Order-Plan Execution", href: "/reports/order-plan-execution", roles: ["admin", "production", "accountant"] },
       ],
     },
     {
