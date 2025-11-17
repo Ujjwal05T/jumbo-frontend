@@ -70,6 +70,7 @@ interface CutRollItem {
   individual_roll_number?: number;
   parent_jumbo_id?: string;
   parent_118_roll_id?: string;
+  parent_118_roll_barcode?: string;
   roll_sequence?: number;
   // Added fields for pending orders
   source_type?: string;
@@ -120,7 +121,60 @@ interface ProductionSummary {
     created_at: string | null;
     client_name: string | null;
   }[];
-  detailed_items: CutRollItem[];
+  // New hierarchical structure
+  production_hierarchy: Array<{
+    jumbo_roll: {
+      id: string;
+      barcode_id: string;
+      frontend_id?: string;
+      width_inches: number;
+      paper_spec: string;
+      status: string;
+      location: string;
+    };
+    intermediate_rolls: Array<{
+      id: string;
+      barcode_id: string;
+      parent_jumbo_id: string;
+      individual_roll_number: number;
+      width_inches: number;
+      paper_spec: string;
+    }>;
+    cut_rolls: Array<{
+      id: string;
+      barcode_id: string;
+      width_inches: number;
+      parent_118_roll_barcode?: string;
+      weight_kg: number;
+      paper_specs: {
+        gsm: number;
+        bf: number;
+        shade: string;
+      };
+      status: string;
+      client_name: string;
+      order_date?: string;
+      created_at?: string;
+      location: string;
+    }>;
+  }>;
+  wastage_items: Array<{
+    id: string;
+    barcode_id: string;
+    width_inches: number;
+    weight_kg: number;
+    paper_specs: {
+      gsm: number;
+      bf: number;
+      shade: string;
+    };
+    status: string;
+    client_name: string;
+    order_date?: string;
+    created_at?: string;
+    location: string;
+  }>;
+  detailed_items: CutRollItem[]; // Keep for backward compatibility
 }
 
 export default function PlansPage() {
@@ -345,6 +399,100 @@ export default function PlansPage() {
     return grouped;
   };
 
+  // New function to process hierarchical data for PDF generation
+  const processHierarchicalDataForPDF = (productionHierarchy: any[], wastageItems: any[]): Record<string, { displayId: string; rolls: any[] }> => {
+    const grouped: Record<string, { displayId: string; rolls: any[] }> = {};
+
+    console.log('🔍 Processing Hierarchical Data for PDF:');
+    console.log('- productionHierarchy length:', productionHierarchy.length);
+
+    // Process production hierarchy
+    productionHierarchy.forEach((jumboGroup, jumboIndex) => {
+      const jumboRoll = jumboGroup.jumbo_roll;
+      const jumboDisplayId =  jumboRoll.barcode_id;
+
+      console.log(`🔍 Jumbo ${jumboIndex}: ${jumboDisplayId}`);
+      console.log(`- Intermediate rolls: ${jumboGroup.intermediate_rolls?.length || 0}`);
+      console.log(`- Cut rolls: ${jumboGroup.cut_rolls?.length || 0}`);
+
+      if (!grouped[jumboRoll.id]) {
+        grouped[jumboRoll.id] = {
+          displayId: `${jumboDisplayId}`,
+          rolls: []
+        };
+      }
+
+      // Create a mapping of intermediate rolls to their individual_roll_number
+      const intermediateRollMap: Record<string, number> = {};
+      jumboGroup.intermediate_rolls.forEach((intermediateRoll: any) => {
+        intermediateRollMap[intermediateRoll.id] = intermediateRoll.individual_roll_number;
+      });
+
+      // Add all cut rolls from this jumbo with proper SET information
+      jumboGroup.cut_rolls.forEach((cutRoll: any, cutRollIndex: number) => {
+        // Find the parent intermediate roll to get the individual_roll_number
+        let setNumber = 1; // Default SET number
+        if (cutRoll.parent_118_roll_barcode) {
+          // Find the matching intermediate roll by barcode
+          const matchingIntermediate = jumboGroup.intermediate_rolls.find((ir: any) =>
+            ir.barcode_id === cutRoll.parent_118_roll_barcode
+          );
+          if (matchingIntermediate) {
+            setNumber = matchingIntermediate.individual_roll_number;
+          } else {
+            console.log(`⚠️ No matching intermediate roll found for cut roll ${cutRoll.barcode_id} with parent ${cutRoll.parent_118_roll_barcode}`);
+          }
+        } else {
+          console.log(`⚠️ Cut roll ${cutRoll.barcode_id} has no parent_118_roll_barcode`);
+        }
+
+        if (cutRollIndex < 3) { // Only log first few cut rolls to avoid spam
+          console.log(`🔍 Cut Roll ${cutRollIndex}: ${cutRoll.barcode_id} -> SET #${setNumber} (parent: ${cutRoll.parent_118_roll_barcode})`);
+        }
+
+        // Transform cut roll data to match expected format for PDF generation
+        const transformedRoll = {
+          barcode_id: cutRoll.barcode_id,
+          width_inches: cutRoll.width_inches,
+          weight_kg: cutRoll.weight_kg,
+          paper_specs: cutRoll.paper_specs,
+          status: cutRoll.status,
+          client_name: cutRoll.client_name,
+          individual_roll_number: setNumber, // Use actual SET number from intermediate roll
+          parent_118_roll_barcode: cutRoll.parent_118_roll_barcode,
+          jumbo_roll_frontend_id: jumboDisplayId
+        };
+        grouped[jumboRoll.id].rolls.push(transformedRoll);
+      });
+    });
+
+    // Process wastage items (excluding SCR items which should not be in labels)
+    wastageItems.forEach((wastageRoll) => {
+      if (wastageRoll.barcode_id && !wastageRoll.barcode_id.startsWith('SCR-')) {
+        const transformedRoll = {
+          barcode_id: wastageRoll.barcode_id,
+          width_inches: wastageRoll.width_inches,
+          weight_kg: wastageRoll.weight_kg,
+          paper_specs: wastageRoll.paper_specs,
+          status: wastageRoll.status,
+          client_name: wastageRoll.client_name,
+          individual_roll_number: 1, // Default to SET 1 for wastage rolls
+          jumbo_roll_frontend_id: 'Cut Rolls from Stock'
+        };
+
+        if (!grouped['wastage']) {
+          grouped['wastage'] = {
+            displayId: 'Cut Rolls from Stock',
+            rolls: []
+          };
+        }
+        grouped['wastage'].rolls.push(transformedRoll);
+      }
+    });
+
+    return grouped;
+  };
+
  const handleDownloadReport = async (plan: Plan) => {
   try {
     toast.loading('Preparing report download...', { id: `report-${plan.id}` });
@@ -356,7 +504,66 @@ export default function PlansPage() {
       return;
     }
 
-    // EXACT copy of exportPlanDetailsToPDF from plan details page
+    // Check if we have hierarchical data available
+    const hasHierarchicalData = productionSummary &&
+      productionSummary.production_hierarchy &&
+      productionSummary.production_hierarchy.length > 0;
+
+    const hasLegacyData = productionSummary &&
+      productionSummary.detailed_items &&
+      productionSummary.detailed_items.length > 0;
+
+    // Debug logging
+    console.log('🔍 PDF Data Check:');
+    console.log('- hasHierarchicalData:', hasHierarchicalData);
+    console.log('- hasLegacyData:', hasLegacyData);
+    console.log('- production_hierarchy:', productionSummary?.production_hierarchy);
+    console.log('- detailed_items length:', productionSummary?.detailed_items?.length);
+
+    if (!hasHierarchicalData && !hasLegacyData) {
+      toast.error('No production data available for this plan', { id: `report-${plan.id}` });
+      return;
+    }
+
+    // Helper function to extract data from hierarchical structure
+    const extractDataFromHierarchy = (hierarchy: any[], wastageItems: any[]) => {
+      const allItems: any[] = [];
+
+      // Extract cut rolls from hierarchy
+      hierarchy.forEach((jumboGroup: any) => {
+        jumboGroup.cut_rolls.forEach((cutRoll: any) => {
+          allItems.push({
+            ...cutRoll,
+            jumbo_roll_frontend_id: jumboGroup.jumbo_roll.frontend_id || jumboGroup.jumbo_roll.barcode_id,
+            jumbo_roll_barcode: jumboGroup.jumbo_roll.barcode_id
+          });
+        });
+      });
+
+      // Add wastage items (excluding SCR items for regular production)
+      wastageItems.forEach((wastageRoll: any) => {
+        if (wastageRoll.barcode_id && !wastageRoll.barcode_id.startsWith('SCR-')) {
+          allItems.push({
+            ...wastageRoll,
+            jumbo_roll_frontend_id: 'Cut Rolls from Stock'
+          });
+        }
+      });
+
+      return allItems;
+    };
+
+    // Get data based on availability
+    let allItems: any[] = [];
+
+    if (hasHierarchicalData) {
+      allItems = extractDataFromHierarchy(
+        productionSummary.production_hierarchy,
+        productionSummary.wastage_items || []
+      );
+    } else {
+      allItems = productionSummary.detailed_items;
+    }
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -388,11 +595,11 @@ export default function PlansPage() {
     yPosition += 15;
 
     // Extract unique clients and paper specs from production data
-    const uniqueClients = [...new Set(productionSummary.detailed_items
+    const uniqueClients = [...new Set(allItems
       .map(item => item.client_name)
       .filter(client => client && client !== 'Unknown Client'))];
-    
-    const uniquePaperSpecs = [...new Set(productionSummary.detailed_items
+
+    const uniquePaperSpecs = [...new Set(allItems
       .filter(item => item.paper_specs)
       .map(item => `${item.paper_specs!.gsm}gsm, BF:${item.paper_specs!.bf}, ${item.paper_specs!.shade}`))];
 
@@ -477,8 +684,8 @@ export default function PlansPage() {
         let totalRolls = 0;
         
         // Filter out SCR (stock/wastage) rolls - only include regular production rolls
-        const specItems = productionSummary.detailed_items.filter((item: any) => 
-          item.paper_specs && 
+        const specItems = allItems.filter((item: any) =>
+          item.paper_specs &&
           item.paper_specs.gsm === specGroup.gsm &&
           item.paper_specs.bf === specGroup.bf &&
           item.paper_specs.shade === specGroup.shade &&
@@ -606,8 +813,8 @@ export default function PlansPage() {
     yPosition += 10;
 
     // Separate SCR cut rolls from regular cut rolls for plan details PDF
-    const regularCutRolls = productionSummary.detailed_items.filter(roll => !roll.barcode_id?.startsWith('SCR-'));
-    const scrCutRolls = productionSummary.detailed_items.filter(roll => roll.barcode_id?.startsWith('SCR-'));
+    const regularCutRolls = allItems.filter(roll => !roll.barcode_id?.startsWith('SCR-'));
+    const scrCutRolls = allItems.filter(roll => roll.barcode_id?.startsWith('SCR-'));
 
     // Add SCR Cut Rolls Summary if any exist
     if (productionSummary.wastage_allocations.length > 0) {
@@ -643,7 +850,18 @@ export default function PlansPage() {
     }
 
     // Use production data directly - group by jumbo rolls first (regular rolls only)
-    const jumboRollMapping = groupCutRollsByJumboWithSequential(regularCutRolls);
+    let jumboRollMapping: Record<string, { displayId: string; rolls: any[] }>;
+
+    if (hasHierarchicalData) {
+      // Use new hierarchical structure
+      jumboRollMapping = processHierarchicalDataForPDF(
+        productionSummary.production_hierarchy,
+        productionSummary.wastage_items || []
+      );
+    } else {
+      // Use legacy structure
+      jumboRollMapping = groupCutRollsByJumboWithSequential(regularCutRolls);
+    }
     const sortedJumboMappingEntries = Object.entries(jumboRollMapping).sort(([aId, aGroup], [bId, bGroup]) => {
       const aDisplayId = aGroup.displayId;
       const bDisplayId = bGroup.displayId;
@@ -716,11 +934,14 @@ export default function PlansPage() {
         const rollsByNumber = sortedJumboRolls.reduce((rollGroups: any, roll: CutRollItem) => {
           const rollNum = roll.individual_roll_number || "No Roll #";
           if (!rollGroups[rollNum]) {
-            rollGroups[rollNum] = [];
+            rollGroups[rollNum] = {
+              rolls: [],
+              setBarcodeId: roll.parent_118_roll_barcode || null
+            };
           }
-          rollGroups[rollNum].push(roll);
+          rollGroups[rollNum].rolls.push(roll);
           return rollGroups;
-        }, {} as Record<string, CutRollItem[]>);
+        }, {} as Record<string, { rolls: CutRollItem[]; setBarcodeId: string | null }>);
 
         // Helper function to visualize a group of rolls
         const visualizeRollGroup = (doc: any, rolls: any[], pageWidth: number, startY: number) => {
@@ -859,26 +1080,33 @@ export default function PlansPage() {
           return parseInt(aKey) - parseInt(bKey);
         });
         let index_set = 1;
-        sortedRollEntries.forEach(([rollNumber, rollsInNumber]:[any, any]) => {
+        sortedRollEntries.forEach(([rollNumber, groupData]:[any, any]) => {
           checkPageBreak(80);
-          
+
+          const rollsInNumber = groupData.rolls;
+          const setBarcodeId = groupData.setBarcodeId;
 
           doc.setFontSize(14);
           doc.setFont('helvetica', 'bold');
           doc.setTextColor(60, 60, 60);
-          const rollTitle = rollNumber === "No Roll #" ? "Unassigned Roll" : `Set #${index_set}`;
+          // Show SET barcode ID instead of just "Set #X"
+          const rollTitle = rollNumber === "No Roll #"
+            ? "Unassigned Roll"
+            : setBarcodeId
+              ? setBarcodeId
+              : `Set #${index_set}`;
           index_set = index_set + 1;
           doc.text(rollTitle, 30, yPosition);
           yPosition += 12;
-          
+
           // Always check if width exceeds 118" and apply automatic segmentation regardless of order type
           const maxAllowedWidth = 120; // Maximum width constraint in inches
-          
+
           // Create segments automatically based on width constraint
           const segments: CutRollItem[][] = [];
           let currentSegment: CutRollItem[] = [];
           let currentWidth = 0;
-          
+
           // Process each roll and create new segments when width exceeds 118"
           rollsInNumber.forEach((roll: CutRollItem) => {
             const rollWidth = roll.width_inches || 0;
@@ -955,22 +1183,45 @@ export default function PlansPage() {
   const handlePrintLabels = async (plan: Plan) => {
     try {
       toast.loading('Preparing labels...', { id: `labels-${plan.id}` });
-      
+
       const productionSummary = await loadProductionData(plan.id);
-      if (!productionSummary || !productionSummary.detailed_items.length) {
+
+      // Use new hierarchical structure for better data organization
+      const hasHierarchicalData = productionSummary &&
+        productionSummary.production_hierarchy &&
+        productionSummary.production_hierarchy.length > 0;
+
+      const hasLegacyData = productionSummary &&
+        productionSummary.detailed_items &&
+        productionSummary.detailed_items.length > 0;
+
+      if (!hasHierarchicalData && !hasLegacyData) {
         toast.error('No cut rolls available for label printing', { id: `labels-${plan.id}` });
         return;
       }
 
-      // EXACT copy of exportBarcodesToPDF from plan details page
-      const filteredCutRolls = productionSummary.detailed_items; // Use all items for consistency
+      let jumboGroups: Record<string, { displayId: string; rolls: any[] }>;
+      let allCutRolls: any[] = [];
+
+      if (hasHierarchicalData) {
+        // Use new hierarchical structure
+        jumboGroups = processHierarchicalDataForPDF(
+          productionSummary.production_hierarchy,
+          productionSummary.wastage_items || []
+        );
+
+        // Count all rolls for total display
+        allCutRolls = Object.values(jumboGroups).flatMap(group => group.rolls);
+      } else {
+        // Fallback to legacy structure
+        const filteredCutRolls = productionSummary.detailed_items;
+        jumboGroups = groupCutRollsByJumboWithSequential(filteredCutRolls);
+        allCutRolls = filteredCutRolls;
+      }
       
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.width;
       const pageHeight = doc.internal.pageSize.height;
-      
-      // Group cut rolls by jumbo for organized PDF output
-      const jumboGroups = groupCutRollsByJumboWithSequential(filteredCutRolls);
       
       // Sort jumbo groups for consistent PDF ordering
       const sortedJumboEntries = Object.entries(jumboGroups).sort(([aId, aGroup], [bId, bGroup]) => {
@@ -1006,7 +1257,7 @@ export default function PlansPage() {
       doc.setFont('helvetica', 'normal');
       doc.text(`Generated on: ${new Date().toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}`, pageWidth / 2, yPosition, { align: 'center' });
       yPosition += 8;
-      doc.text(`Total Items: ${filteredCutRolls.length}`, pageWidth / 2, yPosition, { align: 'center' });
+      doc.text(`Total Items: ${allCutRolls.length}`, pageWidth / 2, yPosition, { align: 'center' });
       yPosition += 20;
       
       // Process each jumbo group in sorted order

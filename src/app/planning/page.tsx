@@ -1308,10 +1308,22 @@ export default function PlanningPage() {
       return;
     }
 
-    if (!planResult.summary) {
-      toast.error("Plan result is missing summary data");
+    // More flexible check - summary might be in different format
+    const summary = planResult.summary || {};
+    if (!summary && !planResult.jumbo_rolls_needed) {
+      toast.error("Plan result is missing required data");
       return;
     }
+
+    // Debug logging
+    console.log("🔍 DEBUG: Plan PDF Generation - planResult structure:", {
+      hasSummary: !!planResult.summary,
+      hasJumboRollsNeeded: !!planResult.jumbo_rolls_needed,
+      hasJumboRollDetails: !!(planResult.jumbo_roll_details && planResult.jumbo_roll_details.length > 0),
+      hasCutRollsGenerated: !!(planResult.cut_rolls_generated && planResult.cut_rolls_generated.length > 0),
+      summaryKeys: planResult.summary ? Object.keys(planResult.summary) : [],
+      planResultKeys: Object.keys(planResult)
+    });
 
     setGeneratingPDF(true);
     try {
@@ -1371,7 +1383,7 @@ export default function PlanningPage() {
       yPosition += 10;
 
       // Enhanced Jumbo Roll Summary Section
-      if (planResult.jumbo_rolls_needed > 0) {
+      if (planResult.jumbo_rolls_needed && planResult.jumbo_rolls_needed > 0) {
         checkPageBreak(40);
         pdf.setFontSize(16);
         pdf.setTextColor(40, 40, 40);
@@ -1383,26 +1395,33 @@ export default function PlanningPage() {
         pdf.setTextColor(60, 60, 60);
         pdf.text(`Total Virtual Jumbo Rolls: ${planResult.jumbo_rolls_needed}`, 15, yPosition);
         yPosition += 8;
-        
+
         // Enhanced statistics if jumbo details are available
-        if (planResult.summary.complete_jumbos !== undefined && planResult.summary.partial_jumbos !== undefined) {
-          pdf.text(`Ready Jumbos (1+ rolls): ${planResult.summary.complete_jumbos}`, 15, yPosition);
-          yPosition += 8;
-          pdf.text(`Empty Jumbos: ${planResult.summary.partial_jumbos}`, 15, yPosition);
+        if (summary.complete_jumbos !== undefined && summary.complete_jumbos !== null) {
+          pdf.text(`Ready Jumbos (1+ rolls): ${summary.complete_jumbos}`, 15, yPosition);
           yPosition += 8;
         }
-        
+        if (summary.partial_jumbos !== undefined && summary.partial_jumbos !== null) {
+          pdf.text(`Empty Jumbos: ${summary.partial_jumbos}`, 15, yPosition);
+          yPosition += 8;
+        }
+
         pdf.text(`Each jumbo roll contains 1-3 rolls of ${planningWidth}" width (flexible)`, 15, yPosition);
         yPosition += 8;
         pdf.text(`Total ${planningWidth}" rolls available: ${planResult.jumbo_rolls_needed}`, 15, yPosition);
         yPosition += 8;
-        
+
         // Efficiency metrics
-        const metrics = calculateEfficiencyMetrics(planResult.cut_rolls_generated);
-        pdf.text(`Overall Material Efficiency: ${metrics.averageEfficiency.toFixed(1)}%`, 15, yPosition);
-        yPosition += 8;
-        pdf.text(`Total Cut Rolls Generated: ${planResult.summary.total_cut_rolls}`, 15, yPosition);
-        yPosition += 10;
+        if (planResult.cut_rolls_generated && planResult.cut_rolls_generated.length > 0) {
+          const metrics = calculateEfficiencyMetrics(planResult.cut_rolls_generated);
+          pdf.text(`Overall Material Efficiency: ${metrics.averageEfficiency.toFixed(1)}%`, 15, yPosition);
+          yPosition += 8;
+        }
+        if (summary.total_cut_rolls) {
+          pdf.text(`Total Cut Rolls Generated: ${summary.total_cut_rolls}`, 15, yPosition);
+          yPosition += 8;
+        }
+        yPosition += 2;
       }
 
       // Enhanced: Jumbo Roll Hierarchy Section
@@ -1411,23 +1430,31 @@ export default function PlanningPage() {
       pdf.setTextColor(40, 40, 40);
       
       // Check if we have jumbo roll details for enhanced view
-      if (planResult.jumbo_roll_details && planResult.jumbo_roll_details.length > 0) {
+      const jumboDetails = planResult.jumbo_roll_details || [];
+      console.log("🔍 DEBUG: Jumbo roll details available:", {
+        hasJumboDetails: jumboDetails.length > 0,
+        jumboDetailsCount: jumboDetails.length,
+        jumboDetailsSample: jumboDetails.slice(0, 2) // Show first 2 items
+      });
+
+      if (Array.isArray(jumboDetails) && jumboDetails.length > 0) {
         pdf.text("Production Plan - Jumbo Roll Hierarchy", 15, yPosition);
         yPosition += 10;
 
         // Process jumbo roll details
-        (planResult.jumbo_roll_details || []).forEach((jumboDetail: JumboRollDetail) => {
+        jumboDetails.forEach((jumboDetail: any) => {
           if (!jumboDetail) return; // Skip if jumboDetail is null/undefined
-          
+
           checkPageBreak(40);
 
           // Jumbo Roll Header
           pdf.setFontSize(14);
           pdf.setTextColor(40, 40, 40);
-          pdf.text(`Jumbo Roll ${jumboDetail.jumbo_frontend_id || jumboDetail.jumbo_id || 'Unknown'}`, 15, yPosition);
+          const jumboId = jumboDetail.jumbo_frontend_id || jumboDetail.jumbo_id || 'Unknown';
+          pdf.text(`Jumbo Roll ${jumboId}`, 15, yPosition);
           yPosition += 8;
 
-          // Jumbo Roll Details
+          // Jumbo Roll Details - with defensive checks
           pdf.setFontSize(10);
           pdf.setTextColor(80, 80, 80);
           pdf.text(`Paper: ${jumboDetail.paper_spec || 'Unknown'}`, 25, yPosition);
@@ -1439,10 +1466,18 @@ export default function PlanningPage() {
           pdf.text(`Status: ${jumboDetail.is_complete ? 'Complete' : 'Partial'}`, 120, yPosition);
           yPosition += 12;
 
-          // Get cut rolls for this jumbo
-          const jumboRolls = (planResult.cut_rolls_generated || []).filter(roll => 
-            roll && roll.jumbo_roll_id === jumboDetail.jumbo_id
+          // Get cut rolls for this jumbo - with defensive checks
+          const cutRollsGenerated = planResult.cut_rolls_generated || [];
+          const jumboRolls = cutRollsGenerated.filter(roll =>
+            roll && (roll.jumbo_roll_id === jumboDetail.jumbo_id || roll.jumbo_id === jumboDetail.jumbo_id)
           );
+
+          console.log("🔍 DEBUG: Jumbo roll filtering:", {
+            jumboId: jumboDetail.jumbo_id,
+            totalCutRolls: cutRollsGenerated.length,
+            jumboRollsFound: jumboRolls.length,
+            jumboRollsSample: jumboRolls.slice(0, 3) // Show first 3 rolls
+          });
 
           // Group by 118" roll
           const roll118Groups = jumboRolls.reduce((groups, roll, index) => {
@@ -1487,10 +1522,20 @@ export default function PlanningPage() {
             let currentX = rectStartX;
 
             cutsInRoll.forEach((roll) => {
-              // Add safety checks for undefined values
-              const rollWidth = roll.width || 0;
+              // Add safety checks for undefined values - use multiple possible width fields
+              const rollWidth = roll.width_inches || roll.width || roll.target_width || 0;
               const rollOriginalIndex = roll.originalIndex ?? -1;
-              
+
+              // Debug log for troubleshooting
+              console.log("🔍 DEBUG: Roll data for visual:", {
+                originalIndex: rollOriginalIndex,
+                width: roll.width,
+                width_inches: roll.width_inches,
+                target_width: roll.target_width,
+                rollId: roll.id,
+                rollKey: roll.key
+              });
+
               const widthRatio = rollWidth / planningWidth;
               const sectionWidth = rectWidth * widthRatio;
               const isSelected = selectedCutRolls.includes(rollOriginalIndex);
@@ -1991,7 +2036,7 @@ export default function PlanningPage() {
   };
 
   const generateBarcodesPDF = async () => {
-    if (productionRecords.length === 0) {
+    if (productionHierarchy.length === 0) {
       toast.error("No production records available to generate barcode labels PDF");
       return;
     }
@@ -2022,20 +2067,14 @@ export default function PlanningPage() {
       doc.setFont('helvetica', 'normal');
       doc.text(`Generated on: ${new Date().toLocaleString()}`, pageWidth / 2, yPosition, { align: 'center' });
       yPosition += 8;
-      doc.text(`Total Items: ${productionRecords.length}`, pageWidth / 2, yPosition, { align: 'center' });
-      yPosition += 20;
-      
-      // Group records by jumbo roll for PDF
-      const recordsByJumbo = productionRecords.reduce((groups, record) => {
-        const jumboId = record.jumbo_roll_id || record.jumbo_frontend_id || 'Unknown';
-        if (!groups[jumboId]) {
-          groups[jumboId] = [];
-        }
-        groups[jumboId].push(record);
-        return groups;
-      }, {} as Record<string, ProductionRecord[]>);
 
-      Object.entries(recordsByJumbo).forEach(([jumboId, records]) => {
+      // Calculate total cut rolls from hierarchy
+      const totalCutRolls = productionHierarchy.reduce((acc, jumbo) => acc + jumbo.cut_rolls.length, 0);
+      doc.text(`Total Cut Rolls: ${totalCutRolls}`, pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 20;
+
+      // Process each jumbo group from hierarchy
+      productionHierarchy.forEach((jumboGroup) => {
         // Check if we need a new page for jumbo header
         if (itemCount >= itemsPerPage || yPosition > pageHeight - 80) {
           doc.addPage();
@@ -2045,16 +2084,17 @@ export default function PlanningPage() {
         }
 
         // Jumbo Roll Header in PDF
+        const jumboBarcode = jumboGroup.jumbo_roll?.barcode_id || 'Unknown';
         doc.setFontSize(14);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(40, 40, 40);
-        doc.text(`Jumbo Roll: ${jumboId}`, pageWidth / 2, yPosition, { align: 'center' });
+        doc.text(`Jumbo Roll: ${jumboBarcode}`, pageWidth / 2, yPosition, { align: 'center' });
         yPosition += 8;
-        
+
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(100, 100, 100);
-        doc.text(`${records.length} cut rolls in this jumbo`, pageWidth / 2, yPosition, { align: 'center' });
+        doc.text(`${jumboGroup.cut_rolls.length} cut rolls in this jumbo`, pageWidth / 2, yPosition, { align: 'center' });
         yPosition += 10;
 
         // Add separator line
@@ -2064,7 +2104,7 @@ export default function PlanningPage() {
         yPosition += 10;
 
         // Process cut rolls under this jumbo
-        records.forEach((record, index) => {
+        jumboGroup.cut_rolls.forEach((cutRoll, index) => {
           // Check if we need a new page
           if (itemCount >= itemsPerPage || yPosition > pageHeight - 60) {
             doc.addPage();
@@ -2073,7 +2113,7 @@ export default function PlanningPage() {
             itemCount = 0;
           }
 
-          const barcodeValue = record.barcode_id || record.qr_code;
+          const barcodeValue = cutRoll.barcode_id;
           
           // Generate and add barcode image
           try {
@@ -2100,11 +2140,12 @@ export default function PlanningPage() {
           doc.setFontSize(10);
           doc.setFont('helvetica', 'normal');
           doc.setTextColor(0, 0, 0);
-          doc.text(`${record.gsm}gsm, BF:${record.bf}, ${record.shade}`, pageWidth / 2, yPosition, { align: 'center' });
+          const paperSpecs = cutRoll.paper_specs || {};
+          doc.text(`${paperSpecs.gsm}gsm, BF:${paperSpecs.bf}, ${paperSpecs.shade}`, pageWidth / 2, yPosition, { align: 'center' });
           yPosition += 12;
 
           // Separation line between cut rolls (not after last item in jumbo)
-          if (index < records.length - 1) {
+          if (index < jumboGroup.cut_rolls.length - 1) {
             doc.setDrawColor(150, 150, 150);
             doc.setLineWidth(0.5);
             doc.line(marginX + 20, yPosition, pageWidth - marginX - 20, yPosition);
