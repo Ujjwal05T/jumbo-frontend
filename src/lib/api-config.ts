@@ -150,6 +150,7 @@ export const ROLL_TRACKING_ENDPOINTS = {
   TRACK_ROLL: (identifier: string) => `${API_BASE_URL}/track/roll/${encodeURIComponent(identifier)}`,
   SEARCH_ROLLS: `${API_BASE_URL}/track/search`,
   SEARCH_BY_SPECS: `${API_BASE_URL}/track/search-by-specs`,
+  TRACK_HIERARCHY: (barcode: string) => `${API_BASE_URL}/track/hierarchy/${encodeURIComponent(barcode)}`,
 };
 
 /**

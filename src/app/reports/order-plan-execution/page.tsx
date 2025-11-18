@@ -240,11 +240,13 @@ export default function OrderPlanExecutionPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Clients</SelectItem>
-                    {availableClients.map((client) => (
+                    {availableClients
+                      .sort((a, b) => a.company_name.localeCompare(b.company_name))
+                      .map((client) => (
                       <SelectItem key={client.id} value={client.id}>
                         {client.company_name}
                       </SelectItem>
-                    ))}
+                      ))}
                   </SelectContent>
                 </Select>
               </div>

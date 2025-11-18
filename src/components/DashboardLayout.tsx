@@ -8,12 +8,12 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuSeparator, 
-  DropdownMenuTrigger 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import {
   LayoutDashboard,
@@ -35,7 +35,8 @@ import {
   Package,
   Database,
   Clock,
-  Weight
+  Weight,
+  Barcode
 } from "lucide-react";
 import { getCurrentUser, logout } from "@/lib/auth";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -135,6 +136,12 @@ const getNavigationForRole = (role: string | null) => {
       roles: ["admin", "production"],
     },
     {
+      name: "Barcode Lookup",
+      href: "/barcode-lookup",
+      icon: Barcode,
+      roles: ["admin"],
+    },
+    {
       name: "Reports",
       icon: BarChart3,
       roles: ["admin", "production", "accountant", "dispatch"],
@@ -174,6 +181,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>(["Masters"]);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const [barcodeQuery, setBarcodeQuery] = useState("");
   const pathname = usePathname();
   const router = useRouter();
   const user = getCurrentUser();

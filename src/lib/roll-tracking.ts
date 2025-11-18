@@ -289,3 +289,124 @@ export async function searchRollsBySpecifications(
 
   return response.json();
 }
+
+// Hierarchy tracking interfaces
+export interface CutRollInfo {
+  id: string;
+  barcode_id: string;
+  width_inches: number;
+  weight_kg: number;
+  status: string;
+  location: string;
+  is_wastage_roll: boolean;
+  created_at: string;
+  paper_specs?: {
+    name: string;
+    gsm: number;
+    bf: number;
+    shade: string;
+  };
+}
+
+export interface IntermediateRollInfo {
+  id: string;
+  barcode_id: string;
+  frontend_id?: string;
+  individual_roll_number?: number;
+  roll_sequence?: number;
+  width_inches: number;
+  weight_kg: number;
+  status: string;
+  location: string;
+  cut_rolls: CutRollInfo[];
+  cut_rolls_count: number;
+}
+
+export interface JumboRollInfo {
+  id: string;
+  barcode_id: string;
+  frontend_id?: string;
+  width_inches: number;
+  weight_kg: number;
+  status: string;
+  location: string;
+  paper_specs?: {
+    name: string;
+    gsm: number;
+    bf: number;
+    shade: string;
+  };
+}
+
+export interface SetRollInfo {
+  id: string;
+  barcode_id: string;
+  individual_roll_number?: number;
+  roll_sequence?: number;
+  status: string;
+  cut_rolls_count?: number;
+  is_current_parent?: boolean;
+}
+
+export interface JumboHierarchy {
+  jumbo_roll: JumboRollInfo;
+  intermediate_rolls: IntermediateRollInfo[];
+  total_cut_rolls: number;
+  total_sets: number;
+}
+
+export interface SetHierarchy {
+  parent_jumbo_roll: JumboRollInfo | null;
+  current_set_roll: IntermediateRollInfo;
+  cut_rolls_from_this_set: CutRollInfo[];
+  sibling_sets: SetRollInfo[];
+  total_cut_rolls: number;
+}
+
+export interface CutRollHierarchy {
+  parent_jumbo_roll: JumboRollInfo | null;
+  parent_set_roll: SetRollInfo | null;
+  current_cut_roll: CutRollInfo;
+  sibling_cut_rolls: CutRollInfo[];
+  all_sets_from_jumbo: SetRollInfo[];
+}
+
+export interface HierarchyTrackingResponse {
+  searched_barcode: string;
+  roll_type: 'jumbo' | '118' | 'cut';
+  hierarchy: JumboHierarchy | SetHierarchy | CutRollHierarchy;
+  searched_roll_info: {
+    id: string;
+    barcode_id: string;
+    qr_code?: string;
+    frontend_id?: string;
+    width_inches: number;
+    weight_kg: number;
+    roll_type: string;
+    status: string;
+    location: string;
+    individual_roll_number?: number;
+    roll_sequence?: number;
+    is_wastage_roll: boolean;
+    created_at: string;
+    paper_specs?: {
+      paper_id: string;
+      name: string;
+      gsm: number;
+      bf: number;
+      shade: string;
+      type: string;
+    };
+  };
+}
+
+export async function trackRollHierarchy(barcode: string): Promise<HierarchyTrackingResponse> {
+  const response = await fetch(ROLL_TRACKING_ENDPOINTS.TRACK_HIERARCHY(barcode), createRequestOptions('GET'));
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    throw { response: { status: response.status, data: errorData } };
+  }
+
+  return response.json();
+}

@@ -58,6 +58,7 @@ export interface CutRoll {
   client_id?: string;
   paper_id?: string;
   source_type?: string;
+  jumbo_id?: string;
   source_pending_id?: string | UUID; // For pending orders
   
   // Enhanced jumbo roll hierarchy fields

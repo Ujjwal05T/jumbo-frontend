@@ -35,6 +35,12 @@ export default function Navbar() {
               >
                 Roll Tracking
               </Link>
+              <Link
+                href="/barcode-lookup"
+                className="px-3 py-2 rounded hover:bg-gray-700 transition-colors"
+              >
+                Barcode Lookup
+              </Link>
               <span className="text-gray-300">Welcome, {user}</span>
               <LogoutButton />
             </>

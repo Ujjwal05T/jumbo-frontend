@@ -1184,19 +1184,19 @@ export default function PlanningPage() {
       }
 
       const result = await response.json();
-      console.log("🔍 BACKEND RESPONSE:", result);
-      console.log("🗑️ WASTAGE CREATED:", result.summary?.wastage_items_created || 0);
-      console.log("🔍 PRODUCTION HIERARCHY FROM RESPONSE:", result.production_hierarchy);
-      console.log("🔍 TYPEOF PRODUCTION HIERARCHY:", typeof result.production_hierarchy);
-      console.log("🔍 KEYS IN RESPONSE:", Object.keys(result));
+      // console.log("🔍 BACKEND RESPONSE:", result);
+      // console.log("🗑️ WASTAGE CREATED:", result.summary?.wastage_items_created || 0);
+      // console.log("🔍 PRODUCTION HIERARCHY FROM RESPONSE:", result.production_hierarchy);
+      // console.log("🔍 TYPEOF PRODUCTION HIERARCHY:", typeof result.production_hierarchy);
+      // console.log("🔍 KEYS IN RESPONSE:", Object.keys(result));
 
       // Use simplified hierarchical data from backend
       const backendProductionHierarchy = result.production_hierarchy || [];
       const backendWastageItems = result.wastage_items || [];
 
-      console.log('🎯 FINAL PRODUCTION HIERARCHY:', backendProductionHierarchy);
-      console.log('🎯 FINAL PRODUCTION HIERARCHY LENGTH:', backendProductionHierarchy.length);
-      console.log('🗑️ WASTAGE ITEMS:', backendWastageItems);
+      // console.log('🎯 FINAL PRODUCTION HIERARCHY:', backendProductionHierarchy);
+      // console.log('🎯 FINAL PRODUCTION HIERARCHY LENGTH:', backendProductionHierarchy.length);
+      // console.log('🗑️ WASTAGE ITEMS:', backendWastageItems);
 
       // Set state for new hierarchical display
       setProductionHierarchy(backendProductionHierarchy);
@@ -1218,7 +1218,7 @@ export default function PlanningPage() {
         })) || []
       );
 
-      console.log('🔍 DEBUG Final production records:', productionRecords);
+      // console.log('🔍 DEBUG Final production records:', productionRecords);
 
       setProductionRecords(productionRecords);
       setActiveTab("production");
@@ -1239,13 +1239,13 @@ export default function PlanningPage() {
       
       toast.success(successMessage);
 
-      console.log("✅ Production started successfully with comprehensive status updates:", {
-        planId: currentPlanId,
-        updatedOrders: result.summary.orders_updated,
-        updatedOrderItems: result.summary.order_items_updated,
-        updatedPendingOrders: result.summary.pending_orders_updated,
-        inventoryCreated: result.summary.inventory_created
-      });
+      // console.log("✅ Production started successfully with comprehensive status updates:", {
+      //   planId: currentPlanId,
+      //   updatedOrders: result.summary.orders_updated,
+      //   updatedOrderItems: result.summary.order_items_updated,
+      //   updatedPendingOrders: result.summary.pending_orders_updated,
+      //   inventoryCreated: result.summary.inventory_created
+      // });
 
     } catch (err) {
       const errorMessage = err instanceof Error
@@ -1259,22 +1259,6 @@ export default function PlanningPage() {
     }
   };
 
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case "selected":
-        return "outline";
-      case "in_production":
-        return "secondary";
-      case "completed":
-        return "default";
-      case "quality_check":
-        return "destructive";
-      case "delivered":
-        return "default";
-      default:
-        return "outline";
-    }
-  };
 
   const toggleRollSetExpansion = (specKey: string, rollNumber: string) => {
     const key = `${specKey}-${rollNumber}`;
@@ -1299,8 +1283,6 @@ export default function PlanningPage() {
       return newSet;
     });
   };
-
-  // REMOVED: handleRollSetSelection - only jumbo-level selection now
 
   const generatePDF = async () => {
     if (!planResult) {
@@ -1521,7 +1503,7 @@ export default function PlanningPage() {
             const rectHeight = 12;
             let currentX = rectStartX;
 
-            cutsInRoll.forEach((roll) => {
+            cutsInRoll.forEach((roll:any) => {
               // Add safety checks for undefined values - use multiple possible width fields
               const rollWidth = roll.width_inches || roll.width || roll.target_width || 0;
               const rollOriginalIndex = roll.originalIndex ?? -1;
@@ -2104,7 +2086,7 @@ export default function PlanningPage() {
         yPosition += 10;
 
         // Process cut rolls under this jumbo
-        jumboGroup.cut_rolls.forEach((cutRoll, index) => {
+        jumboGroup.cut_rolls.forEach((cutRoll:any, index:number) => {
           // Check if we need a new page
           if (itemCount >= itemsPerPage || yPosition > pageHeight - 60) {
             doc.addPage();
@@ -2136,12 +2118,14 @@ export default function PlanningPage() {
             yPosition += 12;
           }
 
-          // Paper specifications
+          // Paper specifications - use the string format directly
           doc.setFontSize(10);
           doc.setFont('helvetica', 'normal');
           doc.setTextColor(0, 0, 0);
-          const paperSpecs = cutRoll.paper_specs || {};
-          doc.text(`${paperSpecs.gsm}gsm, BF:${paperSpecs.bf}, ${paperSpecs.shade}`, pageWidth / 2, yPosition, { align: 'center' });
+
+          // paper_spec is already a formatted string like "140gsm, 16.00bf, GOLDEN"
+          const paperSpec = cutRoll.paper_spec || 'N/A';
+          doc.text(paperSpec, pageWidth / 2, yPosition, { align: 'center' });
           yPosition += 12;
 
           // Separation line between cut rolls (not after last item in jumbo)
@@ -3380,9 +3364,9 @@ export default function PlanningPage() {
                 <CardHeader>
                   <div className="flex justify-between items-center">
                     <div>
-                      <CardTitle>Production Hierarchy</CardTitle>
+                      <CardTitle>Production </CardTitle>
                       <CardDescription>
-                        Jumbo rolls with their associated cut rolls and wastage items
+                        Jumbo rolls with their associated cut rolls and stock items
                       </CardDescription>
                     </div>
                     <Button
@@ -3431,66 +3415,52 @@ export default function PlanningPage() {
                           )}
                         </div>
 
-                        {/* Intermediate 118" Rolls (Optional Display) */}
-                        {jumboGroup.intermediate_rolls && jumboGroup.intermediate_rolls.length > 0 && (
-                          <div className="ml-8 mb-3 p-2 bg-blue-50 rounded border-l-4 border-blue-200">
-                            <div className="text-sm font-medium text-blue-700 mb-1">
-                              118" Intermediate Rolls:
-                            </div>
-                            <div className="text-xs text-blue-600">
-                              {jumboGroup.intermediate_rolls.map((roll: any, idx: number) => (
-                                <span key={idx} className="mr-3">
-                                  {roll.barcode_id} (Roll #{roll.individual_roll_number})
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
                         {/* Cut Rolls */}
-                        <div className="ml-8 space-y-2">
+                        <div className="space-y-2">
                           <div className="text-sm font-medium text-gray-700">Cut Rolls:</div>
+                          <div className="overflow-x-auto">
                           <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="w-24">Barcode</TableHead>
-                                <TableHead>Width (in)</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Parent 118" Roll</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {jumboGroup.cut_rolls.map((cutRoll: any, idx: number) => (
-                                <TableRow key={idx} className="border-l-4 border-green-200">
-                                  <TableCell>
-                                    <div className="flex items-center gap-2">
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => {
-                                          setBarcodeModalLoading(true);
-                                          setSelectedBarcode(cutRoll.barcode_id);
-                                          setTimeout(() => setBarcodeModalLoading(false), 300);
-                                        }}
-                                        aria-label={`View barcode for ${cutRoll.barcode_id}`}>
-                                        <ScanLine className="h-4 w-4" />
-                                      </Button>
-                                      <code className="text-sm">{cutRoll.barcode_id}</code>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>{cutRoll.width_inches}&quot;</TableCell>
-                                  <TableCell>
-                                    <Badge variant={cutRoll.status === 'ready' ? 'default' : 'secondary'}>
-                                      {cutRoll.status}
-                                    </Badge>
-                                  </TableCell>
-                                  <TableCell className="text-xs text-muted-foreground">
-                                    {cutRoll.parent_118_roll_barcode || 'N/A'}
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
+                          <TableHeader>
+                            <TableRow>
+                            <TableHead>Barcode</TableHead>
+                            <TableHead>Width (in)</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Parent Roll</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {jumboGroup.cut_rolls.map((cutRoll: any, idx: number) => (
+                            <TableRow key={idx} className="border-l-4 border-green-200">
+                            <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                              setBarcodeModalLoading(true);
+                              setSelectedBarcode(cutRoll.barcode_id);
+                              setTimeout(() => setBarcodeModalLoading(false), 300);
+                              }}
+                              aria-label={`View barcode for ${cutRoll.barcode_id}`}>
+                              <ScanLine className="h-4 w-4" />
+                              </Button>
+                              <code className="text-sm">{cutRoll.barcode_id}</code>
+                            </div>
+                            </TableCell>
+                            <TableCell>{cutRoll.width_inches}&quot;</TableCell>
+                            <TableCell>
+                            <Badge variant={cutRoll.status === 'ready' ? 'default' : 'secondary'}>
+                              {cutRoll.status}
+                            </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                            {cutRoll.parent_118_roll_barcode || 'N/A'}
+                            </TableCell>
+                            </TableRow>
+                            ))}
+                          </TableBody>
                           </Table>
+                          </div>
                         </div>
                       </div>
                     ))}

@@ -47,6 +47,39 @@ import { RollbackApiService } from "@/lib/rollback-api";
 import jsPDF from 'jspdf';
 import JsBarcode from 'jsbarcode';
 
+// Helper functions to transform old hex-based IDs to user-friendly format
+const transformJumboIdToDisplay = (barcode: string, index: number): string => {
+  // Check if it's an old hex-based ID (VJB_XXX, VIRTUAL_JUMBO_XXX or contains hex patterns)
+  if (!barcode || barcode === 'Unknown Jumbo') return barcode;
+
+  // If it's already in the new format (JR_XXXXX), return as is
+  if (barcode.startsWith('JR_')) return barcode;
+
+  // If it's old hex format (VJB_XXX, VIRTUAL_JUMBO_XXX or hex-only pattern), convert to JR_0001 format
+  if (barcode.startsWith('VJB_') || barcode.includes('VIRTUAL_JUMBO') || /^[A-F0-9]{8}$/i.test(barcode)) {
+    return `JR_${String(index + 1).padStart(4, '0')}`;
+  }
+
+  // Return as is for any other format
+  return barcode;
+};
+
+const transformSetIdToDisplay = (setBarcode: string, setIndex: number): string => {
+  // Check if it's an old hex-based ID
+  if (!setBarcode || setBarcode === 'Unknown SET') return setBarcode;
+
+  // If it's already in the new format (SET_XXXXX), return it with "Set #" prefix
+  if (setBarcode.startsWith('SET_')) return setBarcode;
+
+  // If it's old hex format (V118_XXX, VIRTUAL_118_XXX or hex-only pattern), convert to Set #1, Set #2, etc.
+  if (setBarcode.startsWith('V118_') || setBarcode.includes('VIRTUAL_118') || /^[A-F0-9]{8}$/i.test(setBarcode)) {
+    return `Set #${setIndex}`;
+  }
+
+  // Return as is for any other format
+  return setBarcode;
+};
+
 // Sequential transformation function to convert "INV-367" format to "JR-001", "JR-002", etc.
 const transformJumboId = (jumboFrontendId: string | undefined, allJumboIds: string[]): string => {
   if (!jumboFrontendId) return "Unknown";
@@ -427,14 +460,17 @@ export default function PlanDetailsPage() {
     const items:any[] = [];
 
     // Add cut rolls from hierarchy
-    productionHierarchy.forEach((jumboGroup: any) => {
+    productionHierarchy.forEach((jumboGroup: any, jumboIndex: number) => {
+      const rawJumboBarcode = jumboGroup.jumbo_roll?.barcode_id;
+      const transformedJumboId = transformJumboIdToDisplay(rawJumboBarcode || '', jumboIndex);
+
       jumboGroup.cut_rolls?.forEach((cutRoll: any) => {
         items.push({
           ...cutRoll,
           groupType: 'production',
-          jumboBarcode: jumboGroup.jumbo_roll?.barcode_id,
+          jumboBarcode: rawJumboBarcode,
           jumboLocation: jumboGroup.jumbo_roll?.location,
-          groupIdentifier: jumboGroup.jumbo_roll?.barcode_id
+          groupIdentifier: transformedJumboId  // Use transformed ID for display
         });
       });
     });
@@ -1078,27 +1114,20 @@ export default function PlanDetailsPage() {
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(40, 40, 40);
-    doc.text(`Cut Rolls Details (${filteredCutRolls.length} items)`, margin, yPosition);
+
+    // Calculate total cut rolls from hierarchy
+    const totalCutRolls = productionHierarchy.reduce((sum, jumboGroup) =>
+      sum + (jumboGroup.cut_rolls?.length || 0), 0) + wastageItems.length;
+
+    doc.text(`Cut Rolls Details (${totalCutRolls} items)`, margin, yPosition);
     yPosition += 12;
 
-    if (filteredCutRolls.length > 0) {
-      // Group by jumbo rolls and sort them
-      const jumboGroups = groupCutRollsByJumboWithSequential(filteredCutRolls);
-      const sortedJumboEntries = Object.entries(jumboGroups).sort(([aId, aGroup], [bId, bGroup]) => {
-        const aDisplayId = aGroup.displayId;
-        const bDisplayId = bGroup.displayId;
-        
-        if (aDisplayId === 'Ungrouped Items' || aDisplayId === 'Cut Rolls from Stock') return 1;
-        if (bDisplayId === 'Ungrouped Items' || bDisplayId === 'Cut Rolls from Stock') return -1;
-        
-        const aNum = parseInt(aDisplayId.replace('JR-', '')) || 0;
-        const bNum = parseInt(bDisplayId.replace('JR-', '')) || 0;
-        
-        return aNum - bNum;
-      });
-      
-      sortedJumboEntries.forEach(([originalJumboId, jumboGroup]) => {
-        const { displayId: jumboDisplayName, rolls: jumboRolls } = jumboGroup;
+    if (productionHierarchy.length > 0 || wastageItems.length > 0) {
+      // Process production hierarchy (jumbo rolls with cut rolls)
+      productionHierarchy.forEach((jumboGroup, jumboIndex) => {
+        const rawJumboBarcode = jumboGroup.jumbo_roll?.barcode_id;
+        const jumboDisplayName = transformJumboIdToDisplay(rawJumboBarcode || '', jumboIndex);
+        const jumboRolls = jumboGroup.cut_rolls || [];
         
         // Jumbo group header with paper specs
         checkPageBreak(30);
@@ -1106,11 +1135,13 @@ export default function PlanDetailsPage() {
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(40, 40, 40);
         
-        // Get paper specs from first roll (since all rolls in jumbo have same specs)
-        const paperSpecs = jumboRolls[0]?.paper_specs 
+        // Get paper specs from jumbo roll or first cut roll
+        const paperSpecs = jumboGroup.jumbo_roll?.paper_specs
+          ? `(${jumboGroup.jumbo_roll.paper_specs.gsm}gsm, BF:${jumboGroup.jumbo_roll.paper_specs.bf}, ${jumboGroup.jumbo_roll.paper_specs.shade})`
+          : jumboRolls[0]?.paper_specs
           ? `(${jumboRolls[0].paper_specs.gsm}gsm, BF:${jumboRolls[0].paper_specs.bf}, ${jumboRolls[0].paper_specs.shade})`
           : '';
-        
+
         doc.text(`${jumboDisplayName} ${paperSpecs} - ${jumboRolls.length} rolls`, margin, yPosition);
         yPosition += 10;
 
@@ -1147,20 +1178,20 @@ export default function PlanDetailsPage() {
         doc.setTextColor(60, 60, 60);
         
         jumboRolls
-          .sort((a, b) => {
+          .sort((a: any, b: any) => {
             const aRollNum = a.individual_roll_number || 999;
             const bRollNum = b.individual_roll_number || 999;
             if (aRollNum !== bRollNum) return aRollNum - bRollNum;
-            
+
             if (a.width_inches !== b.width_inches) {
               return a.width_inches - b.width_inches;
             }
-            
+
             const aCode = a.barcode_id || a.qr_code;
             const bCode = b.barcode_id || b.qr_code;
             return aCode.localeCompare(bCode);
           })
-          .forEach((roll, rollIndex) => {
+          .forEach((roll: any, rollIndex: any) => {
           checkPageBreak(8);
           
           if (rollIndex % 2 === 1) {
@@ -1204,9 +1235,106 @@ export default function PlanDetailsPage() {
           });
           yPosition += 8;
         });
-        
+
         yPosition += 8; // Space between jumbo groups
       });
+
+      // Add wastage items section if exists
+      if (wastageItems.length > 0) {
+        // Wastage group header
+        checkPageBreak(30);
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(40, 40, 40);
+        doc.text(`Cut Rolls from Stock - ${wastageItems.length} rolls`, margin, yPosition);
+        yPosition += 10;
+
+        // Table headers for wastage rolls
+        const rollTableHeaders = ['Barcode', 'Width', 'Status', 'Client', 'Weight'];
+        const rollColWidths = [45, 20, 30, 35, 30];
+
+        doc.setFillColor(248, 249, 250);
+        doc.rect(margin, yPosition - 2, pageWidth - (margin * 2), 10, 'F');
+        doc.setDrawColor(100, 100, 100);
+        doc.setLineWidth(0.5);
+        doc.rect(margin, yPosition - 2, pageWidth - (margin * 2), 10, 'S');
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(40, 40, 40);
+
+        // Add column separators
+        let colX = margin;
+        for (let i = 0; i < rollColWidths.length - 1; i++) {
+          colX += rollColWidths[i];
+          doc.line(colX, yPosition - 2, colX, yPosition + 8);
+        }
+
+        let xPos = margin + 2;
+        rollTableHeaders.forEach((header, index) => {
+          doc.text(header, xPos, yPosition + 5);
+          xPos += rollColWidths[index];
+        });
+        yPosition += 10;
+
+        // Wastage roll data rows
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(60, 60, 60);
+
+        wastageItems
+          .sort((a: any, b: any) => {
+            if (a.width_inches !== b.width_inches) {
+              return a.width_inches - b.width_inches;
+            }
+            const aCode = a.barcode_id || a.qr_code;
+            const bCode = b.barcode_id || b.qr_code;
+            return aCode.localeCompare(bCode);
+          })
+          .forEach((roll: any, rollIndex: any) => {
+            checkPageBreak(8);
+
+            if (rollIndex % 2 === 1) {
+              doc.setFillColor(252, 252, 252);
+              doc.rect(margin, yPosition - 1, pageWidth - (margin * 2), 8, 'F');
+            }
+
+            // Row border
+            doc.setDrawColor(100, 100, 100);
+            doc.setLineWidth(0.3);
+            doc.rect(margin, yPosition - 1, pageWidth - (margin * 2), 8, 'S');
+
+            // Column separators
+            let colX = margin;
+            for (let i = 0; i < rollColWidths.length - 1; i++) {
+              colX += rollColWidths[i];
+              doc.line(colX, yPosition - 1, colX, yPosition + 7);
+            }
+
+            const rollData = [
+              roll.barcode_id || roll.qr_code,
+              `${roll.width_inches}"`,
+              roll.status.replace('_', ' '),
+              roll.client_name || 'Unknown',
+              roll.weight_kg === 0 ? '' : `${roll.weight_kg}kg`
+            ];
+
+            let xPos = margin + 2;
+            rollData.forEach((cell, cellIndex) => {
+              // Truncate long text to fit column width
+              let displayText = cell;
+              if (cellIndex === 0 && cell.length > 15) { // Barcode column
+                displayText = cell.substring(0, 12) + '...';
+              } else if (cellIndex === 3 && cell.length > 25) { // Client column
+                displayText = cell.substring(0, 9) + '...';
+              }
+
+              doc.setFontSize(7);
+              doc.text(displayText, xPos, yPosition + 4);
+              xPos += rollColWidths[cellIndex];
+            });
+            yPosition += 8;
+          });
+      }
     } else {
       doc.setFontSize(10);
       doc.setTextColor(100, 100, 100);
@@ -1587,12 +1715,13 @@ export default function PlanDetailsPage() {
         yPosition += 15;
       } else {
         // Process each jumbo roll from production hierarchy
-        productionHierarchy.forEach((jumboGroup, index) => {
-          const jumboDisplayId = jumboGroup.jumbo_roll?.barcode_id || 'Unknown Jumbo';
+        productionHierarchy.forEach((jumboGroup, jumboIndex) => {
+          const rawJumboBarcode = jumboGroup.jumbo_roll?.barcode_id || 'Unknown Jumbo';
+          const jumboDisplayId = transformJumboIdToDisplay(rawJumboBarcode, jumboIndex);
           const jumboRolls = jumboGroup.cut_rolls || [];
-          
+
           // Add new page for each jumbo roll (except the first one)
-          if (index > -1) {
+          if (jumboIndex > -1) {
             doc.addPage();
             yPosition = 30; // Top margin to leave space for stapling
           }
@@ -1655,15 +1784,15 @@ export default function PlanDetailsPage() {
           });
 
           // LEVEL 2: INDIVIDUAL 118" ROLL (SET) SUB-HEADERS + LEVEL 3: VISUAL PATTERNS
-          let set_index = 1;
-          sortedSetEntries.forEach(([setBarcode, rollsInSet]: [any, any]) => {
+          sortedSetEntries.forEach(([setBarcode, rollsInSet]: [any, any], setIndex) => {
             checkPageBreak(80);
 
             // LEVEL 2: SET Roll Sub-header (Set #1, Set #2, etc.)
             doc.setFontSize(14);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(60, 60, 60);
-            const rollTitle = setBarcode === "Unknown SET" ? "Unassigned Roll" : `${setBarcode} (${rollsInSet.length} cuts)`;
+            const transformedSetId = transformSetIdToDisplay(setBarcode, setIndex + 1);
+            const rollTitle = setBarcode === "Unknown SET" ? "Unassigned Roll" : `${transformedSetId} (${rollsInSet.length} cuts)`;
             doc.text(rollTitle, 35, yPosition);
             yPosition += 12;
 
