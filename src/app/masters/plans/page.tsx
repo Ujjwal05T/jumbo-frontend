@@ -406,8 +406,23 @@ export default function PlansPage() {
     console.log('🔍 Processing Hierarchical Data for PDF:');
     console.log('- productionHierarchy length:', productionHierarchy.length);
 
+    // Helper function to extract numeric value from jumbo roll ID for sorting
+    const extractJumboRollNumber = (barcodeId: string): number => {
+      if (!barcodeId) return 999999; // Put items without barcode at the end
+      // Handle both JR_ and JR- formats
+      const match = barcodeId.match(/JR[_-](\d+)/i);
+      return match ? parseInt(match[1], 10) : 999999;
+    };
+
+    // Sort production hierarchy by jumbo roll number (JR_0002, JR_0003, JR_0007, etc.)
+    const sortedProductionHierarchy = [...productionHierarchy].sort((a: any, b: any) => {
+      const numA = extractJumboRollNumber(a.jumbo_roll?.barcode_id);
+      const numB = extractJumboRollNumber(b.jumbo_roll?.barcode_id);
+      return numA - numB;
+    });
+
     // Process production hierarchy
-    productionHierarchy.forEach((jumboGroup, jumboIndex) => {
+    sortedProductionHierarchy.forEach((jumboGroup, jumboIndex) => {
       const jumboRoll = jumboGroup.jumbo_roll;
       const jumboDisplayId =  jumboRoll.barcode_id;
 

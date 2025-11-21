@@ -459,8 +459,23 @@ export default function PlanDetailsPage() {
   const allProductionItems = useMemo(() => {
     const items:any[] = [];
 
+    // Helper function to extract numeric value from jumbo roll ID for sorting
+    const extractJumboRollNumber = (barcodeId: string): number => {
+      if (!barcodeId) return 999999; // Put items without barcode at the end
+      // Handle both JR_ and JR- formats
+      const match = barcodeId.match(/JR[_-](\d+)/i);
+      return match ? parseInt(match[1], 10) : 999999;
+    };
+
+    // Sort production hierarchy by jumbo roll number (JR_0002, JR_0003, JR_0007, etc.)
+    const sortedProductionHierarchy = [...productionHierarchy].sort((a: any, b: any) => {
+      const numA = extractJumboRollNumber(a.jumbo_roll?.barcode_id);
+      const numB = extractJumboRollNumber(b.jumbo_roll?.barcode_id);
+      return numA - numB;
+    });
+
     // Add cut rolls from hierarchy
-    productionHierarchy.forEach((jumboGroup: any, jumboIndex: number) => {
+    sortedProductionHierarchy.forEach((jumboGroup: any, jumboIndex: number) => {
       const rawJumboBarcode = jumboGroup.jumbo_roll?.barcode_id;
       const transformedJumboId = transformJumboIdToDisplay(rawJumboBarcode || '', jumboIndex);
 
@@ -935,6 +950,20 @@ export default function PlanDetailsPage() {
       return;
     }
 
+    // Helper function to extract numeric value from jumbo roll ID for sorting
+    const extractJumboRollNumber = (barcodeId: string): number => {
+      if (!barcodeId) return 999999;
+      const match = barcodeId.match(/JR[_-](\d+)/i);
+      return match ? parseInt(match[1], 10) : 999999;
+    };
+
+    // Sort production hierarchy by jumbo roll number
+    const sortedProductionHierarchy = [...productionHierarchy].sort((a: any, b: any) => {
+      const numA = extractJumboRollNumber(a.jumbo_roll?.barcode_id);
+      const numB = extractJumboRollNumber(b.jumbo_roll?.barcode_id);
+      return numA - numB;
+    });
+
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -1116,15 +1145,15 @@ export default function PlanDetailsPage() {
     doc.setTextColor(40, 40, 40);
 
     // Calculate total cut rolls from hierarchy
-    const totalCutRolls = productionHierarchy.reduce((sum, jumboGroup) =>
+    const totalCutRolls = sortedProductionHierarchy.reduce((sum, jumboGroup) =>
       sum + (jumboGroup.cut_rolls?.length || 0), 0) + wastageItems.length;
 
     doc.text(`Cut Rolls Details (${totalCutRolls} items)`, margin, yPosition);
     yPosition += 12;
 
-    if (productionHierarchy.length > 0 || wastageItems.length > 0) {
+    if (sortedProductionHierarchy.length > 0 || wastageItems.length > 0) {
       // Process production hierarchy (jumbo rolls with cut rolls)
-      productionHierarchy.forEach((jumboGroup, jumboIndex) => {
+      sortedProductionHierarchy.forEach((jumboGroup, jumboIndex) => {
         const rawJumboBarcode = jumboGroup.jumbo_roll?.barcode_id;
         const jumboDisplayName = transformJumboIdToDisplay(rawJumboBarcode || '', jumboIndex);
         const jumboRolls = jumboGroup.cut_rolls || [];
@@ -1377,6 +1406,20 @@ export default function PlanDetailsPage() {
         return;
       }
 
+      // Helper function to extract numeric value from jumbo roll ID for sorting
+      const extractJumboRollNumber = (barcodeId: string): number => {
+        if (!barcodeId) return 999999;
+        const match = barcodeId.match(/JR[_-](\d+)/i);
+        return match ? parseInt(match[1], 10) : 999999;
+      };
+
+      // Sort production hierarchy by jumbo roll number
+      const sortedProductionHierarchy = [...productionHierarchy].sort((a: any, b: any) => {
+        const numA = extractJumboRollNumber(a.jumbo_roll?.barcode_id);
+        const numB = extractJumboRollNumber(b.jumbo_roll?.barcode_id);
+        return numA - numB;
+      });
+
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
@@ -1413,7 +1456,7 @@ export default function PlanDetailsPage() {
       const allProductionItems: any[] = [];
 
       // Add cut rolls from production hierarchy
-      productionHierarchy.forEach(jumboGroup => {
+      sortedProductionHierarchy.forEach(jumboGroup => {
         if (jumboGroup.cut_rolls) {
           allProductionItems.push(...jumboGroup.cut_rolls);
         }
@@ -1708,14 +1751,14 @@ export default function PlanDetailsPage() {
       }
 
       // Use production hierarchy data directly for visual cutting patterns
-      if (productionHierarchy.length === 0) {
+      if (sortedProductionHierarchy.length === 0) {
         doc.setFontSize(12);
         doc.setTextColor(100, 100, 100);
         doc.text("No production data available for cutting pattern", 20, yPosition);
         yPosition += 15;
       } else {
         // Process each jumbo roll from production hierarchy
-        productionHierarchy.forEach((jumboGroup, jumboIndex) => {
+        sortedProductionHierarchy.forEach((jumboGroup, jumboIndex) => {
           const rawJumboBarcode = jumboGroup.jumbo_roll?.barcode_id || 'Unknown Jumbo';
           const jumboDisplayId = transformJumboIdToDisplay(rawJumboBarcode, jumboIndex);
           const jumboRolls = jumboGroup.cut_rolls || [];
