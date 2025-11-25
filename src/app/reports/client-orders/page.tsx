@@ -298,7 +298,9 @@ export default function ClientOrdersPage() {
                   {availableClients.length === 0 ? (
                     <SelectItem value="no-clients" disabled>No clients found</SelectItem>
                   ) : (
-                    availableClients.map((client) => (
+                    availableClients
+                    .sort((a, b) => a.company_name.localeCompare(b.company_name))
+                    .map((client) => (
                       <SelectItem key={client.id} value={client.id}>
                         <div className="flex flex-col">
                           <span className="font-medium">{client.company_name}</span>

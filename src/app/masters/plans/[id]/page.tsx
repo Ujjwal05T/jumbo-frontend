@@ -2025,7 +2025,16 @@ export default function PlanDetailsPage() {
         });
       }
 
-      
+      // Add page numbers to all pages
+      const totalPages = doc.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Page ${i} of ${totalPages}`, pageWidth - 20, pageHeight - 10, { align: 'right' });
+      }
+
       openPDFForPrint(doc, `plan-details-${plan.name || 'plan'}-${new Date().toISOString().split('T')[0]}.pdf`);
       toast.success('Plan details opened for printing!');
     } catch (error) {

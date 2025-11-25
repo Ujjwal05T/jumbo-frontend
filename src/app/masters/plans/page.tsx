@@ -890,6 +890,26 @@ export default function PlansPage() {
       return aNum - bNum;
     });
 
+    // Helper function to transform jumbo roll ID
+    const transformJumboDisplayId = (barcodeId: string, index: number): string => {
+      // Check if barcode matches JR_##### format
+      if (barcodeId && /^JR_\d+$/i.test(barcodeId)) {
+        return barcodeId; // Return as is
+      }
+      // Generate sequential ID
+      return `JR_0000${index + 1}`;
+    };
+
+    // Helper function to transform SET roll ID
+    const transformSetDisplayId = (barcodeId: string, sequenceNumber: number): string => {
+      // Check if barcode matches SET_##### format
+      if (barcodeId && /^SET_\d+$/i.test(barcodeId)) {
+        return barcodeId; // Return as is
+      }
+      // Generate sequential ID
+      return `SET #${sequenceNumber}`;
+    };
+
     if (sortedJumboMappingEntries.length === 0) {
       doc.setFontSize(12);
       doc.setTextColor(100, 100, 100);
@@ -897,8 +917,11 @@ export default function PlansPage() {
       yPosition += 15;
     } else {
       // Process each jumbo roll
-      sortedJumboMappingEntries.forEach(([originalJumboId, jumboGroup], index) => {
+      sortedJumboMappingEntries.forEach(([originalJumboId, jumboGroup], jumboIndex) => {
         const { displayId: jumboDisplayId, rolls: jumboRolls } = jumboGroup;
+
+        // Transform jumbo display ID
+        const transformedJumboId = transformJumboDisplayId(jumboDisplayId, jumboIndex);
         
         // Sort jumbo rolls by individual_roll_number to preserve cutting pattern order
         const sortedJumboRolls = [...jumboRolls].sort((a, b) => {
@@ -906,17 +929,17 @@ export default function PlansPage() {
           const bRollNum = b.individual_roll_number || 999;
           return aRollNum - bRollNum;
         });
-        
-        if (index > -1) {
+
+        if (jumboIndex > -1) {
           doc.addPage();
           yPosition = 30; // Top margin to leave space for stapling
         }
-        
+
         const paperSpecs = sortedJumboRolls[0]?.paper_specs;
-        const specKey = paperSpecs 
+        const specKey = paperSpecs
           ? `${paperSpecs.gsm}gsm, ${paperSpecs.bf}bf, ${paperSpecs.shade}`
           : 'Unknown Specification';
-        
+
         checkPageBreak(25);
 
         doc.setFontSize(14);
@@ -934,11 +957,11 @@ export default function PlansPage() {
         doc.setDrawColor(100, 100, 100);
         doc.setLineWidth(1);
         doc.rect(20, yPosition - 5, pageWidth - 40, 20, 'S');
-        
+
         doc.setFontSize(16);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(40, 40, 40);
-        doc.text(jumboDisplayId, 25, yPosition + 6);
+        doc.text(transformedJumboId, 25, yPosition + 6);
         
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
@@ -1104,12 +1127,10 @@ export default function PlansPage() {
           doc.setFontSize(14);
           doc.setFont('helvetica', 'bold');
           doc.setTextColor(60, 60, 60);
-          // Show SET barcode ID instead of just "Set #X"
+          // Show SET barcode ID - use original format if matches SET_##### pattern, else generate sequential ID
           const rollTitle = rollNumber === "No Roll #"
             ? "Unassigned Roll"
-            : setBarcodeId
-              ? setBarcodeId
-              : `Set #${index_set}`;
+            : transformSetDisplayId(setBarcodeId || '', index_set);
           index_set = index_set + 1;
           doc.text(rollTitle, 30, yPosition);
           yPosition += 12;
@@ -1186,7 +1207,17 @@ export default function PlansPage() {
         yPosition += 10;
       });
     }
-    
+
+    // Add page numbers to all pages
+    const totalPages = doc.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Page ${i} of ${totalPages}`, pageWidth - 20, pageHeight - 10, { align: 'right' });
+    }
+
     doc.save(`${plan.frontend_id || 'plan'}.pdf`);
     toast.success('Plan details exported to PDF successfully!', { id: `report-${plan.id}` });
   } catch (error) {
