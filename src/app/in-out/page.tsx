@@ -54,7 +54,6 @@ import {
   SplinePointer,
   LoaderCircle,
   LogOut,
-  X,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -585,37 +584,6 @@ export default function InOutPage() {
     date: "",
   });
 
-  // State for multiple materials (mockup only)
-  type MaterialItem = {
-    id: string;
-    material_id: string;
-    gross_weight: number;
-    net_weight: number;
-  };
-  const [materialItems, setMaterialItems] = useState<MaterialItem[]>([
-    { id: Date.now().toString(), material_id: "", gross_weight: 0, net_weight: 0 }
-  ]);
-
-  // Helper functions for managing material items (mockup only)
-  const addMaterialItem = () => {
-    setMaterialItems([
-      ...materialItems,
-      { id: Date.now().toString(), material_id: "", gross_weight: 0, net_weight: 0 }
-    ]);
-  };
-
-  const removeMaterialItem = (id: string) => {
-    if (materialItems.length > 1) {
-      setMaterialItems(materialItems.filter(item => item.id !== id));
-    }
-  };
-
-  const updateMaterialItem = (id: string, field: 'material_id' | 'gross_weight' | 'net_weight', value: string | number) => {
-    setMaterialItems(materialItems.map(item =>
-      item.id === id ? { ...item, [field]: value } : item
-    ));
-  };
-
   // Form states for Outward Challan
   const [outwardForm, setOutwardForm] = useState<
     Partial<CreateOutwardChallanData & { serial_no: string; date: string }>
@@ -764,10 +732,6 @@ export default function InOutPage() {
         report: undefined,
         moureport: undefined,
       });
-      // Reset material items (mockup)
-      setMaterialItems([
-        { id: Date.now().toString(), material_id: "", gross_weight: 0, net_weight: 0 }
-      ]);
       loadData(); // Refresh data
     } catch (error) {
       console.error("Error creating inward challan:", error);
@@ -1324,97 +1288,41 @@ export default function InOutPage() {
                       </div>
                     )}
 
-                    {/* Materials Section - Security & Admin can see (Mockup: Multiple Materials) */}
+                    {/* Material - Security & Admin can see */}
                     {canViewField("security") && (
-                      <div className="col-span-1 md:col-span-2 flex flex-col space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Label className="text-base font-semibold">Materials & Weights *</Label>
-                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">Mockup</span>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={addMaterialItem}
-                          >
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add Material
-                          </Button>
-                        </div>
-
-                        <div className="space-y-3 border rounded-lg p-4 bg-gray-50">
-                          {materialItems.map((item) => (
-                            <div key={item.id} className="flex gap-3 items-end bg-white p-3 rounded-md border">
-                              <div className="flex-1">
-                                <Label htmlFor={`material-${item.id}`} className="text-xs">Material</Label>
-                                <Select
-                                  value={item.material_id}
-                                  onValueChange={(value) => updateMaterialItem(item.id, 'material_id', value)}
-                                >
-                                  <SelectTrigger id={`material-${item.id}`}>
-                                    <SelectValue placeholder="Select material" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {materials.length > 0 ? (
-                                      materials.map((material) => (
-                                        <SelectItem
-                                          key={material.id}
-                                          value={material.id}
-                                          className="focus:bg-orange-300">
-                                          {material.name} ({material.unit_of_measure})
-                                        </SelectItem>
-                                      ))
-                                    ) : (
-                                      <SelectItem value="none" disabled>
-                                        {loading ? "Loading..." : "No materials"}
-                                      </SelectItem>
-                                    )}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-
-                              <div className="w-40">
-                                <Label htmlFor={`gross-${item.id}`} className="text-xs">Gross Weight</Label>
-                                <Input
-                                  id={`gross-${item.id}`}
-                                  type="number"
-                                  step="0.01"
-                                  placeholder="Gross"
-                                  value={item.gross_weight || ""}
-                                  onChange={(e) => updateMaterialItem(item.id, 'gross_weight', Number(e.target.value))}
-                                />
-                              </div>
-
-                              <div className="w-40">
-                                <Label htmlFor={`net-${item.id}`} className="text-xs">Net Weight</Label>
-                                <Input
-                                  id={`net-${item.id}`}
-                                  type="number"
-                                  step="0.01"
-                                  placeholder="Net"
-                                  value={item.net_weight || ""}
-                                  onChange={(e) => updateMaterialItem(item.id, 'net_weight', Number(e.target.value))}
-                                />
-                              </div>
-
-                              <Button
-                                type="button"
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => removeMaterialItem(item.id)}
-                                disabled={materialItems.length === 1}
-                                className="mb-0.5"
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          ))}
-
-                          <div className="text-xs text-muted-foreground mt-2">
-                            Total Items: {materialItems.length} | Total Gross: {materialItems.reduce((sum, item) => sum + (item.gross_weight || 0), 0).toFixed(2)} | Total Net: {materialItems.reduce((sum, item) => sum + (item.net_weight || 0), 0).toFixed(2)}
-                          </div>
-                        </div>
+                      <div className="flex flex-col space-y-2">
+                        <Label htmlFor="material">Material *</Label>
+                        <Select
+                          key={`material-${showInwardModal}-${inwardForm.material_id}`}
+                          value={inwardForm.material_id}
+                          onValueChange={(value) =>
+                            setInwardForm({ ...inwardForm, material_id: value })
+                          }>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select material" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {materials.length > 0 ? (
+                              materials.map((material) => (
+                                <SelectItem
+                                  key={material.id}
+                                  value={material.id}
+                                  className="focus:bg-orange-300">
+                                  {material.name} ({material.unit_of_measure})
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem
+                                value="all"
+                                disabled
+                                className="focus:bg-orange-300">
+                                {loading
+                                  ? "Loading materials..."
+                                  : "No materials available"}
+                              </SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
                       </div>
                     )}
 
@@ -1456,9 +1364,8 @@ export default function InOutPage() {
                       </div>
                     )}
 
-                    {/* COMMENTED OUT: Gross Weight and Net Weight fields - replaced by multiple materials section above */}
                     {/* Gross Weight - Accountant & Admin can see */}
-                    {/* {canViewField("accountant") && (
+                    {canViewField("accountant") && (
                       <div className="flex flex-col space-y-2">
                         <Label htmlFor="gross">Gross Weight</Label>
                         <Input
@@ -1475,10 +1382,10 @@ export default function InOutPage() {
                           }
                         />
                       </div>
-                    )} */}
+                    )}
 
                     {/* Net Weight - Accountant & Admin can see */}
-                    {/* {canViewField("accountant") && (
+                    {canViewField("accountant") && (
                       <div className="flex flex-col space-y-2">
                         <Label htmlFor="net">Net Weight</Label>
                         <Input
@@ -1498,7 +1405,7 @@ export default function InOutPage() {
                           }}
                         />
                       </div>
-                    )} */}
+                    )}
 
                     {/* Payment Type - Accountant & Admin can see */}
                     {canViewField("accountant") && (
@@ -1722,12 +1629,8 @@ export default function InOutPage() {
                             time_in: "",
                             time_out: "",
                             report: undefined,
-                            moureport: undefined,
+        moureport: undefined,
                           });
-                          // Reset material items (mockup)
-                          setMaterialItems([
-                            { id: Date.now().toString(), material_id: "", gross_weight: 0, net_weight: 0 }
-                          ]);
                         }}>
                         Cancel
                       </Button>

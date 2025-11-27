@@ -404,7 +404,7 @@ export default function PlansPage() {
     const grouped: Record<string, { displayId: string; rolls: any[] }> = {};
 
     console.log('🔍 Processing Hierarchical Data for PDF:');
-    console.log('- productionHierarchy length:', productionHierarchy.length);
+    console.log('- productionHierarchy length:', productionHierarchy);
 
     // Helper function to extract numeric value from jumbo roll ID for sorting
     const extractJumboRollNumber = (barcodeId: string): number => {
@@ -444,6 +444,7 @@ export default function PlansPage() {
       });
 
       // Add all cut rolls from this jumbo with proper SET information
+      const transformedRolls: any[] = [];
       jumboGroup.cut_rolls.forEach((cutRoll: any, cutRollIndex: number) => {
         // Find the parent intermediate roll to get the individual_roll_number
         let setNumber = 1; // Default SET number
@@ -477,8 +478,46 @@ export default function PlansPage() {
           parent_118_roll_barcode: cutRoll.parent_118_roll_barcode,
           jumbo_roll_frontend_id: jumboDisplayId
         };
-        grouped[jumboRoll.id].rolls.push(transformedRoll);
+        transformedRolls.push(transformedRoll);
       });
+
+      // Sort transformed rolls: first by SET (parent_118_roll_barcode), then by barcode_id
+      transformedRolls.sort((a, b) => {
+        // First sort by SET barcode
+        const aSetBarcode = a.parent_118_roll_barcode || '';
+        const bSetBarcode = b.parent_118_roll_barcode || '';
+
+        // Extract numeric part from SET barcode (SET_00045 -> 45)
+        const getSetNumber = (barcode: string): number => {
+          if (!barcode) return 999999;
+          const match = barcode.match(/SET_(\d+)/i);
+          return match ? parseInt(match[1], 10) : 999999;
+        };
+
+        const aSetNum = getSetNumber(aSetBarcode);
+        const bSetNum = getSetNumber(bSetBarcode);
+
+        if (aSetNum !== bSetNum) return aSetNum - bSetNum;
+
+        // Then sort by cut roll barcode within the same SET
+        const aCutBarcode = a.barcode_id || '';
+        const bCutBarcode = b.barcode_id || '';
+
+        // Extract numeric part from CR barcode (CR_00678 -> 678)
+        const getCutNumber = (barcode: string): number => {
+          if (!barcode) return 999999;
+          const match = barcode.match(/CR_(\d+)/i);
+          return match ? parseInt(match[1], 10) : 999999;
+        };
+
+        const aCutNum = getCutNumber(aCutBarcode);
+        const bCutNum = getCutNumber(bCutBarcode);
+
+        return aCutNum - bCutNum;
+      });
+
+      // Add sorted rolls to grouped structure
+      grouped[jumboRoll.id].rolls.push(...transformedRolls);
     });
 
     // Process wastage items (excluding SCR items which should not be in labels)
@@ -1000,8 +1039,23 @@ export default function PlansPage() {
           const totalUsedWidth = rolls.reduce((sum:number, roll:any) => sum + (roll.width_inches || 0), 0);
           const waste = Math.max(0, 119 - totalUsedWidth); // Ensure waste isn't negative
           
+          // Sort rolls by width_inches for organized display (smallest to largest)
+            const sortedRolls = rolls.sort((a:any, b:any) => {
+  // Extract numeric part from barcode_id (CR_00678 -> 678)
+  const getNumericPart = (barcode: string): number => {
+    if (!barcode) return 999999;
+    const match = barcode.match(/CR_(\d+)/i);
+    return match ? parseInt(match[1], 10) : 999999;
+  };
+  
+  const aNum = getNumericPart(a.barcode_id);
+  const bNum = getNumericPart(b.barcode_id);
+  
+  return aNum - bNum;
+});
+
           // Draw the roll segments
-          rolls.forEach((roll:any) => {
+          sortedRolls.forEach((roll:any) => {
 
             // Calculate section width based on roll width ratio with min/max constraints
             const rollRatio = roll.width_inches / 118; // Ratio of this roll to total width
@@ -1111,10 +1165,28 @@ export default function PlansPage() {
           return localY; // Return the new Y position
         };
 
-        // Process roll groups in order of individual_roll_number
-        const sortedRollEntries = Object.entries(rollsByNumber).sort(([aKey], [bKey]) => {
+        // Process roll groups in order of SET barcode ID
+        const sortedRollEntries = Object.entries(rollsByNumber).sort(([aKey, aData], [bKey, bData]) => {
           if (aKey === "No Roll #") return 1;
           if (bKey === "No Roll #") return -1;
+
+          // Get SET barcode IDs from the group data
+          const aSetBarcode = (aData as any).setBarcodeId || '';
+          const bSetBarcode = (bData as any).setBarcodeId || '';
+
+          // Extract numeric part from SET barcode (SET_00045 -> 45)
+          const getSetNumber = (barcode: string): number => {
+            if (!barcode) return 999999;
+            const match = barcode.match(/SET_(\d+)/i);
+            return match ? parseInt(match[1], 10) : 999999;
+          };
+
+          const aSetNum = getSetNumber(aSetBarcode);
+          const bSetNum = getSetNumber(bSetBarcode);
+
+          if (aSetNum !== bSetNum) return aSetNum - bSetNum;
+
+          // Fallback to comparing roll numbers if SET numbers are equal
           return parseInt(aKey) - parseInt(bKey);
         });
         let index_set = 1;
@@ -1331,19 +1403,29 @@ export default function PlansPage() {
         doc.text(`${jumboRolls.length} cut rolls - Total Weight: ${jumboRolls.reduce((sum, roll) => sum + roll.weight_kg, 0).toFixed(1)} kg`, pageWidth / 2, yPosition, { align: 'center' });
         yPosition += 15;
         
-        // Sort cut rolls within this jumbo group and process them
+        // Sort cut rolls within this jumbo group in ascending order by barcode
         jumboRolls
           .sort((a, b) => {
+            // First sort by individual_roll_number (SET number)
             const aRollNum = a.individual_roll_number || 999;
             const bRollNum = b.individual_roll_number || 999;
             if (aRollNum !== bRollNum) return aRollNum - bRollNum;
-            
-            if (a.width_inches !== b.width_inches) {
-              return a.width_inches - b.width_inches;
+
+            // Then extract numeric portion from barcode_id for proper numeric sorting
+            const aCode = a.barcode_id || a.qr_code || '';
+            const bCode = b.barcode_id || b.qr_code || '';
+
+            // Extract numbers from barcode (e.g., "CR_00123" -> 123, "CR-456" -> 456)
+            const aNumMatch = aCode.match(/\d+/);
+            const bNumMatch = bCode.match(/\d+/);
+
+            if (aNumMatch && bNumMatch) {
+              const aNum = parseInt(aNumMatch[0], 10);
+              const bNum = parseInt(bNumMatch[0], 10);
+              if (aNum !== bNum) return aNum - bNum;
             }
-            
-            const aCode = a.barcode_id || a.qr_code;
-            const bCode = b.barcode_id || b.qr_code;
+
+            // Fallback to string comparison if no numbers found
             return aCode.localeCompare(bCode);
           })
           .forEach((item, index) => {

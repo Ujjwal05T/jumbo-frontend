@@ -1846,8 +1846,19 @@ export default function PlanDetailsPage() {
             doc.text("Cutting Pattern:", 40, yPosition);
             yPosition += 8;
 
-            // Sort rolls by width_inches for organized display (smallest to largest)
-            const sortedRolls = rollsInSet.sort((a:any, b:any) => (a.width_inches || 0) - (b.width_inches || 0));
+            const sortedRolls = rollsInSet.sort((a:any, b:any) => {
+  // Extract numeric part from barcode_id (CR_00678 -> 678)
+  const getNumericPart = (barcode: string): number => {
+    if (!barcode) return 999999;
+    const match = barcode.match(/CR_(\d+)/i);
+    return match ? parseInt(match[1], 10) : 999999;
+  };
+  
+  const aNum = getNumericPart(a.barcode_id);
+  const bNum = getNumericPart(b.barcode_id);
+  
+  return aNum - bNum;
+});
 
             // Always check if width exceeds 118" and apply automatic segmentation
             const maxAllowedWidth = 118; // Maximum width constraint in inches
@@ -2442,22 +2453,8 @@ export default function PlanDetailsPage() {
                               <TableBody>
                                 {jumboRolls
                                   .sort((a, b) => {
-                                    // Sort cut rolls within each jumbo by:
-                                    // 1. Individual roll number (if available)
-                                    // 2. Width (ascending)  
-                                    // 3. Barcode/QR code (alphabetically)
-                                    
-                                    // First by individual_roll_number
-                                    const aRollNum = a.individual_roll_number || 999;
-                                    const bRollNum = b.individual_roll_number || 999;
-                                    if (aRollNum !== bRollNum) return aRollNum - bRollNum;
-                                    
-                                    // Then by width
-                                    if (a.width_inches !== b.width_inches) {
-                                      return a.width_inches - b.width_inches;
-                                    }
-                                    
-                                    // Finally by barcode/QR code
+
+                                    //  by barcode
                                     const aCode = a.barcode_id || a.qr_code;
                                     const bCode = b.barcode_id || b.qr_code;
                                     return aCode.localeCompare(bCode);

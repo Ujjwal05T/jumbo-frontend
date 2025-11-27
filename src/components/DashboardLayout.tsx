@@ -150,6 +150,7 @@ const getNavigationForRole = (role: string | null) => {
         { name: "Client-Order Analysis", href: "/reports/client-orders", roles: ["admin", "production", "accountant"] },
         { name: "Plan Report", href: "/reports/client-orders-plans", roles: ["admin"] },
         { name: "Order-Plan Execution", href: "/reports/order-plan-execution", roles: ["admin", "production", "accountant"] },
+        { name: "Client Order Summary", href: "/reports/client-order-summary", roles: ["admin", "production", "accountant"] },
       ],
     },
     {
