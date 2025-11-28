@@ -27,6 +27,10 @@ export interface QRScanResult {
     created_at: string;
     created_by: string | null;
   };
+  parent_rolls: {
+    parent_118_barcode: string | null;
+    parent_jumbo_barcode: string | null;
+  };
   client_info: {
     client_name: string | null;
   };

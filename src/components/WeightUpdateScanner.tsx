@@ -301,6 +301,30 @@ function RollDetailsCard({ result }: RollDetailsCardProps) {
             {result.client_info?.client_name || 'No Client Assigned'}
           </p>
         </div>
+
+        {(result.parent_rolls?.parent_118_barcode || result.parent_rolls?.parent_jumbo_barcode) && (
+          <div className="border-t pt-4">
+            <Label className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 block">Parent Rolls</Label>
+            <div className="space-y-2">
+              {result.parent_rolls.parent_118_barcode && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs sm:text-sm text-gray-600">118" Roll:</span>
+                  <span className="text-sm sm:text-base font-mono font-semibold text-orange-600">
+                    {result.parent_rolls.parent_118_barcode}
+                  </span>
+                </div>
+              )}
+              {result.parent_rolls.parent_jumbo_barcode && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs sm:text-sm text-gray-600">Jumbo Roll:</span>
+                  <span className="text-sm sm:text-base font-mono font-semibold text-green-600">
+                    {result.parent_rolls.parent_jumbo_barcode}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -449,7 +473,7 @@ function WeightUpdateForm({ scanResult, onUpdate, loading, onReset, onScanResult
               className="min-h-[48px] sm:min-h-[56px] px-4 sm:px-6 w-full sm:w-auto"
               size="lg"
             >
-              <RefreshCw className="h-4 w-4 sm:h-5 sm:w-5" />
+              New Barcode Scan
             </Button>
           </div>
         </form>

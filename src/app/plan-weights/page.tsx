@@ -52,8 +52,7 @@ interface Plan {
 }
 
 interface CutRoll {
-  inventory_id: string;
-  qr_code: string;
+  id: string;
   barcode_id: string;
   width_inches: number;
   weight_kg: number;
@@ -65,8 +64,32 @@ interface CutRoll {
     shade: string;
   } | null;
   client_name: string;
+  order_frontend_id: string | null;
   order_date: string | null;
   created_at: string;
+  parent_118_roll_barcode?: string;
+  jumbo_barcode_id?: string; // Added for display purposes
+}
+
+interface JumboGroup {
+  jumbo_roll: {
+    id: string;
+    barcode_id: string;
+    frontend_id: string;
+    width_inches: number;
+    paper_spec: string;
+    status: string;
+    location: string;
+  };
+  intermediate_rolls: Array<{
+    id: string;
+    barcode_id: string;
+    parent_jumbo_id: string;
+    individual_roll_number: number;
+    width_inches: number;
+    paper_spec: string;
+  }>;
+  cut_rolls: CutRoll[];
 }
 
 interface PlanSummary {
@@ -80,7 +103,9 @@ interface PlanSummary {
     average_weight_per_roll: number;
     status_breakdown: Record<string, any>;
   };
-  detailed_items: CutRoll[];
+  production_hierarchy: JumboGroup[];
+  wastage_items: CutRoll[];
+  detailed_items?: CutRoll[]; // Keep for backward compatibility
 }
 
 export default function PlanWeightsPage() {
@@ -123,11 +148,22 @@ export default function PlanWeightsPage() {
       if (!response.ok) throw new Error('Failed to load cut rolls');
       const data = await response.json();
       setPlanSummary(data);
+
+      // Extract all cut rolls from production_hierarchy
+      const allCutRolls: CutRoll[] = [];
+      if (data.production_hierarchy && Array.isArray(data.production_hierarchy)) {
+        data.production_hierarchy.forEach((jumboGroup: JumboGroup) => {
+          if (jumboGroup.cut_rolls && Array.isArray(jumboGroup.cut_rolls)) {
+            allCutRolls.push(...jumboGroup.cut_rolls);
+          }
+        });
+      }
+
       // Initialize weight updates with current weights (but don't show default/small weights)
       const initialWeights: Record<string, string> = {};
-      data.detailed_items?.forEach((item: CutRoll) => {
+      allCutRolls.forEach((item: CutRoll) => {
         // Only show weight if it's meaningful (> 0.1), otherwise leave empty for user input
-        initialWeights[item.inventory_id] = item.weight_kg > 0.1 ? item.weight_kg.toString() : '';
+        initialWeights[item.id] = item.weight_kg > 0.1 ? item.weight_kg.toString() : '';
       });
       setWeightUpdates(initialWeights);
     } catch (error) {
@@ -156,7 +192,7 @@ export default function PlanWeightsPage() {
     }));
   };
 
-  const updateWeight = async (inventoryId: string, qrCode: string) => {
+  const updateWeight = async (inventoryId: string, barcodeId: string) => {
     const newWeight = weightUpdates[inventoryId];
     if (!newWeight || isNaN(parseFloat(newWeight))) {
       toast.error("Please enter a valid weight");
@@ -173,7 +209,7 @@ export default function PlanWeightsPage() {
           'ngrok-skip-browser-warning': 'true'
         },
         body: JSON.stringify({
-          qr_code: qrCode,
+          qr_code: barcodeId, // Use barcode_id as qr_code
           weight_kg: parseFloat(newWeight)
         })
       });
@@ -183,22 +219,25 @@ export default function PlanWeightsPage() {
 
       toast.success(result.message || `Weight updated to ${newWeight}kg`);
 
-      // Partial refresh - update only the modified item
-      if (selectedPlanId && planSummary?.detailed_items) {
+      // Partial refresh - update the modified item in production_hierarchy
+      if (selectedPlanId && planSummary?.production_hierarchy) {
         setPlanSummary(prev => {
           if (!prev) return prev;
 
           return {
             ...prev,
-            detailed_items: prev.detailed_items.map(item =>
-              item.inventory_id === inventoryId
-                ? {
-                    ...item,
-                    weight_kg: parseFloat(newWeight),
-                    status: 'available' as const // Update status to available after weighing
-                  }
-                : item
-            )
+            production_hierarchy: prev.production_hierarchy.map(jumboGroup => ({
+              ...jumboGroup,
+              cut_rolls: jumboGroup.cut_rolls.map(item =>
+                item.id === inventoryId
+                  ? {
+                      ...item,
+                      weight_kg: parseFloat(newWeight),
+                      status: 'available' // Update status to available after weighing
+                    }
+                  : item
+              )
+            }))
           };
         });
       }
@@ -223,11 +262,30 @@ export default function PlanWeightsPage() {
     }
   };
 
-  const filteredCutRolls = planSummary?.detailed_items?.filter(item =>
-    item.qr_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.barcode_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.client_name.toLowerCase().includes(searchTerm.toLowerCase())
+  // Extract all cut rolls from production_hierarchy for display and filtering
+  // Add jumbo barcode to each cut roll for display
+  const allCutRolls = planSummary?.production_hierarchy?.flatMap(
+    jumboGroup => (jumboGroup.cut_rolls || []).map(cutRoll => ({
+      ...cutRoll,
+      jumbo_barcode_id: jumboGroup.jumbo_roll.barcode_id
+    }))
   ) || [];
+
+  const filteredCutRolls = allCutRolls
+    .filter(item =>
+      item.barcode_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.order_frontend_id && item.order_frontend_id.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (item.jumbo_barcode_id && item.jumbo_barcode_id.toLowerCase().includes(searchTerm.toLowerCase()))
+    )
+    .sort((a, b) => {
+      // First sort by status - "available" comes first
+      if (a.status === 'available' && b.status !== 'available') return -1;
+      if (a.status !== 'available' && b.status === 'available') return 1;
+
+      // Then sort by barcode_id alphabetically
+      return a.barcode_id.localeCompare(b.barcode_id);
+    });
 
   return (
     <DashboardLayout>
@@ -287,7 +345,7 @@ export default function PlanWeightsPage() {
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                       type="search"
-                      placeholder="Search by QR code, barcode, or client..."
+                      placeholder="Search by cut/jumbo barcode, order ID, or client..."
                       className="pl-8"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
@@ -354,7 +412,7 @@ export default function PlanWeightsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>S.No</TableHead>
-                      <TableHead>Bar Code</TableHead>
+                      <TableHead>Barcode</TableHead>
                       <TableHead>Client & Order</TableHead>
                       <TableHead>Paper Specs</TableHead>
                       <TableHead>Dimensions</TableHead>
@@ -376,13 +434,18 @@ export default function PlanWeightsPage() {
                       </TableRow>
                     ) : filteredCutRolls.length > 0 ? (
                       filteredCutRolls.map((item, index) => (
-                        <TableRow key={item.inventory_id}>
+                        <TableRow key={item.id}>
                           <TableCell className="font-medium">
                             {index + 1}
                           </TableCell>
                           <TableCell>
                             <div className="space-y-1">
                               <div className="font-mono text-sm">{item.barcode_id}</div>
+                              {item.jumbo_barcode_id && (
+                                <div className="text-sm font-mono text-green-600">
+                                  Jumbo Roll:{item.jumbo_barcode_id}
+                                </div>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -391,9 +454,11 @@ export default function PlanWeightsPage() {
                                 <Building2 className="w-3 h-3 text-blue-600" />
                                 {item.client_name || "N/A"}
                               </div>
-                              <div className="text-xs text-muted-foreground">
-                                {item.order_date ? new Date(item.order_date).toLocaleDateString('en-GB') : "N/A"}
-                              </div>
+                              {item.order_frontend_id && (
+                                <div className="text-sm font-mono text-purple-600">
+                                  Order: {item.order_frontend_id}
+                                </div>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -426,16 +491,16 @@ export default function PlanWeightsPage() {
                               type="number"
                               min="0"
                               placeholder="Enter weight"
-                              value={weightUpdates[item.inventory_id] || ''}
-                              onChange={(e) => handleWeightChange(item.inventory_id, e.target.value)}
+                              value={weightUpdates[item.id] || ''}
+                              onChange={(e) => handleWeightChange(item.id, e.target.value)}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
                                   e.preventDefault();
-                                  updateWeight(item.inventory_id, item.qr_code);
+                                  updateWeight(item.id, item.barcode_id);
                                 }
                               }}
                               className="w-24"
-                              disabled={savingWeights[item.inventory_id]}
+                              disabled={savingWeights[item.id]}
                             />
                           </TableCell>
                           <TableCell>
@@ -444,14 +509,14 @@ export default function PlanWeightsPage() {
                           <TableCell>
                             <Button
                               size="sm"
-                              onClick={() => updateWeight(item.inventory_id, item.qr_code)}
+                              onClick={() => updateWeight(item.id, item.barcode_id)}
                               disabled={
-                                savingWeights[item.inventory_id] ||
-                                !weightUpdates[item.inventory_id] ||
-                                isNaN(parseFloat(weightUpdates[item.inventory_id]))
+                                savingWeights[item.id] ||
+                                !weightUpdates[item.id] ||
+                                isNaN(parseFloat(weightUpdates[item.id]))
                               }
                             >
-                              {savingWeights[item.inventory_id] ? (
+                              {savingWeights[item.id] ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
                               ) : (
                                 <>
