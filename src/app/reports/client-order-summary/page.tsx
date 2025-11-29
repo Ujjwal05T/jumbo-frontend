@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Users, Package, TrendingUp, Calendar, Filter, Eye, Loader2,
-  CheckCircle, AlertTriangle, Box, Barcode, ChevronDown, ChevronUp
+  CheckCircle, AlertTriangle, Box, Barcode, ChevronDown, ChevronUp, Printer
 } from 'lucide-react';
 import { REPORTS_ENDPOINTS, MASTER_ENDPOINTS, createRequestOptions } from '@/lib/api-config';
 
@@ -157,6 +157,33 @@ export default function ClientOrderSummaryPage() {
   // Expanded rows state for pending items
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
+  // Local barcode transformation function (context-aware numbering with unique constraint)
+  const transformJumboIdToDisplay = (barcode: string | null | undefined, allCutRolls: CutRoll[]): string => {
+    if (!barcode || barcode === 'Unknown Jumbo') return barcode || '';
+    if (barcode.startsWith('JR_')) return barcode;
+
+    // Check for old format identifiers - more lenient pattern
+    if (barcode.startsWith('VJB_') || barcode.startsWith('VJB') ||
+        barcode.includes('VIRTUAL_JUMBO') || /^[A-F0-9]{8}$/i.test(barcode)) {
+
+      // Get unique jumbo barcodes in order of first appearance
+      const uniqueJumbos: string[] = [];
+      allCutRolls.forEach(roll => {
+        if (roll.jumbo_barcode_id && !uniqueJumbos.includes(roll.jumbo_barcode_id)) {
+          uniqueJumbos.push(roll.jumbo_barcode_id);
+        }
+      });
+
+      // Find the index of this barcode in the unique list
+      const uniqueIndex = uniqueJumbos.indexOf(barcode);
+      if (uniqueIndex !== -1) {
+        return `JR_${String(uniqueIndex + 1).padStart(4, '0')}`;
+      }
+    }
+
+    return barcode;
+  };
+
   // Fetch available clients
   const fetchAvailableClients = async () => {
     try {
@@ -265,6 +292,289 @@ export default function ClientOrderSummaryPage() {
       month: 'short',
       day: 'numeric'
     });
+  };
+
+  // Print cut rolls modal
+  const printCutRollsModal = () => {
+    if (!cutRollsData || !selectedOrder) {
+      return;
+    }
+
+    // Create print window content
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Cut Rolls Details - ${selectedOrder.order_frontend_id}</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            font-size: 12px;
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+          }
+          .header h1 {
+            margin: 0;
+            font-size: 24px;
+          }
+          .header p {
+            margin: 5px 0;
+            color: #666;
+          }
+          .order-info {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 5px;
+          }
+          .info-item {
+            text-align: center;
+          }
+          .info-item .label {
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+          }
+          .info-item .value {
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+          }
+          .summary {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+          }
+          .summary-card {
+            padding: 15px;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+          }
+          .summary-card .title {
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+          }
+          .summary-card .value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+          }
+          .summary-card .details {
+            font-size: 9px;
+            color: #666;
+            margin-top: 8px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+          }
+          th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+          }
+          th {
+            background-color: #4CAF50;
+            color: white;
+            font-weight: bold;
+            font-size: 11px;
+          }
+          tr:nth-child(even) {
+            background-color: #f9f9f9;
+          }
+          .barcode {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            color: #2563eb;
+          }
+          .plan-id {
+            font-family: 'Courier New', monospace;
+            color: #9333ea;
+            font-size: 10px;
+            display: inline-block;
+            margin: 2px;
+            padding: 2px 6px;
+            background: #f3e8ff;
+            border-radius: 3px;
+          }
+          .jumbo-barcode {
+            font-family: 'Courier New', monospace;
+            color: #22c55e;
+            font-size: 10px;
+          }
+          .paper-info {
+            font-size: 10px;
+          }
+          .paper-name {
+            font-weight: bold;
+          }
+          .status-badge {
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: bold;
+          }
+          .status-available {
+            background: #dcfce7;
+            color: #166534;
+          }
+          .status-cutting {
+            background: #dbeafe;
+            color: #1e40af;
+          }
+          .status-allocated {
+            background: #f3e8ff;
+            color: #6b21a8;
+          }
+          .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 10px;
+            color: #666;
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+          }
+          @media print {
+            body { padding: 10px; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Cut Rolls Details Report</h1>
+          <p><strong>Order ID: ${selectedOrder.order_frontend_id}</strong></p>
+          <p>Generated: ${new Date().toLocaleString()}</p>
+        </div>
+
+        <div class="order-info">
+          <div class="info-item">
+            <div class="label">Client</div>
+            <div class="value">${cutRollsData.order_info.client_name || 'N/A'}</div>
+          </div>
+          <div class="info-item">
+            <div class="label">Order Date</div>
+            <div class="value">${formatDate(cutRollsData.order_info.order_date)}</div>
+          </div>
+          <div class="info-item">
+            <div class="label">Status</div>
+            <div class="value">${cutRollsData.order_info.status.replace('_', ' ')}</div>
+          </div>
+        </div>
+
+        <div class="summary">
+          <div class="summary-card">
+            <div class="title">Total Cut Rolls</div>
+            <div class="value">${cutRollsData.mapping_summary.total_cut_rolls}</div>
+          </div>
+          <div class="summary-card">
+            <div class="title">Total Weight</div>
+            <div class="value">${cutRollsData.mapping_summary.total_weight_kg} kg</div>
+          </div>
+          <div class="summary-card">
+            <div class="title">By Status</div>
+            <div class="details">
+              ${Object.entries(cutRollsData.mapping_summary.by_status)
+                .map(([status, count]) => `${status}: ${count}`)
+                .join('<br/>')}
+            </div>
+          </div>
+          <div class="summary-card">
+            <div class="title">By Width</div>
+            <div class="details">
+              ${Object.entries(cutRollsData.mapping_summary.by_width)
+                .slice(0, 5)
+                .map(([width, count]) => `${width}": ${count}`)
+                .join('<br/>')}
+            </div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 15%;">Cut Roll Barcode</th>
+              <th style="width: 15%;">Plan IDs</th>
+              <th style="width: 12%;">Jumbo Barcode</th>
+              <th style="width: 8%;">Width</th>
+              <th style="width: 10%;">Weight</th>
+              <th style="width: 25%;">Paper Specifications</th>
+              <th style="width: 10%;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filteredCutRolls.map((roll, index) => `
+              <tr>
+                <td>
+                  <span class="barcode">${roll.barcode_id || 'N/A'}</span>
+                </td>
+                <td>
+                  ${roll.plan_frontend_ids && roll.plan_frontend_ids.length > 0
+                    ? roll.plan_frontend_ids.map(planId => `<span class="plan-id">${planId}</span>`).join(' ')
+                    : 'N/A'
+                  }
+                </td>
+                <td>
+                  <span class="jumbo-barcode">
+                    ${roll.jumbo_barcode_id ? transformJumboIdToDisplay(roll.jumbo_barcode_id, filteredCutRolls) : 'N/A'}
+                  </span>
+                </td>
+                <td style="text-align: center;">${roll.width_inches}"</td>
+                <td style="text-align: center;">${roll.weight_kg} kg</td>
+                <td>
+                  ${roll.paper
+                    ? `<div class="paper-info">
+                        <div class="paper-name">${roll.paper.name || 'N/A'}</div>
+                        <div>${roll.paper.gsm}gsm, ${roll.paper.bf}bf, ${roll.paper.shade}</div>
+                      </div>`
+                    : 'N/A'
+                  }
+                </td>
+                <td>
+                  <span class="status-badge status-${roll.status.toLowerCase()}">
+                    ${roll.status}
+                  </span>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div class="footer">
+          <p>Total Cut Rolls: ${filteredCutRolls.length} | Order: ${selectedOrder.order_frontend_id} | Client: ${cutRollsData.order_info.client_name || 'N/A'}</p>
+          <p>Printed on: ${new Date().toLocaleString()}</p>
+        </div>
+
+        <script>
+          window.onload = function() {
+            window.print();
+            window.onafterprint = function() {
+              window.close();
+            };
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    // Open print window
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+    }
   };
 
   // Filter cut rolls by barcode search
@@ -768,13 +1078,28 @@ export default function ClientOrderSummaryPage() {
         <Dialog open={showCutRollsModal} onOpenChange={setShowCutRollsModal}>
           <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Barcode className="h-5 w-5" />
-                Cut Rolls Details - {selectedOrder?.order_frontend_id}
-              </DialogTitle>
-              <DialogDescription>
-                Detailed information about cut rolls linked to this order
-              </DialogDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Barcode className="h-5 w-5" />
+                    Cut Rolls Details - {selectedOrder?.order_frontend_id}
+                  </DialogTitle>
+                  <DialogDescription>
+                    Detailed information about cut rolls linked to this order
+                  </DialogDescription>
+                </div>
+                {cutRollsData && filteredCutRolls.length > 0 && (
+                  <Button
+                    onClick={printCutRollsModal}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-2"
+                  >
+                    <Printer className="h-4 w-4" />
+                    Print
+                  </Button>
+                )}
+              </div>
             </DialogHeader>
 
             {cutRollsLoading ? (
@@ -873,7 +1198,7 @@ export default function ClientOrderSummaryPage() {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {filteredCutRolls.length > 0 ? (
-                        filteredCutRolls.map((roll) => (
+                        filteredCutRolls.map((roll, index) => (
                           <tr key={roll.id} className="hover:bg-gray-50">
                             <td className="px-3 py-3 whitespace-nowrap">
                               <span className="font-mono font-semibold text-blue-600">
@@ -895,7 +1220,7 @@ export default function ClientOrderSummaryPage() {
                             </td>
                             <td className="px-3 py-3 whitespace-nowrap">
                               <span className="font-mono text-xs text-green-600">
-                                {roll.jumbo_barcode_id || 'N/A'}
+                                {roll.jumbo_barcode_id ? transformJumboIdToDisplay(roll.jumbo_barcode_id, filteredCutRolls) : 'N/A'}
                               </span>
                             </td>
                             <td className="px-3 py-3 whitespace-nowrap">

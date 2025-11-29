@@ -40,6 +40,7 @@ import {
   RefreshCw,
   Save,
   Building2,
+  Printer,
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/api-config";
 
@@ -116,6 +117,33 @@ export default function PlanWeightsPage() {
   const [weightUpdates, setWeightUpdates] = useState<Record<string, string>>({});
   const [savingWeights, setSavingWeights] = useState<Record<string, boolean>>({});
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Local barcode transformation function (context-aware numbering with unique constraint)
+  const transformJumboIdToDisplay = (barcode: string | undefined, allCutRolls: typeof filteredCutRolls): string => {
+    if (!barcode || barcode === 'Unknown Jumbo') return barcode || '';
+    if (barcode.startsWith('JR_')) return barcode;
+
+    // Check for old format identifiers - more lenient pattern
+    if (barcode.startsWith('VJB_') || barcode.startsWith('VJB') ||
+        barcode.includes('VIRTUAL_JUMBO') || /^[A-F0-9]{8}$/i.test(barcode)) {
+
+      // Get unique jumbo barcodes in order of first appearance
+      const uniqueJumbos: string[] = [];
+      allCutRolls.forEach(item => {
+        if (item.jumbo_barcode_id && !uniqueJumbos.includes(item.jumbo_barcode_id)) {
+          uniqueJumbos.push(item.jumbo_barcode_id);
+        }
+      });
+
+      // Find the index of this barcode in the unique list
+      const uniqueIndex = uniqueJumbos.indexOf(barcode);
+      if (uniqueIndex !== -1) {
+        return `JR_${String(uniqueIndex + 1).padStart(4, '0')}`;
+      }
+    }
+
+    return barcode;
+  };
 
   // Load plans on component mount
   useEffect(() => {
@@ -262,6 +290,224 @@ export default function PlanWeightsPage() {
     }
   };
 
+  const printPlanWeights = () => {
+    if (!planSummary || filteredCutRolls.length === 0) {
+      toast.error("No data to print");
+      return;
+    }
+
+    // Create print window content
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Plan Weights - ${planSummary.plan_name || planSummary.plan_id}</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            font-size: 12px;
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+          }
+          .header h1 {
+            margin: 0;
+            font-size: 24px;
+          }
+          .header p {
+            margin: 5px 0;
+            color: #666;
+          }
+          .summary {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 5px;
+          }
+          .summary-item {
+            text-align: center;
+          }
+          .summary-item .label {
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+          }
+          .summary-item .value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+          }
+          th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+          }
+          th {
+            background-color: #4CAF50;
+            color: white;
+            font-weight: bold;
+            font-size: 11px;
+          }
+          tr:nth-child(even) {
+            background-color: #f9f9f9;
+          }
+          .barcode {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+          }
+          .jumbo-barcode {
+            font-family: 'Courier New', monospace;
+            color: #22c55e;
+            font-size: 10px;
+          }
+          .client-name {
+            font-weight: bold;
+          }
+          .order-id {
+            font-family: 'Courier New', monospace;
+            color: #9333ea;
+            font-size: 10px;
+          }
+          .status-badge {
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: bold;
+          }
+          .status-available {
+            background: #dcfce7;
+            color: #166534;
+          }
+          .status-cutting {
+            background: #dbeafe;
+            color: #1e40af;
+          }
+          .status-allocated {
+            background: #f3e8ff;
+            color: #6b21a8;
+          }
+          .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 10px;
+            color: #666;
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+          }
+          @media print {
+            body { padding: 10px; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Plan Weights Report</h1>
+          <p><strong>${planSummary.plan_name || 'Plan ' + planSummary.plan_id}</strong></p>
+          <p>Status: ${planSummary.plan_status} | Generated: ${new Date().toLocaleString()}</p>
+        </div>
+
+        <div class="summary">
+          <div class="summary-item">
+            <div class="label">Total Rolls</div>
+            <div class="value">${planSummary.production_summary.total_cut_rolls}</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">Total Weight</div>
+            <div class="value">${planSummary.production_summary.total_weight_kg.toFixed(1)} kg</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">Avg Weight/Roll</div>
+            <div class="value">${planSummary.production_summary.average_weight_per_roll.toFixed(1)} kg</div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 5%;">S.No</th>
+              <th style="width: 18%;">Barcode / Jumbo</th>
+              <th style="width: 18%;">Client & Order</th>
+              <th style="width: 20%;">Paper Specs</th>
+              <th style="width: 10%;">Width</th>
+              <th style="width: 12%;">Weight</th>
+              <th style="width: 12%;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filteredCutRolls.map((item, index) => `
+              <tr>
+                <td style="text-align: center;">${index + 1}</td>
+                <td>
+                  <div class="barcode">${item.barcode_id}</div>
+                  ${item.jumbo_barcode_id ? `<div class="jumbo-barcode">Jumbo: ${transformJumboIdToDisplay(item.jumbo_barcode_id, filteredCutRolls)}</div>` : ''}
+                </td>
+                <td>
+                  <div class="client-name">${item.client_name || 'N/A'}</div>
+                  ${item.order_frontend_id ? `<div class="order-id">Order: ${item.order_frontend_id}</div>` : ''}
+                </td>
+                <td>
+                  ${item.paper_specs
+                    ? `${item.paper_specs.gsm}gsm, ${item.paper_specs.bf}bf, ${item.paper_specs.shade}`
+                    : 'N/A'
+                  }
+                </td>
+                <td style="text-align: center;">${item.width_inches}"</td>
+                <td style="text-align: center;">
+                  <strong>${item.weight_kg} kg</strong>
+                  <br/>
+                  <span style="font-size: 9px; color: ${item.weight_kg <= 0.1 ? '#dc2626' : '#16a34a'};">
+                    ${item.weight_kg <= 0.1 ? 'Needs weighing' : 'Weight set'}
+                  </span>
+                </td>
+                <td>
+                  <span class="status-badge status-${item.status.toLowerCase()}">
+                    ${item.status}
+                  </span>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div class="footer">
+          <p>Total Records: ${filteredCutRolls.length} | Plan: ${planSummary.plan_name || planSummary.plan_id}</p>
+          <p>Printed on: ${new Date().toLocaleString()}</p>
+        </div>
+
+        <script>
+          window.onload = function() {
+            window.print();
+            window.onafterprint = function() {
+              window.close();
+            };
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    // Open print window
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+    } else {
+      toast.error("Please allow popups to print");
+    }
+  };
+
   // Extract all cut rolls from production_hierarchy for display and filtering
   // Add jumbo barcode to each cut roll for display
   const allCutRolls = planSummary?.production_hierarchy?.flatMap(
@@ -295,7 +541,7 @@ export default function PlanWeightsPage() {
           <div className="space-y-1">
             <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
               <Scale className="w-8 h-8 text-primary" />
-              Plan Weight Updates
+              Plan Weight Report
             </h1>
             <p className="text-muted-foreground">
               Select a plan to view and update cut roll weights
@@ -401,10 +647,23 @@ export default function PlanWeightsPage() {
         {planSummary && (
           <Card>
             <CardHeader>
-              <CardTitle>Cut Rolls Weight Update</CardTitle>
-              <CardDescription>
-                Update weights for cut rolls in this plan ({filteredCutRolls.length} items)
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Cut Rolls Weight Update</CardTitle>
+                  <CardDescription>
+                    Update weights for cut rolls in this plan ({filteredCutRolls.length} items)
+                  </CardDescription>
+                </div>
+                <Button
+                  onClick={printPlanWeights}
+                  variant="outline"
+                  disabled={filteredCutRolls.length === 0}
+                  className="flex items-center gap-2"
+                >
+                  <Printer className="w-4 h-4" />
+                  Print Report
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="rounded-md border">
@@ -417,9 +676,9 @@ export default function PlanWeightsPage() {
                       <TableHead>Paper Specs</TableHead>
                       <TableHead>Dimensions</TableHead>
                       <TableHead>Current Weight</TableHead>
-                      <TableHead>New Weight (kg)</TableHead>
+                      {/* <TableHead>New Weight (kg)</TableHead> */}
                       <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
+                      {/* <TableHead>Actions</TableHead> */}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -443,7 +702,7 @@ export default function PlanWeightsPage() {
                               <div className="font-mono text-sm">{item.barcode_id}</div>
                               {item.jumbo_barcode_id && (
                                 <div className="text-sm font-mono text-green-600">
-                                  Jumbo Roll:{item.jumbo_barcode_id}
+                                  Jumbo Roll: {transformJumboIdToDisplay(item.jumbo_barcode_id, filteredCutRolls)}
                                 </div>
                               )}
                             </div>
@@ -486,7 +745,7 @@ export default function PlanWeightsPage() {
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell>
+                          {/* <TableCell>
                             <Input
                               type="number"
                               min="0"
@@ -502,11 +761,11 @@ export default function PlanWeightsPage() {
                               className="w-24"
                               disabled={savingWeights[item.id]}
                             />
-                          </TableCell>
+                          </TableCell> */}
                           <TableCell>
                             {getStatusBadge(item.status)}
                           </TableCell>
-                          <TableCell>
+                          {/* <TableCell>
                             <Button
                               size="sm"
                               onClick={() => updateWeight(item.id, item.barcode_id)}
@@ -525,7 +784,7 @@ export default function PlanWeightsPage() {
                                 </>
                               )}
                             </Button>
-                          </TableCell>
+                          </TableCell> */}
                         </TableRow>
                       ))
                     ) : (

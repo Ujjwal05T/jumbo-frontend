@@ -37,6 +37,7 @@ import {
   QRScanResult,
   QRWeightUpdate
 } from '@/lib/qr-management';
+import { transformJumboBarcode, transformSetBarcode } from '@/lib/barcode-utils';
 
 interface RollDetailsCardProps {
   result: QRScanResult;
@@ -242,8 +243,27 @@ function RollDetailsCard({ result }: RollDetailsCardProps) {
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
           <div className="text-center sm:text-left">
             <CardTitle className="text-lg sm:text-xl md:text-2xl">Roll Details</CardTitle>
-            <CardDescription className="text-sm sm:text-base break-all">
-              Code: {result.barcode_id || result.qr_code}
+            <CardDescription className="flex flex-wrap items-center gap-3 sm:gap-4 p-3 text-sm sm:text-base">
+              <div className="font-bold text-gray-500">
+                Code: <span className="font-mono">{result.barcode_id || result.qr_code}</span>
+              </div>
+
+              {result.parent_rolls.parent_118_barcode && (
+                <div className="flex items-center gap-1">
+                  <span className="text-xs sm:text-sm text-gray-600">SET:</span>
+                  <span className="text-sm sm:text-base font-mono font-semibold ">
+                    {transformSetBarcode(result.parent_rolls.parent_118_barcode)}
+                  </span>
+                </div>
+              )}
+              {result.parent_rolls.parent_jumbo_barcode && (
+                <div className="flex items-center gap-1">
+                  <span className="text-xs sm:text-sm text-gray-600">Jumbo:</span>
+                  <span className="text-sm sm:text-base font-mono font-semibold ">
+                    {transformJumboBarcode(result.parent_rolls.parent_jumbo_barcode)}
+                  </span>
+                </div>
+              )}
             </CardDescription>
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
@@ -277,7 +297,7 @@ function RollDetailsCard({ result }: RollDetailsCardProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
+        {/* <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
           <div>
             <Label className="text-xs sm:text-sm font-medium text-muted-foreground">Type</Label>
             <p className="text-base sm:text-lg font-semibold capitalize">{result.roll_details.roll_type}</p>
@@ -286,7 +306,7 @@ function RollDetailsCard({ result }: RollDetailsCardProps) {
             <Label className="text-xs sm:text-sm font-medium text-muted-foreground">Location</Label>
             <p className="text-base sm:text-lg font-semibold">{result.roll_details.location || 'Not Set'}</p>
           </div>
-        </div>
+        </div> */}
 
         {result.paper_specifications && (
           <div>
@@ -301,30 +321,6 @@ function RollDetailsCard({ result }: RollDetailsCardProps) {
             {result.client_info?.client_name || 'No Client Assigned'}
           </p>
         </div>
-
-        {(result.parent_rolls?.parent_118_barcode || result.parent_rolls?.parent_jumbo_barcode) && (
-          <div className="border-t pt-4">
-            <Label className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 block">Parent Rolls</Label>
-            <div className="space-y-2">
-              {result.parent_rolls.parent_118_barcode && (
-                <div className="flex items-center justify-between">
-                  <span className="text-xs sm:text-sm text-gray-600">118" Roll:</span>
-                  <span className="text-sm sm:text-base font-mono font-semibold text-orange-600">
-                    {result.parent_rolls.parent_118_barcode}
-                  </span>
-                </div>
-              )}
-              {result.parent_rolls.parent_jumbo_barcode && (
-                <div className="flex items-center justify-between">
-                  <span className="text-xs sm:text-sm text-gray-600">Jumbo Roll:</span>
-                  <span className="text-sm sm:text-base font-mono font-semibold text-green-600">
-                    {result.parent_rolls.parent_jumbo_barcode}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </CardContent>
     </Card>
   );
