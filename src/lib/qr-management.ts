@@ -261,10 +261,10 @@ export const validateWeight = (weight: number): {
     };
   }
   
-  if (weight > 1000) {
+  if (weight > 9999) {
     return {
       isValid: false,
-      message: 'Weight seems too high (>1000kg)'
+      message: 'Weight seems too high (>9999kg)'
     };
   }
   

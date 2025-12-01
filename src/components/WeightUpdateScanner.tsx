@@ -606,6 +606,7 @@ export default function WeightUpdateScanner() {
 
         {!scanResult ? (
           /* Barcode Input */
+          <>
           <Card className="w-full max-w-2xl mx-auto">
             <CardHeader className="text-center pb-4 sm:pb-6">
               <div className="mx-auto w-14 h-14 sm:w-16 sm:h-16 bg-blue-100 rounded-full flex items-center justify-center mb-3 sm:mb-4">
@@ -665,6 +666,12 @@ export default function WeightUpdateScanner() {
               </form>
             </CardContent>
           </Card>
+          <div className='w-full max-w-2xl mx-auto'>
+          <Button className='w-full font-medium text-lg py-5'  onClick={() => router.push('/masters/cut-rolls/manual')}>
+            Manual Roll
+          </Button>
+        </div>
+          </>
         ) : (
           /* Roll Details and Weight Update */
           <div className="space-y-4 sm:space-y-6">

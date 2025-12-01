@@ -129,6 +129,9 @@ export const REPORTS_ENDPOINTS = {
   // Client Order Summary Report endpoints (new report)
   CLIENT_ORDER_SUMMARY: `${API_BASE_URL}/reports/client-order-summary`,
   CLIENT_ORDER_CUT_ROLLS: (orderFrontendId: string) => `${API_BASE_URL}/reports/client-order-summary/${orderFrontendId}/cut-rolls`,
+
+  // Cut Rolls Weight Update Report endpoint (new report)
+  CUT_ROLLS_WEIGHT_UPDATE: (reportDate: string) => `${API_BASE_URL}/reports/cut-rolls-weight-update?report_date=${reportDate}`,
 };
 
 // Order Edit Logs endpoints
