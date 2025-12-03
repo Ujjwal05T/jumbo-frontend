@@ -1024,7 +1024,7 @@ export default function PlanningPage() {
           };
         }),
         wastage_allocations: planResult.wastage_allocations || [], // Send wastage_allocations as separate field
-        expected_waste_percentage: 100 - calculateEfficiencyMetrics(planResult.cut_rolls_generated).averageEfficiency,
+        expected_waste_percentage: Math.max(0, 100 - calculateEfficiencyMetrics(planResult.cut_rolls_generated).averageEfficiency),
         created_by_id: user_id,
         order_ids: selectedOrders,
         pending_orders: planResult.pending_orders || [] // Include pending orders from algorithm

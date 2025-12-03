@@ -83,8 +83,25 @@ export default function BarcodeLookupPage() {
         return 'outline';
       case 'consumed':
         return 'destructive';
+      case 'cutting':
+        return 'secondary';
+      case 'used':
+        return 'outline';
       default:
         return 'outline';
+    }
+  };
+
+  const getStatusDisplayText = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'cutting':
+        return 'Planned';
+      case 'available':
+        return 'Weight Updated';
+      case 'used':
+        return 'Dispatched';
+      default:
+        return status;
     }
   };
 
@@ -104,7 +121,7 @@ export default function BarcodeLookupPage() {
                   <CardDescription className="font-mono">{jumbo_roll.barcode_id}</CardDescription>
                 </div>
               </div>
-              <Badge variant={getStatusBadgeVariant(jumbo_roll.status)}>{jumbo_roll.status}</Badge>
+              <Badge variant={getStatusBadgeVariant(jumbo_roll.status)} className="text-sm px-3 py-1">{getStatusDisplayText(jumbo_roll.status)}</Badge>
             </div>
           </CardHeader>
           <CardContent>
@@ -176,7 +193,7 @@ export default function BarcodeLookupPage() {
                           </p>
                         </div>
                       </div>
-                      <Badge variant={getStatusBadgeVariant(setRoll.status)} className="text-xs">{setRoll.status}</Badge>
+                      <Badge variant={getStatusBadgeVariant(setRoll.status)} className="text-sm px-3 py-1">{getStatusDisplayText(setRoll.status)}</Badge>
                     </div>
 
                     {/* Cut Rolls Table */}
@@ -241,7 +258,7 @@ export default function BarcodeLookupPage() {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Status</p>
-                  <Badge variant={getStatusBadgeVariant(parent_jumbo_roll.status)}>{parent_jumbo_roll.status}</Badge>
+                  <Badge variant={getStatusBadgeVariant(parent_jumbo_roll.status)} className="text-sm px-3 py-1">{getStatusDisplayText(parent_jumbo_roll.status)}</Badge>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Location</p>
@@ -263,7 +280,7 @@ export default function BarcodeLookupPage() {
                   <CardDescription className="font-mono">{current_set_roll.barcode_id}</CardDescription>
                 </div>
               </div>
-              <Badge variant={getStatusBadgeVariant(current_set_roll.status)}>{current_set_roll.status}</Badge>
+              <Badge variant={getStatusBadgeVariant(current_set_roll.status)} className="text-sm px-3 py-1">{getStatusDisplayText(current_set_roll.status)}</Badge>
             </div>
           </CardHeader>
           <CardContent>
@@ -303,8 +320,8 @@ export default function BarcodeLookupPage() {
                       <p className="font-mono text-sm">{sibling.barcode_id}</p>
                       <p className="text-xs text-muted-foreground">Set #{sibling.individual_roll_number}</p>
                     </div>
-                    <Badge variant={getStatusBadgeVariant(sibling.status)} className="text-xs">
-                      {sibling.status}
+                    <Badge variant={getStatusBadgeVariant(sibling.status)} className="text-sm px-3 py-1">
+                      {getStatusDisplayText(sibling.status)}
                     </Badge>
                   </div>
                 ))}
@@ -389,7 +406,7 @@ export default function BarcodeLookupPage() {
                   <CardDescription className="font-mono">{current_cut_roll.barcode_id}</CardDescription>
                 </div>
               </div>
-              <Badge variant={getStatusBadgeVariant(current_cut_roll.status)}>{current_cut_roll.status}</Badge>
+              <Badge variant={getStatusBadgeVariant(current_cut_roll.status)} className="text-sm px-3 py-1">{getStatusDisplayText(current_cut_roll.status)}</Badge>
             </div>
           </CardHeader>
           <CardContent>
@@ -403,8 +420,8 @@ export default function BarcodeLookupPage() {
                 <p className="font-semibold">{current_cut_roll.weight_kg} kg</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Location</p>
-                <p className="font-semibold">{current_cut_roll.location}</p>
+                <p className="text-muted-foreground">Status</p>
+                <p className="font-semibold">{getStatusDisplayText(current_cut_roll.status)}</p>
               </div>
               <div>
                 <p className="text-muted-foreground">Wastage Roll</p>
@@ -490,8 +507,8 @@ export default function BarcodeLookupPage() {
                       </p>
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                      <Badge variant={getStatusBadgeVariant(setRoll.status)} className="text-xs">
-                        {setRoll.status}
+                      <Badge variant={getStatusBadgeVariant(setRoll.status)} className="text-sm px-3 py-1">
+                        {getStatusDisplayText(setRoll.status)}
                       </Badge>
                       {setRoll.is_current_parent && (
                         <Badge variant="outline" className="text-xs">Current</Badge>

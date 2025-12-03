@@ -25,23 +25,12 @@ import {
   ArrowLeft,
   AlertCircle,
   CheckCircle2,
-  Plus,
-  X,
   Package,
 } from "lucide-react";
 import { toast } from "sonner";
 import { MASTER_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
 
 // Types for manual cut roll entry
-interface ManualCutRoll {
-  id: string;
-  paper_id: string;
-  paper_name: string;
-  reel_number: string;
-  width_inches: string;
-  weight_kg: string;
-}
-
 interface Client {
   id: string;
   company_name: string;
@@ -68,20 +57,14 @@ export default function ManualCutRollEntryPage() {
     message: string;
   }>({ type: null, message: "" });
 
-  // Single client selection for all rolls
+  // Form fields for single roll entry
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [selectedClientName, setSelectedClientName] = useState<string>("");
-
-  const [cutRolls, setCutRolls] = useState<ManualCutRoll[]>([
-    {
-      id: "1",
-      paper_id: "",
-      paper_name: "",
-      reel_number: "",
-      width_inches: "",
-      weight_kg: "",
-    },
-  ]);
+  const [selectedPaperId, setSelectedPaperId] = useState<string>("");
+  const [selectedPaperName, setSelectedPaperName] = useState<string>("");
+  const [reelNumber, setReelNumber] = useState<string>("");
+  const [widthInches, setWidthInches] = useState<string>("");
+  const [weightKg, setWeightKg] = useState<string>("");
 
   useEffect(() => {
     const loadData = async () => {
@@ -137,136 +120,103 @@ export default function ManualCutRollEntryPage() {
       return;
     }
 
-    if (cutRolls.length === 0) {
+    if (!selectedPaperId) {
       setAlert({
         type: "error",
-        message: "Please add at least one cut roll.",
+        message: "Please select a paper type.",
       });
       return;
     }
 
-    for (let i = 0; i < cutRolls.length; i++) {
-      const roll = cutRolls[i];
+    if (!reelNumber || reelNumber.trim() === "") {
+      setAlert({
+        type: "error",
+        message: "Please enter a reel number.",
+      });
+      return;
+    }
 
-      if (!roll.paper_id) {
-        setAlert({
-          type: "error",
-          message: `Please select a paper type for cut roll ${i + 1}.`,
-        });
-        return;
-      }
+    if (!widthInches || parseFloat(widthInches) <= 0) {
+      setAlert({
+        type: "error",
+        message: "Please enter a valid width.",
+      });
+      return;
+    }
 
-      if (!roll.reel_number || roll.reel_number.trim() === "") {
-        setAlert({
-          type: "error",
-          message: `Please enter a reel number for cut roll ${i + 1}.`,
-        });
-        return;
-      }
-
-      if (!roll.width_inches || parseFloat(roll.width_inches) <= 0) {
-        setAlert({
-          type: "error",
-          message: `Please enter a valid width for cut roll ${i + 1}.`,
-        });
-        return;
-      }
-
-      if (!roll.weight_kg || parseFloat(roll.weight_kg) <= 0) {
-        setAlert({
-          type: "error",
-          message: `Please enter a valid weight for cut roll ${i + 1}.`,
-        });
-        return;
-      }
+    if (!weightKg || parseFloat(weightKg) <= 0) {
+      setAlert({
+        type: "error",
+        message: "Please enter a valid weight.",
+      });
+      return;
     }
 
     try {
       setLoading(true);
 
-      // Prepare data with client information
-      const rollData = cutRolls.map(roll => ({
-        client_id: selectedClientId,
-        client_name: selectedClientName,
-        paper_id: roll.paper_id,
-        paper_name: roll.paper_name,
-        reel_number: roll.reel_number,
-        width_inches: roll.width_inches,
-        weight_kg: roll.weight_kg,
-      }));
+      // Get user ID from localStorage
+      const userId = localStorage.getItem('user_id');
+      if (!userId) {
+        setAlert({
+          type: "error",
+          message: "User not authenticated. Please log in again.",
+        });
+        return;
+      }
 
-      // Mockup - just show success message
-      // In real implementation, this would send rollData to backend
-      console.log("Submitting cut rolls:", rollData);
+      // Prepare data for backend
+      const rollData = {
+        client_id: selectedClientId,
+        paper_id: selectedPaperId,
+        reel_number: reelNumber,
+        width_inches: parseFloat(widthInches),
+        weight_kg: parseFloat(weightKg),
+        created_by_id: userId,
+      };
+
+      // Send to backend
+      const response = await fetch(
+        MASTER_ENDPOINTS.MANUAL_CUT_ROLLS,
+        createRequestOptions('POST', rollData)
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to create manual cut roll');
+      }
+
+      const result = await response.json();
 
       setAlert({
         type: "success",
-        message: `Successfully registered ${cutRolls.length} cut roll(s) for ${selectedClientName}!`,
+        message: `Successfully registered cut roll ${result.frontend_id} for ${selectedClientName}!`,
       });
 
-      toast.success(`Successfully registered ${cutRolls.length} cut roll(s)!`);
+      toast.success(`Cut roll ${result.barcode_id} created successfully!`);
 
       // Reset form after successful submission
       setTimeout(() => {
-        setCutRolls([{
-          id: "1",
-          paper_id: "",
-          paper_name: "",
-          reel_number: "",
-          width_inches: "",
-          weight_kg: "",
-        }]);
         setSelectedClientId("");
         setSelectedClientName("");
+        setSelectedPaperId("");
+        setSelectedPaperName("");
+        setReelNumber("");
+        setWidthInches("");
+        setWeightKg("");
         setAlert({ type: null, message: "" });
       }, 2000);
 
     } catch (error) {
-      console.error("Error saving cut rolls:", error);
+      console.error("Error saving cut roll:", error);
       setAlert({
         type: "error",
-        message: "Failed to save cut rolls. Please try again.",
+        message: error instanceof Error ? error.message : "Failed to save cut roll. Please try again.",
       });
+      toast.error("Failed to create cut roll");
     } finally {
       setLoading(false);
     }
-  };
-
-  const addCutRoll = () => {
-    const newRoll: ManualCutRoll = {
-      id: Date.now().toString(), // Use timestamp as temporary ID
-      paper_id: cutRolls[0]?.paper_id || "",
-      paper_name: cutRolls[0]?.paper_name || "",
-      reel_number: "",
-      width_inches: "",
-      weight_kg: "",
-    };
-
-    setCutRolls([...cutRolls, newRoll]);
-  };
-
-  const removeCutRoll = (id: string) => {
-    if (cutRolls.length > 1) {
-      setCutRolls(cutRolls.filter(roll => roll.id !== id));
-    }
-  };
-
-  const updateCutRoll = (id: string, field: keyof ManualCutRoll, value: string) => {
-    setCutRolls(cutRolls.map(roll => {
-      if (roll.id === id) {
-        const updatedRoll = { ...roll, [field]: value };
-
-        // Auto-populate paper name when paper_id changes
-        if (field === "paper_id") {
-          const selectedPaper = papers.find(p => p.id === value);
-          updatedRoll.paper_name = selectedPaper ?
-            `${selectedPaper.gsm}gsm, ${selectedPaper.bf}bf, ${selectedPaper.shade}` : "";
-        }
-
-        return updatedRoll;
-      }
-      return roll;
-    }));
   };
 
   const handleClientChange = (clientId: string) => {
@@ -275,14 +225,20 @@ export default function ManualCutRollEntryPage() {
     setSelectedClientName(selectedClient?.company_name || "");
   };
 
+  const handlePaperChange = (paperId: string) => {
+    setSelectedPaperId(paperId);
+    const selectedPaper = papers.find(p => p.id === paperId);
+    setSelectedPaperName(selectedPaper ?
+      `${selectedPaper.gsm}gsm, ${selectedPaper.bf}bf, ${selectedPaper.shade}` : "");
+  };
+
   const handleNumberInput = (
-    id: string,
-    field: keyof ManualCutRoll,
+    setter: (value: string) => void,
     value: string
   ) => {
     // Allow empty string, numbers, and decimal point
     if (value === "" || /^\d*\.?\d*$/.test(value)) {
-      updateCutRoll(id, field, value);
+      setter(value);
     }
   };
 
@@ -346,147 +302,87 @@ export default function ManualCutRollEntryPage() {
               
             </div>
 
-            {/* Cut Rolls Section */}
+            {/* Cut Roll Entry Section */}
             <div className="space-y-4">
-              <Label className="text-lg font-semibold mb-4">Cut Rolls *</Label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Paper Selection */}
+                <div>
+                  <Label htmlFor="paper_id" className="text-base font-medium">Paper Type *</Label>
+                  <Select
+                    value={selectedPaperId}
+                    onValueChange={handlePaperChange}
+                    disabled={loading}
+                  >
+                    <SelectTrigger className="mt-2 font-medium">
+                      <SelectValue placeholder="Select paper" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {papers
+                        .sort((a, b) => a.gsm - b.gsm)
+                        .map((paper) => (
+                          <SelectItem key={paper.id} value={paper.id} className="font-medium">
+                            {paper.gsm}gsm, {paper.bf}bf, {paper.shade}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedPaperName && (
+                    <p className="mt-1 text-sm text-gray-600">
+                      Selected: {selectedPaperName}
+                    </p>
+                  )}
+                </div>
 
-              <div className="space-y-4">
-                {cutRolls.map((roll, index) => (
-                  <div key={roll.id} className="border rounded-lg p-4">
-                    <div className="flex flex-col sm:flex-row sm:justify-around sm:items-end sm:gap-3 gap-4">
-                      {/* Item Number */}
-                      <div className="flex-shrink-0 w-12">
-                        <Label className="text-base font-medium">Item</Label>
-                        <div className="flex items-center justify-center mt-2">
-                          <span className="text-md font-medium bg-gray-100 px-2 py-1 rounded">
-                            #{index + 1}
-                          </span>
-                        </div>
-                      </div>
+                {/* Reel Number */}
+                <div>
+                  <Label htmlFor="reel_number" className="text-base font-medium">Reel Number *</Label>
+                  <Input
+                    id="reel_number"
+                    type="text"
+                    value={reelNumber}
+                    onChange={(e) => setReelNumber(e.target.value)}
+                    placeholder="Enter reel number"
+                    disabled={loading}
+                    className="mt-2 font-medium"
+                  />
+                </div>
 
-                      {/* Paper Selection */}
-                      <div className="flex-1 min-w-0 sm:max-w-64 lg:max-w-86">
-                        <Label className="text-base font-medium">Paper Type *</Label>
-                        <Select
-                          value={roll.paper_id}
-                          onValueChange={(value) =>
-                            updateCutRoll(roll.id, "paper_id", value)
-                          }
-                          disabled={loading}
-                          
-                        >
-                          <SelectTrigger className="mt-2 w-full font-medium">
-                            <SelectValue placeholder="Select paper" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {papers
-                              .sort((a, b) => a.gsm - b.gsm)
-                              .map((paper) => (
-                                <SelectItem key={paper.id} value={paper.id} className="font-medium">
-                                  {paper.gsm}gsm, {paper.bf}bf, {paper.shade}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                {/* Width */}
+                <div>
+                  <Label htmlFor="width_inches" className="text-base font-medium">Width (inches) *</Label>
+                  <Input
+                    id="width_inches"
+                    type="text"
+                    inputMode="decimal"
+                    pattern="[0-9]*\.?[0-9]*"
+                    value={widthInches}
+                    onChange={(e) => handleNumberInput(setWidthInches, e.target.value)}
+                    placeholder="Enter width"
+                    disabled={loading}
+                    className="mt-2 font-medium"
+                  />
+                </div>
 
-                      {/* Reel Number */}
-                      <div className="flex-shrink-0 max-w-86">
-                        <Label className="text-base font-medium">Reel Number *</Label>
-                        <Input
-                          type="text"
-                          value={roll.reel_number}
-                          onChange={(e) =>
-                            updateCutRoll(roll.id, "reel_number", e.target.value)
-                          }
-                          placeholder="Reel ID"
-                          disabled={loading}
-                          className="mt-2 w-fullv font-medium"
-                        />
-                      </div>
-
-                      {/* Width */}
-                      <div className="flex-shrink-0 sm:w-32 lg:w-40 xl:w-48">
-                        <Label className="text-base font-medium">Width (inches) *</Label>
-                        <Input
-                          type="text"
-                          inputMode="decimal"
-                          pattern="[0-9]*\.?[0-9]*"
-                          value={roll.width_inches}
-                          onChange={(e) =>
-                            handleNumberInput(roll.id, "width_inches", e.target.value)
-                          }
-                          placeholder="Width"
-                          disabled={loading}
-                          className="mt-2 font-medium"
-                        />
-                      </div>
-
-                      {/* Weight */}
-                      <div className="flex-shrink-0 sm:w-32 lg:w-40 xl:w-48">
-                        <Label className="text-base font-medium">Weight (kg) *</Label>
-                        <Input
-                          type="text"
-                          inputMode="decimal"
-                          pattern="[0-9]*\.?[0-9]*"
-                          value={roll.weight_kg}
-                          onChange={(e) =>
-                            handleNumberInput(roll.id, "weight_kg", e.target.value)
-                          }
-                          placeholder="Weight"
-                          disabled={loading}
-                          className="mt-2 font-medium"
-                        />
-                      </div>
-
-                      {/* Remove Button */}
-                      <div className="flex-shrink-0">
-                        <Label className="text-sm font-medium opacity-0">Remove</Label>
-                        <div className="mt-2">
-                          {cutRolls.length > 1 ? (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeCutRoll(roll.id)}
-                              disabled={loading}
-                              className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
-                            >
-                              <X className="h-5 w-5" />
-                            </Button>
-                          ) : (
-                            <div className="h-8 w-8"></div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Display selected paper info */}
-                    <div className="mt-3 pt-3 border-t text-sm text-gray-600">
-                      {roll.paper_name && (
-                        <div>
-                          <span className="font-medium">Paper:</span> {roll.paper_name}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                {/* Weight */}
+                <div>
+                  <Label htmlFor="weight_kg" className="text-base font-medium">Weight (kg) *</Label>
+                  <Input
+                    id="weight_kg"
+                    type="text"
+                    inputMode="decimal"
+                    pattern="[0-9]*\.?[0-9]*"
+                    value={weightKg}
+                    onChange={(e) => handleNumberInput(setWeightKg, e.target.value)}
+                    placeholder="Enter weight"
+                    disabled={loading}
+                    className="mt-2 font-medium"
+                  />
+                </div>
               </div>
             </div>
 
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4 justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={addCutRoll}
-                disabled={loading}
-                className="w-full sm:w-auto"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Add Cut Roll
-              </Button>
-
               <Button
                 type="button"
                 variant="outline"
@@ -499,7 +395,7 @@ export default function ManualCutRollEntryPage() {
 
               <Button type="submit" disabled={loading} className="w-full sm:w-auto">
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save Cut Rolls
+                Save Cut Roll
               </Button>
             </div>
           </form>

@@ -12,11 +12,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DASHBOARD_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
+import { trackRollHierarchy, type JumboHierarchy } from "@/lib/roll-tracking";
 import { 
   Users, 
   ShoppingCart, 
   Clock, 
-  FileText, 
+  ChevronDown, 
   TrendingUp, 
   TrendingDown,
   Package,
@@ -90,6 +91,9 @@ export default function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [activities, setActivities] = useState<RecentActivity[]>([]);
   const [lastUpdated, setLastUpdated] = useState<string>("");
+  const [currentJumbo, setCurrentJumbo] = useState<any>(null);
+  const [jumboHierarchy, setJumboHierarchy] = useState<JumboHierarchy | null>(null);
+  const [showJumboDetails, setShowJumboDetails] = useState(false);
   const router = useRouter();
 
   // Fetch dashboard data
@@ -111,8 +115,34 @@ export default function DashboardPage() {
         const activitiesData = await activitiesResponse.json();
         setActivities(activitiesData.activities);
       }
-      
-      
+
+      // Fetch current jumbo roll
+      try {
+        const jumboResponse = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/current-jumbo`, createRequestOptions('GET'));
+        if (jumboResponse.ok) {
+          const jumboData = await jumboResponse.json();
+          if (jumboData.current_jumbo) {
+            setCurrentJumbo(jumboData.current_jumbo);
+
+            // Fetch hierarchy details for the jumbo roll
+            try {
+              const hierarchyData = await trackRollHierarchy(jumboData.current_jumbo.jumbo_barcode_id);
+              if (hierarchyData.roll_type === 'jumbo') {
+                setJumboHierarchy(hierarchyData.hierarchy as JumboHierarchy);
+              }
+            } catch (error) {
+              console.error('Error fetching jumbo hierarchy:', error);
+            }
+          } else {
+            setCurrentJumbo(null);
+            setJumboHierarchy(null);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching current jumbo:', error);
+      }
+
+
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       toast.error('Failed to load dashboard data');
@@ -327,6 +357,193 @@ export default function DashboardPage() {
             </Card>
           ))}
         </div>
+
+        {/* Current Jumbo Roll */}
+        {currentJumbo && jumboHierarchy && (
+          <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-xl">
+                    <Package className="w-6 h-6 text-blue-600" />
+                    Current Jumbo Roll in Machine
+                  </CardTitle>
+                  <CardDescription className="font-mono text-4xl font-semibold mt-1">
+                    {currentJumbo.jumbo_barcode_id}
+                  </CardDescription>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm text-muted-foreground">Set on</div>
+                  <div className="text-xs text-muted-foreground">{new Date(currentJumbo.created_at).toLocaleString()}</div>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Collapsible Jumbo Details */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-semibold text-sm flex items-center gap-2">
+                      <Package className="w-4 h-4 text-blue-600" />
+                      Jumbo Roll Details
+                    </h4>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowJumboDetails(!showJumboDetails)}
+                      className="text-xs"
+                    >
+                      {showJumboDetails ? 'Hide Details' : 'Show Details'}
+                      <ChevronDown className={`w-4 h-4 ml-1 transition-transform ${showJumboDetails ? 'rotate-180' : ''}`} />
+                    </Button>
+                  </div>
+                  
+                  {showJumboDetails && (
+                    <div className="space-y-4 animate-in slide-in-from-top-1 duration-300">
+                      {/* Jumbo Details */}
+                      <div className="space-y-3 p-4 bg-white rounded-lg border">
+                        <h5 className="font-semibold text-sm flex items-center gap-2">
+                          <Package className="w-4 h-4 text-blue-600" />
+                          Jumbo Roll Specifications
+                        </h5>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Width:</span>
+                            <span className="font-medium">{jumboHierarchy.jumbo_roll.width_inches}"</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Weight:</span>
+                            <span className="font-medium">{jumboHierarchy.jumbo_roll.weight_kg} kg</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Total SETs:</span>
+                            <span className="font-semibold text-purple-600">{jumboHierarchy.total_sets}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Total Cuts:</span>
+                            <span className="font-semibold text-green-600">{jumboHierarchy.total_cut_rolls}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* SET Rolls */}
+                      {/* <div className="space-y-3 p-4 bg-white rounded-lg border">
+                        <h5 className="font-semibold text-sm flex items-center gap-2">
+                          <Scissors className="w-4 h-4 text-purple-600" />
+                          SET Rolls ({jumboHierarchy.intermediate_rolls.length})
+                        </h5>
+                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                          {jumboHierarchy.intermediate_rolls.slice(0, 5).map((setRoll, idx) => (
+                            <div key={setRoll.id} className="text-xs font-mono bg-gray-50 p-2 rounded border">
+                              {setRoll.barcode_id} <span className="text-muted-foreground">({setRoll.cut_rolls_count} cuts)</span>
+                            </div>
+                          ))}
+                          {jumboHierarchy.intermediate_rolls.length > 5 && (
+                            <div className="text-xs text-muted-foreground text-center py-1">
+                              +{jumboHierarchy.intermediate_rolls.length - 5} more SETs
+                            </div>
+                          )}
+                        </div>
+                      </div> */}
+
+                      {/* Cut Rolls - Show all cut rolls from all SET rolls */}
+                      <div className="space-y-3 p-4 bg-white rounded-lg border">
+                        <h5 className="font-semibold text-sm flex items-center gap-2">
+                          <Scissors className="w-4 h-4 text-green-600" />
+                          Cut Rolls (All SETs)
+                        </h5>
+                        <div className="space-y-1 max-h-40 overflow-y-auto">
+                          {jumboHierarchy.intermediate_rolls.map((setRoll) =>
+                            setRoll.cut_rolls?.map((cutRoll) => (
+                              <div key={cutRoll.id} className="text-xs font-mono bg-gray-50 p-2 rounded border">
+                                <span className="text-purple-600">[{setRoll.barcode_id}]</span> {cutRoll.barcode_id} <span className="text-muted-foreground">({cutRoll.width_inches}")</span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {/* Jumbo Details */}
+                {/* <div className="space-y-3">
+                  <h4 className="font-semibold text-sm flex items-center gap-2">
+                    <Package className="w-4 h-4 text-blue-600" />
+                    Jumbo Roll
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Width:</span>
+                      <span className="font-medium">{jumboHierarchy.jumbo_roll.width_inches}"</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Weight:</span>
+                      <span className="font-medium">{jumboHierarchy.jumbo_roll.weight_kg} kg</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total SETs:</span>
+                      <span className="font-semibold text-purple-600">{jumboHierarchy.total_sets}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total Cuts:</span>
+                      <span className="font-semibold text-green-600">{jumboHierarchy.total_cut_rolls}</span>
+                    </div>
+                  </div>
+                </div> */}
+
+                {/* SET Rolls */}
+                {/* <div className="space-y-3">
+                  <h4 className="font-semibold text-sm flex items-center gap-2">
+                    <Scissors className="w-4 h-4 text-purple-600" />
+                    SET Rolls ({jumboHierarchy.intermediate_rolls.length})
+                  </h4>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {jumboHierarchy.intermediate_rolls.slice(0, 5).map((setRoll, idx) => (
+                      <div key={setRoll.id} className="text-xs font-mono bg-white p-2 rounded border">
+                        {setRoll.barcode_id} <span className="text-muted-foreground">({setRoll.cut_rolls_count} cuts)</span>
+                      </div>
+                    ))}
+                    {jumboHierarchy.intermediate_rolls.length > 5 && (
+                      <div className="text-xs text-muted-foreground text-center py-1">
+                        +{jumboHierarchy.intermediate_rolls.length - 5} more SETs
+                      </div>
+                    )}
+                  </div>
+                </div> */}
+
+                {/* Cut Rolls */}
+                {/* <div className="space-y-3">
+                  <h4 className="font-semibold text-sm flex items-center gap-2">
+                    <Scissors className="w-4 h-4 text-green-600" />
+                    Sample Cut Rolls
+                  </h4>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {jumboHierarchy.intermediate_rolls[0]?.cut_rolls.slice(0, 5).map((cutRoll) => (
+                      <div key={cutRoll.id} className="text-xs font-mono bg-white p-2 rounded border">
+                        {cutRoll.barcode_id} <span className="text-muted-foreground">({cutRoll.width_inches}")</span>
+                      </div>
+                    ))}
+                    {jumboHierarchy.total_cut_rolls > 5 && (
+                      <div className="text-xs text-muted-foreground text-center py-1">
+                        +{jumboHierarchy.total_cut_rolls - 5} more cuts
+                      </div>
+                    )}
+                  </div>
+                </div> */}
+              </div>
+              {/* <div className="mt-4 pt-4 border-t">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push(`/barcode-lookup?barcode=${currentJumbo.jumbo_barcode_id}`)}
+                >
+                  View Full Hierarchy
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </div> */}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Main Content Grid */}
         <div className="grid gap-6 lg:grid-cols-3">

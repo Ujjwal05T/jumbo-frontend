@@ -7,7 +7,8 @@ import type { NextRequest } from 'next/server';
 // Define role-based route permissions
 const roleBasedRoutes = {
   admin: [
-    'cut-rolls-weight',
+    '/current-jumbo',
+    '/cut-rolls-weight',
     '/reports',
     '/barcode-lookup',
     '/roll-tracking',

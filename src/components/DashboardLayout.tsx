@@ -67,7 +67,7 @@ const getNavigationForRole = (role: string | null) => {
         { name: "User Master", href: "/masters/users", roles: ["admin"] },
         { name: "Paper Master", href: "/masters/papers", roles: ["admin", "order_puncher", "accountant"] },
         { name: "Material Master", href: "/masters/materials", roles: ["admin", "accountant","security"] },
-        { name: "Cut Roll Entry", href: "/masters/cut-rolls/manual", roles: ["admin", "production"] },
+        // { name: "Cut Roll Entry", href: "/masters/cut-rolls/manual", roles: ["admin", "production"] },
       ],
     },
     
@@ -130,6 +130,12 @@ const getNavigationForRole = (role: string | null) => {
       roles: ["admin", "accountant"],
     },
     {
+      name: "Set Jumbo Roll",
+      href: "/current-jumbo",
+      icon: Clock,
+      roles: ["admin"],
+    },
+    {
       name: "QR Scanner",
       href: "/qr-scanner",
       icon: QrCode,
@@ -151,7 +157,7 @@ const getNavigationForRole = (role: string | null) => {
         { name: "Plan Report", href: "/reports/client-orders-plans", roles: ["admin"] },
         { name: "Order-Plan Execution", href: "/reports/order-plan-execution", roles: ["admin", "production", "accountant"] },
         { name: "Client Order Summary", href: "/reports/client-order-summary", roles: ["admin", "production", "accountant"] },
-        { name: "Cut Rolls Weight Update", href: "/reports/cut-rolls-weight", roles: ["admin", "production"] },
+        { name: "Cut Rolls Report", href: "/reports/cut-rolls-weight", roles: ["admin", "production"] },
         { name: "Plan Weights", href: "/plan-weights", roles: ["admin"] },
       ],
     },

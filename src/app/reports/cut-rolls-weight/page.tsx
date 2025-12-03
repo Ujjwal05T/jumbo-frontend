@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MaterialReactTable, useMaterialReactTable, MRT_ColumnDef } from 'material-react-table';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Calendar, Download, FileText, Package, Search, AlertCircle, TrendingUp } from 'lucide-react';
+import { Calendar, Download, FileText, Package, Search, AlertCircle, TrendingUp, Printer } from 'lucide-react';
 import { REPORTS_ENDPOINTS, createRequestOptions } from '@/lib/api-config';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -86,17 +86,40 @@ type ReportResponse = {
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
 
+// Utility function to format date from yyyy-mm-dd to dd-mm-yyyy
+const formatDateDisplay = (dateString: string): string => {
+  if (!dateString) return '';
+  const [year, month, day] = dateString.split('-');
+  return `${day}-${month}-${year}`;
+};
+
+// Utility function to format ISO date to dd-mm-yyyy
+const formatISODateDisplay = (isoString: string): string => {
+  if (!isoString) return 'N/A';
+  const date = new Date(isoString);
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
+};
+
 export default function CutRollsWeightReportPage() {
-  const [reportDate, setReportDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
-  );
+  const todayISO = new Date().toISOString().split('T')[0];
+
+  const [fromDate, setFromDate] = useState<string>(todayISO);
+  const [toDate, setToDate] = useState<string>(todayISO);
   const [reportData, setReportData] = useState<ReportResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchReport = async () => {
-    if (!reportDate) {
-      setError('Please select a date');
+    if (!fromDate || !toDate) {
+      setError('Please select both from and to dates');
+      return;
+    }
+
+    if (new Date(fromDate) > new Date(toDate)) {
+      setError('From date cannot be after to date');
       return;
     }
 
@@ -105,7 +128,7 @@ export default function CutRollsWeightReportPage() {
 
     try {
       const response = await fetch(
-        REPORTS_ENDPOINTS.CUT_ROLLS_WEIGHT_UPDATE(reportDate),
+        REPORTS_ENDPOINTS.CUT_ROLLS_WEIGHT_UPDATE(fromDate, toDate),
         createRequestOptions('GET')
       );
 
@@ -125,11 +148,7 @@ export default function CutRollsWeightReportPage() {
 
   useEffect(() => {
     fetchReport();
-  }, [reportDate]); // Auto-fetch when reportDate changes
-
-  const handleDateChange = (date: string) => {
-    setReportDate(date);
-  };
+  }, [fromDate, toDate]); // Auto-fetch when date range changes
 
   const exportToCSV = () => {
     if (!reportData?.data.cut_rolls.length) return;
@@ -160,7 +179,7 @@ export default function CutRollsWeightReportPage() {
       roll.plan_info?.frontend_id || '',
       roll.plan_info?.name || '',
       roll.allocated_order?.frontend_id || '',
-      roll.production_date ? new Date(roll.production_date).toLocaleDateString() : '',
+      roll.production_date ? formatISODateDisplay(roll.production_date) : '',
       roll.roll_sequence || '',
       roll.source_type || '',
       roll.is_wastage_roll ? 'Yes' : 'No'
@@ -174,7 +193,7 @@ export default function CutRollsWeightReportPage() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `cut_rolls_weight_update_${reportDate}.csv`;
+    a.download = `cut_rolls_weight_update_${fromDate}_to_${toDate}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -190,8 +209,8 @@ export default function CutRollsWeightReportPage() {
     doc.text('Cut Rolls Weight Update Report', 14, 15);
 
     doc.setFontSize(12);
-    doc.text(`Report Date: ${summary.date_range.report_date}`, 14, 25);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 32);
+    doc.text(`Date Range: ${formatDateDisplay(fromDate)} to ${formatDateDisplay(toDate)}`, 14, 25);
+    doc.text(`Generated: ${formatISODateDisplay(new Date().toISOString())}`, 14, 32);
 
     // Add summary
     doc.setFontSize(14);
@@ -231,15 +250,13 @@ export default function CutRollsWeightReportPage() {
       roll.barcode_id,
       roll.width_inches.toString(),
       roll.weight_kg.toString(),
-      roll.paper_specs.paper_name,
       roll.paper_specs.gsm.toString(),
       roll.parent_118_roll?.barcode_id || '',
-      roll.plan_info?.frontend_id || '',
-      roll.status
+      roll.plan_info?.frontend_id || ''
       ]);
 
     autoTable(doc, {
-      head: [['Barcode', 'Width', 'Weight', 'Paper', 'GSM', '118" Roll', 'Plan', 'Status']],
+      head: [['Barcode', 'Width', 'Weight', 'GSM', '118" Roll', 'Plan']],
       body: tableData,
       startY: finalY + 8,
       theme: 'grid',
@@ -247,37 +264,13 @@ export default function CutRollsWeightReportPage() {
       headStyles: { fillColor: [59, 130, 246] }
     });
 
-    doc.save(`cut_rolls_weight_update_${reportDate}.pdf`);
+    doc.save(`cut_rolls_weight_${fromDate}_to_${toDate}.pdf`);
   };
 
-  // Prepare chart data
-  const widthDistribution = reportData?.data.cut_rolls.reduce((acc: any[], roll) => {
-    const existing = acc.find(item => item.width === roll.width_inches);
-    if (existing) {
-      existing.count += 1;
-      existing.totalWeight += roll.weight_kg;
-    } else {
-      acc.push({
-        width: roll.width_inches,
-        count: 1,
-        totalWeight: roll.weight_kg
-      });
-    }
-    return acc;
-  }, []) || [];
+  const handlePrint = () => {
+    window.print();
+  };
 
-  const paperTypeDistribution = reportData?.data.cut_rolls.reduce((acc: any[], roll) => {
-    const existing = acc.find(item => item.type === roll.paper_specs.type);
-    if (existing) {
-      existing.count += 1;
-    } else {
-      acc.push({
-        type: roll.paper_specs.type,
-        count: 1
-      });
-    }
-    return acc;
-  }, []) || [];
 
   // Define table columns
   const columns: MRT_ColumnDef<CutRollWeightData>[] = [
@@ -298,11 +291,6 @@ export default function CutRollsWeightReportPage() {
       header: 'Weight (kg)',
       size: 80,
       Cell: ({ cell }) => cell.getValue<number>()?.toFixed(2) || '0.00'
-    },
-    {
-      accessorKey: 'paper_specs.paper_name',
-      header: 'Paper Name',
-      size: 150,
     },
     {
       accessorKey: 'paper_specs.gsm',
@@ -328,15 +316,10 @@ export default function CutRollsWeightReportPage() {
       Cell: ({ cell, row }) => row.original.plan_info?.frontend_id || 'N/A'
     },
     {
-      accessorKey: 'status',
-      header: 'Status',
-      size: 100,
-    },
-    {
       accessorKey: 'production_date',
       header: 'Production Date',
       size: 100,
-      Cell: ({ cell }) => cell.getValue<string>() ? new Date(cell.getValue<string>()).toLocaleDateString() : 'N/A'
+      Cell: ({ cell }) => cell.getValue<string>() ? formatISODateDisplay(cell.getValue<string>()) : 'N/A'
     }
   ];
 
@@ -349,9 +332,12 @@ export default function CutRollsWeightReportPage() {
     enableSorting: true,
     enableFilters: true,
     enableColumnFilters: true,
+    enableRowSelection: false, // Disable row selection
+    enableMultiRowSelection: false,
     muiTableContainerProps: { sx: { maxHeight: '600px' } },
     initialState: {
-      sorting: [{ id: 'production_date', desc: true }]
+      sorting: [{ id: 'production_date', desc: true }],
+      showColumnFilters: true // Show filters by default
     }
   });
 
@@ -360,37 +346,60 @@ export default function CutRollsWeightReportPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Cut Rolls Weight Update Report</h1>
+            <h1 className="text-3xl font-bold">Cut Rolls Report</h1>
             <p className="text-muted-foreground">
               Report showing cut rolls that had their weight updated on a specific date
             </p>
           </div>
         </div>
 
-        {/* Date Selector */}
+        {/* Date Range Selector */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5" />
-              Report Date Selection
+              Report Date Range Selection
             </CardTitle>
             <CardDescription>
-              Select a date to automatically generate the cut rolls weight update report
+              Select a date range to automatically generate the cut rolls weight update report
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-4">
-              <div className="flex-1 max-w-sm">
-                <label className="block text-sm font-medium mb-2">Select Date</label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    type="date"
-                    value={reportDate}
-                    onChange={(e) => handleDateChange(e.target.value)}
-                    className="pl-10"
-                    max={new Date().toISOString().split('T')[0]}
-                  />
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex-1 min-w-[200px] max-w-sm">
+                <label className="block text-sm font-medium mb-2">From Date</label>
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
+                    <Input
+                      type="date"
+                      value={fromDate}
+                      onChange={(e) => setFromDate(e.target.value)}
+                      className="pl-10"
+                      max={new Date().toISOString().split('T')[0]}
+                    />
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Selected: {formatDateDisplay(fromDate)}
+                  </div>
+                </div>
+              </div>
+              <div className="flex-1 min-w-[200px] max-w-sm">
+                <label className="block text-sm font-medium mb-2">To Date</label>
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
+                    <Input
+                      type="date"
+                      value={toDate}
+                      onChange={(e) => setToDate(e.target.value)}
+                      className="pl-10"
+                      max={new Date().toISOString().split('T')[0]}
+                    />
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Selected: {formatDateDisplay(toDate)}
+                  </div>
                 </div>
               </div>
               {loading && (
@@ -493,7 +502,7 @@ export default function CutRollsWeightReportPage() {
               <CardHeader>
                 <CardTitle>Cut Rolls Details</CardTitle>
                 <CardDescription>
-                  {reportData.data.cut_rolls.length} cut rolls found for {reportData.data.summary.date_range.report_date}
+                  {reportData.data.cut_rolls.length} cut rolls found for date range: {formatDateDisplay(fromDate)} to {formatDateDisplay(toDate)}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -501,7 +510,7 @@ export default function CutRollsWeightReportPage() {
                   <MaterialReactTable table={table} />
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">
-                    No cut rolls found for the selected date.
+                    No cut rolls found for the selected date range.
                   </div>
                 )}
               </CardContent>

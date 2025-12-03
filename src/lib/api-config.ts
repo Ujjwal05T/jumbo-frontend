@@ -31,6 +31,7 @@ export const MASTER_ENDPOINTS = {
   PENDING_ORDER_ITEMS: `${API_BASE_URL}/pending-order-items`,
   PLANS: `${API_BASE_URL}/plans`,
   PLAN_ORDER_ITEMS: (planId: string) => `${API_BASE_URL}/plans/${planId}/order-items`,
+  MANUAL_CUT_ROLLS: `${API_BASE_URL}/manual-cut-rolls`,
 };
 
 // Production endpoints - Updated for new flow
@@ -131,7 +132,7 @@ export const REPORTS_ENDPOINTS = {
   CLIENT_ORDER_CUT_ROLLS: (orderFrontendId: string) => `${API_BASE_URL}/reports/client-order-summary/${orderFrontendId}/cut-rolls`,
 
   // Cut Rolls Weight Update Report endpoint (new report)
-  CUT_ROLLS_WEIGHT_UPDATE: (reportDate: string) => `${API_BASE_URL}/reports/cut-rolls-weight-update?report_date=${reportDate}`,
+  CUT_ROLLS_WEIGHT_UPDATE: (fromDate: string, toDate: string) => `${API_BASE_URL}/reports/cut-rolls-weight-update?from_date=${fromDate}&to_date=${toDate}`,
 };
 
 // Order Edit Logs endpoints

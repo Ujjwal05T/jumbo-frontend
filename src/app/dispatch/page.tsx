@@ -16,7 +16,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -42,24 +41,15 @@ import {
   Loader2,
   History,
   X,
-  ShoppingCart,
   Building2,
   Search,
+  Printer,
+  Filter,
 } from "lucide-react";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { DispatchSuccessModal } from "@/components/DispatchSuccessModal";
-import { 
-  getWarehouseItems,
+import {
   getStatusBadgeVariant,
   getStatusDisplayText
 } from "@/lib/production";
-import { 
-  fetchPendingItems,
-  completePendingItem,
-  createDispatchRecord,
-  WarehouseItem,
-  PendingItem
-} from "@/lib/dispatch";
 import { API_BASE_URL } from "@/lib/api-config";
 import WastageIndicator from "@/components/WastageIndicator";
 
@@ -69,33 +59,19 @@ export default function DispatchPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [warehouseItems, setWarehouseItems] = useState<any[]>([]);
-  const [selectedItems, setSelectedItems] = useState<string[]>([]);
-  const [confirmDialog, setConfirmDialog] = useState<{
-    open: boolean;
-    itemIds: string[];
-    action: "complete";
-  }>({ open: false, itemIds: [], action: "complete" });
-  const [dispatchLoading, setDispatchLoading] = useState(false);
-  const [successModalOpen, setSuccessModalOpen] = useState(false);
-  const [dispatchResult, setDispatchResult] = useState<any>(null);
-
-  // Client selection state
-  const [clients, setClients] = useState<any[]>([]);
-  const [selectedClientId, setSelectedClientId] = useState<string>("none");
-  const [clientsLoading, setClientsLoading] = useState(false);
 
   // Search state
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Dispatch details state (filled first before selecting items)
-  const [dispatchDetails, setDispatchDetails] = useState({
-    vehicle_number: "",
-    driver_name: "",
-    driver_mobile: "",
-    dispatch_number: "",
-    reference_number: "",
+  // Filter state
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState({
+    client: "all",
+    paperSpec: "all",
+    minWeight: "",
+    maxWeight: "",
+    isWastage: "all",
   });
-  const [detailsFilled, setDetailsFilled] = useState(false);
 
   // Helper function to highlight matching text
   const highlightText = (text: string, searchTerm: string) => {
@@ -110,25 +86,6 @@ export default function DispatchPage() {
       ) : part
     );
   };
-
-  // Load clients on page load
-  const loadClients = async () => {
-    try {
-      setClientsLoading(true);
-      const response = await fetch(`${API_BASE_URL}/dispatch/clients`, {
-        headers: { 'ngrok-skip-browser-warning': 'true' }
-      });
-      if (!response.ok) throw new Error('Failed to load clients');
-      const data = await response.json();
-      setClients(data.clients || []);
-    } catch (err) {
-      console.error('Error loading clients:', err);
-      toast.error('Failed to load clients');
-    } finally {
-      setClientsLoading(false);
-    }
-  };
-
 
   // Load warehouse items - always load all items (no filtering)
   const loadData = async () => {
@@ -158,127 +115,172 @@ export default function DispatchPage() {
   };
 
   useEffect(() => {
-    loadClients(); // Load clients on page load
     loadData(); // Load all warehouse items
   }, []);
 
-  // Filter items based on search term
+  // Filter items based on search term and filters
   const filteredItems = warehouseItems.filter((item) => {
-    if (!searchTerm.trim()) return true;
+    // Search filter
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch = (
+        (item.barcode_id && item.barcode_id.toLowerCase().includes(searchLower)) ||
+        (item.qr_code && item.qr_code.toLowerCase().includes(searchLower)) ||
+        (item.client_name && item.client_name.toLowerCase().includes(searchLower)) ||
+        (item.order_id && item.order_id.toLowerCase().includes(searchLower)) ||
+        (item.paper_spec && item.paper_spec.toLowerCase().includes(searchLower))
+      );
+      if (!matchesSearch) return false;
+    }
 
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      (item.barcode_id && item.barcode_id.toLowerCase().includes(searchLower)) ||
-      (item.qr_code && item.qr_code.toLowerCase().includes(searchLower)) ||
-      (item.client_name && item.client_name.toLowerCase().includes(searchLower)) ||
-      (item.order_id && item.order_id.toLowerCase().includes(searchLower)) ||
-      (item.paper_spec && item.paper_spec.toLowerCase().includes(searchLower))
-    );
+    // Client filter
+    if (filters.client !== "all" && item.client_name !== filters.client) {
+      return false;
+    }
+
+    // Paper spec filter
+    if (filters.paperSpec !== "all" && item.paper_spec !== filters.paperSpec) {
+      return false;
+    }
+
+    // Weight filters
+    if (filters.minWeight && item.weight_kg < parseFloat(filters.minWeight)) {
+      return false;
+    }
+    if (filters.maxWeight && item.weight_kg > parseFloat(filters.maxWeight)) {
+      return false;
+    }
+
+    // Wastage filter
+    if (filters.isWastage === "wastage" && !item.is_wastage_roll) {
+      return false;
+    }
+    if (filters.isWastage === "non-wastage" && item.is_wastage_roll) {
+      return false;
+    }
+
+    return true;
   });
 
-  const handleSaveDetails = () => {
-    // Validate details
-    if (!dispatchDetails.vehicle_number.trim()) {
-      toast.error("Vehicle number is required");
-      return;
-    }
-    if (!dispatchDetails.driver_name.trim()) {
-      toast.error("Driver name is required");
-      return;
-    }
-    if (!dispatchDetails.driver_mobile.trim()) {
-      toast.error("Driver mobile is required");
-      return;
-    }
-    if (!dispatchDetails.dispatch_number.trim()) {
-      toast.error("Dispatch number is required");
-      return;
-    }
-    if (selectedClientId === "none") {
-      toast.error("Please select a client for the dispatch slip");
-      return;
-    }
+  // Get unique clients and paper specs for filter dropdowns
+  const uniqueClients = Array.from(new Set(warehouseItems.map(item => item.client_name).filter(Boolean)));
+  const uniquePaperSpecs = Array.from(new Set(warehouseItems.map(item => item.paper_spec).filter(Boolean)));
 
-    setDetailsFilled(true);
-    toast.success("Details saved! Now select items to dispatch");
+  // Print functionality - Simple HTML table
+  const handlePrint = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Warehouse Items Report</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+          }
+          h1 {
+            text-align: center;
+            margin-bottom: 10px;
+          }
+          .info {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #666;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+          }
+          th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+          }
+          th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+          }
+          tr:nth-child(even) {
+            background-color: #f9f9f9;
+          }
+          .wastage-badge {
+            background-color: #fef3c7;
+            color: #92400e;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+          }
+          @media print {
+            body { padding: 10px; }
+          }
+        </style>
+      </head>
+      <body>
+        <h1>Warehouse Items Report</h1>
+        <div class="info">
+          <p>Generated on: ${new Date().toLocaleString()}</p>
+          <p>Total Items: ${filteredItems.length}</p>
+          <p>Total Weight: ${filteredItems.reduce((sum, item) => sum + (item.weight_kg || 0), 0).toFixed(1)} kg</p>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>S.No</th>
+              <th>QR Code</th>
+              <th>Client</th>
+              <th>Order</th>
+              <th>Paper Specs</th>
+              <th>Width (in)</th>
+              <th>Weight (kg)</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filteredItems.map((item, index) => `
+              <tr>
+                <td>${index + 1}</td>
+                <td>${item.barcode_id || item.qr_code}</td>
+                <td>${item.client_name || 'N/A'}</td>
+                <td>${item.order_id || 'N/A'}</td>
+                <td>
+                  ${item.paper_spec}
+                  ${item.is_wastage_roll ? '<span class="wastage-badge">Stock</span>' : ''}
+                </td>
+                <td>${item.width_inches}"</td>
+                <td>${item.weight_kg} kg</td>
+                <td>${item.status}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 250);
   };
 
-  const handleEditDetails = () => {
-    setDetailsFilled(false);
-    setSelectedItems([]);
-    toast.info("Edit dispatch details");
-  };
-
-  // Get selected client info for dispatch form
-  const selectedClient = selectedClientId && selectedClientId !== "none" ? clients.find(c => c.id === selectedClientId) : null;
-
-  const handleDispatchConfirm = async () => {
-    if (selectedItems.length === 0) {
-      toast.error("Please select at least one item to dispatch");
-      return;
-    }
-
-    try {
-      setDispatchLoading(true);
-
-      const dispatchData = {
-        ...dispatchDetails,
-        client_id: selectedClientId, // Use selected client for dispatch slip
-        inventory_ids: selectedItems
-      };
-
-      const result = await createDispatchRecord(dispatchData as any);
-
-      // Show success modal with dispatch details
-      setDispatchResult(result);
-      setSuccessModalOpen(true);
-
-      // Reload data and reset selections
-      await loadData();
-      setSelectedItems([]);
-      setDispatchDetails({
-        vehicle_number: "",
-        driver_name: "",
-        driver_mobile: "",
-        // payment_type: "cash",
-        dispatch_number: "",
-        reference_number: "",
-      });
-      setDetailsFilled(false);
-      setSelectedClientId("none");
-
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to create dispatch';
-      toast.error(errorMessage);
-      console.error("Dispatch error:", error);
-    } finally {
-      setDispatchLoading(false);
-    }
-  };
-
-  const confirmStatusChange = async () => {
-    // This is now handled by the dispatch form
-    setConfirmDialog(prev => ({ ...prev, open: false }));
-  };
-
-  const handleBulkDispatch = () => {
-    if (!detailsFilled) {
-      toast.error("Please fill dispatch details first");
-      return;
-    }
-    if (selectedItems.length === 0) {
-      toast.error("Please select items to dispatch");
-      return;
-    }
-    handleDispatchConfirm();
-  };
-
-  const removeSelectedItem = (inventoryId: string) => {
-    setSelectedItems(prev => prev.filter(id => id !== inventoryId));
-    const item = warehouseItems.find(item => item.inventory_id === inventoryId);
-    if (item) {
-      toast.success(`Removed ${item.barcode_id || item.qr_code} from selection`);
-    }
+  // Clear all filters
+  const clearFilters = () => {
+    setFilters({
+      client: "all",
+      paperSpec: "all",
+      minWeight: "",
+      maxWeight: "",
+      isWastage: "all",
+    });
+    toast.success("Filters cleared");
   };
 
   const getStatusBadge = (status: string, itemType: ItemType = "warehouse") => {
@@ -314,179 +316,17 @@ export default function DispatchPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
             <Truck className="w-8 h-8 text-primary" />
-            Dispatch Management
+            Weight Updated Rolls
           </h1>
-          <Button
-            onClick={() => window.location.href = '/dispatch/history'}
-            variant="outline"
-          >
-            <History className="w-4 h-4 mr-2" />
-            View History
-          </Button>
         </div>
 
-        {/* Step 1: Dispatch Details Form */}
-        <Card className={detailsFilled ? "border-green-500 bg-green-50/50" : ""}>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold">1</div>
-              Dispatch Details
-              {detailsFilled && <CheckCircle className="w-5 h-5 text-green-600 ml-2" />}
-            </CardTitle>
-            <CardDescription>
-              {detailsFilled ? "Details saved. Select items below to dispatch." : "Fill dispatch information before selecting items"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {!detailsFilled ? (
-              <>
-                {/* Client Selection */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center gap-2">
-                    <Building2 className="w-4 h-4" />
-                    Select Client for Dispatch Slip *
-                  </label>
-                  <Select
-                    value={selectedClientId}
-                    onValueChange={(value) => {
-                      setSelectedClientId(value);
-                      setSelectedItems([]);
-                    }}
-                    disabled={clientsLoading}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={clientsLoading ? "Loading..." : "Select a client"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none" disabled>Select a client</SelectItem>
-                      {clients.sort((a, b) => a.company_name.localeCompare(b.company_name)).map((client) => (
-                        <SelectItem key={client.id} value={client.id}>
-                          {client.company_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    This client will appear on the dispatch slip. You can still select items from any client below.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Vehicle Number */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Vehicle Number *</label>
-                    <Input
-                      value={dispatchDetails.vehicle_number}
-                      onChange={(e) => setDispatchDetails(prev => ({ ...prev, vehicle_number: e.target.value }))}
-                      placeholder="e.g., MH-12-AB-1234"
-                    />
-                  </div>
-
-                  {/* Driver Name */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Driver Name *</label>
-                    <Input
-                      value={dispatchDetails.driver_name}
-                      onChange={(e) => setDispatchDetails(prev => ({ ...prev, driver_name: e.target.value }))}
-                      placeholder="e.g., John Doe"
-                    />
-                  </div>
-
-                  {/* Driver Mobile */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Driver Mobile *</label>
-                    <Input
-                      value={dispatchDetails.driver_mobile}
-                      onChange={(e) => setDispatchDetails(prev => ({ ...prev, driver_mobile: e.target.value }))}
-                      placeholder="e.g., +91 9876543210"
-                    />
-                  </div>
-
-                  {/* Dispatch Number */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Dispatch Number *</label>
-                    <Input
-                      value={dispatchDetails.dispatch_number}
-                      onChange={(e) => setDispatchDetails(prev => ({ ...prev, dispatch_number: e.target.value }))}
-                      placeholder="e.g., DISP-001"
-                    />
-                  </div>
-
-                  {/* Payment Type */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Payment Type</label>
-                    {/* <Select
-                      value={dispatchDetails.payment_type}
-                      onValueChange={(value) => setDispatchDetails(prev => ({ ...prev, payment_type: value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="cash">Cash</SelectItem>
-                        <SelectItem value="credit">Credit</SelectItem>
-                        <SelectItem value="online">Online</SelectItem>
-                      </SelectContent>
-                    </Select> */}
-                  </div>
-
-                  {/* Reference Number */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Reference Number (Optional)</label>
-                    <Input
-                      value={dispatchDetails.reference_number}
-                      onChange={(e) => setDispatchDetails(prev => ({ ...prev, reference_number: e.target.value }))}
-                      placeholder="e.g., REF-123"
-                    />
-                  </div>
-                </div>
-
-                <Button onClick={handleSaveDetails} className="w-full">
-                  <CheckCircle className="w-4 h-4 mr-2" />
-                  Save Details & Continue to Item Selection
-                </Button>
-              </>
-            ) : (
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Dispatch Client:</span>
-                    <p className="font-medium">{selectedClient?.company_name}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Vehicle:</span>
-                    <p className="font-medium">{dispatchDetails.vehicle_number}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Driver:</span>
-                    <p className="font-medium">{dispatchDetails.driver_name}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Mobile:</span>
-                    <p className="font-medium">{dispatchDetails.driver_mobile}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Dispatch #:</span>
-                    <p className="font-medium">{dispatchDetails.dispatch_number}</p>
-                  </div>
-                  {/* <div>
-                    <span className="text-muted-foreground">Payment:</span>
-                    <p className="font-medium capitalize">{dispatchDetails.payment_type}</p>
-                  </div> */}
-                </div>
-                <Button onClick={handleEditDetails} variant="outline" size="sm">
-                  Edit Details
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+       
 
         {/* Stats Cards */}
         <div className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Available Items</CardTitle>
+              <CardTitle className="text-sm font-medium">Total Items</CardTitle>
               <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -498,14 +338,14 @@ export default function DispatchPage() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Selected Items</CardTitle>
-              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Filtered Items</CardTitle>
+              <Search className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-blue-600">
-                {selectedItems.length}
+                {filteredItems.length}
               </div>
-              <p className="text-xs text-muted-foreground">Items to dispatch</p>
+              <p className="text-xs text-muted-foreground">Matching filters</p>
             </CardContent>
           </Card>
           <Card>
@@ -515,12 +355,11 @@ export default function DispatchPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">
-                {warehouseItems
-                  .filter(item => selectedItems.includes(item.inventory_id))
+                {filteredItems
                   .reduce((sum, item) => sum + (item.weight_kg || 0), 0)
                   .toFixed(1)}kg
               </div>
-              <p className="text-xs text-muted-foreground">Selected weight</p>
+              <p className="text-xs text-muted-foreground">Filtered items weight</p>
             </CardContent>
           </Card>
           <Card>
@@ -530,7 +369,7 @@ export default function DispatchPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-orange-600">
-                {warehouseItems.filter(item => item.weight_kg > 10).length}
+                {filteredItems.filter(item => item.weight_kg > 10).length}
               </div>
               <p className="text-xs text-muted-foreground">
                 {'>'}10kg rolls
@@ -539,49 +378,41 @@ export default function DispatchPage() {
           </Card>
         </div>
 
-        {/* Step 2: Item Selection */}
-        <Card className={!detailsFilled ? "opacity-50 pointer-events-none" : ""}>
+        {/* Filters and Actions */}
+        <Card>
           <CardHeader>
             <div className="flex flex-col gap-4">
               <div className="flex justify-between items-center">
                 <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold">2</div>
-                    Select Items to Dispatch
-                  </CardTitle>
+                  <CardTitle>Warehouse Items</CardTitle>
                   <CardDescription>
-                    {detailsFilled
-                      ? `Showing all warehouse items. Select items to dispatch to ${selectedClient?.company_name}.`
-                      : "Complete step 1 to enable item selection"}
+                    View and filter all warehouse items ready for dispatch
                   </CardDescription>
                 </div>
-                {selectedItems.length > 0 && detailsFilled && (
+                <div className="flex gap-2 no-print">
                   <Button
-                    onClick={handleBulkDispatch}
-                    className="bg-green-600 hover:bg-green-700 text-white shadow-lg"
-                    size="lg"
-                    disabled={dispatchLoading}
+                    variant="outline"
+                    onClick={() => setShowFilters(!showFilters)}
                   >
-                    {dispatchLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                        Dispatching...
-                      </>
-                    ) : (
-                      <>
-                        <Truck className="mr-2 h-5 w-5" />
-                        Dispatch {selectedItems.length} Items
-                      </>
-                    )}
+                    <Filter className="mr-2 h-4 w-4" />
+                    {showFilters ? "Hide Filters" : "Show Filters"}
                   </Button>
-                )}
+                  <Button
+                    variant="outline"
+                    onClick={handlePrint}
+                  >
+                    <Printer className="mr-2 h-4 w-4" />
+                    Print
+                  </Button>
+                </div>
               </div>
 
               {/* Search Bar */}
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 no-print">
                 <div className="relative flex-1 max-w-sm">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
+                    placeholder="Search by QR code, client, order, or paper spec..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-8 pr-8"
@@ -603,6 +434,108 @@ export default function DispatchPage() {
                   </div>
                 )}
               </div>
+
+              {/* Filters Section */}
+              {showFilters && (
+                <div className="border rounded-lg p-4 space-y-4 bg-muted/50 no-print">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold">Filters</h3>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearFilters}
+                    >
+                      Clear All
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                    {/* Client Filter */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Client</label>
+                      <Select
+                        value={filters.client}
+                        onValueChange={(value) => setFilters({ ...filters, client: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Clients</SelectItem>
+                          {uniqueClients.map((client) => (
+                            <SelectItem key={client} value={client}>
+                              {client}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Paper Spec Filter */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Paper Spec</label>
+                      <Select
+                        value={filters.paperSpec}
+                        onValueChange={(value) => setFilters({ ...filters, paperSpec: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Specs</SelectItem>
+                          {uniquePaperSpecs.map((spec) => (
+                            <SelectItem key={spec} value={spec}>
+                              {spec}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Min Weight Filter */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Min Weight (kg)</label>
+                      <Input
+                        type="number"
+                        placeholder="0"
+                        value={filters.minWeight}
+                        onChange={(e) => setFilters({ ...filters, minWeight: e.target.value })}
+                      />
+                    </div>
+
+                    {/* Max Weight Filter */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Max Weight (kg)</label>
+                      <Input
+                        type="number"
+                        placeholder="100"
+                        value={filters.maxWeight}
+                        onChange={(e) => setFilters({ ...filters, maxWeight: e.target.value })}
+                      />
+                    </div>
+
+                    {/* Wastage Filter */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Roll Type</label>
+                      <Select
+                        value={filters.isWastage}
+                        onValueChange={(value) => setFilters({ ...filters, isWastage: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Types</SelectItem>
+                          <SelectItem value="wastage">Stock Only</SelectItem>
+                          <SelectItem value="non-wastage">Non-Stock Only</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Showing {filteredItems.length} of {warehouseItems.length} items
+                  </div>
+                </div>
+              )}
             </div>
           </CardHeader>
           <CardContent>
@@ -610,25 +543,6 @@ export default function DispatchPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[50px]">
-                      <div className="flex items-center justify-center">
-                        <Checkbox
-                          checked={filteredItems.length > 0 && selectedItems.length === filteredItems.length}
-                          disabled={!detailsFilled}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              const allItemIds = filteredItems.map(item => item.inventory_id);
-                              setSelectedItems(allItemIds);
-                              toast.success(`Selected all ${allItemIds.length} items`);
-                            } else {
-                              setSelectedItems([]);
-                              toast.success("Cleared all selections");
-                            }
-                          }}
-                          className="w-5 h-5"
-                        />
-                      </div>
-                    </TableHead>
                     <TableHead>S.No</TableHead>
                     <TableHead>QR Code</TableHead>
                     <TableHead>Client & Order</TableHead>
@@ -643,39 +557,14 @@ export default function DispatchPage() {
                     filteredItems.map((item: any, index) => (
                       <TableRow
                         key={item.inventory_id || item.id}
-                        className={selectedItems.includes(item.inventory_id) ? "bg-blue-50 border-blue-200" : ""}
                       >
-                        <TableCell>
-                          <div className="flex items-center justify-center">
-                            <Checkbox
-                              checked={selectedItems.includes(item.inventory_id)}
-                              disabled={!detailsFilled}
-                              onCheckedChange={(checked) => {
-                                if (checked) {
-                                  setSelectedItems(prev => [...prev, item.inventory_id]);
-                                  toast.success(`Selected ${item.barcode_id || item.qr_code}`);
-                                } else {
-                                  removeSelectedItem(item.inventory_id);
-                                }
-                              }}
-                              className="w-5 h-5"
-                            />
-                          </div>
-                        </TableCell>
                         <TableCell className="font-medium">
                           {index + 1}
                         </TableCell>
                         <TableCell>
                           <div className="space-y-1">
-                            <div className={`font-mono text-sm ${
-                              selectedItems.includes(item.inventory_id)
-                                ? "font-bold text-blue-700"
-                                : ""
-                            }`}>
+                            <div className="font-mono text-sm">
                               {highlightText(item.barcode_id || item.qr_code, searchTerm)}
-                              {selectedItems.includes(item.inventory_id) && (
-                                <Badge className="ml-2 text-xs bg-blue-600">SELECTED</Badge>
-                              )}
                             </div>
                             <div className="text-xs text-muted-foreground">
                               Created by: {item.created_by}
@@ -700,7 +589,7 @@ export default function DispatchPage() {
                               <WastageIndicator isWastageRoll={item.is_wastage_roll} />
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              {item.is_wastage_roll ? "Wastage roll ready for dispatch" : "Cut roll ready for dispatch"}
+                              {item.is_wastage_roll ? "Stock roll ready for dispatch" : "Cut roll ready for dispatch"}
                             </div>
                           </div>
                         </TableCell>
@@ -725,7 +614,7 @@ export default function DispatchPage() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-24 text-center">
+                      <TableCell colSpan={7} className="h-24 text-center">
                         {loading ? (
                           <div className="flex items-center justify-center">
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -734,11 +623,11 @@ export default function DispatchPage() {
                         ) : (
                           <div className="text-center py-4">
                             <div className="text-muted-foreground">
-                              <p className="font-medium">No cut rolls ready for dispatch</p>
+                              <p className="font-medium">No items found</p>
                               <p className="text-sm">
-                                {selectedClientId === "none"
-                                  ? "No warehouse items found for any client"
-                                  : `No warehouse items found for the selected client`
+                                {searchTerm || filters.client !== "all" || filters.paperSpec !== "all" || filters.minWeight || filters.maxWeight || filters.isWastage !== "all"
+                                  ? "Try adjusting your search or filters"
+                                  : "No warehouse items available"
                                 }
                               </p>
                             </div>
@@ -753,35 +642,6 @@ export default function DispatchPage() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Success Modal */}
-      <DispatchSuccessModal
-        open={successModalOpen}
-        onOpenChange={setSuccessModalOpen}
-        dispatchResult={dispatchResult}
-      />
-
-      {/* Confirmation Dialog */}
-      <ConfirmDialog
-        open={confirmDialog.open}
-        onOpenChange={(open) => setConfirmDialog((prev) => ({ ...prev, open }))}
-        title={
-          confirmDialog.action === "complete"
-            ? "Mark as Delivered"
-            : "Mark as Dispatched"
-        }
-        description={`Are you sure you want to mark ${confirmDialog.itemIds.length} item(s) as ${
-          confirmDialog.action === "complete" ? "dispatched" : "processed"
-        }?`}
-        confirmText={
-          confirmDialog.action === "complete"
-            ? "Mark Delivered"
-            : "Mark Dispatched"
-        }
-        cancelText="Cancel"
-        variant="default"
-        onConfirm={confirmStatusChange}
-      />
     </DashboardLayout>
   );
 }
