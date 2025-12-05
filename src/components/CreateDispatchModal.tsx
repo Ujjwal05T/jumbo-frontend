@@ -77,17 +77,19 @@ const OptimizedRow = memo(({
   item,
   index,
   isSelected,
-  isWastageItem,
+  itemType,
   searchTerm,
   onToggle
 }: {
   item: any;
   index: number;
   isSelected: boolean;
-  isWastageItem: boolean;
+  itemType: string;
   searchTerm: string;
   onToggle: () => void;
 }) => {
+  const isWastageItem = itemType === "wastage";
+  const isManualItem = itemType === "manual";
   // Use inline styles for highlighting instead of mark components
   const getHighlightedText = (text: string, highlight: string) => {
     if (!highlight || !text) return text;
@@ -189,15 +191,17 @@ export function CreateDispatchModal({
   const [loading, setLoading] = useState(false);
   const [warehouseItems, setWarehouseItems] = useState<any[]>([]);
   const [wastageItems, setWastageItems] = useState<any[]>([]);
+  const [manualCutRolls, setManualCutRolls] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>("none");
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [selectedWastageIds, setSelectedWastageIds] = useState<Set<string>>(new Set());
+  const [selectedManualCutRollIds, setSelectedManualCutRollIds] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState("");
   const [dispatchLoading, setDispatchLoading] = useState(false);
   const [successModalOpen, setSuccessModalOpen] = useState(false);
   const [dispatchResult, setDispatchResult] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<"client" | "all" | "wastage">("client");
+  const [activeTab, setActiveTab] = useState<"client" | "all" | "wastage" | "manual">("client");
 
   const [dispatchDetails, setDispatchDetails] = useState({
     vehicle_number: "",
@@ -227,6 +231,7 @@ export function CreateDispatchModal({
       loadClients();
       loadWarehouseItems();
       loadWastageItems();
+      loadManualCutRolls();
       loadPreviewNumber();
     } else {
       // Reset state
@@ -234,6 +239,7 @@ export function CreateDispatchModal({
       setSelectedClientId("none");
       setSelectedItems(new Set());
       setSelectedWastageIds(new Set());
+      setSelectedManualCutRollIds(new Set());
       setSearchTerm("");
       setDebouncedSearchTerm("");
       setPreviewNumber("");
@@ -302,6 +308,26 @@ export function CreateDispatchModal({
     }
   };
 
+  const loadManualCutRolls = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(
+        `${API_BASE_URL}/dispatch/manual-cut-rolls`,
+        {
+          headers: { "ngrok-skip-browser-warning": "true" },
+        }
+      );
+      if (!response.ok) throw new Error("Failed to load manual cut rolls");
+      const data = await response.json();
+      setManualCutRolls(data.manual_cut_rolls || []);
+    } catch (err) {
+      console.error("Error loading manual cut rolls:", err);
+      toast.error("Failed to load manual cut rolls");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadPreviewNumber = async () => {
     try {
       setPreviewLoading(true);
@@ -337,7 +363,7 @@ export function CreateDispatchModal({
   }, [dispatchDetails, selectedClientId]);
 
   const handleDispatchConfirm = useCallback(async () => {
-    if (selectedItems.size === 0 && selectedWastageIds.size === 0) {
+    if (selectedItems.size === 0 && selectedWastageIds.size === 0 && selectedManualCutRollIds.size === 0) {
       toast.error("Please select at least one item to dispatch");
       return;
     }
@@ -351,6 +377,7 @@ export function CreateDispatchModal({
         client_id: selectedClientId,
         inventory_ids: Array.from(selectedItems),
         wastage_ids: Array.from(selectedWastageIds),
+        manual_cut_roll_ids: Array.from(selectedManualCutRollIds),
       };
 
       const result = await createDispatchRecord(dispatchData as any);
@@ -370,7 +397,7 @@ export function CreateDispatchModal({
     } finally {
       setDispatchLoading(false);
     }
-  }, [dispatchDetails, selectedClientId, selectedItems, selectedWastageIds, onOpenChange, onSuccess]);
+  }, [dispatchDetails, selectedClientId, selectedItems, selectedWastageIds, selectedManualCutRollIds, onOpenChange, onSuccess]);
 
   // Memoize selected client
   const selectedClient = useMemo(() => {
@@ -413,37 +440,75 @@ export function CreateDispatchModal({
   const displayItems = useMemo(() => {
     const { filteredClient, filteredOther, filteredWastage } = filteredData;
 
+    // Filter manual cut rolls
+    const filteredManual = manualCutRolls.filter(roll => {
+      if (!debouncedSearchTerm) return true;
+      const fields = [
+        roll.barcode_id,
+        roll.frontend_id,
+        roll.reel_number,
+        roll.client_name,
+        roll.paper_spec,
+        String(roll.width_inches),
+        String(roll.weight_kg),
+      ];
+      return fields.some(field =>
+        field && field.toLowerCase().includes(debouncedSearchTerm)
+      );
+    });
+
     const items = [];
 
     if (activeTab === "client") {
       items.push(
         ...filteredClient.map(item => ({ ...item, type: "warehouse", priority: 1 })),
         ...filteredOther.map(item => ({ ...item, type: "warehouse", priority: 2 })),
-        ...filteredWastage.map(item => ({ ...item, type: "wastage", priority: 3 }))
+        ...filteredWastage.map(item => ({ ...item, type: "wastage", priority: 3 })),
+        ...filteredManual.map(item => ({ ...item, type: "manual", priority: 4 }))
       );
     } else if (activeTab === "all") {
       items.push(
         ...filteredOther.map(item => ({ ...item, type: "warehouse", priority: 1 })),
         ...filteredClient.map(item => ({ ...item, type: "warehouse", priority: 2 })),
-        ...filteredWastage.map(item => ({ ...item, type: "wastage", priority: 3 }))
+        ...filteredWastage.map(item => ({ ...item, type: "wastage", priority: 3 })),
+        ...filteredManual.map(item => ({ ...item, type: "manual", priority: 4 }))
       );
-    } else {
+    } else if (activeTab === "wastage") {
       items.push(
         ...filteredWastage.map(item => ({ ...item, type: "wastage", priority: 1 })),
         ...filteredClient.map(item => ({ ...item, type: "warehouse", priority: 2 })),
-        ...filteredOther.map(item => ({ ...item, type: "warehouse", priority: 3 }))
+        ...filteredOther.map(item => ({ ...item, type: "warehouse", priority: 3 })),
+        ...filteredManual.map(item => ({ ...item, type: "manual", priority: 4 }))
+      );
+    } else {
+      // manual tab
+      items.push(
+        ...filteredManual.map(item => ({ ...item, type: "manual", priority: 1 })),
+        ...filteredClient.map(item => ({ ...item, type: "warehouse", priority: 2 })),
+        ...filteredOther.map(item => ({ ...item, type: "warehouse", priority: 3 })),
+        ...filteredWastage.map(item => ({ ...item, type: "wastage", priority: 4 }))
       );
     }
 
     return items;
-  }, [filteredData, activeTab]);
+  }, [filteredData, activeTab, manualCutRolls, debouncedSearchTerm]);
 
   // Optimized toggle handler - use Set for O(1) operations
-  const handleToggleItem = useCallback((item: any, isWastageItem: boolean) => {
-    const itemId = isWastageItem ? item.id : item.inventory_id;
+  const handleToggleItem = useCallback((item: any, itemType: string) => {
+    const itemId = itemType === "wastage" ? item.id : (itemType === "manual" ? item.id : item.inventory_id);
 
-    if (isWastageItem) {
+    if (itemType === "wastage") {
       setSelectedWastageIds(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(itemId)) {
+          newSet.delete(itemId);
+        } else {
+          newSet.add(itemId);
+        }
+        return newSet;
+      });
+    } else if (itemType === "manual") {
+      setSelectedManualCutRollIds(prev => {
         const newSet = new Set(prev);
         if (newSet.has(itemId)) {
           newSet.delete(itemId);
@@ -467,7 +532,7 @@ export function CreateDispatchModal({
 
   // Memoize stats to avoid recalculation
   const stats = useMemo(() => {
-    const totalSelected = selectedItems.size + selectedWastageIds.size;
+    const totalSelected = selectedItems.size + selectedWastageIds.size + selectedManualCutRollIds.size;
 
     // Calculate total weight only when needed
     let totalWeight = 0;
@@ -482,15 +547,21 @@ export function CreateDispatchModal({
           totalWeight += item.weight_kg || 0;
         }
       });
+      manualCutRolls.forEach(item => {
+        if (selectedManualCutRollIds.has(item.id)) {
+          totalWeight += item.weight_kg || 0;
+        }
+      });
     }
 
     return {
       totalSelected,
       totalWeight,
       regularCount: selectedItems.size,
-      wastageCount: selectedWastageIds.size
+      wastageCount: selectedWastageIds.size,
+      manualCount: selectedManualCutRollIds.size
     };
-  }, [selectedItems, selectedWastageIds, warehouseItems, wastageItems]);
+  }, [selectedItems, selectedWastageIds, selectedManualCutRollIds, warehouseItems, wastageItems, manualCutRolls]);
 
   // Render optimized table
   const renderTable = useMemo(() => {
@@ -551,21 +622,23 @@ export function CreateDispatchModal({
           </TableHeader>
           <TableBody>
             {displayItems.map((item: any, index) => {
-              const isWastageItem = item.type === "wastage";
-              const itemId = isWastageItem ? item.id : item.inventory_id;
-              const isSelected = isWastageItem
+              const itemType = item.type;
+              const itemId = itemType === "wastage" ? item.id : (itemType === "manual" ? item.id : item.inventory_id);
+              const isSelected = itemType === "wastage"
                 ? selectedWastageIds.has(itemId)
-                : selectedItems.has(itemId);
+                : (itemType === "manual"
+                  ? selectedManualCutRollIds.has(itemId)
+                  : selectedItems.has(itemId));
 
               return (
                 <OptimizedRow
-                  key={`${isWastageItem ? 'w' : 'i'}-${itemId}`}
+                  key={`${itemType.charAt(0)}-${itemId}`}
                   item={item}
                   index={index}
                   isSelected={isSelected}
-                  isWastageItem={isWastageItem}
+                  itemType={itemType}
                   searchTerm={searchTerm}
-                  onToggle={() => handleToggleItem(item, isWastageItem)}
+                  onToggle={() => handleToggleItem(item, itemType)}
                 />
               );
             })}
@@ -573,7 +646,7 @@ export function CreateDispatchModal({
         </Table>
       </div>
     );
-  }, [loading, displayItems, debouncedSearchTerm, searchTerm, selectedItems, selectedWastageIds, handleToggleItem]);
+  }, [loading, displayItems, debouncedSearchTerm, searchTerm, selectedItems, selectedWastageIds, selectedManualCutRollIds, handleToggleItem]);
 
   return (
     <>

@@ -66,6 +66,7 @@ export interface DispatchFormData {
   primary_order_id?: string;
   inventory_ids: string[];
   wastage_ids?: string[];  // NEW: Wastage inventory IDs
+  manual_cut_roll_ids?: string[];  // NEW: Manual cut roll IDs
 }
 
 export interface CompletePendingItemRequest {
@@ -88,7 +89,7 @@ export async function fetchWarehouseItems(): Promise<WarehouseItem[]> {
 
 /**
  * Create dispatch record with vehicle/driver details and complete items
- * Supports both regular inventory and wastage items
+ * Supports regular inventory, wastage items, and manual cut rolls
  */
 export async function createDispatchRecord(dispatchData: {
   vehicle_number: string;
@@ -102,6 +103,7 @@ export async function createDispatchRecord(dispatchData: {
   primary_order_id?: string;
   inventory_ids: string[];
   wastage_ids?: string[];  // NEW: Wastage inventory IDs
+  manual_cut_roll_ids?: string[];  // NEW: Manual cut roll IDs
 }): Promise<{
   dispatch_id: string;
   dispatch_number: string;
@@ -110,6 +112,7 @@ export async function createDispatchRecord(dispatchData: {
     dispatched_items: number;
     regular_items?: number;
     wastage_items?: number;
+    manual_cut_rolls?: number;
     orders_completed: number;
     total_weight: number;
   };
@@ -134,6 +137,7 @@ export async function createDispatchRecord(dispatchData: {
     order_date: null,
     inventory_ids: dispatchData.inventory_ids || [],
     wastage_ids: dispatchData.wastage_ids || [],  // NEW: Include wastage IDs
+    manual_cut_roll_ids: dispatchData.manual_cut_roll_ids || [],  // NEW: Include manual cut roll IDs
     created_by_id: userId
   };
 

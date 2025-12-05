@@ -80,6 +80,7 @@ export const STATUS_ENDPOINTS = {
 export const DISPATCH_ENDPOINTS = {
   WAREHOUSE_ITEMS: `${API_BASE_URL}/dispatch/warehouse-items`,
   WASTAGE_INVENTORY_ITEMS: `${API_BASE_URL}/dispatch/wastage-inventory-items`,  // NEW: Wastage items
+  MANUAL_CUT_ROLLS: `${API_BASE_URL}/dispatch/manual-cut-rolls`,  // NEW: Manual cut rolls
   PREVIEW_DISPATCH_NUMBER: `${API_BASE_URL}/dispatch/preview-number`,  // NEW: Preview dispatch number
   CREATE_DISPATCH: `${API_BASE_URL}/dispatch/create-dispatch`,
   CLIENTS: `${API_BASE_URL}/dispatch/clients`,
