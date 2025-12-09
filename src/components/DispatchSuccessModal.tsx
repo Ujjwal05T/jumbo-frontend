@@ -203,7 +203,7 @@ export function DispatchSuccessModal({
       const packingSlipData = convertDispatchToPackingSlip(dispatchData);
 
       // Generate PDF and open print dialog
-      const pdf = generatePackingSlipPDF(packingSlipData, true);
+      const pdf = generatePackingSlipPDF(packingSlipData,false, true);
 
       toast.success('Packing slip opened for printing');
     } catch (error) {

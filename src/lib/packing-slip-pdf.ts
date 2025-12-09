@@ -108,7 +108,9 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
 
     // Prepare table data
     const tableHeaders = ['S.No', 'GSM', 'BF', 'Size', 'Reel', 'Weight', 'Nat/Gold'];
-    const tableData = data.items.map(item => [
+
+    const sortedItems = data.items.sort((a:any, b:any) => a.reel - b.reel);
+    const tableData = sortedItems.map(item => [
       item.sno.toString(),
       item.gsm.toString() || '',
       item.bf.toString() || '',

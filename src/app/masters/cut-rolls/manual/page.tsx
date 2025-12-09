@@ -79,6 +79,7 @@ export default function ManualCutRollEntryPage() {
 
         if (clientsResponse.ok && papersResponse.ok) {
           const clientsData = await clientsResponse.json();
+          console.log("Fetched clients:", clientsData);
           const papersData = await papersResponse.json();
 
           // Sort clients by company name
@@ -136,7 +137,25 @@ export default function ManualCutRollEntryPage() {
       return;
     }
 
-    if (!widthInches || parseFloat(widthInches) <= 0) {
+    // Validate reel number is numeric and in range 8000-9000
+    const reelNo = parseInt(reelNumber);
+    if (isNaN(reelNo)) {
+      setAlert({
+        type: "error",
+        message: "Reel number must be a valid number.",
+      });
+      return;
+    }
+
+    if (reelNo < 8000 || reelNo > 9000) {
+      setAlert({
+        type: "error",
+        message: "Reel number must be between 8000 and 9000.",
+      });
+      return;
+    }
+
+    if (!widthInches || parseFloat(widthInches) < 0 && parseFloat(widthInches) > 118) {
       setAlert({
         type: "error",
         message: "Please enter a valid width.",
@@ -144,7 +163,7 @@ export default function ManualCutRollEntryPage() {
       return;
     }
 
-    if (!weightKg || parseFloat(weightKg) <= 0) {
+    if (!weightKg || parseFloat(weightKg) < 0 && parseFloat(weightKg) > 9999) {
       setAlert({
         type: "error",
         message: "Please enter a valid weight.",
@@ -154,6 +173,29 @@ export default function ManualCutRollEntryPage() {
 
     try {
       setLoading(true);
+
+      // Check if reel number already exists
+      const checkResponse = await fetch(
+        `${MASTER_ENDPOINTS.MANUAL_CUT_ROLLS}?status=all`,
+        createRequestOptions('GET')
+      );
+
+      if (checkResponse.ok) {
+        const existingRolls = await checkResponse.json();
+        const barcodeId = `CR_0${reelNumber}`;
+        const duplicate = existingRolls.manual_cut_rolls?.find(
+          (roll: any) => roll.barcode_id === barcodeId
+        );
+
+        if (duplicate) {
+          setAlert({
+            type: "error",
+            message: `Reel number ${reelNumber} already exists. Please use a different number.`,
+          });
+          setLoading(false);
+          return;
+        }
+      }
 
       // Get user ID from localStorage
       const userId = localStorage.getItem('user_id');
@@ -338,13 +380,24 @@ export default function ManualCutRollEntryPage() {
                   <Label htmlFor="reel_number" className="text-base font-medium">Reel Number *</Label>
                   <Input
                     id="reel_number"
-                    type="text"
+                    type="number"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    // min="8000"
+                    max="9000"
                     value={reelNumber}
-                    onChange={(e) => setReelNumber(e.target.value)}
-                    placeholder="Enter reel number"
+                    onChange={(e) => {
+                      // Only allow integers (no decimals)
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      setReelNumber(value);
+                    }}
+                    placeholder="Enter reel number (8000-9000)"
                     disabled={loading}
                     className="mt-2 font-medium"
                   />
+                  <p className="mt-1 text-sm text-gray-600">
+                    Valid range: 8000 to 9000
+                  </p>
                 </div>
 
                 {/* Width */}

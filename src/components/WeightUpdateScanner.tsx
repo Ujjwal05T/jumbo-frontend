@@ -666,11 +666,11 @@ export default function WeightUpdateScanner() {
               </form>
             </CardContent>
           </Card>
-          {/* <div className='w-full max-w-2xl mx-auto'>
+          <div className='w-full max-w-2xl mx-auto'>
           <Button className='w-full font-medium text-lg py-5'  onClick={() => router.push('/masters/cut-rolls/manual')}>
             Manual Roll
           </Button>
-        </div> */}
+        </div>
           </>
         ) : (
           /* Roll Details and Weight Update */

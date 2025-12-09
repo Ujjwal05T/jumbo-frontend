@@ -58,6 +58,7 @@ type CutRoll = {
   allocated_order: {
     id: string;
     frontend_id: string | null;
+    client_company_name: string | null;
   } | null;
   source_type: string | null;
   is_wastage_roll: boolean;
@@ -79,12 +80,14 @@ export default function AllCutRollsReportPage() {
   const [gsmFilter, setGsmFilter] = useState<string>('');
   const [widthFilter, setWidthFilter] = useState<string>('');
   const [locationFilter, setLocationFilter] = useState<string>('');
+  const [clientFilter, setClientFilter] = useState<string>('all');
+  const [orderFilter, setOrderFilter] = useState<string>('all');
 
   // Fetch data with pagination
   const fetchData = async (page: number) => {
     setLoading(true);
     try {
-      const url = `${API_BASE_URL}/api/reports/all-cut-rolls?page=${page}&page_size=${pageSize}`;
+      const url = `${API_BASE_URL}/reports/all-cut-rolls?page=${page}&page_size=${pageSize}`;
       const response = await fetch(url, createRequestOptions('GET'));
       const result = await response.json();
 
@@ -143,8 +146,22 @@ export default function AllCutRollsReportPage() {
       );
     }
 
+    // Client filter
+    if (clientFilter && clientFilter !== 'all') {
+      filtered = filtered.filter(roll =>
+        roll.allocated_order?.client_company_name?.toLowerCase() === clientFilter.toLowerCase()
+      );
+    }
+
+    // Order filter
+    if (orderFilter && orderFilter !== 'all') {
+      filtered = filtered.filter(roll =>
+        roll.allocated_order?.frontend_id === orderFilter
+      );
+    }
+
     return filtered;
-  }, [cutRolls, statusFilter, paperNameFilter, gsmFilter, widthFilter, locationFilter]);
+  }, [cutRolls, statusFilter, paperNameFilter, gsmFilter, widthFilter, locationFilter, clientFilter, orderFilter]);
 
   // Clear all filters
   const clearFilters = () => {
@@ -153,7 +170,30 @@ export default function AllCutRollsReportPage() {
     setGsmFilter('');
     setWidthFilter('');
     setLocationFilter('');
+    setClientFilter('all');
+    setOrderFilter('all');
   };
+
+  // Get unique clients and orders for filter dropdowns (sorted)
+  const uniqueClients = useMemo(() => {
+    const clients = new Set<string>();
+    cutRolls.forEach(roll => {
+      if (roll.allocated_order?.client_company_name) {
+        clients.add(roll.allocated_order.client_company_name);
+      }
+    });
+    return Array.from(clients).sort((a, b) => a.localeCompare(b));
+  }, [cutRolls]);
+
+  const uniqueOrders = useMemo(() => {
+    const orders = new Set<string>();
+    cutRolls.forEach(roll => {
+      if (roll.allocated_order?.frontend_id) {
+        orders.add(roll.allocated_order.frontend_id);
+      }
+    });
+    return Array.from(orders).sort((a, b) => a.localeCompare(b));
+  }, [cutRolls]);
 
   // Pagination handlers
   const handleNextPage = () => {
@@ -200,29 +240,32 @@ export default function AllCutRollsReportPage() {
       roll.parent_118_roll?.barcode_id || 'N/A',
       roll.parent_jumbo_roll?.barcode_id || 'N/A',
       roll.plan_info?.frontend_id || 'N/A',
+      roll.allocated_order?.frontend_id || 'N/A',
+      roll.allocated_order?.client_company_name || 'N/A',
       roll.created_at ? new Date(roll.created_at).toLocaleDateString('en-GB') : 'N/A'
     ]);
 
     // Create table
     autoTable(doc, {
-      head: [['Cut Roll ID', 'Paper', 'Width', 'Weight (kg)', 'Status','118" Roll', 'Jumbo Roll', 'Plan ID', 'Created']],
+      head: [['Cut Roll ID', 'Paper', 'Width', 'Weight', 'Status','118" Roll', 'Jumbo Roll', 'Plan ID', 'Order ID', 'Client', 'Created']],
       body: tableData,
       startY: 40,
-      styles: { fontSize: 7, cellPadding: 2 },
+      styles: { fontSize: 6, cellPadding: 1.5 },
       headStyles: { fillColor: [66, 66, 66], fontStyle: 'bold' },
       columnStyles: {
-        0: { cellWidth: 22 },  // Cut Roll ID
-        1: { cellWidth: 45 },  // Paper (wider for multiline)
-        2: { cellWidth: 15 },  // Width
-        3: { cellWidth: 18 },  // Weight
-        4: { cellWidth: 20 },  // Status
-        5: { cellWidth: 25 },  // Location
-        6: { cellWidth: 22 },  // 118" Roll
-        7: { cellWidth: 22 },  // Jumbo Roll
-        8: { cellWidth: 22 },  // Plan ID
-        9: { cellWidth: 22 },  // Created
+        0: { cellWidth: 20 },  // Cut Roll ID
+        1: { cellWidth: 35 },  // Paper (reduced)
+        2: { cellWidth: 12 },  // Width
+        3: { cellWidth: 14 },  // Weight
+        4: { cellWidth: 18 },  // Status
+        5: { cellWidth: 20 },  // 118" Roll
+        6: { cellWidth: 20 },  // Jumbo Roll
+        7: { cellWidth: 18 },  // Plan ID
+        8: { cellWidth: 18 },  // Order ID
+        9: { cellWidth: 35 },  // Client
+        10: { cellWidth: 18 }, // Created
       },
-      margin: { top: 40, left: 14, right: 14 },
+      margin: { top: 40, left: 10, right: 10 },
     });
 
     // Save the PDF
@@ -333,6 +376,32 @@ export default function AllCutRollsReportPage() {
       },
     },
     {
+      accessorKey: 'allocated_order.frontend_id',
+      header: 'Order ID',
+      size: 130,
+      Cell: ({ row }) => {
+        const order = row.original.allocated_order;
+        return order ? (
+          <span className="font-mono text-xs">{order.frontend_id}</span>
+        ) : (
+          <span className="text-muted-foreground">N/A</span>
+        );
+      },
+    },
+    {
+      accessorKey: 'allocated_order.client_company_name',
+      header: 'Client',
+      size: 180,
+      Cell: ({ row }) => {
+        const order = row.original.allocated_order;
+        return order ? (
+          <span className="text-sm">{order.client_company_name}</span>
+        ) : (
+          <span className="text-muted-foreground">N/A</span>
+        );
+      },
+    },
+    {
       accessorKey: 'created_at',
       header: 'Created',
       size: 130,
@@ -377,6 +446,8 @@ export default function AllCutRollsReportPage() {
               '118" Roll ID': row.original.parent_118_roll?.barcode_id || 'N/A',
               'Jumbo Roll ID': row.original.parent_jumbo_roll?.barcode_id || 'N/A',
               'Plan ID': row.original.plan_info?.frontend_id || 'N/A',
+              'Order ID': row.original.allocated_order?.frontend_id || 'N/A',
+              'Client': row.original.allocated_order?.client_company_name || 'N/A',
               'Created At': row.original.created_at ? new Date(row.original.created_at).toLocaleDateString('en-GB') : 'N/A',
               'Is Wastage': row.original.is_wastage_roll ? 'Yes' : 'No',
             }));
@@ -517,7 +588,7 @@ export default function AllCutRollsReportPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
               <div>
                 <label className="text-sm font-medium">Status</label>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -526,21 +597,12 @@ export default function AllCutRollsReportPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="available">Wight Updated</SelectItem>
+                    <SelectItem value="available">Weight Updated</SelectItem>
                     <SelectItem value="cutting">Planned</SelectItem>
                     <SelectItem value="used">Dispatched</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* <div>
-                <label className="text-sm font-medium">Paper Name</label>
-                <Input
-                  placeholder="Filter by paper name"
-                  value={paperNameFilter}
-                  onChange={(e) => setPaperNameFilter(e.target.value)}
-                />
-              </div> */}
 
               <div>
                 <label className="text-sm font-medium">GSM</label>
@@ -560,14 +622,39 @@ export default function AllCutRollsReportPage() {
                 />
               </div>
 
-              {/* <div>
-                <label className="text-sm font-medium">Location</label>
-                <Input
-                  placeholder="Filter by location"
-                  value={locationFilter}
-                  onChange={(e) => setLocationFilter(e.target.value)}
-                />
-              </div> */}
+              <div>
+                <label className="text-sm font-medium">Client</label>
+                <Select value={clientFilter} onValueChange={setClientFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Clients" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Clients</SelectItem>
+                    {uniqueClients.map(client => (
+                      <SelectItem key={client} value={client}>
+                        {client}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Order</label>
+                <Select value={orderFilter} onValueChange={setOrderFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Orders" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Orders</SelectItem>
+                    {uniqueOrders.map(order => (
+                      <SelectItem key={order} value={order}>
+                        {order}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </CardContent>
         </Card>

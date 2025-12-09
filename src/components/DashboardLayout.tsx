@@ -67,7 +67,7 @@ const getNavigationForRole = (role: string | null) => {
         { name: "User Master", href: "/masters/users", roles: ["admin"] },
         { name: "Paper Master", href: "/masters/papers", roles: ["admin", "order_puncher", "accountant"] },
         { name: "Material Master", href: "/masters/materials", roles: ["admin", "accountant","security"] },
-        // { name: "Cut Roll Entry", href: "/masters/cut-rolls/manual", roles: ["admin", "production"] },
+        { name: "Manual Cut Rolls", href: "/masters/cut-rolls", roles: ["admin", "production", "accountant"] },
       ],
     },
     
@@ -90,12 +90,12 @@ const getNavigationForRole = (role: string | null) => {
       icon: Recycle,
       roles: ["admin", "accountant"],
     },
-    // {
-    //   name: "Weight Update",
-    //   href: "/weight-update",
-    //   icon: Database,
-    //   roles: ["admin", "weight_update", "accountant"],
-    // },
+    {
+      name: "Weight Update",
+      href: "/weight-update",
+      icon: Database,
+      roles: ["admin", "weight_update", "accountant"],
+    },
     {
       name: "In/Out",
       href: "/in-out",
