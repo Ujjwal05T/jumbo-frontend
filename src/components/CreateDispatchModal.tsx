@@ -23,6 +23,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSearch,
 } from "@/components/ui/select";
 import {
   Table,
@@ -43,6 +44,8 @@ import {
   Search,
   User,
   Phone,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/api-config";
 import { createDispatchRecord } from "@/lib/dispatch";
@@ -110,10 +113,13 @@ const OptimizedRow = memo(({
 
   return (
     <TableRow
+      onClick={onToggle}
       style={{
         backgroundColor: isSelected ? (isWastageItem ? '#fff7ed' : '#eff6ff') : 'transparent',
-        borderLeft: item.priority === 1 ? '4px solid #22c55e' : 'none'
+        borderLeft: item.priority === 1 ? '4px solid #22c55e' : 'none',
+        cursor: 'pointer'
       }}
+      className="hover:bg-gray-50 transition-colors"
     >
       <TableCell style={{ fontWeight: 500, fontSize: '16px' }}>{index + 1}</TableCell>
       <TableCell>
@@ -138,9 +144,6 @@ const OptimizedRow = memo(({
             </span>
           )}
         </div>
-        <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
-          By: {item.created_by || "Unknown"}
-        </div>
       </TableCell>
       <TableCell>
         {isWastageItem ? (
@@ -151,6 +154,15 @@ const OptimizedRow = memo(({
               <Building2 style={{ width: '14px', height: '14px', color: '#2563eb' }} />
               {getHighlightedText(item.client_name || "N/A", searchTerm)}
             </div>
+          </div>
+        )}
+      </TableCell>
+      <TableCell>
+        {isWastageItem ? (
+          <div style={{ color: '#6b7280', fontSize: '16px' }}>-</div>
+        ) : (
+          <div>
+           
             <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
               Order: {getHighlightedText(item.order_id || "N/A", searchTerm)}
             </div>
@@ -173,7 +185,10 @@ const OptimizedRow = memo(({
       <TableCell style={{ textAlign: 'center', fontWeight: 500, fontSize: '16px' }}>
         {item.weight_kg}kg
       </TableCell>
-      <TableCell style={{ display: 'flex', justifyContent: 'center' }}>
+      <TableCell
+        style={{ display: 'flex', justifyContent: 'center' }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <PureCheckbox checked={isSelected} onChange={onToggle} />
       </TableCell>
     </TableRow>
@@ -214,6 +229,8 @@ export function CreateDispatchModal({
 
   const [previewNumber, setPreviewNumber] = useState<string>("");
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [clientSearch, setClientSearch] = useState("");
+  const [summaryCollapsed, setSummaryCollapsed] = useState(false);
 
   // Debounce search to reduce re-renders
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
@@ -243,6 +260,7 @@ export function CreateDispatchModal({
       setSearchTerm("");
       setDebouncedSearchTerm("");
       setPreviewNumber("");
+      setClientSearch("");
       setDispatchDetails({
         vehicle_number: "",
         driver_name: "",
@@ -261,7 +279,13 @@ export function CreateDispatchModal({
       });
       if (!response.ok) throw new Error("Failed to load clients");
       const data = await response.json();
-      setClients(data.clients || []);
+
+      // Deduplicate clients based on ID
+      const uniqueClients = Array.from(
+        new Map((data.clients || []).map((client: any) => [client.id, client])).values()
+      );
+
+      setClients(uniqueClients);
     } catch (err) {
       console.error("Error loading clients:", err);
       toast.error("Failed to load clients");
@@ -613,7 +637,8 @@ export function CreateDispatchModal({
             <TableRow>
               <TableHead style={{ width: '60px', fontSize: '16px', fontWeight: 600 }}>S.No</TableHead>
               <TableHead style={{ width: '200px', fontSize: '16px', fontWeight: 600 }}>ID / Barcode</TableHead>
-              <TableHead style={{ width: '200px', fontSize: '16px', fontWeight: 600 }}>Client & Order</TableHead>
+              <TableHead style={{ width: '200px', fontSize: '16px', fontWeight: 600 }}>Client</TableHead>
+              <TableHead style={{ width: '200px', fontSize: '16px', fontWeight: 600 }}> Order</TableHead>
               <TableHead style={{ fontSize: '16px', fontWeight: 600 }}>Paper Specs</TableHead>
               <TableHead style={{ width: '80px', textAlign: 'center', fontSize: '16px', fontWeight: 600 }}>Width</TableHead>
               <TableHead style={{ width: '80px', textAlign: 'center', fontSize: '16px', fontWeight: 600 }}>Weight</TableHead>
@@ -651,12 +676,9 @@ export function CreateDispatchModal({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent style={{ maxWidth: '1200px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+        <DialogContent style={{ maxWidth: '1500px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
           <DialogHeader>
-            <DialogTitle style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '20px' }}>
-              <Truck style={{ width: '24px', height: '24px' }} />
-              Create New Dispatch
-            </DialogTitle>
+            
             <DialogDescription style={{ fontSize: '16px' }}>
               {step === 1 ? "Step 1: Fill dispatch details" : "Step 2: Select items to dispatch"}
             </DialogDescription>
@@ -664,7 +686,7 @@ export function CreateDispatchModal({
 
           <div style={{ flex: 1, overflow: 'auto' }}>
             {step === 1 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '8px' }}>
                 {/* Form fields... */}
                 <div style={{ display: 'grid',gap: '16px' }}>
                   <div>
@@ -683,8 +705,19 @@ export function CreateDispatchModal({
                         <SelectValue placeholder="Select a client" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectSearch
+                          placeholder="Search clients..."
+                          value={clientSearch}
+                          onChange={(e) => setClientSearch(e.target.value)}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        />
                         <SelectItem value="none" disabled>Select a client</SelectItem>
                         {clients
+                          .filter((client) =>
+                            client.company_name
+                              .toLowerCase()
+                              .includes(clientSearch.toLowerCase())
+                          )
                           .sort((a, b) => a.company_name.localeCompare(b.company_name))
                           .map((client) => (
                             <SelectItem key={client.id} value={client.id}>
@@ -837,88 +870,107 @@ export function CreateDispatchModal({
                 </Button>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '8px' }}>
                 {/* Summary */}
                 <div style={{
                   backgroundColor: '#f0fdf4',
                   border: '1px solid #86efac',
-                  borderRadius: '8px',
-                  padding: '16px'
+                  borderRadius: '6px',
+                  padding: '10px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '16px'
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                    <h3 style={{ fontWeight: 600, fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <CheckCircle style={{ width: '20px', height: '20px', color: '#16a34a' }} />
-                      Dispatch Details Saved
-                    </h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '24px', fontSize: '14px', flex: 1 }}>
+                    {!summaryCollapsed && (
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ color: '#6b7280', fontWeight: 500 }}>Client:</span>
+                          <span style={{ fontWeight: 600}}>{selectedClient?.company_name}</span>
+                        </div>
+                        <div style={{ height: '20px', width: '1px', backgroundColor: '#86efac' }} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ color: '#6b7280', fontWeight: 500 }}>Vehicle:</span>
+                          <span style={{ fontWeight: 600 }}>{dispatchDetails.vehicle_number}</span>
+                        </div>
+                        <div style={{ height: '20px', width: '1px', backgroundColor: '#86efac' }} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ color: '#6b7280', fontWeight: 500 }}>Driver:</span>
+                          <span style={{ fontWeight: 600 }}>{dispatchDetails.driver_name}</span>
+                        </div>
+                      </>
+                    )}
+                    {summaryCollapsed && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ color: '#6b7280', fontWeight: 500 }}>Dispatch Details</span>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSummaryCollapsed(!summaryCollapsed)}
+                      style={{ padding: '4px 8px' }}
+                    >
+                      {summaryCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                    </Button>
                     <Button variant="outline" size="sm" onClick={() => setStep(1)}>
                       Edit
                     </Button>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', fontSize: '16px' }}>
-                    <div>
-                      <span style={{ color: '#6b7280' }}>Client:</span>
-                      <p style={{ fontWeight: 500 }}>{selectedClient?.company_name}</p>
-                    </div>
-                    <div>
-                      <span style={{ color: '#6b7280' }}>Vehicle:</span>
-                      <p style={{ fontWeight: 500 }}>{dispatchDetails.vehicle_number}</p>
-                    </div>
-                    <div>
-                      <span style={{ color: '#6b7280' }}>Driver:</span>
-                      <p style={{ fontWeight: 500 }}>{dispatchDetails.driver_name}</p>
-                    </div>
-                  </div>
                 </div>
 
                 {/* Stats */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
                   <div style={{
                     backgroundColor: '#eff6ff',
                     border: '1px solid #93c5fd',
-                    borderRadius: '8px',
-                    padding: '12px',
+                    borderRadius: '6px',
+                    padding: '8px 12px',
                     textAlign: 'center'
                   }}>
-                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#2563eb' }}>
+                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#2563eb' }}>
                       {stats.totalSelected}
                     </div>
-                    <div style={{ fontSize: '14px', color: '#6b7280' }}>Total Selected</div>
+                    <div style={{ fontSize: '12px', color: '#6b7280' }}>Total Selected</div>
                   </div>
                   <div style={{
                     backgroundColor: '#f0fdf4',
                     border: '1px solid #86efac',
-                    borderRadius: '8px',
-                    padding: '12px',
+                    borderRadius: '6px',
+                    padding: '8px 12px',
                     textAlign: 'center'
                   }}>
-                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#16a34a' }}>
+                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#16a34a' }}>
                       {stats.totalWeight.toFixed(1)} kg
                     </div>
-                    <div style={{ fontSize: '14px', color: '#6b7280' }}>Total Weight</div>
+                    <div style={{ fontSize: '12px', color: '#6b7280' }}>Total Weight</div>
                   </div>
                   <div style={{
                     backgroundColor: '#faf5ff',
                     border: '1px solid #d8b4fe',
-                    borderRadius: '8px',
-                    padding: '12px',
+                    borderRadius: '6px',
+                    padding: '8px 12px',
                     textAlign: 'center'
                   }}>
-                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#9333ea' }}>
+                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#9333ea' }}>
                       {stats.regularCount}
                     </div>
-                    <div style={{ fontSize: '14px', color: '#6b7280' }}>Regular Items</div>
+                    <div style={{ fontSize: '12px', color: '#6b7280' }}>Regular Items</div>
                   </div>
                   <div style={{
                     backgroundColor: '#fff7ed',
                     border: '1px solid #fed7aa',
-                    borderRadius: '8px',
-                    padding: '12px',
+                    borderRadius: '6px',
+                    padding: '8px 12px',
                     textAlign: 'center'
                   }}>
-                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ea580c' }}>
+                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#ea580c' }}>
                       {stats.wastageCount}
                     </div>
-                    <div style={{ fontSize: '14px', color: '#6b7280' }}>Stock Items</div>
+                    <div style={{ fontSize: '12px', color: '#6b7280' }}>Stock Items</div>
                   </div>
                 </div>
 
@@ -941,8 +993,9 @@ export function CreateDispatchModal({
                         paddingLeft: '48px',
                         paddingRight: '48px',
                         height: '56px',
-                        fontSize: '16px'
+                        fontSize: '20px'
                       }}
+
                     />
                     {searchTerm && (
                       <Button

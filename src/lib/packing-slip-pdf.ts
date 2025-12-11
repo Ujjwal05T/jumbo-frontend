@@ -33,15 +33,36 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
   try {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
-    let yPosition = 20;
+    const pageHeight = doc.internal.pageSize.getHeight();
+    let yPosition = 13;
+
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('SatGuru Papers Pvt. Ltd.', pageWidth/2, yPosition, { align: 'center' });
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Kraft paper Mill', pageWidth/2 + 45, yPosition-2, { align: 'left' });
+
+    // Plant address
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Address - Pithampur Dhar(M.P.)', pageWidth/2 + 45, yPosition+3, { align: 'left' });
+
+
+    yPosition+=12
+
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'normal')
+    doc.text(`Date: ${new Date(data.dispatch_date).toLocaleDateString('en-GB')}`, 155, yPosition,{align:'left'});
 
     // Title
-    doc.setFontSize(20);
+    doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
     doc.text('PACKING SLIP', pageWidth / 2, yPosition, { align: 'center' });
-    yPosition += 15;
+    
+    yPosition += 10;
 
-    // Dispatch Information Section
+    // Dispatch Information Section - 3 columns layout
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
     
@@ -49,58 +70,33 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
     const leftMargin = 20;
     const rightMargin = 20;
     const usableWidth = pageWidth - leftMargin - rightMargin;
+    const bottomMargin = 20;
 
-    // Left column - Dispatch details
-    const leftColX = leftMargin;
-    const rightColX = pageWidth / 2 + 10;
+    // Three columns
+    const col1X = leftMargin;
+    const col2X = leftMargin + (usableWidth / 3);
+    const col3X = leftMargin + (2 * usableWidth / 3);
     
-    doc.setFont('helvetica', 'bold');
-    doc.text('Dispatch Details:', leftColX, yPosition);
-    doc.setFont('helvetica', 'normal');
-    yPosition += 8;
+    // Row 1
+   
+    doc.text(`Dispatch No: ${data.dispatch_number}`, 155, yPosition-3,{align:'left'});
+    doc.text(`Party: ${data.client.company_name}`, col1X, yPosition);
     
-    doc.text(`Dispatch No: ${data.dispatch_number}`, leftColX, yPosition);
-    yPosition += 6;
-    
-    if (data.reference_number) {
-      doc.text(`Reference No: ${data.reference_number}`, leftColX, yPosition);
-      yPosition += 6;
-    }
-    
-    doc.text(`Date: ${new Date(data.dispatch_date).toLocaleDateString('en-GB')}`, leftColX, yPosition);
-    yPosition += 6;
-
-    // Reset yPosition for right column
-    let rightYPos = yPosition - (data.reference_number ? 20 : 14);
-    
-    // Right column - Client details
-    doc.setFont('helvetica', 'bold');
-    doc.text('Client Details:', rightColX, rightYPos);
-    doc.setFont('helvetica', 'normal');
-    rightYPos += 8;
-    
-    doc.text(`Company: ${data.client.company_name}`, rightColX, rightYPos);
-    rightYPos += 6;
-    
-    yPosition = Math.max(yPosition, rightYPos) + 10;
-
-    // Transport Details
-    doc.setFont('helvetica', 'bold');
-    doc.text('Transport Details:', leftColX, yPosition);
-    doc.setFont('helvetica', 'normal');
-    yPosition += 8;
-    
-    doc.text(`Vehicle: ${data.vehicle_number}`, leftColX, yPosition);
-    doc.text(`Driver: ${data.driver_name}`, rightColX, yPosition);
-    yPosition += 6;
-    
-    doc.text(`Driver Mobile: ${data.driver_mobile}`, leftColX, yPosition);
-    yPosition += 15;
-
-    // Items Table
-    doc.setFont('helvetica', 'bold');
-    doc.text('Items:', leftColX, yPosition);
     yPosition += 10;
+    
+    // Row 2
+    if (data.reference_number) {
+      doc.text(`Reference No: ${data.reference_number}`, 155, (yPosition-6));
+    }
+    doc.text(`Vehicle No.: ${data.vehicle_number}`, 155, yPosition+1);
+    let formatAddress = ''
+    if(data.client.address && data.client.address?.length > 0 ){
+        formatAddress = data.client.address?.length > 36 ?data.client.address?.substring(0,35)+'...': data.client.address
+    }
+
+    doc.text(`Address: ${formatAddress}`, 20, yPosition);
+    yPosition += 14;
+    
 
     // Calculate totals
     const totalWeight = data.items.reduce((sum, item) => sum + item.weight, 0);
@@ -109,9 +105,30 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
     // Prepare table data
     const tableHeaders = ['S.No', 'GSM', 'BF', 'Size', 'Reel', 'Weight', 'Nat/Gold'];
 
-    const sortedItems = data.items.sort((a:any, b:any) => a.reel - b.reel);
-    const tableData = sortedItems.map(item => [
-      item.sno.toString(),
+    const sortedItems = data.items.sort((a:any, b:any) => {
+      // Sort by size first
+      const sizeA = parseFloat(String(a.size)) || 0;
+      const sizeB = parseFloat(String(b.size)) || 0;
+      if (sizeA !== sizeB) return sizeA - sizeB;
+      
+      // Then by GSM
+      const gsmA = parseFloat(String(a.gsm)) || 0;
+      const gsmB = parseFloat(String(b.gsm)) || 0;
+      if (gsmA !== gsmB) return gsmA - gsmB;
+      
+      // Then by BF
+      const bfA = parseFloat(String(a.bf)) || 0;
+      const bfB = parseFloat(String(b.bf)) || 0;
+      if (bfA !== bfB) return bfA - bfB;
+      
+      // Finally by reel
+      const reelA = parseFloat(String(a.reel)) || 0;
+      const reelB = parseFloat(String(b.reel)) || 0;
+      return reelA - reelB;
+    });
+    
+    const tableData = sortedItems.map((item, index) => [
+      (index + 1).toString(), // Regenerate S.No after sorting
       item.gsm.toString() || '',
       item.bf.toString() || '',
       item.size.toString() || '',
@@ -119,6 +136,8 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
       item.weight.toString(),
       item.natgold || ''
     ]);
+
+    
 
     // Add totals row
     tableData.push([
@@ -131,87 +150,117 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
       ''
     ]);
 
-    // Draw table manually
+    // Draw table manually with pagination support
     const totalTableWidth = usableWidth - 10; // Leave some extra space on right
     const colWidths = [totalTableWidth * 0.08, totalTableWidth * 0.12, totalTableWidth * 0.10, totalTableWidth * 0.12, totalTableWidth * 0.20, totalTableWidth * 0.18, totalTableWidth * 0.20]; // Responsive column widths
     const rowHeight = 8;
     const headerHeight = 10;
+    const tableWidth = colWidths.reduce((a, b) => a + b, 0);
+    const leftColX = col1X; // Use col1X for table alignment
+
+    // Helper function to draw table headers
+    const drawTableHeader = (startY: number) => {
+      doc.setFillColor(240, 240, 240);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+
+      let currentX = leftColX;
+      // Draw header background
+      doc.rect(currentX, startY, tableWidth, headerHeight, 'F');
+
+      // Draw header text
+      tableHeaders.forEach((header, i) => {
+        doc.text(header, currentX + colWidths[i] / 2, startY + headerHeight / 2 + 2, { align: 'center' });
+        currentX += colWidths[i];
+      });
+
+      return startY + headerHeight;
+    };
+
+    // Helper function to draw table borders for a section
+    const drawTableBorders = (startY: number, endY: number, rowCount: number) => {
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.5);
+
+      const sectionHeight = endY - startY;
+
+      // Outer border
+      doc.rect(leftColX, startY, tableWidth, sectionHeight, 'S');
+
+      // Vertical lines
+      let x = leftColX;
+      for (let i = 0; i < colWidths.length - 1; i++) {
+        x += colWidths[i];
+        doc.line(x, startY, x, endY);
+      }
+
+      // Horizontal lines (header line + row lines)
+      doc.line(leftColX, startY + headerHeight, leftColX + tableWidth, startY + headerHeight);
+      for (let i = 1; i < rowCount; i++) {
+        const y = startY + headerHeight + (i * rowHeight);
+        if (y < endY) {
+          doc.line(leftColX, y, leftColX + tableWidth, y);
+        }
+      }
+    };
+
     let currentY = yPosition;
-    
-    // Draw header row
-    doc.setFillColor(240, 240, 240);
-    doc.setTextColor(0, 0, 0);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    
-    let currentX = leftColX;
-    // Draw header background
-    doc.rect(currentX, currentY, colWidths.reduce((a, b) => a + b, 0), headerHeight, 'F');
-    
-    // Draw header text
-    tableHeaders.forEach((header, i) => {
-      doc.text(header, currentX + colWidths[i] / 2, currentY + headerHeight / 2 + 2, { align: 'center' });
-      currentX += colWidths[i];
-    });
-    
-    currentY += headerHeight;
-    
-    // Draw data rows
+    let tableStartY = currentY;
+    let rowsInCurrentPage = 0;
+
+    // Draw initial header
+    currentY = drawTableHeader(currentY);
+
+    // Draw data rows with pagination
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(0, 0, 0);
-    
+
     tableData.forEach((row, rowIndex) => {
-      currentX = leftColX;
-      
       // Check if this is the total row (last row)
       const isTotalRow = rowIndex === tableData.length - 1;
-      
+
+      // Check if we need a new page (leave space for footer if it's the last row)
+      const spaceNeeded = isTotalRow ? rowHeight + 60 : rowHeight; // Extra space for footer on last row
+      if (currentY + spaceNeeded > pageHeight - bottomMargin) {
+        // Draw borders for current table section
+        drawTableBorders(tableStartY, currentY, rowsInCurrentPage);
+
+        // Add new page
+        doc.addPage();
+
+        // Reset Y position and redraw header
+        currentY = 20;
+        tableStartY = currentY;
+        currentY = drawTableHeader(currentY);
+        rowsInCurrentPage = 0;
+      }
+
+      let currentX = leftColX;
+
       if (isTotalRow) {
         doc.setFillColor(250, 250, 250);
         doc.setFont('helvetica', 'bold');
-        doc.rect(currentX, currentY, colWidths.reduce((a, b) => a + b, 0), rowHeight, 'F');
+        doc.rect(currentX, currentY, tableWidth, rowHeight, 'F');
       }
-      
+
       // Draw cell data
       row.forEach((cell, colIndex) => {
         doc.text(cell, currentX + colWidths[colIndex] / 2, currentY + rowHeight / 2 + 1, { align: 'center' });
         currentX += colWidths[colIndex];
       });
-      
+
       if (isTotalRow) {
         doc.setFont('helvetica', 'normal');
       }
-      
+
       currentY += rowHeight;
+      rowsInCurrentPage++;
     });
-    
-    // Draw table borders
-    currentX = leftColX;
-    const tableWidth = colWidths.reduce((a, b) => a + b, 0);
-    const tableHeight = headerHeight + (tableData.length * rowHeight);
-    
-    doc.setDrawColor(0, 0, 0);
-    doc.setLineWidth(0.5);
-    
-    // Outer border
-    doc.rect(currentX, yPosition, tableWidth, tableHeight, 'S');
-    
-    // Vertical lines
-    let x = currentX;
-    for (let i = 0; i < colWidths.length - 1; i++) {
-      x += colWidths[i];
-      doc.line(x, yPosition, x, yPosition + tableHeight);
-    }
-    
-    // Horizontal lines  
-    doc.line(currentX, yPosition + headerHeight, currentX + tableWidth, yPosition + headerHeight);
-    for (let i = 1; i < tableData.length; i++) {
-      const y = yPosition + headerHeight + (i * rowHeight);
-      doc.line(currentX, y, currentX + tableWidth, y);
-    }
-    
-    currentY = yPosition + tableHeight;
+
+    // Draw final table borders
+    drawTableBorders(tableStartY, currentY, rowsInCurrentPage);
 
     // Footer
     const finalY = currentY + 20;
@@ -219,15 +268,15 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
     doc.setFont('helvetica', 'normal');
     
     // Summary
-    doc.text(`Total Items: ${totalItems}`, leftColX, finalY);
-    doc.text(`Total Weight: ${totalWeight} kg`, rightColX, finalY);
+    doc.text(`Total Items: ${totalItems}`, col1X, finalY);
+    doc.text(`Total Weight: ${totalWeight} kg`, col3X, finalY);
     
     // Signature lines
     const signatureY = finalY + 30;
-    doc.text('_________________________', leftColX, signatureY);
-    doc.text('_________________________', rightColX, signatureY);
-    doc.text('Prepared By', leftColX + 25, signatureY + 10);
-    doc.text('Received By', rightColX + 25, signatureY + 10);
+    doc.text('_________________________', col1X, signatureY);
+    doc.text('_________________________', col3X, signatureY);
+    doc.text('Prepared By', col1X + 25, signatureY + 10);
+    doc.text('Received By', col3X + 25, signatureY + 10);
 
     // Save or return the PDF
     if (returnDoc) {

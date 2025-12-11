@@ -23,6 +23,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSearch,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Plus, Package } from "lucide-react";
@@ -42,6 +43,7 @@ export default function CreateWastageModal({ onWastageCreated }: CreateWastageMo
   const [loading, setLoading] = useState(false);
   const [papers, setPapers] = useState<PaperMaster[]>([]);
   const [loadingPapers, setLoadingPapers] = useState(false);
+  const [paperSearch, setPaperSearch] = useState("");
 
   // Form state
   const [formData, setFormData] = useState<CreateWastageRequest>({

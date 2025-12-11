@@ -193,3 +193,147 @@ export async function completePendingItem(pendingItemId: string): Promise<void> 
     throw new Error(errorData.detail || errorData.message || 'Failed to complete pending item');
   }
 }
+
+/**
+ * Dispatch details interface
+ */
+export interface DispatchDetails {
+  id: string;
+  frontend_id: string;
+  dispatch_number: string;
+  reference_number: string | null;
+  dispatch_date: string;
+  order_date: string | null;
+  client: {
+    id: string;
+    company_name: string;
+    contact_person: string;
+    mobile: string;
+    email: string;
+    address: string;
+  };
+  primary_order: {
+    id: string;
+    order_number: string;
+    status: string;
+    payment_type: string;
+  } | null;
+  vehicle_number: string;
+  driver_name: string;
+  driver_mobile: string;
+  locket_no: string | null;
+  payment_type: string;
+  status: string;
+  total_items: number;
+  total_weight_kg: number;
+  created_by: {
+    id: string;
+    name: string;
+    username: string;
+  } | null;
+  created_at: string;
+  delivered_at: string | null;
+  items: DispatchItemDetails[];
+}
+
+export interface DispatchItemDetails {
+  id: string;
+  frontend_id: string;
+  qr_code: string;
+  barcode_id: string;
+  width_inches: number;
+  weight_kg: number;
+  paper_spec: string;
+  status: string;
+  dispatched_at: string;
+  inventory: {
+    id: string;
+    location: string;
+    roll_type: string;
+  } | null;
+}
+
+/**
+ * Fetch dispatch details by ID
+ */
+export async function fetchDispatchDetails(dispatchId: string): Promise<DispatchDetails> {
+  const response = await fetch(
+    DISPATCH_ENDPOINTS.GET_DISPATCH_DETAILS(dispatchId),
+    createRequestOptions('GET')
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || errorData.message || 'Failed to fetch dispatch details');
+  }
+
+  return response.json();
+}
+
+/**
+ * Update dispatch record interface
+ */
+export interface UpdateDispatchData {
+  vehicle_number?: string;
+  driver_name?: string;
+  driver_mobile?: string;
+  locket_no?: string;
+  payment_type?: string;
+  dispatch_date?: string;
+  reference_number?: string;
+  inventory_ids?: string[];
+  wastage_ids?: string[];
+  manual_cut_roll_ids?: string[];
+}
+
+/**
+ * Update an existing dispatch record
+ */
+export async function updateDispatchRecord(
+  dispatchId: string,
+  updateData: UpdateDispatchData
+): Promise<{
+  message: string;
+  dispatch_id: string;
+  dispatch_number: string;
+  total_items: number;
+  total_weight_kg: number;
+  updated_fields: {
+    vehicle_details: boolean;
+    items_changed: boolean;
+  };
+}> {
+  const userId = localStorage.getItem('user_id');
+  if (!userId) {
+    throw new Error('User not authenticated');
+  }
+
+  const request = {
+    ...updateData,
+    updated_by_id: userId,
+  };
+
+  console.log('Sending dispatch update request:', request);
+
+  const response = await fetch(
+    DISPATCH_ENDPOINTS.UPDATE_DISPATCH(dispatchId),
+    createRequestOptions('PUT', request)
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    console.error('Dispatch update failed:', {
+      status: response.status,
+      statusText: response.statusText,
+      errorData,
+      request,
+    });
+    throw new Error(
+      errorData.detail ||
+        errorData.message ||
+        `HTTP ${response.status}: Failed to update dispatch record`
+    );
+  }
+
+  return response.json();
+}

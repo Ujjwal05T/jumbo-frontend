@@ -36,6 +36,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSearch,
 } from "@/components/ui/select";
 import {
   Dialog,
@@ -67,6 +68,7 @@ import {
 import { API_BASE_URL } from "@/lib/api-config";
 import { generatePackingSlipPDF, convertDispatchToPackingSlip } from "@/lib/packing-slip-pdf";
 import { CreateDispatchModal } from "@/components/CreateDispatchModal";
+import { EditDispatchModal } from "@/components/EditDispatchModal";
 
 interface DispatchRecord {
   id: string;
@@ -205,9 +207,14 @@ export default function DispatchHistoryPage() {
 
   // Clients for filter
   const [clients, setClients] = useState<any[]>([]);
+  const [clientSearch, setClientSearch] = useState("");
 
   // Create dispatch modal
   const [createModalOpen, setCreateModalOpen] = useState(false);
+
+  // Edit dispatch modal
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editDispatchId, setEditDispatchId] = useState<string | null>(null);
 
   const loadDispatches = async () => {
     try {
@@ -466,12 +473,25 @@ export default function DispatchHistoryPage() {
                     <SelectValue placeholder="All clients" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectSearch
+                      placeholder="Search clients..."
+                      value={clientSearch}
+                      onChange={(e) => setClientSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
                     <SelectItem value="all">All Clients</SelectItem>
-                    {clients.sort((a, b) => a.company_name.localeCompare(b.company_name)).map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.company_name}
-                      </SelectItem>
-                    ))}
+                    {clients
+                      .filter((client) =>
+                        client.company_name
+                          .toLowerCase()
+                          .includes(clientSearch.toLowerCase())
+                      )
+                      .sort((a, b) => a.company_name.localeCompare(b.company_name))
+                      .map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.company_name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -652,6 +672,18 @@ export default function DispatchHistoryPage() {
                                 <Eye className="mr-2 h-4 w-4" />
                                 View Details
                               </DropdownMenuItem>
+                              {dispatch.status === 'dispatched' && (
+                                <DropdownMenuItem
+                                  className="text-blue-600"
+                                  onClick={() => {
+                                    setEditDispatchId(dispatch.id);
+                                    setEditModalOpen(true);
+                                  }}
+                                >
+                                  <RefreshCw className="mr-2 h-4 w-4" />
+                                  Edit Dispatch
+                                </DropdownMenuItem>
+                              )}
                               {/* <DropdownMenuItem
                                 onClick={() => printPDF(dispatch.id, dispatch.dispatch_number)}
                               >
@@ -664,24 +696,7 @@ export default function DispatchHistoryPage() {
                                 <FileText className="mr-2 h-4 w-4" />
                                 Print Packing Slip
                               </DropdownMenuItem>
-                              {dispatch.status === 'dispatched' && (
-                                <DropdownMenuItem
-                                  className="text-green-600"
-                                  onClick={() => updateDispatchStatus(dispatch.id, 'delivered')}
-                                >
-                                  <CheckCircle className="mr-2 h-4 w-4" />
-                                  Mark as Delivered
-                                </DropdownMenuItem>
-                              )}
-                              {dispatch.status === 'dispatched' && (
-                                <DropdownMenuItem
-                                  className="text-red-600"
-                                  onClick={() => updateDispatchStatus(dispatch.id, 'returned')}
-                                >
-                                  <XCircle className="mr-2 h-4 w-4" />
-                                  Mark as Returned
-                                </DropdownMenuItem>
-                              )}
+                              
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>
@@ -941,6 +956,18 @@ export default function DispatchHistoryPage() {
         onSuccess={() => {
           loadDispatches();
           loadStats();
+        }}
+      />
+
+      {/* Edit Dispatch Modal */}
+      <EditDispatchModal
+        open={editModalOpen}
+        onOpenChange={setEditModalOpen}
+        dispatchId={editDispatchId}
+        onSuccess={() => {
+          loadDispatches();
+          loadStats();
+          setEditDispatchId(null);
         }}
       />
     </DashboardLayout>

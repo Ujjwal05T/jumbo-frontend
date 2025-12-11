@@ -83,6 +83,8 @@ export const DISPATCH_ENDPOINTS = {
   MANUAL_CUT_ROLLS: `${API_BASE_URL}/dispatch/manual-cut-rolls`,  // NEW: Manual cut rolls
   PREVIEW_DISPATCH_NUMBER: `${API_BASE_URL}/dispatch/preview-number`,  // NEW: Preview dispatch number
   CREATE_DISPATCH: `${API_BASE_URL}/dispatch/create-dispatch`,
+  GET_DISPATCH_DETAILS: (dispatchId: string) => `${API_BASE_URL}/dispatch/${dispatchId}/details`,  // NEW: Get dispatch details
+  UPDATE_DISPATCH: (dispatchId: string) => `${API_BASE_URL}/dispatch/${dispatchId}`,  // NEW: Update dispatch
   CLIENTS: `${API_BASE_URL}/dispatch/clients`,
   PENDING_ITEMS: `${API_BASE_URL}/dispatch/pending-items`,
   COMPLETE_PENDING_ITEM: `${API_BASE_URL}/dispatch/complete-pending-item`,
