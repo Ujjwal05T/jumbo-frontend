@@ -192,7 +192,7 @@ export function PlanDetailsModal({ planFrontendId, open, onOpenChange }: PlanDet
                   <p className="text-muted-foreground text-center py-4">No cut rolls match the selected status</p>
                 ) : (
                   <div className="grid grid-cols-3 gap-3">
-                    {filteredCutRolls.map((roll: any, index: number) => (
+                    {filteredCutRolls.sort((a:any, b:any) => {return a.width_inches - b.width_inches}).map((roll: any, index: number) => (
                       <div key={index} className="border rounded-lg p-3">
                         <div className="space-y-2">
                           <div>

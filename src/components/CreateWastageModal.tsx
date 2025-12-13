@@ -205,16 +205,32 @@ export default function CreateWastageModal({ onWastageCreated }: CreateWastageMo
                   <SelectValue placeholder="Select paper type" />
                 </SelectTrigger>
                 <SelectContent>
-                    {papers.sort((a, b) => a.gsm - b.gsm).map((paper) => (
-                    <SelectItem key={paper.id} value={paper.id}>
-                      <div className="flex flex-col">
-                      
-                      <span className="text-sm font-medium">
-                        {paper.gsm}GSM • {paper.bf}BF • {paper.shade}
-                      </span>
-                      </div>
-                    </SelectItem>
-                    ))}
+                  <SelectSearch
+                    placeholder="Search papers..."
+                    value={paperSearch}
+                    onChange={(e) => setPaperSearch(e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  />
+                    {papers
+                      .filter((paper) => {
+                        const searchLower = paperSearch.toLowerCase();
+                        return (
+                          paper.gsm.toString().includes(searchLower) ||
+                          paper.bf.toString().toLowerCase().includes(searchLower) ||
+                          paper.shade.toLowerCase().includes(searchLower)
+                        );
+                      })
+                      .sort((a, b) => a.gsm - b.gsm)
+                      .map((paper) => (
+                        <SelectItem key={paper.id} value={paper.id}>
+                          <div className="flex flex-col">
+
+                          <span className="text-sm font-medium">
+                            {paper.gsm}GSM • {paper.bf}BF • {paper.shade}
+                          </span>
+                          </div>
+                        </SelectItem>
+                      ))}
                 </SelectContent>
               </Select>
             )}

@@ -9,6 +9,7 @@ const roleBasedRoutes = {
   admin: [
     '/',
     '/all-cut-rolls',
+    '/all-cut-rolls-filtered',
     '/current-jumbo',
     '/cut-rolls-weight',
     '/reports',
@@ -82,6 +83,7 @@ const roleBasedRoutes = {
     '/dispatch',
     '/plan-weights',
     '/hour-calculator',
+    '/reports/all-cut-rolls',
   ],
   sales_person: [
     '/masters/orders',

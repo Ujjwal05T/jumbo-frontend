@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MaterialReactTable, useMaterialReactTable, MRT_ColumnDef } from 'material-react-table';
-import { Package, Download, Filter, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText } from 'lucide-react';
+import { Package, Download, Filter, X, FileText, Search } from 'lucide-react';
 import { createRequestOptions } from '@/lib/api-config';
 import { Badge } from '@/components/ui/badge';
 import jsPDF from 'jspdf';
@@ -15,6 +15,7 @@ import autoTable from 'jspdf-autotable';
 import { OrderDetailsModal } from '@/components/OrderDetailsModal';
 import { PlanDetailsModal } from '@/components/PlanDetailsModal';
 import { BarcodeDetailsModal } from '@/components/BarcodeDetailsModal';
+import { is } from 'zod/v4/locales';
 
 type CutRoll = {
   id: string;
@@ -58,6 +59,12 @@ type CutRoll = {
     status: string;
     created_at: string;
   } | null;
+  wastage_details: {
+    source: string,
+    reel_no: string,
+    wastage_barcode: string,
+    wastage_frontend_id: string
+  } | null,
   allocated_order: {
     id: string;
     frontend_id: string | null;
@@ -69,26 +76,48 @@ type CutRoll = {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-export default function AllCutRollsReportPage() {
+type Client = {
+  id: string;
+  company_name: string;
+};
+
+type Order = {
+  id: string;
+  frontend_id: string;
+  client: {
+    company_name: string;
+  };
+};
+
+type Plan = {
+  id: string;
+  frontend_id: string;
+  name: string;
+};
+
+export default function AllCutRollsFilteredReportPage() {
   const [cutRolls, setCutRolls] = useState<CutRoll[]>([]);
   const [loading, setLoading] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(0);
   const [totalItems, setTotalItems] = useState(0);
-  const pageSize = 500;
+  const [hasAppliedFilters, setHasAppliedFilters] = useState(false);
 
-  // Client-side filter states
-  const [omniSearch, setOmniSearch] = useState<string>('');
+  // Filter states (server-side)
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [paperNameFilter, setPaperNameFilter] = useState<string>('');
   const [gsmFilter, setGsmFilter] = useState<string>('');
-  const [widthFilter, setWidthFilter] = useState<string>('');
-  const [locationFilter, setLocationFilter] = useState<string>('');
   const [clientFilter, setClientFilter] = useState<string>('all');
   const [orderFilter, setOrderFilter] = useState<string>('all');
   const [planFilter, setPlanFilter] = useState<string>('all');
   const [fromProductionDateTime, setFromProductionDateTime] = useState<string>('');
   const [toProductionDateTime, setToProductionDateTime] = useState<string>('');
+
+  // Client-side search (applied after data is loaded)
+  const [omniSearch, setOmniSearch] = useState<string>('');
+
+  // Dropdown options
+  const [availableClients, setAvailableClients] = useState<Client[]>([]);
+  const [availableOrders, setAvailableOrders] = useState<Order[]>([]);
+  const [availablePlans, setAvailablePlans] = useState<Plan[]>([]);
+  const [loadingDropdowns, setLoadingDropdowns] = useState(true);
 
   // Modal states
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -99,268 +128,214 @@ export default function AllCutRollsReportPage() {
   const [selectedIsWastage, setSelectedIsWastage] = useState(false);
   const [barcodeModalOpen, setBarcodeModalOpen] = useState(false);
 
-  // Fetch data with pagination
-  const fetchData = async (page: number) => {
+  // Fetch dropdown options on mount
+  useEffect(() => {
+    const fetchDropdownOptions = async () => {
+      setLoadingDropdowns(true);
+      try {
+        // Fetch clients
+        const clientsResponse = await fetch(`${API_BASE_URL}/clients`, createRequestOptions('GET'));
+        const clientsData = await clientsResponse.json();
+        if (Array.isArray(clientsData)) {
+          const sortedClients = clientsData
+            .filter((c: Client) => c.company_name)
+            .sort((a: Client, b: Client) => a.company_name.localeCompare(b.company_name));
+          setAvailableClients(sortedClients);
+        }
+
+        // Fetch orders
+        const ordersResponse = await fetch(`${API_BASE_URL}/orders`, createRequestOptions('GET'));
+        const ordersData = await ordersResponse.json();
+        if (Array.isArray(ordersData)) {
+          const sortedOrders = ordersData
+            .filter((o: Order) => o.frontend_id)
+            .sort((a: Order, b: Order) => {
+              // Sort by frontend_id in ascending order
+              const aId = a.frontend_id || '';
+              const bId = b.frontend_id || '';
+              return aId.localeCompare(bId);
+            });
+          setAvailableOrders(sortedOrders);
+        }
+
+        // Fetch plans
+        const plansResponse = await fetch(`${API_BASE_URL}/plans`, createRequestOptions('GET'));
+        const plansData = await plansResponse.json();
+        if (Array.isArray(plansData)) {
+          const sortedPlans = plansData
+            .filter((p: Plan) => p.frontend_id)
+            .sort((a: Plan, b: Plan) => {
+              // Sort by frontend_id in ascending order
+              const aId = a.frontend_id || '';
+              const bId = b.frontend_id || '';
+              return aId.localeCompare(bId);
+            });
+          setAvailablePlans(sortedPlans);
+        }
+      } catch (error) {
+        console.error('Error fetching dropdown options:', error);
+      } finally {
+        setLoadingDropdowns(false);
+      }
+    };
+
+    fetchDropdownOptions();
+  }, []);
+
+  // Apply filters and fetch data
+  const applyFilters = async () => {
+    // Check if at least one filter is applied (excluding omniSearch - it's client-side only)
+    const hasFilters = !!(
+      (statusFilter && statusFilter !== 'all') ||
+      gsmFilter ||
+      (clientFilter && clientFilter !== 'all') ||
+      (orderFilter && orderFilter !== 'all') ||
+      (planFilter && planFilter !== 'all') ||
+      fromProductionDateTime ||
+      toProductionDateTime
+    );
+
+    if (!hasFilters) {
+      alert('Please apply at least one filter before searching');
+      return;
+    }
+
     setLoading(true);
+    setHasAppliedFilters(true);
+
     try {
-      const url = `${API_BASE_URL}/reports/all-cut-rolls?page=${page}&page_size=${pageSize}`;
+      // Build query parameters
+      const params = new URLSearchParams();
+
+      // Add filter parameters if they exist
+      if (statusFilter && statusFilter !== 'all') params.append('status_filter', statusFilter);
+      if (gsmFilter) params.append('gsm', gsmFilter);
+      if (clientFilter && clientFilter !== 'all') params.append('client_name', clientFilter);
+      if (orderFilter && orderFilter !== 'all') params.append('order_id', orderFilter);
+      if (planFilter && planFilter !== 'all') params.append('plan_id', planFilter);
+
+      // Handle datetime filters (convert IST to UTC)
+      // User enters datetime in IST, we need to send UTC to server
+      if (fromProductionDateTime) {
+        // Explicitly treat input as IST by appending +05:30 offset
+        const istDateTimeStr = fromProductionDateTime.includes(':00+')
+          ? fromProductionDateTime
+          : fromProductionDateTime + ':00+05:30';
+        const utcDateTime = new Date(istDateTimeStr);
+        params.append('from_production_date', utcDateTime.toISOString());
+      }
+      if (toProductionDateTime) {
+        // Explicitly treat input as IST by appending +05:30 offset
+        // Set to end of minute (59 seconds, 999ms)
+        const istDateTimeStr = toProductionDateTime.includes(':00+')
+          ? toProductionDateTime
+          : toProductionDateTime + ':59.999+05:30';
+        const utcDateTime = new Date(istDateTimeStr);
+        params.append('to_production_date', utcDateTime.toISOString());
+      }
+
+      const url = `${API_BASE_URL}/reports/all-cut-rolls-filtered?${params.toString()}`;
       const response = await fetch(url, createRequestOptions('GET'));
       const result = await response.json();
 
       if (result.success && result.data) {
         setCutRolls(result.data.cut_rolls);
-        setTotalPages(result.data.pagination.total_pages);
-        setTotalItems(result.data.pagination.total_items);
-        setCurrentPage(result.data.pagination.current_page);
+        setTotalItems(result.data.total_items);
       }
     } catch (error) {
       console.error('Error fetching cut rolls:', error);
+      alert('Error fetching cut rolls. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Load initial data
-  useEffect(() => {
-    fetchData(1);
-  }, []);
-
-  // Apply client-side filters on current page data
-  const filteredCutRolls = useMemo(() => {
-    let filtered = [...cutRolls];
-
-    // Omni search - searches across barcode_id, paper name, client, order, plan
-    if (omniSearch && omniSearch.trim()) {
-      const searchLower = omniSearch.toLowerCase().trim();
-      filtered = filtered.filter(roll => {
-        return (
-          roll.barcode_id?.toLowerCase().includes(searchLower) ||
-          roll.paper_specs.paper_name?.toLowerCase().includes(searchLower) ||
-          roll.allocated_order?.client_company_name?.toLowerCase().includes(searchLower) ||
-          roll.allocated_order?.frontend_id?.toLowerCase().includes(searchLower) ||
-          roll.plan_info?.frontend_id?.toLowerCase().includes(searchLower) ||
-          roll.parent_118_roll?.barcode_id?.toLowerCase().includes(searchLower) ||
-          roll.parent_jumbo_roll?.barcode_id?.toLowerCase().includes(searchLower)
-        );
-      });
-    }
-
-    // Production date range filter (based on updated_at)
-    // Convert IST datetime to UTC for comparison with database timestamps
-    if (fromProductionDateTime) {
-      // Parse datetime-local value (format: YYYY-MM-DDTHH:mm)
-      const istDateTime = new Date(fromProductionDateTime);
-      // Convert IST to UTC (IST is UTC+5:30)
-      const utcDateTime = new Date(istDateTime.getTime() - (5.5 * 60 * 60 * 1000));
-
-      filtered = filtered.filter(roll => {
-        if (!roll.updated_at) return false;
-        const rollDate = new Date(roll.updated_at);
-        return rollDate >= utcDateTime;
-      });
-    }
-
-    if (toProductionDateTime) {
-      // Parse datetime-local value (format: YYYY-MM-DDTHH:mm)
-      const istDateTime = new Date(toProductionDateTime);
-      // Add 59 seconds and 999ms to include the full minute
-      istDateTime.setSeconds(59, 999);
-      // Convert IST to UTC (IST is UTC+5:30)
-      const utcDateTime = new Date(istDateTime.getTime() - (5.5 * 60 * 60 * 1000));
-
-      filtered = filtered.filter(roll => {
-        if (!roll.updated_at) return false;
-        const rollDate = new Date(roll.updated_at);
-        return rollDate <= utcDateTime;
-      });
-    }
-
-    // Status filter
-    if (statusFilter && statusFilter !== 'all') {
-      if (statusFilter === 'weight_updated') {
-        // Weight Updated = available + used
-        filtered = filtered.filter(roll =>
-          roll.status.toLowerCase() === 'available' || roll.status.toLowerCase() === 'used'
-        );
-      } else {
-        filtered = filtered.filter(roll => roll.status.toLowerCase() === statusFilter.toLowerCase());
-      }
-    }
-
-    // Paper name filter
-    if (paperNameFilter) {
-      filtered = filtered.filter(roll =>
-        roll.paper_specs.paper_name.toLowerCase().includes(paperNameFilter.toLowerCase())
-      );
-    }
-
-    // GSM filter
-    if (gsmFilter) {
-      filtered = filtered.filter(roll =>
-        roll.paper_specs.gsm.toString().includes(gsmFilter)
-      );
-    }
-
-    // Width filter
-    if (widthFilter) {
-      filtered = filtered.filter(roll =>
-        roll.width_inches.toString().includes(widthFilter)
-      );
-    }
-
-    // Location filter
-    if (locationFilter) {
-      filtered = filtered.filter(roll =>
-        roll.location.toLowerCase().includes(locationFilter.toLowerCase())
-      );
-    }
-
-    // Client filter
-    if (clientFilter && clientFilter !== 'all') {
-      filtered = filtered.filter(roll =>
-        roll.allocated_order?.client_company_name?.toLowerCase() === clientFilter.toLowerCase()
-      );
-    }
-
-    // Order filter
-    if (orderFilter && orderFilter !== 'all') {
-      filtered = filtered.filter(roll =>
-        roll.allocated_order?.frontend_id === orderFilter
-      );
-    }
-
-    // Plan filter
-    if (planFilter && planFilter !== 'all') {
-      filtered = filtered.filter(roll =>
-        roll.plan_info?.frontend_id === planFilter
-      );
-    }
-
-    return filtered;
-  }, [cutRolls, omniSearch, statusFilter, paperNameFilter, gsmFilter, widthFilter, locationFilter, clientFilter, orderFilter, planFilter, fromProductionDateTime, toProductionDateTime]);
-
   // Clear all filters
   const clearFilters = () => {
     setOmniSearch('');
     setStatusFilter('all');
-    setPaperNameFilter('');
     setGsmFilter('');
-    setWidthFilter('');
-    setLocationFilter('');
-    setClientFilter('all');
-    setOrderFilter('all');
-    setPlanFilter('all');
+    setClientFilter('all'); // Reset to "All Clients"
+    setOrderFilter('all'); // Reset to "All Orders"
+    setPlanFilter('all'); // Reset to "All Plans"
     setFromProductionDateTime('');
     setToProductionDateTime('');
+    setCutRolls([]);
+    setTotalItems(0);
+    setHasAppliedFilters(false);
   };
 
-  // Get unique clients, orders, and plans for filter dropdowns (sorted)
-  const uniqueClients = useMemo(() => {
-    const clients = new Set<string>();
-    cutRolls.forEach(roll => {
-      if (roll.allocated_order?.client_company_name) {
-        clients.add(roll.allocated_order.client_company_name);
-      }
-    });
-    return Array.from(clients).sort((a, b) => a.localeCompare(b));
-  }, [cutRolls]);
-
-  const uniqueOrders = useMemo(() => {
-    const orders = new Set<string>();
-    cutRolls.forEach(roll => {
-      if (roll.allocated_order?.frontend_id) {
-        orders.add(roll.allocated_order.frontend_id);
-      }
-    });
-    return Array.from(orders).sort((a, b) => a.localeCompare(b));
-  }, [cutRolls]);
-
-  const uniquePlans = useMemo(() => {
-    const plans = new Set<string>();
-    cutRolls.forEach(roll => {
-      if (roll.plan_info?.frontend_id) {
-        plans.add(roll.plan_info.frontend_id);
-      }
-    });
-    return Array.from(plans).sort((a, b) => a.localeCompare(b));
-  }, [cutRolls]);
-
-  // Pagination handlers
-  const handleNextPage = () => {
-    if (currentPage < totalPages) {
-      fetchData(currentPage + 1);
+  // Client-side omni search on loaded data
+  const filteredCutRolls = useMemo(() => {
+    if (!omniSearch.trim()) {
+      return cutRolls;
     }
-  };
 
-  const handlePreviousPage = () => {
-    if (currentPage > 1) {
-      fetchData(currentPage - 1);
-    }
-  };
+    const searchTerm = omniSearch.toLowerCase().trim();
 
-  const handleGoToPage = (page: number) => {
-    if (page >= 1 && page <= totalPages) {
-      fetchData(page);
-    }
-  };
+    return cutRolls.filter(roll => {
+      // Search in barcode
+      if (roll.barcode_id?.toLowerCase().includes(searchTerm)) return true;
 
-  // Helper function to convert UTC to IST
-  const convertUTCtoIST = (utcDateString: string) => {
-    const utcDate = new Date(utcDateString);
-    // Add 5 hours 30 minutes for IST
-    const istDate = new Date(utcDate.getTime() + (5.5 * 60 * 60 * 1000));
-    return istDate;
-  };
+      // Search in paper specs
+      if (roll.paper_specs?.paper_name?.toLowerCase().includes(searchTerm)) return true;
+      if (roll.paper_specs?.gsm?.toString().includes(searchTerm)) return true;
+      if (roll.paper_specs?.bf?.toString().includes(searchTerm)) return true;
+      if (roll.paper_specs?.shade?.toLowerCase().includes(searchTerm)) return true;
 
-  // Helper function to format datetime in IST
-  const formatISTDateTime = (utcDateString: string) => {
-    const istDate = convertUTCtoIST(utcDateString);
-    const date = istDate.toLocaleDateString('en-GB');
-    const time = istDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-    return `${date} ${time}`;
-  };
+      // Search in width and weight
+      if (roll.width_inches?.toString().includes(searchTerm)) return true;
+      if (roll.weight_kg?.toString().includes(searchTerm)) return true;
+
+      // Search in status
+      if (roll.status?.toLowerCase().includes(searchTerm)) return true;
+
+      // Search in location
+      if (roll.location?.toLowerCase().includes(searchTerm)) return true;
+
+      // Search in parent rolls
+      if (roll.parent_118_roll?.barcode_id?.toLowerCase().includes(searchTerm)) return true;
+      if (roll.parent_jumbo_roll?.barcode_id?.toLowerCase().includes(searchTerm)) return true;
+
+      // Search in plan
+      if (roll.plan_info?.frontend_id?.toLowerCase().includes(searchTerm)) return true;
+      if (roll.plan_info?.name?.toLowerCase().includes(searchTerm)) return true;
+
+      // Search in order and client
+      if (roll.allocated_order?.frontend_id?.toLowerCase().includes(searchTerm)) return true;
+      if (roll.allocated_order?.client_company_name?.toLowerCase().includes(searchTerm)) return true;
+
+      return false;
+    });
+  }, [cutRolls, omniSearch]);
 
   // Export to PDF function
   const exportToPDF = () => {
     const doc = new jsPDF('landscape');
 
     // Generate dynamic title based on filters
-    let reportTitle = '';
+    let reportTitle = 'Filtered Cut Rolls Report';
 
-    // Add client name if filter is active
-    if (clientFilter && clientFilter !== 'all') {
-      reportTitle = clientFilter + ' ';
-    }
-
-    // Add status-based name
-    if (statusFilter && statusFilter !== 'all') {
+    if (clientFilter) {
+      reportTitle = clientFilter + ' Rolls Report';
+    } else if (statusFilter && statusFilter !== 'all') {
       const statusName = statusFilter === 'weight_updated' ? 'Weight Updated' :
                          statusFilter === 'available' ? 'Stock' :
                          statusFilter === 'cutting' ? 'Planned' :
                          statusFilter === 'used' ? 'Dispatched' :
                          statusFilter;
-      reportTitle += statusName + ' Rolls Report';
-    } else {
-      reportTitle += 'All Rolls Report';
+      reportTitle = statusName + ' Rolls Report';
     }
 
     // Add title
     doc.setFontSize(18);
     doc.text(reportTitle, 148, 20, { align: 'center' });
 
-
     // Calculate date ranges from actual data
-    let minCreatedDate: Date | null = null;
-    let maxCreatedDate: Date | null = null;
     let minProductionDate: Date | null = null;
     let maxProductionDate: Date | null = null;
 
     filteredCutRolls.forEach(roll => {
-      if (roll.created_at) {
-        const date = new Date(roll.created_at);
-        if (!minCreatedDate || date < minCreatedDate) minCreatedDate = date;
-        if (!maxCreatedDate || date > maxCreatedDate) maxCreatedDate = date;
-      }
       if (roll.updated_at) {
         const date = new Date(roll.updated_at);
         if (!minProductionDate || date < minProductionDate) minProductionDate = date;
@@ -368,12 +343,12 @@ export default function AllCutRollsReportPage() {
       }
     });
 
-    // Calculate summary statistics from filtered data
+    // Calculate summary statistics
     const totalRolls = filteredCutRolls.length;
     const totalWeight = filteredCutRolls.reduce((sum, roll) => sum + roll.weight_kg, 0);
     const stockRolls = filteredCutRolls.filter(r => r.status.toLowerCase() === 'available').length;
     const dispatchedRolls = filteredCutRolls.filter(r => r.status.toLowerCase() === 'used').length;
-    const weightUpdatedRolls = stockRolls + dispatchedRolls; // Weight Updated = Stock + Dispatched
+    const weightUpdatedRolls = stockRolls + dispatchedRolls;
     const plannedRolls = filteredCutRolls.filter(r => r.status.toLowerCase() === 'cutting').length;
 
     // Add date range section
@@ -381,15 +356,13 @@ export default function AllCutRollsReportPage() {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
 
-
     if (minProductionDate !== null && maxProductionDate !== null) {
       dateRangeY += 4;
-      // Convert UTC to IST and show with time
       const minDateIST = new Date((minProductionDate as Date).getTime() + (5.5 * 60 * 60 * 1000));
       const maxDateIST = new Date((maxProductionDate as Date).getTime() + (5.5 * 60 * 60 * 1000));
       const minDateStr = `${minDateIST.toLocaleDateString('en-GB')} ${minDateIST.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}`;
       const maxDateStr = `${maxDateIST.toLocaleDateString('en-GB')} ${maxDateIST.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}`;
-      doc.text(`Production Date: ${minDateStr} to ${maxDateStr}`, 190, dateRangeY -10);
+      doc.text(`Production Date: ${minDateStr} to ${maxDateStr}`, 190, dateRangeY - 10);
     }
 
     dateRangeY += 5;
@@ -399,10 +372,8 @@ export default function AllCutRollsReportPage() {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
 
-    // Build summary text in one line
     let summaryText = `Total Rolls: ${totalRolls}  |  Total Weight: ${totalWeight.toFixed(2)} kg`;
 
-    // Only add status-specific info if they have values
     if (weightUpdatedRolls > 0) {
       summaryText += `  |  Weight Updated: ${weightUpdatedRolls}`;
     }
@@ -420,21 +391,18 @@ export default function AllCutRollsReportPage() {
 
     const finalY = summaryStartY + 5;
 
-    // Sort by production date and then by width (ascending)
+    // Sort by production date and then by width
     const sortedRolls = [...filteredCutRolls].sort((a, b) => {
-      // First sort by production date (updated_at) - null dates come first
       const dateA = a.updated_at ? new Date(a.updated_at).getTime() : -Infinity;
       const dateB = b.updated_at ? new Date(b.updated_at).getTime() : -Infinity;
       if (dateB !== dateA) {
-        return dateA - dateB; 
+        return dateA - dateB;
       }
-      // If dates are equal, sort by width (ascending)
       return a.width_inches - b.width_inches;
     });
 
-    // Prepare table data from filtered results
+    // Prepare table data
     const tableData = sortedRolls.map(roll => {
-      // Convert production date (updated_at) to IST with time
       let productionDateIST = 'N/A';
       if (roll.updated_at) {
         const utcDate = new Date(roll.updated_at);
@@ -471,37 +439,30 @@ export default function AllCutRollsReportPage() {
       styles: { fontSize: 7, cellPadding: 2.0 },
       headStyles: { fillColor: [66, 66, 66], fontStyle: 'bold' },
       columnStyles: {
-        0: { cellWidth: 20 },  // Cut Roll ID
-        1: { cellWidth: 35 },  // Paper
-        2: { cellWidth: 12 },  // Width
-        3: { cellWidth: 14 },  // Weight
-        4: { cellWidth: 19 },  // Status
-        5: { cellWidth: 28 },  // Production Date with time (IST)
-        6: { cellWidth: 19 },  // 118" Roll
-        7: { cellWidth: 19 },  // Jumbo Roll
-        8: { cellWidth: 19 },  // Plan ID
-        9: { cellWidth: 19 },  // Order ID
-        10: { cellWidth: 55 }, // Client
-        11: { cellWidth: 19 }, // Created
+        0: { cellWidth: 20 },
+        1: { cellWidth: 35 },
+        2: { cellWidth: 12 },
+        3: { cellWidth: 14 },
+        4: { cellWidth: 19 },
+        5: { cellWidth: 28 },
+        6: { cellWidth: 19 },
+        7: { cellWidth: 19 },
+        8: { cellWidth: 19 },
+        9: { cellWidth: 19 },
+        10: { cellWidth: 55 },
+        11: { cellWidth: 19 },
       },
       margin: { left: 10, right: 10 },
     });
 
-    // Add footer with timestamps
+    // Add footer
     const footerY = (doc as any).lastAutoTable.finalY + 10;
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-
-    let footerText = `Generated on: ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString('en-GB')}`;
-
-    if (minCreatedDate !== null && maxCreatedDate !== null) {
-      footerText += `  |  Created at: ${(minCreatedDate as Date).toLocaleDateString('en-GB')} to ${(maxCreatedDate as Date).toLocaleDateString('en-GB')}`;
-    }
-
-    doc.text(footerText, 14, footerY);
+    doc.text(`Generated on: ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString('en-GB')}`, 14, footerY);
 
     // Save the PDF
-    doc.save(`cut-rolls-report-page-${currentPage}-${new Date().toISOString().split('T')[0]}.pdf`);
+    doc.save(`cut-rolls-filtered-report-${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   // Table columns definition
@@ -512,9 +473,12 @@ export default function AllCutRollsReportPage() {
       size: 140,
       Cell: ({ row }) => {
         const barcodeId = row.original.barcode_id;
+        let reelNo = barcodeId;
         const isWastage = row.original.is_wastage_roll;
+        if (isWastage && row.original.wastage_details) {
+          reelNo = row.original.wastage_details.reel_no;
+        } 
 
-        // Make all barcodes clickable to show dispatch info
         return (
           <button
             onClick={(e) => {
@@ -525,7 +489,7 @@ export default function AllCutRollsReportPage() {
             }}
             className="font-mono font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
           >
-            {barcodeId}
+            {isWastage ? reelNo : barcodeId}
           </button>
         );
       },
@@ -538,8 +502,7 @@ export default function AllCutRollsReportPage() {
         const specs = row.original.paper_specs;
         return (
           <div>
-            <div className="font-medium">{specs.paper_name}</div>
-            <div className="text-xs text-muted-foreground">
+            <div className="text-sm text-muted-foreground">
               {specs.gsm}GSM, {specs.bf}BF, {specs.shade}
             </div>
           </div>
@@ -589,7 +552,6 @@ export default function AllCutRollsReportPage() {
         const date = cell.getValue<string>();
         if (!date) return 'N/A';
 
-        // Convert UTC to IST and show with time in AM/PM format
         const utcDate = new Date(date);
         const istDate = new Date(utcDate.getTime() + (5.5 * 60 * 60 * 1000));
         const dateStr = istDate.toLocaleDateString('en-GB');
@@ -613,7 +575,7 @@ export default function AllCutRollsReportPage() {
     },
     {
       accessorKey: 'parent_jumbo_roll.barcode_id',
-      header: 'Jumbo Roll ID',
+      header: 'JR ID',
       size: 140,
       Cell: ({ row }) => {
         const jumbo = row.original.parent_jumbo_roll;
@@ -640,7 +602,6 @@ export default function AllCutRollsReportPage() {
             className="text-left hover:opacity-80"
           >
             <div className="font-mono text-xs text-blue-600 hover:text-blue-800 hover:underline cursor-pointer">{plan.frontend_id}</div>
-            <div className="text-xs text-muted-foreground">{plan.name}</div>
           </button>
         ) : (
           <span className="text-muted-foreground">N/A</span>
@@ -691,7 +652,6 @@ export default function AllCutRollsReportPage() {
         return date ? new Date(date).toLocaleDateString('en-GB') : 'N/A';
       },
     },
-    
   ], []);
 
   // Material React Table instance
@@ -710,16 +670,14 @@ export default function AllCutRollsReportPage() {
       pagination: { pageSize: 100, pageIndex: 0 },
       density: 'compact'
     },
-    renderTopToolbarCustomActions: ({ table }) => (
+    renderTopToolbarCustomActions: () => (
       <div className="flex gap-2">
         <Button
           onClick={() => {
-            // Export CSV functionality
-            const csvData = table.getCoreRowModel().rows.map(row => {
-              // Convert production date to IST with time
+            const csvData = filteredCutRolls.map(roll => {
               let productionDateIST = 'N/A';
-              if (row.original.updated_at) {
-                const utcDate = new Date(row.original.updated_at);
+              if (roll.updated_at) {
+                const utcDate = new Date(roll.updated_at);
                 const istDate = new Date(utcDate.getTime() + (5.5 * 60 * 60 * 1000));
                 const dateStr = istDate.toLocaleDateString('en-GB');
                 const timeStr = istDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
@@ -727,23 +685,23 @@ export default function AllCutRollsReportPage() {
               }
 
               return {
-                'Cut Roll ID': row.original.barcode_id,
-                'Paper Name': row.original.paper_specs.paper_name,
-                'GSM': row.original.paper_specs.gsm,
-                'BF': row.original.paper_specs.bf,
-                'Shade': row.original.paper_specs.shade,
-                'Width (inches)': row.original.width_inches,
-                'Weight (kg)': row.original.weight_kg,
-                'Status': row.original.status,
+                'Cut Roll ID': roll.barcode_id,
+                'Paper Name': roll.paper_specs.paper_name,
+                'GSM': roll.paper_specs.gsm,
+                'BF': roll.paper_specs.bf,
+                'Shade': roll.paper_specs.shade,
+                'Width (inches)': roll.width_inches,
+                'Weight (kg)': roll.weight_kg,
+                'Status': roll.status,
                 'Production Date (IST)': productionDateIST,
-                'Location': row.original.location,
-                '118" Roll ID': row.original.parent_118_roll?.barcode_id || 'N/A',
-                'Jumbo Roll ID': row.original.parent_jumbo_roll?.barcode_id || 'N/A',
-                'Plan ID': row.original.plan_info?.frontend_id || 'N/A',
-                'Order ID': row.original.allocated_order?.frontend_id || 'N/A',
-                'Client': row.original.allocated_order?.client_company_name || 'N/A',
-                'Created At': row.original.created_at ? new Date(row.original.created_at).toLocaleDateString('en-GB') : 'N/A',
-                'Is Wastage': row.original.is_wastage_roll ? 'Yes' : 'No',
+                'Location': roll.location,
+                '118" Roll ID': roll.parent_118_roll?.barcode_id || 'N/A',
+                'Jumbo Roll ID': roll.parent_jumbo_roll?.barcode_id || 'N/A',
+                'Plan ID': roll.plan_info?.frontend_id || 'N/A',
+                'Order ID': roll.allocated_order?.frontend_id || 'N/A',
+                'Client': roll.allocated_order?.client_company_name || 'N/A',
+                'Created At': roll.created_at ? new Date(roll.created_at).toLocaleDateString('en-GB') : 'N/A',
+                'Is Wastage': roll.is_wastage_roll ? 'Yes' : 'No',
               };
             });
 
@@ -757,12 +715,13 @@ export default function AllCutRollsReportPage() {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `all-cut-rolls-${new Date().toISOString().split('T')[0]}.csv`;
+            a.download = `all-cut-rolls-filtered-${new Date().toISOString().split('T')[0]}.csv`;
             a.click();
             URL.revokeObjectURL(url);
           }}
           size="sm"
           variant="outline"
+          disabled={filteredCutRolls.length === 0}
         >
           <Download className="h-4 w-4 mr-2" />
           Export CSV
@@ -771,6 +730,7 @@ export default function AllCutRollsReportPage() {
           onClick={exportToPDF}
           size="sm"
           variant="outline"
+          disabled={filteredCutRolls.length === 0}
         >
           <FileText className="h-4 w-4 mr-2" />
           Export PDF
@@ -785,9 +745,9 @@ export default function AllCutRollsReportPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">All Cut Rolls Report</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Filtered Cut Rolls Report</h1>
             <p className="text-muted-foreground">
-              Comprehensive view of all cut rolls in the system with advanced filtering
+              Apply filters to load data, then use search to filter results - shows ALL matching records
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -796,72 +756,74 @@ export default function AllCutRollsReportPage() {
         </div>
 
         {/* Summary Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Rolls (DB)</CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{totalItems.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">
-                Page {currentPage} of {totalPages}
-              </p>
-            </CardContent>
-          </Card>
+        {hasAppliedFilters && (
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Filtered</CardTitle>
+                <Package className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{totalItems.toLocaleString()}</div>
+                <p className="text-xs text-muted-foreground">
+                  All matching records
+                </p>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">This Page</CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{filteredCutRolls.length}</div>
-              <p className="text-xs text-muted-foreground">
-                of {cutRolls.length} loaded
-              </p>
-            </CardContent>
-          </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Weight</CardTitle>
+                <Package className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {filteredCutRolls.reduce((sum, roll) => sum + roll.weight_kg, 0).toFixed(2)}
+                </div>
+                <p className="text-xs text-muted-foreground">kg</p>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Weight</CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {filteredCutRolls.reduce((sum, roll) => sum + roll.weight_kg, 0).toFixed(2)}
-              </div>
-              <p className="text-xs text-muted-foreground">kg (filtered)</p>
-            </CardContent>
-          </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Available</CardTitle>
+                <Package className="h-4 w-4 text-green-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {filteredCutRolls.filter(r => r.status.toLowerCase() === 'available').length}
+                </div>
+                <p className="text-xs text-muted-foreground">rolls</p>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Available</CardTitle>
-              <Package className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {filteredCutRolls.filter(r => r.status.toLowerCase() === 'available').length}
-              </div>
-              <p className="text-xs text-muted-foreground">rolls</p>
-            </CardContent>
-          </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Used</CardTitle>
+                <Package className="h-4 w-4 text-gray-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {filteredCutRolls.filter(r => r.status.toLowerCase() === 'used').length}
+                </div>
+                <p className="text-xs text-muted-foreground">rolls</p>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Allocated</CardTitle>
-              <Package className="h-4 w-4 text-blue-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {filteredCutRolls.filter(r => r.status.toLowerCase() === 'allocated').length}
-              </div>
-              <p className="text-xs text-muted-foreground">rolls</p>
-            </CardContent>
-          </Card>
-        </div>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Cutting</CardTitle>
+                <Package className="h-4 w-4 text-yellow-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {filteredCutRolls.filter(r => r.status.toLowerCase() === 'cutting').length}
+                </div>
+                <p className="text-xs text-muted-foreground">rolls</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Filters */}
         <Card>
@@ -870,27 +832,34 @@ export default function AllCutRollsReportPage() {
               <div>
                 <CardTitle className="flex items-center gap-2">
                   <Filter className="h-5 w-5" />
-                  Filters
+                  Apply Filters to Search
                 </CardTitle>
                 <CardDescription>
-                  Apply filters to narrow down the cut rolls list
+                  Select at least one filter and click "Apply Filters" to view results
                 </CardDescription>
               </div>
-              <Button onClick={clearFilters} variant="outline" size="sm">
-                <X className="h-4 w-4 mr-2" />
-                Clear Filters
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={clearFilters} variant="outline" size="sm">
+                  <X className="h-4 w-4 mr-2" />
+                  Clear All
+                </Button>
+                <Button onClick={applyFilters} variant="default" size="sm" disabled={loading}>
+                  <Search className="h-4 w-4 mr-2" />
+                  {loading ? 'Searching...' : 'Apply Filters'}
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
             {/* Search and Date Filters */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
               <div className="lg:col-span-1">
-                <label className="text-sm font-medium mb-2 block">Search</label>
+                <label className="text-sm font-medium mb-2 block">Search (Client-side)</label>
                 <Input
                   placeholder="Search by barcode, paper, client..."
                   value={omniSearch}
                   onChange={(e) => setOmniSearch(e.target.value)}
+                  disabled={!hasAppliedFilters}
                 />
               </div>
               <div className="lg:col-span-1">
@@ -913,7 +882,7 @@ export default function AllCutRollsReportPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
               <div>
                 <label className="text-sm font-medium">Status</label>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -934,48 +903,24 @@ export default function AllCutRollsReportPage() {
                 <label className="text-sm font-medium">GSM</label>
                 <Input
                   placeholder="Filter by GSM"
+                  type="number"
                   value={gsmFilter}
                   onChange={(e) => setGsmFilter(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
                 />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Width</label>
-                <Input
-                  placeholder="Filter by width"
-                  value={widthFilter}
-                  onChange={(e) => setWidthFilter(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Plan</label>
-                <Select value={planFilter} onValueChange={setPlanFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Plans" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Plans</SelectItem>
-                    {uniquePlans.map(plan => (
-                      <SelectItem key={plan} value={plan}>
-                        {plan}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
 
               <div>
                 <label className="text-sm font-medium">Client</label>
-                <Select value={clientFilter} onValueChange={setClientFilter}>
+                <Select value={clientFilter} onValueChange={setClientFilter} disabled={loadingDropdowns}>
                   <SelectTrigger>
-                    <SelectValue placeholder="All Clients" />
+                    <SelectValue placeholder={loadingDropdowns ? "Loading..." : "Select Client"} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Clients</SelectItem>
-                    {uniqueClients.map(client => (
-                      <SelectItem key={client} value={client}>
-                        {client}
+                    {availableClients.map(client => (
+                      <SelectItem key={client.id} value={client.company_name}>
+                        {client.company_name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -983,16 +928,33 @@ export default function AllCutRollsReportPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium">Order</label>
-                <Select value={orderFilter} onValueChange={setOrderFilter}>
+                <label className="text-sm font-medium">Order ID</label>
+                <Select value={orderFilter} onValueChange={setOrderFilter} disabled={loadingDropdowns}>
                   <SelectTrigger>
-                    <SelectValue placeholder="All Orders" />
+                    <SelectValue placeholder={loadingDropdowns ? "Loading..." : "Select Order"} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Orders</SelectItem>
-                    {uniqueOrders.map(order => (
-                      <SelectItem key={order} value={order}>
-                        {order}
+                    {availableOrders.map(order => (
+                      <SelectItem key={order.id} value={order.frontend_id}>
+                        {order.frontend_id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Plan ID</label>
+                <Select value={planFilter} onValueChange={setPlanFilter} disabled={loadingDropdowns}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={loadingDropdowns ? "Loading..." : "Select Plan"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Plans</SelectItem>
+                    {availablePlans.map(plan => (
+                      <SelectItem key={plan.id} value={plan.frontend_id}>
+                        {plan.frontend_id}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1002,90 +964,52 @@ export default function AllCutRollsReportPage() {
           </CardContent>
         </Card>
 
-        {/* Main Table */}
+        {/* Main Table or Empty State */}
         <Card>
           <CardHeader>
-            <CardTitle>Cut Rolls List</CardTitle>
+            <CardTitle>Cut Rolls Results</CardTitle>
             <CardDescription>
-              {loading ? 'Loading...' : `Showing ${filteredCutRolls.length} rolls (page ${currentPage} of ${totalPages}, ${totalItems.toLocaleString()} total in database)`}
+              {loading
+                ? 'Loading filtered results...'
+                : hasAppliedFilters
+                  ? omniSearch.trim()
+                    ? `Showing ${filteredCutRolls.length.toLocaleString()} of ${totalItems.toLocaleString()} rolls (filtered by search)`
+                    : `Showing all ${totalItems.toLocaleString()} filtered rolls`
+                  : 'Apply filters above to view results'}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="flex justify-center items-center h-40">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <div className="flex flex-col justify-center items-center h-40">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
+                <p className="text-muted-foreground">Fetching filtered results...</p>
+              </div>
+            ) : !hasAppliedFilters ? (
+              <div className="flex flex-col justify-center items-center h-40 text-center">
+                <Search className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Filters Applied</h3>
+                <p className="text-muted-foreground">
+                  Select at least one filter above and click "Apply Filters" to view results
+                </p>
+              </div>
+            ) : filteredCutRolls.length === 0 ? (
+              <div className="flex flex-col justify-center items-center h-40 text-center">
+                <Package className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Results Found</h3>
+                <p className="text-muted-foreground">
+                  {omniSearch.trim()
+                    ? 'No rolls match your search criteria. Try adjusting your search term.'
+                    : 'No cut rolls match your filter criteria. Try adjusting your filters.'}
+                </p>
               </div>
             ) : (
               <MaterialReactTable table={table} />
             )}
           </CardContent>
         </Card>
-
-        {/* Pagination Controls */}
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-muted-foreground">
-                Page {currentPage} of {totalPages} ({totalItems.toLocaleString()} total rolls)
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleGoToPage(1)}
-                  disabled={currentPage === 1 || loading}
-                >
-                  <ChevronsLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handlePreviousPage}
-                  disabled={currentPage === 1 || loading}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Previous
-                </Button>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min={1}
-                    max={totalPages}
-                    value={currentPage}
-                    onChange={(e) => {
-                      const page = parseInt(e.target.value);
-                      if (!isNaN(page)) {
-                        handleGoToPage(page);
-                      }
-                    }}
-                    className="w-20 text-center"
-                  />
-                  <span className="text-sm text-muted-foreground">of {totalPages}</span>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleNextPage}
-                  disabled={currentPage === totalPages || loading}
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleGoToPage(totalPages)}
-                  disabled={currentPage === totalPages || loading}
-                >
-                  <ChevronsRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
-      {/* Order Details Modal */}
+      {/* Modals */}
       <OrderDetailsModal
         orderFrontendId={selectedOrderId}
         open={orderModalOpen}

@@ -123,6 +123,8 @@ const getNavigationForRole = (role: string | null) => {
     },
     { name: "Current Dispatch",icon: Truck, href: "/dispatch/history", roles: ["dispatch", "sales_person"] },
     { name: "Plan Weights",icon: Weight, href: "/plan-weights", roles: ["dispatch"] },
+    { name: "All cut rolls",icon: BarChart3, href: "/reports/all-cut-rolls", roles: ["dispatch"] },
+    
     {
       name: "Challan",
       href: "/challan",

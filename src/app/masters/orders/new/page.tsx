@@ -11,6 +11,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSearch,
 } from "@/components/ui/select";
 import {
   Card,
@@ -53,6 +54,8 @@ export default function NewOrderPage() {
     { id: string; name: string; gsm: number; bf: number; shade: string }[]
   >([]);
   const [loading, setLoading] = useState(false);
+  const [clientSearch, setClientSearch] = useState("");
+  const [paperSearches, setPaperSearches] = useState<Record<number, string>>({});
   const [alert, setAlert] = useState<{
     type: "success" | "error" | null;
     message: string;
@@ -496,11 +499,24 @@ export default function NewOrderPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {clients.sort((a, b) => a.company_name.localeCompare(b.company_name)).map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.company_name}
-                      </SelectItem>
-                    ))}
+                    <SelectSearch
+                      placeholder="Search clients..."
+                      value={clientSearch}
+                      onChange={(e) => setClientSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
+                    {clients
+                      .filter((client) =>
+                        client.company_name
+                          .toLowerCase()
+                          .includes(clientSearch.toLowerCase())
+                      )
+                      .sort((a, b) => a.company_name.localeCompare(b.company_name))
+                      .map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.company_name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -588,7 +604,26 @@ export default function NewOrderPage() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
+                            <SelectSearch
+                              placeholder="Search papers..."
+                              value={paperSearches[index] || ""}
+                              onChange={(e) =>
+                                setPaperSearches((prev) => ({
+                                  ...prev,
+                                  [index]: e.target.value,
+                                }))
+                              }
+                              onKeyDown={(e) => e.stopPropagation()}
+                            />
                             {papers
+                              .filter((paper) => {
+                                const search = (paperSearches[index] || "").toLowerCase();
+                                return (
+                                  paper.gsm.toString().includes(search) ||
+                                  paper.bf.toString().toLowerCase().includes(search) ||
+                                  paper.shade.toLowerCase().includes(search)
+                                );
+                              })
                               .sort((a, b) => a.gsm - b.gsm)
                               .map((paper) => (
                                 <SelectItem key={paper.id} value={paper.id}>
