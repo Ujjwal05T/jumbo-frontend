@@ -37,6 +37,7 @@ type CutRoll = {
     shade: string;
     type: string;
   };
+  quantity_pending?: number | null;
   parent_118_roll: {
     id: string;
     frontend_id: string;
@@ -184,13 +185,16 @@ export default function AllCutRollsFilteredReportPage() {
 
   // Apply filters and fetch data
   const applyFilters = async () => {
+    const isPending = statusFilter === 'pending';
+
     // Check if at least one filter is applied (excluding omniSearch - it's client-side only)
+    // For pending orders, plan filter is not applicable
     const hasFilters = !!(
       (statusFilter && statusFilter !== 'all') ||
       gsmFilter ||
       (clientFilter && clientFilter !== 'all') ||
       (orderFilter && orderFilter !== 'all') ||
-      (planFilter && planFilter !== 'all') ||
+      (!isPending && planFilter && planFilter !== 'all') ||
       fromProductionDateTime ||
       toProductionDateTime
     );
@@ -208,11 +212,19 @@ export default function AllCutRollsFilteredReportPage() {
       const params = new URLSearchParams();
 
       // Add filter parameters if they exist
-      if (statusFilter && statusFilter !== 'all') params.append('status_filter', statusFilter);
       if (gsmFilter) params.append('gsm', gsmFilter);
       if (clientFilter && clientFilter !== 'all') params.append('client_name', clientFilter);
       if (orderFilter && orderFilter !== 'all') params.append('order_id', orderFilter);
-      if (planFilter && planFilter !== 'all') params.append('plan_id', planFilter);
+
+      // Plan filter only for non-pending orders
+      if (!isPending && planFilter && planFilter !== 'all') {
+        params.append('plan_id', planFilter);
+      }
+
+      // Status filter only for non-pending orders
+      if (!isPending && statusFilter && statusFilter !== 'all') {
+        params.append('status_filter', statusFilter);
+      }
 
       // Handle datetime filters (convert IST to UTC)
       // User enters datetime in IST, we need to send UTC to server
@@ -222,7 +234,8 @@ export default function AllCutRollsFilteredReportPage() {
           ? fromProductionDateTime
           : fromProductionDateTime + ':00+05:30';
         const utcDateTime = new Date(istDateTimeStr);
-        params.append('from_production_date', utcDateTime.toISOString());
+        const dateParam = isPending ? 'from_created_date' : 'from_production_date';
+        params.append(dateParam, utcDateTime.toISOString());
       }
       if (toProductionDateTime) {
         // Explicitly treat input as IST by appending +05:30 offset
@@ -231,20 +244,29 @@ export default function AllCutRollsFilteredReportPage() {
           ? toProductionDateTime
           : toProductionDateTime + ':59.999+05:30';
         const utcDateTime = new Date(istDateTimeStr);
-        params.append('to_production_date', utcDateTime.toISOString());
+        const dateParam = isPending ? 'to_created_date' : 'to_production_date';
+        params.append(dateParam, utcDateTime.toISOString());
       }
 
-      const url = `${API_BASE_URL}/reports/all-cut-rolls-filtered?${params.toString()}`;
+      // Switch API endpoint based on status
+      const endpoint = isPending ? '/reports/pending-orders-filtered' : '/reports/all-cut-rolls-filtered';
+      const url = `${API_BASE_URL}${endpoint}?${params.toString()}`;
       const response = await fetch(url, createRequestOptions('GET'));
       const result = await response.json();
 
       if (result.success && result.data) {
-        setCutRolls(result.data.cut_rolls);
-        setTotalItems(result.data.total_items);
+        // Handle response based on endpoint
+        if (isPending) {
+          setCutRolls(result.data.pending_orders || []);
+          setTotalItems(result.data.total_items || 0);
+        } else {
+          setCutRolls(result.data.cut_rolls || []);
+          setTotalItems(result.data.total_items || 0);
+        }
       }
     } catch (error) {
-      console.error('Error fetching cut rolls:', error);
-      alert('Error fetching cut rolls. Please try again.');
+      console.error('Error fetching data:', error);
+      alert('Error fetching data. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -314,17 +336,22 @@ export default function AllCutRollsFilteredReportPage() {
     const doc = new jsPDF('landscape');
 
     // Generate dynamic title based on filters
-    let reportTitle = 'Filtered Cut Rolls Report';
+    let reportTitle = '';
 
-    if (clientFilter) {
-      reportTitle = clientFilter + ' Rolls Report';
-    } else if (statusFilter && statusFilter !== 'all') {
+    if (clientFilter && clientFilter !== 'all') {
+      reportTitle = clientFilter + ' ';
+    }
+
+    // Add status-based name
+    if (statusFilter && statusFilter !== 'all') {
       const statusName = statusFilter === 'weight_updated' ? 'Weight Updated' :
                          statusFilter === 'available' ? 'Stock' :
                          statusFilter === 'cutting' ? 'Planned' :
                          statusFilter === 'used' ? 'Dispatched' :
                          statusFilter;
-      reportTitle = statusName + ' Rolls Report';
+      reportTitle += statusName + ' Rolls Report';
+    } else {
+      reportTitle += 'All Rolls Report';
     }
 
     // Add title
@@ -466,34 +493,55 @@ export default function AllCutRollsFilteredReportPage() {
   };
 
   // Table columns definition
-  const columns = useMemo<MRT_ColumnDef<CutRoll>[]>(() => [
-    {
-      accessorKey: 'barcode_id',
-      header: 'Cut Roll ID',
-      size: 140,
-      Cell: ({ row }) => {
-        const barcodeId = row.original.barcode_id;
-        let reelNo = barcodeId;
-        const isWastage = row.original.is_wastage_roll;
-        if (isWastage && row.original.wastage_details) {
-          reelNo = row.original.wastage_details.reel_no;
-        } 
+  const columns = useMemo<MRT_ColumnDef<CutRoll>[]>(() => {
+    const isPending = statusFilter === 'pending';
 
-        return (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedBarcodeId(barcodeId);
-              setSelectedIsWastage(isWastage);
-              setBarcodeModalOpen(true);
-            }}
-            className="font-mono font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
-          >
-            {isWastage ? reelNo : barcodeId}
-          </button>
-        );
+    return [
+      {
+        accessorKey: isPending ? 'frontend_id' : 'barcode_id',
+        header: isPending ? 'Pending Order ID' : 'Cut Roll ID',
+        size: 140,
+        Cell: ({ row }) => {
+          if (isPending) {
+            return (
+              <span className="font-mono font-semibold">
+                {row.original.frontend_id || 'N/A'}
+              </span>
+            );
+          }
+
+          const barcodeId = row.original.barcode_id;
+          let reelNo = barcodeId;
+          const isWastage = row.original.is_wastage_roll;
+          if (isWastage && row.original.wastage_details) {
+            reelNo = row.original.wastage_details.reel_no;
+          }
+
+          return (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedBarcodeId(barcodeId);
+                setSelectedIsWastage(isWastage);
+                setBarcodeModalOpen(true);
+              }}
+              className="font-mono font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+            >
+              {isWastage ? reelNo : barcodeId}
+            </button>
+          );
+        },
       },
-    },
+      {
+        accessorKey: 'quantity_pending',
+        header: 'Quantity',
+        size: 120,
+        Cell: ({ cell }) => {
+          const qtyPending = cell.getValue<number | null>();
+          return qtyPending !== null && qtyPending !== undefined ? qtyPending : 'N/A';
+        },
+
+      },
     {
       accessorKey: 'paper_specs.paper_name',
       header: 'Paper',
@@ -544,12 +592,13 @@ export default function AllCutRollsFilteredReportPage() {
         );
       },
     },
-    {
+    // Conditionally add Production Date (only for non-pending)
+    ...(!isPending ? [{
       accessorKey: 'updated_at',
       header: 'Production Date',
       size: 180,
-      Cell: ({ cell }) => {
-        const date = cell.getValue<string>();
+      Cell: ({ cell }: any) => {
+        const date = cell.getValue() as string;
         if (!date) return 'N/A';
 
         const utcDate = new Date(date);
@@ -559,12 +608,13 @@ export default function AllCutRollsFilteredReportPage() {
 
         return `${dateStr}  ${timeStr}`;
       },
-    },
-    {
+    }] : []),
+    // Conditionally add 118" Roll (only for non-pending)
+    ...(!isPending ? [{
       accessorKey: 'parent_118_roll.barcode_id',
       header: '118" Roll ID',
       size: 140,
-      Cell: ({ row }) => {
+      Cell: ({ row }: any) => {
         const roll118 = row.original.parent_118_roll;
         return roll118 ? (
           <span className="font-mono text-xs">{roll118.barcode_id}</span>
@@ -572,12 +622,13 @@ export default function AllCutRollsFilteredReportPage() {
           <span className="text-muted-foreground">N/A</span>
         );
       },
-    },
-    {
+    }] : []),
+    // Conditionally add Jumbo Roll (only for non-pending)
+    ...(!isPending ? [{
       accessorKey: 'parent_jumbo_roll.barcode_id',
       header: 'JR ID',
       size: 140,
-      Cell: ({ row }) => {
+      Cell: ({ row }: any) => {
         const jumbo = row.original.parent_jumbo_roll;
         return jumbo ? (
           <span className="font-mono text-xs">{jumbo.barcode_id}</span>
@@ -585,16 +636,17 @@ export default function AllCutRollsFilteredReportPage() {
           <span className="text-muted-foreground">N/A</span>
         );
       },
-    },
-    {
+    }] : []),
+    // Conditionally add Plan (only for non-pending)
+    ...(!isPending ? [{
       accessorKey: 'plan_info.frontend_id',
       header: 'Plan ID',
       size: 130,
-      Cell: ({ row }) => {
+      Cell: ({ row }: any) => {
         const plan = row.original.plan_info;
         return plan ? (
           <button
-            onClick={(e) => {
+            onClick={(e: any) => {
               e.stopPropagation();
               setSelectedPlanId(plan.frontend_id);
               setPlanModalOpen(true);
@@ -607,7 +659,8 @@ export default function AllCutRollsFilteredReportPage() {
           <span className="text-muted-foreground">N/A</span>
         );
       },
-    },
+    }] : []),
+    
     {
       accessorKey: 'allocated_order.frontend_id',
       header: 'Order ID',
@@ -647,12 +700,13 @@ export default function AllCutRollsFilteredReportPage() {
       accessorKey: 'created_at',
       header: 'Created',
       size: 130,
-      Cell: ({ cell }) => {
-        const date = cell.getValue<string>();
+      Cell: ({ cell }: any) => {
+        const date = cell.getValue() as string;
         return date ? new Date(date).toLocaleDateString('en-GB') : 'N/A';
       },
     },
-  ], []);
+  ];
+  }, [statusFilter]);
 
   // Material React Table instance
   const table = useMaterialReactTable({
@@ -786,7 +840,7 @@ export default function AllCutRollsFilteredReportPage() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Available</CardTitle>
+                <CardTitle className="text-sm font-medium">Stock</CardTitle>
                 <Package className="h-4 w-4 text-green-600" />
               </CardHeader>
               <CardContent>
@@ -799,7 +853,7 @@ export default function AllCutRollsFilteredReportPage() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Used</CardTitle>
+                <CardTitle className="text-sm font-medium">Dispatched</CardTitle>
                 <Package className="h-4 w-4 text-gray-600" />
               </CardHeader>
               <CardContent>
@@ -812,7 +866,7 @@ export default function AllCutRollsFilteredReportPage() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Cutting</CardTitle>
+                <CardTitle className="text-sm font-medium">Planned</CardTitle>
                 <Package className="h-4 w-4 text-yellow-600" />
               </CardHeader>
               <CardContent>
@@ -863,7 +917,9 @@ export default function AllCutRollsFilteredReportPage() {
                 />
               </div>
               <div className="lg:col-span-1">
-                <label className="text-sm font-medium mb-2 block">Production From (IST)</label>
+                <label className="text-sm font-medium mb-2 block">
+                  {statusFilter === 'pending' ? 'Created From (IST)' : 'Production From (IST)'}
+                </label>
                 <Input
                   type="datetime-local"
                   value={fromProductionDateTime}
@@ -872,7 +928,9 @@ export default function AllCutRollsFilteredReportPage() {
                 />
               </div>
               <div className="lg:col-span-1">
-                <label className="text-sm font-medium mb-2 block">Production To (IST)</label>
+                <label className="text-sm font-medium mb-2 block">
+                  {statusFilter === 'pending' ? 'Created To (IST)' : 'Production To (IST)'}
+                </label>
                 <Input
                   type="datetime-local"
                   value={toProductionDateTime}
@@ -895,6 +953,7 @@ export default function AllCutRollsFilteredReportPage() {
                     <SelectItem value="available">Stock</SelectItem>
                     <SelectItem value="cutting">Planned</SelectItem>
                     <SelectItem value="used">Dispatched</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -944,22 +1003,25 @@ export default function AllCutRollsFilteredReportPage() {
                 </Select>
               </div>
 
-              <div>
-                <label className="text-sm font-medium">Plan ID</label>
-                <Select value={planFilter} onValueChange={setPlanFilter} disabled={loadingDropdowns}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={loadingDropdowns ? "Loading..." : "Select Plan"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Plans</SelectItem>
-                    {availablePlans.map(plan => (
-                      <SelectItem key={plan.id} value={plan.frontend_id}>
-                        {plan.frontend_id}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Hide Plan filter for pending orders */}
+              {statusFilter !== 'pending' && (
+                <div>
+                  <label className="text-sm font-medium">Plan ID</label>
+                  <Select value={planFilter} onValueChange={setPlanFilter} disabled={loadingDropdowns}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={loadingDropdowns ? "Loading..." : "Select Plan"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Plans</SelectItem>
+                      {availablePlans.map(plan => (
+                        <SelectItem key={plan.id} value={plan.frontend_id}>
+                          {plan.frontend_id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

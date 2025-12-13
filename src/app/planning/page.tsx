@@ -343,6 +343,8 @@ export default function PlanningPage() {
   const [wastage, setWastage] = useState(1); // Default 1 inch wastage
   const [displayMode, setDisplayMode] = useState<'traditional' | 'jumbo'>('jumbo'); // Display mode toggle
   const [planId, setPlanId] = useState<string | null>(null); // Current plan ID for wastage tracking
+  const [includePendingOrders, setIncludePendingOrders] = useState(true); // Control pending orders inclusion
+  const [includeWastageAllocation, setIncludeWastageAllocation] = useState(true); // Control wastage allocation
 
   // Calculate planning width from wastage
   const planningWidth = useMemo(() => {
@@ -888,8 +890,9 @@ export default function PlanningPage() {
       const request: WorkflowProcessRequest = {
         order_ids: selectedOrders,
         user_id: user_id,
-        include_pending_orders: true,
+        include_pending_orders: includePendingOrders,
         include_available_inventory: true,
+        include_wastage_allocation: includeWastageAllocation,
         jumbo_roll_width: planningWidth // Use calculated width from wastage
       };
 
@@ -2348,6 +2351,34 @@ export default function PlanningPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="mb-4 p-4 bg-gray-50 rounded-lg border space-y-3">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="include-pending-orders"
+                    checked={includePendingOrders}
+                    onCheckedChange={(checked) => setIncludePendingOrders(checked as boolean)}
+                  />
+                  <label
+                    htmlFor="include-pending-orders"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    Include Pending Orders
+                  </label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="include-wastage-allocation"
+                    checked={includeWastageAllocation}
+                    onCheckedChange={(checked) => setIncludeWastageAllocation(checked as boolean)}
+                  />
+                  <label
+                    htmlFor="include-wastage-allocation"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    Include Stock
+                  </label>
+                </div>
+              </div>
               <div className="rounded-md border">
                 <Table>
                   <TableHeader>
