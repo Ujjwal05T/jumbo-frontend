@@ -200,6 +200,7 @@ function ProductionRecordsErrorBoundary({
 
 // Wastage Allocation Table Component with enriched data
 function WastageAllocationTable({ wastageAllocations }: { wastageAllocations: any[] }) {
+  // console.log("Wastage allocations data:", wastageAllocations);
   const [enrichedData, setEnrichedData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [papersMap, setPapersMap] = useState<Record<string, any>>({});
@@ -282,7 +283,7 @@ function WastageAllocationTable({ wastageAllocations }: { wastageAllocations: an
         {enrichedData.map((wastage: any, index: number) => (
           <TableRow key={index}>
             <TableCell className="font-medium">
-              {wastage.wastage_frontend_id || `W-${index + 1}`}
+              {wastage.wastage_reel_no || `W-${index + 1}`}
             </TableCell>
             <TableCell>
               {wastage.paperType}

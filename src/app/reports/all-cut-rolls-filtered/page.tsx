@@ -17,6 +17,7 @@ import { PlanDetailsModal } from '@/components/PlanDetailsModal';
 import { BarcodeDetailsModal } from '@/components/BarcodeDetailsModal';
 import { is } from 'zod/v4/locales';
 
+
 type CutRoll = {
   id: string;
   frontend_id: string;
@@ -334,6 +335,7 @@ export default function AllCutRollsFilteredReportPage() {
   // Export to PDF function
   const exportToPDF = () => {
     const doc = new jsPDF('landscape');
+    const isPending = statusFilter === 'pending';
 
     // Generate dynamic title based on filters
     let reportTitle = '';
@@ -343,7 +345,9 @@ export default function AllCutRollsFilteredReportPage() {
     }
 
     // Add status-based name
-    if (statusFilter && statusFilter !== 'all') {
+    if (isPending) {
+      reportTitle += 'Pending Orders Report';
+    } else if (statusFilter && statusFilter !== 'all') {
       const statusName = statusFilter === 'weight_updated' ? 'Weight Updated' :
                          statusFilter === 'available' ? 'Stock' :
                          statusFilter === 'cutting' ? 'Planned' :
@@ -358,129 +362,212 @@ export default function AllCutRollsFilteredReportPage() {
     doc.setFontSize(18);
     doc.text(reportTitle, 148, 20, { align: 'center' });
 
-    // Calculate date ranges from actual data
-    let minProductionDate: Date | null = null;
-    let maxProductionDate: Date | null = null;
-
-    filteredCutRolls.forEach(roll => {
-      if (roll.updated_at) {
-        const date = new Date(roll.updated_at);
-        if (!minProductionDate || date < minProductionDate) minProductionDate = date;
-        if (!maxProductionDate || date > maxProductionDate) maxProductionDate = date;
-      }
-    });
-
-    // Calculate summary statistics
-    const totalRolls = filteredCutRolls.length;
-    const totalWeight = filteredCutRolls.reduce((sum, roll) => sum + roll.weight_kg, 0);
-    const stockRolls = filteredCutRolls.filter(r => r.status.toLowerCase() === 'available').length;
-    const dispatchedRolls = filteredCutRolls.filter(r => r.status.toLowerCase() === 'used').length;
-    const weightUpdatedRolls = stockRolls + dispatchedRolls;
-    const plannedRolls = filteredCutRolls.filter(r => r.status.toLowerCase() === 'cutting').length;
-
-    // Add date range section
+    // Calculate date ranges and statistics based on report type
     let dateRangeY = 30;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
 
-    if (minProductionDate !== null && maxProductionDate !== null) {
-      dateRangeY += 4;
-      const minDateIST = new Date((minProductionDate as Date).getTime() + (5.5 * 60 * 60 * 1000));
-      const maxDateIST = new Date((maxProductionDate as Date).getTime() + (5.5 * 60 * 60 * 1000));
-      const minDateStr = `${minDateIST.toLocaleDateString('en-GB')} ${minDateIST.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}`;
-      const maxDateStr = `${maxDateIST.toLocaleDateString('en-GB')} ${maxDateIST.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}`;
-      doc.text(`Production Date: ${minDateStr} to ${maxDateStr}`, 190, dateRangeY - 10);
-    }
+    if (isPending) {
+      // Pending Orders Report
+      let minCreatedDate: Date | null = null;
+      let maxCreatedDate: Date | null = null;
 
-    dateRangeY += 5;
+      filteredCutRolls.forEach(roll => {
+        if (roll.created_at) {
+          const date = new Date(roll.created_at);
+          if (!minCreatedDate || date < minCreatedDate) minCreatedDate = date;
+          if (!maxCreatedDate || date > maxCreatedDate) maxCreatedDate = date;
+        }
+      });
 
-    // Add summary section
-    const summaryStartY = dateRangeY + 2;
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
+      if (minCreatedDate !== null && maxCreatedDate !== null) {
+        dateRangeY += 4;
+        const minDateIST = new Date((minCreatedDate as Date).getTime() + (5.5 * 60 * 60 * 1000));
+        const maxDateIST = new Date((maxCreatedDate as Date).getTime() + (5.5 * 60 * 60 * 1000));
+        const minDateStr = `${minDateIST.toLocaleDateString('en-GB')}`;
+        const maxDateStr = `${maxDateIST.toLocaleDateString('en-GB')}`;
+        doc.text(`Created Date: ${minDateStr} to ${maxDateStr}`, 190, dateRangeY - 10);
+      }
 
-    let summaryText = `Total Rolls: ${totalRolls}  |  Total Weight: ${totalWeight.toFixed(2)} kg`;
+      dateRangeY += 5;
 
-    if (weightUpdatedRolls > 0) {
-      summaryText += `  |  Weight Updated: ${weightUpdatedRolls}`;
-    }
-    if (stockRolls > 0) {
-      summaryText += `  |  Stock: ${stockRolls}`;
-    }
-    if (plannedRolls > 0) {
-      summaryText += `  |  Planned: ${plannedRolls}`;
-    }
-    if (dispatchedRolls > 0) {
-      summaryText += `  |  Dispatched: ${dispatchedRolls}`;
-    }
+      // Summary for pending orders
+      const summaryStartY = dateRangeY + 2;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
 
-    doc.text(summaryText, 14, summaryStartY);
+      const totalPending = filteredCutRolls.length;
+      const totalQuantity = filteredCutRolls.reduce((sum, roll) => sum + (roll.quantity_pending || 0), 0);
 
-    const finalY = summaryStartY + 5;
+      const summaryText = `Total Pending Items: ${totalPending}  |  Total Quantity Pending: ${totalQuantity}`;
+      doc.text(summaryText, 14, summaryStartY);
 
-    // Sort by production date and then by width
-    const sortedRolls = [...filteredCutRolls].sort((a, b) => {
-      const dateA = a.updated_at ? new Date(a.updated_at).getTime() : -Infinity;
-      const dateB = b.updated_at ? new Date(b.updated_at).getTime() : -Infinity;
-      if (dateB !== dateA) {
+      const finalY = summaryStartY + 5;
+
+      // Sort by created date
+      const sortedRolls = [...filteredCutRolls].sort((a, b) => {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : -Infinity;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : -Infinity;
         return dateA - dateB;
+      });
+
+      // Prepare table data for pending orders
+      const tableData = sortedRolls.map(roll => {
+        let createdDateIST = 'N/A';
+        if (roll.created_at) {
+          const utcDate = new Date(roll.created_at);
+          const istDate = new Date(utcDate.getTime() + (5.5 * 60 * 60 * 1000));
+          createdDateIST = istDate.toLocaleDateString('en-GB');
+        }
+
+        return [
+          roll.frontend_id || 'N/A',
+          `${roll.paper_specs.gsm}GSM, ${roll.paper_specs.bf}BF, ${roll.paper_specs.shade}`,
+          `${roll.width_inches}"`,
+          (roll.quantity_pending || 0).toString(),
+          roll.allocated_order?.frontend_id || 'N/A',
+          roll.allocated_order?.client_company_name || 'N/A',
+          createdDateIST
+        ];
+      });
+
+      // Create table for pending orders
+      autoTable(doc, {
+        head: [['Pending ID', 'Paper', 'Width', 'Qty Pending', 'Order ID', 'Client', 'Created']],
+        body: tableData,
+        startY: finalY + 5,
+        styles: { fontSize: 8, cellPadding: 2.5 },
+        headStyles: { fillColor: [66, 66, 66], fontStyle: 'bold' },
+        columnStyles: {
+          0: { cellWidth: 30 },
+          1: { cellWidth: 50 },
+          2: { cellWidth: 20 },
+          3: { cellWidth: 25 },
+          4: { cellWidth: 30 },
+          5: { cellWidth: 80 },
+          6: { cellWidth: 25 },
+        },
+        margin: { left: 10, right: 10 },
+      });
+    } else {
+      // Cut Rolls Report (existing logic)
+      let minProductionDate: Date | null = null;
+      let maxProductionDate: Date | null = null;
+
+      filteredCutRolls.forEach(roll => {
+        if (roll.updated_at) {
+          const date = new Date(roll.updated_at);
+          if (!minProductionDate || date < minProductionDate) minProductionDate = date;
+          if (!maxProductionDate || date > maxProductionDate) maxProductionDate = date;
+        }
+      });
+
+      if (minProductionDate !== null && maxProductionDate !== null) {
+        dateRangeY += 4;
+        const minDateIST = new Date((minProductionDate as Date).getTime() + (5.5 * 60 * 60 * 1000));
+        const maxDateIST = new Date((maxProductionDate as Date).getTime() + (5.5 * 60 * 60 * 1000));
+        const minDateStr = `${minDateIST.toLocaleDateString('en-GB')} ${minDateIST.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}`;
+        const maxDateStr = `${maxDateIST.toLocaleDateString('en-GB')} ${maxDateIST.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}`;
+        doc.text(`Production Date: ${minDateStr} to ${maxDateStr}`, 190, dateRangeY - 10);
       }
-      return a.width_inches - b.width_inches;
-    });
 
-    // Prepare table data
-    const tableData = sortedRolls.map(roll => {
-      let productionDateIST = 'N/A';
-      if (roll.updated_at) {
-        const utcDate = new Date(roll.updated_at);
-        const istDate = new Date(utcDate.getTime() + (5.5 * 60 * 60 * 1000));
-        const dateStr = istDate.toLocaleDateString('en-GB');
-        const timeStr = istDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-        productionDateIST = `${dateStr} ${timeStr}`;
+      dateRangeY += 5;
+
+      // Summary for cut rolls
+      const summaryStartY = dateRangeY + 2;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+
+      const totalRolls = filteredCutRolls.length;
+      const totalWeight = filteredCutRolls.reduce((sum, roll) => sum + roll.weight_kg, 0);
+      const stockRolls = filteredCutRolls.filter(r => r.status.toLowerCase() === 'available').length;
+      const dispatchedRolls = filteredCutRolls.filter(r => r.status.toLowerCase() === 'used').length;
+      const weightUpdatedRolls = stockRolls + dispatchedRolls;
+      const plannedRolls = filteredCutRolls.filter(r => r.status.toLowerCase() === 'cutting').length;
+
+      let summaryText = `Total Rolls: ${totalRolls}  |  Total Weight: ${totalWeight.toFixed(2)} kg`;
+
+      if (weightUpdatedRolls > 0) {
+        summaryText += `  |  Weight Updated: ${weightUpdatedRolls}`;
+      }
+      if (stockRolls > 0) {
+        summaryText += `  |  Stock: ${stockRolls}`;
+      }
+      if (plannedRolls > 0) {
+        summaryText += `  |  Planned: ${plannedRolls}`;
+      }
+      if (dispatchedRolls > 0) {
+        summaryText += `  |  Dispatched: ${dispatchedRolls}`;
       }
 
-      return [
-        roll.barcode_id || 'N/A',
-        `${roll.paper_specs.gsm}GSM, ${roll.paper_specs.bf}BF, ${roll.paper_specs.shade}`,
-        `${roll.width_inches}"`,
-        roll.weight_kg.toFixed(2),
-        roll.status === 'available' ? 'Stock' :
-        roll.status === 'cutting' ? 'Planned' :
-        roll.status === 'used' ? 'Dispatched' :
-        'Removed',
-        productionDateIST,
-        roll.parent_118_roll?.barcode_id || 'N/A',
-        roll.parent_jumbo_roll?.barcode_id || 'N/A',
-        roll.plan_info?.frontend_id || 'N/A',
-        roll.allocated_order?.frontend_id || 'N/A',
-        roll.allocated_order?.client_company_name || 'N/A',
-        roll.created_at ? new Date(roll.created_at).toLocaleDateString('en-GB') : 'N/A'
-      ];
-    });
+      doc.text(summaryText, 14, summaryStartY);
 
-    // Create table
-    autoTable(doc, {
-      head: [['Cut Roll ID', 'Paper', 'Width', 'Weight', 'Status', 'Production (IST)', '118" Roll', 'JR Roll', 'Plan ID', 'Order ID', 'Client', 'Created']],
-      body: tableData,
-      startY: finalY + 5,
-      styles: { fontSize: 7, cellPadding: 2.0 },
-      headStyles: { fillColor: [66, 66, 66], fontStyle: 'bold' },
-      columnStyles: {
-        0: { cellWidth: 20 },
-        1: { cellWidth: 35 },
-        2: { cellWidth: 12 },
-        3: { cellWidth: 14 },
-        4: { cellWidth: 19 },
-        5: { cellWidth: 28 },
-        6: { cellWidth: 19 },
-        7: { cellWidth: 19 },
-        8: { cellWidth: 19 },
-        9: { cellWidth: 19 },
-        10: { cellWidth: 55 },
-        11: { cellWidth: 19 },
-      },
-      margin: { left: 10, right: 10 },
-    });
+      const finalY = summaryStartY + 5;
+
+      // Sort by production date and then by width
+      const sortedRolls = [...filteredCutRolls].sort((a, b) => {
+        const dateA = a.updated_at ? new Date(a.updated_at).getTime() : -Infinity;
+        const dateB = b.updated_at ? new Date(b.updated_at).getTime() : -Infinity;
+        if (dateB !== dateA) {
+          return dateA - dateB;
+        }
+        return a.width_inches - b.width_inches;
+      });
+
+      // Prepare table data for cut rolls
+      const tableData = sortedRolls.map(roll => {
+        let productionDateIST = 'N/A';
+        if (roll.updated_at) {
+          const utcDate = new Date(roll.updated_at);
+          const istDate = new Date(utcDate.getTime() + (5.5 * 60 * 60 * 1000));
+          const dateStr = istDate.toLocaleDateString('en-GB');
+          const timeStr = istDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+          productionDateIST = `${dateStr} ${timeStr}`;
+        }
+
+        return [
+          roll.barcode_id || 'N/A',
+          `${roll.paper_specs.gsm}GSM, ${roll.paper_specs.bf}BF, ${roll.paper_specs.shade}`,
+          `${roll.width_inches}"`,
+          roll.weight_kg.toFixed(2),
+          roll.status === 'available' ? 'Stock' :
+          roll.status === 'cutting' ? 'Planned' :
+          roll.status === 'used' ? 'Dispatched' :
+          'Removed',
+          productionDateIST,
+          roll.parent_118_roll?.barcode_id || 'N/A',
+          roll.parent_jumbo_roll?.barcode_id || 'N/A',
+          roll.plan_info?.frontend_id || 'N/A',
+          roll.allocated_order?.frontend_id || 'N/A',
+          roll.allocated_order?.client_company_name || 'N/A',
+          roll.created_at ? new Date(roll.created_at).toLocaleDateString('en-GB') : 'N/A'
+        ];
+      });
+
+      // Create table for cut rolls
+      autoTable(doc, {
+        head: [['Cut Roll ID', 'Paper', 'Width', 'Weight', 'Status', 'Production (IST)', '118" Roll', 'JR Roll', 'Plan ID', 'Order ID', 'Client', 'Created']],
+        body: tableData,
+        startY: finalY + 5,
+        styles: { fontSize: 7, cellPadding: 2.0 },
+        headStyles: { fillColor: [66, 66, 66], fontStyle: 'bold' },
+        columnStyles: {
+          0: { cellWidth: 20 },
+          1: { cellWidth: 35 },
+          2: { cellWidth: 12 },
+          3: { cellWidth: 14 },
+          4: { cellWidth: 19 },
+          5: { cellWidth: 28 },
+          6: { cellWidth: 19 },
+          7: { cellWidth: 19 },
+          8: { cellWidth: 19 },
+          9: { cellWidth: 19 },
+          10: { cellWidth: 55 },
+          11: { cellWidth: 19 },
+        },
+        margin: { left: 10, right: 10 },
+      });
+    }
 
     // Add footer
     const footerY = (doc as any).lastAutoTable.finalY + 10;
@@ -488,8 +575,11 @@ export default function AllCutRollsFilteredReportPage() {
     doc.setFont('helvetica', 'normal');
     doc.text(`Generated on: ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString('en-GB')}`, 14, footerY);
 
-    // Save the PDF
-    doc.save(`cut-rolls-filtered-report-${new Date().toISOString().split('T')[0]}.pdf`);
+    // Save the PDF with appropriate filename
+    const filename = isPending 
+      ? `pending-orders-report-${new Date().toISOString().split('T')[0]}.pdf`
+      : `cut-rolls-filtered-report-${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(filename);
   };
 
   // Table columns definition
@@ -532,16 +622,7 @@ export default function AllCutRollsFilteredReportPage() {
           );
         },
       },
-      {
-        accessorKey: 'quantity_pending',
-        header: 'Quantity',
-        size: 120,
-        Cell: ({ cell }) => {
-          const qtyPending = cell.getValue<number | null>();
-          return qtyPending !== null && qtyPending !== undefined ? qtyPending : 'N/A';
-        },
-
-      },
+     
     {
       accessorKey: 'paper_specs.paper_name',
       header: 'Paper',
@@ -557,6 +638,15 @@ export default function AllCutRollsFilteredReportPage() {
         );
       },
     },
+    ...(isPending ? [{
+        accessorKey: 'quantity_pending' as const,
+        header: 'Quantity',
+        size: 120,
+        Cell: ({ row }: any) => {
+          const qtyPending = row.original.quantity_pending;
+          return qtyPending !== null && qtyPending !== undefined ? qtyPending : 'N/A';
+        },
+      }] : []),
     {
       accessorKey: 'width_inches',
       header: 'Width',

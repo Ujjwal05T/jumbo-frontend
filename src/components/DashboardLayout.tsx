@@ -124,6 +124,7 @@ const getNavigationForRole = (role: string | null) => {
     { name: "Current Dispatch",icon: Truck, href: "/dispatch/history", roles: ["dispatch", "sales_person"] },
     { name: "Plan Weights",icon: Weight, href: "/plan-weights", roles: ["dispatch"] },
     { name: "All cut rolls",icon: BarChart3, href: "/reports/all-cut-rolls", roles: ["dispatch"] },
+    { name: "Filter Cut Rolls",icon: BarChart3, href: "/reports/all-cut-rolls-filtered", roles: ["dispatch"] },
     
     {
       name: "Challan",
@@ -161,6 +162,7 @@ const getNavigationForRole = (role: string | null) => {
         { name: "Client Order Summary", href: "/reports/client-order-summary", roles: ["admin", "production", "accountant"] },
         { name: "Cut Rolls Report", href: "/reports/cut-rolls-weight", roles: ["admin", "production"] },
         { name: "All Cut Rolls", href: "/reports/all-cut-rolls", roles: ["admin", "production", "accountant"] },
+        { name: "Filter Cut Rolls", href: "/reports/all-cut-rolls-filtered", roles: ["admin", "production", "accountant"] },
         { name: "Plan Weights", href: "/plan-weights", roles: ["admin"] },
       ],
     },

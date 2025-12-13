@@ -55,6 +55,7 @@ const roleBasedRoutes = {
   ],
   weight_update: [
     '/weight-update',
+    '/masters/cut-rolls/manual'
   ],
   mou: [
     '/mou',
