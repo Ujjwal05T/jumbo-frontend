@@ -5,7 +5,7 @@ import DashboardLayout from '@/components/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSearch } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -91,6 +91,11 @@ export default function OrderPlanExecutionPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [planStatusFilter, setPlanStatusFilter] = useState('all');
   const [includeUnplanned, setIncludeUnplanned] = useState(true);
+
+  // Search states for dropdowns
+  const [clientSearch, setClientSearch] = useState('');
+  const [statusSearch, setStatusSearch] = useState('');
+  const [planStatusSearch, setPlanStatusSearch] = useState('');
 
   // Fetch available clients
   const fetchAvailableClients = async () => {
@@ -239,8 +244,15 @@ export default function OrderPlanExecutionPage() {
                     <SelectValue placeholder="All Clients" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectSearch
+                      placeholder="Search clients..."
+                      value={clientSearch}
+                      onChange={(e) => setClientSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
                     <SelectItem value="all">All Clients</SelectItem>
                     {availableClients
+                      .filter((client) => client.company_name.toLowerCase().includes(clientSearch.toLowerCase()))
                       .sort((a, b) => a.company_name.localeCompare(b.company_name))
                       .map((client) => (
                       <SelectItem key={client.id} value={client.id}>
@@ -279,11 +291,27 @@ export default function OrderPlanExecutionPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="created">Created</SelectItem>
-                    <SelectItem value="in_process">In Process</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                    <SelectSearch
+                      placeholder="Search status..."
+                      value={statusSearch}
+                      onChange={(e) => setStatusSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
+                    {[
+                      { value: 'all', label: 'All Status' },
+                      { value: 'created', label: 'Created' },
+                      { value: 'in_process', label: 'In Process' },
+                      { value: 'completed', label: 'Completed' },
+                      { value: 'cancelled', label: 'Cancelled' }
+                    ]
+                      .filter((item) => item.label.toLowerCase().includes(statusSearch.toLowerCase()))
+                      .sort((a, b) => a.label.localeCompare(b.label))
+                      .map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))
+                    }
                   </SelectContent>
                 </Select>
               </div>
@@ -296,10 +324,26 @@ export default function OrderPlanExecutionPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Plans</SelectItem>
-                    <SelectItem value="created">Created</SelectItem>
-                    <SelectItem value="optimized">Optimized</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectSearch
+                      placeholder="Search plan status..."
+                      value={planStatusSearch}
+                      onChange={(e) => setPlanStatusSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
+                    {[
+                      { value: 'all', label: 'All Plans' },
+                      { value: 'created', label: 'Created' },
+                      { value: 'optimized', label: 'Optimized' },
+                      { value: 'completed', label: 'Completed' }
+                    ]
+                      .filter((item) => item.label.toLowerCase().includes(planStatusSearch.toLowerCase()))
+                      .sort((a, b) => a.label.localeCompare(b.label))
+                      .map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))
+                    }
                   </SelectContent>
                 </Select>
               </div>

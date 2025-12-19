@@ -9,10 +9,12 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   trackRollHierarchy,
+  getWastageAllocationByReelNo,
   type HierarchyTrackingResponse,
   type JumboHierarchy,
   type SetHierarchy,
-  type CutRollHierarchy
+  type CutRollHierarchy,
+  type WastageAllocationResponse
 } from '@/lib/roll-tracking';
 import {
   Search,
@@ -20,9 +22,7 @@ import {
   Layers,
   Scissors,
   ArrowRight,
-  CheckCircle2,
   AlertCircle,
-  Info,
   ChevronDown,
   ChevronRight,
   Barcode
@@ -32,8 +32,20 @@ export default function BarcodeLookupPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [hierarchyData, setHierarchyData] = useState<HierarchyTrackingResponse | null>(null);
+  const [wastageData, setWastageData] = useState<WastageAllocationResponse | null>(null);
+  const [searchType, setSearchType] = useState<'barcode' | 'reel_no' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedSets, setExpandedSets] = useState<Set<string>>(new Set());
+
+  const detectSearchType = (query: string): 'barcode' | 'reel_no' => {
+    // If it starts with standard barcode prefixes, it's a barcode
+    if (query.startsWith('JR_') || query.startsWith('SET_') || query.startsWith('CR_') ||
+        query.startsWith('WCR_') || query.startsWith('SCR_')) {
+      return 'barcode';
+    }
+    // Otherwise, treat it as a reel number
+    return 'reel_no';
+  };
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -41,25 +53,36 @@ export default function BarcodeLookupPage() {
     setIsSearching(true);
     setError(null);
     setHierarchyData(null);
+    setWastageData(null);
+    setSearchType(null);
+
+    const query = searchQuery.trim();
+    const type = detectSearchType(query);
+    setSearchType(type);
 
     try {
-      const data = await trackRollHierarchy(searchQuery.trim());
-      setHierarchyData(data);
-      // Expand all sets by default
-      if (data.roll_type === 'jumbo') {
-        const allSetIds = ((data.hierarchy as JumboHierarchy).intermediate_rolls || []).map(set => set.id);
-        setExpandedSets(new Set(allSetIds));
+      if (type === 'reel_no') {
+        // Search by reel number for wastage allocation
+        const data = await getWastageAllocationByReelNo(query);
+        setWastageData(data);
+      } else {
+        // Search by barcode for hierarchy
+        const data = await trackRollHierarchy(query);
+        setHierarchyData(data);
+        // Expand all sets by default
+        if (data.roll_type === 'jumbo') {
+          const allSetIds = ((data.hierarchy as JumboHierarchy).intermediate_rolls || []).map(set => set.id);
+          setExpandedSets(new Set(allSetIds));
+        }
       }
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to find barcode. Please check and try again.');
+      if (type === 'reel_no') {
+        setError(err.response?.data?.detail || 'Failed to find reel number. Please check and try again.');
+      } else {
+        setError(err.response?.data?.detail || 'Failed to find barcode. Please check and try again.');
+      }
     } finally {
       setIsSearching(false);
-    }
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSearch();
     }
   };
 
@@ -365,6 +388,140 @@ export default function BarcodeLookupPage() {
     );
   };
 
+  const renderWastageAllocation = (data: WastageAllocationResponse) => {
+    return (
+      <div className="space-y-6">
+        {/* Wastage Allocation Card */}
+        <Card className="border-orange-200 bg-orange-50">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Package className="h-6 w-6 text-orange-600" />
+                <div>
+                  <CardTitle className="text-xl">Stock Allocation</CardTitle>
+                  <CardDescription className="font-mono">{data.barcode_id || data.frontend_id}</CardDescription>
+                </div>
+              </div>
+              <Badge variant={getStatusBadgeVariant(data.status)} className="text-sm px-3 py-1">
+                {getStatusDisplayText(data.status)}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <p className="text-muted-foreground">Width</p>
+                <p className="font-semibold">{data.width_inches}"</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Weight</p>
+                <p className="font-semibold">{data.weight_kg} kg</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Roll Type</p>
+                <p className="font-semibold">{data.roll_type.toUpperCase()}</p>
+              </div>
+             
+            </div>
+            
+          </CardContent>
+        </Card>
+
+        {/* Allocation Details - Combined Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Allocation Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Paper Specifications Section */}
+            {data.paper && (
+              <div>
+                <h3 className="text-sm font-semibold text-muted-foreground mb-3">Paper Specifications</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Name</p>
+                    <p className="font-semibold">{data.paper.name}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">GSM</p>
+                    <p className="font-semibold">{data.paper.gsm}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">BF</p>
+                    <p className="font-semibold">{data.paper.bf}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Shade</p>
+                    <p className="font-semibold">{data.paper.shade}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Order Information Section */}
+            {data.order_info && data.order_info.order_frontend_id && (
+              <div className="pt-4 border-t">
+                <h3 className="text-sm font-semibold text-muted-foreground mb-3">Order Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Order ID</p>
+                    <p className="font-semibold font-mono">{data.order_info.order_frontend_id}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Client Name</p>
+                    <p className="font-semibold">{data.order_info.client_name || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Stock Roll</p>
+                    <Badge variant={data.is_wastage_roll ? 'default' : 'outline'}>
+                      {data.is_wastage_roll ? 'Yes' : 'No'}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Plan Information Section */}
+            {data.plan_info && data.plan_info.plan_frontend_id && (
+              <div className="pt-4 border-t">
+                <h3 className="text-sm font-semibold text-muted-foreground mb-3">Source Plan</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Plan ID</p>
+                    <p className="font-semibold font-mono">{data.plan_info.plan_frontend_id}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Additional Information */}
+        {/* <Card>
+          <CardHeader>
+            <CardTitle>Additional Details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+              <div>
+                <p className="text-muted-foreground">Frontend ID</p>
+                <p className="font-semibold font-mono">{data.frontend_id || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Production Date</p>
+                <p className="font-semibold">{new Date(data.production_date).toLocaleDateString()}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Created At</p>
+                <p className="font-semibold">{new Date(data.created_at).toLocaleDateString()}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card> */}
+      </div>
+    );
+  };
+
   const renderCutRollHierarchy = (hierarchy: CutRollHierarchy) => {
     const { parent_jumbo_roll, parent_set_roll, current_cut_roll, sibling_cut_rolls, all_sets_from_jumbo } = hierarchy;
 
@@ -538,18 +695,18 @@ export default function BarcodeLookupPage() {
       {/* Search Card */}
       <Card>
         <CardHeader>
-          <CardTitle>Enter Barcode</CardTitle>
-          <CardDescription>Search for JR_, SET_, CR_</CardDescription>
+          <CardTitle>Enter Barcode or Reel Number</CardTitle>
+          <CardDescription>Search for barcodes (JR_, SET_, CR_) or reel numbers</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex gap-3">
             <div className="relative flex-1">
               <Barcode className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Enter barcode (e.g., JR_00001, SET_00040, CR_12345)..."
+                placeholder="Enter barcode (JR_00001, SET_00040, CR_12345) or reel number..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyPress={handleKeyPress}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                 className="pl-10"
               />
             </div>
@@ -571,10 +728,24 @@ export default function BarcodeLookupPage() {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
+
+          {searchType && !error && (
+            <div className="mt-4">
+              <p className="text-sm text-muted-foreground">
+                Search Type: <span className="font-semibold">{searchType === 'reel_no' ? 'Reel Number' : 'Barcode'}</span>
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       {/* Results */}
+      {wastageData && (
+        <div className="space-y-6">
+          {renderWastageAllocation(wastageData)}
+        </div>
+      )}
+
       {hierarchyData && (
         <div className="space-y-6">
           {/* Render hierarchy based on roll type */}

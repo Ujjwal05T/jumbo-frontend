@@ -5,7 +5,7 @@ import DashboardLayout from '@/components/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSearch } from '@/components/ui/select';
 import { MaterialReactTable, useMaterialReactTable, MRT_ColumnDef } from 'material-react-table';
 import { Package, Download, Filter, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText } from 'lucide-react';
 import { createRequestOptions } from '@/lib/api-config';
@@ -89,6 +89,12 @@ export default function AllCutRollsReportPage() {
   const [planFilter, setPlanFilter] = useState<string>('all');
   const [fromProductionDateTime, setFromProductionDateTime] = useState<string>('');
   const [toProductionDateTime, setToProductionDateTime] = useState<string>('');
+
+  // Search states for dropdowns
+  const [statusSearch, setStatusSearch] = useState('');
+  const [planSearch, setPlanSearch] = useState('');
+  const [clientSearch, setClientSearch] = useState('');
+  const [orderSearch, setOrderSearch] = useState('');
 
   // Modal states
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -921,11 +927,27 @@ export default function AllCutRollsReportPage() {
                     <SelectValue placeholder="All Statuses" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="weight_updated">Weight Updated</SelectItem>
-                    <SelectItem value="available">Stock</SelectItem>
-                    <SelectItem value="cutting">Planned</SelectItem>
-                    <SelectItem value="used">Dispatched</SelectItem>
+                    <SelectSearch
+                      placeholder="Search status..."
+                      value={statusSearch}
+                      onChange={(e) => setStatusSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
+                    {[
+                      { value: 'all', label: 'All Statuses' },
+                      { value: 'weight_updated', label: 'Weight Updated' },
+                      { value: 'available', label: 'Stock' },
+                      { value: 'cutting', label: 'Planned' },
+                      { value: 'used', label: 'Dispatched' }
+                    ]
+                      .filter((item) => item.label.toLowerCase().includes(statusSearch.toLowerCase()))
+                      .sort((a, b) => a.label.localeCompare(b.label))
+                      .map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))
+                    }
                   </SelectContent>
                 </Select>
               </div>
@@ -955,12 +977,22 @@ export default function AllCutRollsReportPage() {
                     <SelectValue placeholder="All Plans" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectSearch
+                      placeholder="Search plans..."
+                      value={planSearch}
+                      onChange={(e) => setPlanSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
                     <SelectItem value="all">All Plans</SelectItem>
-                    {uniquePlans.map(plan => (
-                      <SelectItem key={plan} value={plan}>
-                        {plan}
-                      </SelectItem>
-                    ))}
+                    {uniquePlans
+                      .filter((plan) => plan.toLowerCase().includes(planSearch.toLowerCase()))
+                      .sort((a, b) => a.localeCompare(b))
+                      .map(plan => (
+                        <SelectItem key={plan} value={plan}>
+                          {plan}
+                        </SelectItem>
+                      ))
+                    }
                   </SelectContent>
                 </Select>
               </div>
@@ -972,12 +1004,22 @@ export default function AllCutRollsReportPage() {
                     <SelectValue placeholder="All Clients" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectSearch
+                      placeholder="Search clients..."
+                      value={clientSearch}
+                      onChange={(e) => setClientSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
                     <SelectItem value="all">All Clients</SelectItem>
-                    {uniqueClients.map(client => (
-                      <SelectItem key={client} value={client}>
-                        {client}
-                      </SelectItem>
-                    ))}
+                    {uniqueClients
+                      .filter((client) => client.toLowerCase().includes(clientSearch.toLowerCase()))
+                      .sort((a, b) => a.localeCompare(b))
+                      .map(client => (
+                        <SelectItem key={client} value={client}>
+                          {client}
+                        </SelectItem>
+                      ))
+                    }
                   </SelectContent>
                 </Select>
               </div>
@@ -989,12 +1031,22 @@ export default function AllCutRollsReportPage() {
                     <SelectValue placeholder="All Orders" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectSearch
+                      placeholder="Search orders..."
+                      value={orderSearch}
+                      onChange={(e) => setOrderSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
                     <SelectItem value="all">All Orders</SelectItem>
-                    {uniqueOrders.map(order => (
-                      <SelectItem key={order} value={order}>
-                        {order}
-                      </SelectItem>
-                    ))}
+                    {uniqueOrders
+                      .filter((order) => order.toLowerCase().includes(orderSearch.toLowerCase()))
+                      .sort((a, b) => a.localeCompare(b))
+                      .map(order => (
+                        <SelectItem key={order} value={order}>
+                          {order}
+                        </SelectItem>
+                      ))
+                    }
                   </SelectContent>
                 </Select>
               </div>

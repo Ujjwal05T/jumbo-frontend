@@ -19,6 +19,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSearch,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -98,6 +99,8 @@ export function DispatchForm({
   const [clients, setClients] = useState<Client[]>([]);
   const [loadingClients, setLoadingClients] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [paymentSearch, setPaymentSearch] = useState("");
+  const [clientSearch, setClientSearch] = useState("");
 
   // Calculate totals
   const totalItems = selectedItems.length;
@@ -297,8 +300,8 @@ export function DispatchForm({
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="payment_type">Payment Type</Label>
-                      <Select 
-                        value={formData.payment_type} 
+                      <Select
+                        value={formData.payment_type}
                         onValueChange={(value) =>
                           setFormData(prev => ({ ...prev, payment_type: value }))
                         }
@@ -307,8 +310,22 @@ export function DispatchForm({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="bill">Bill</SelectItem>
-                          <SelectItem value="cash">Cash</SelectItem>
+                          <SelectSearch
+                            placeholder="Search payment type..."
+                            value={paymentSearch}
+                            onChange={(e) => setPaymentSearch(e.target.value)}
+                            onKeyDown={(e) => e.stopPropagation()}
+                          />
+                          {["bill", "cash"]
+                            .filter((type) =>
+                              type.toLowerCase().includes(paymentSearch.toLowerCase())
+                            )
+                            .sort()
+                            .map((type) => (
+                              <SelectItem key={type} value={type}>
+                                {type.charAt(0).toUpperCase() + type.slice(1)}
+                              </SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -354,8 +371,8 @@ export function DispatchForm({
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="client_id">Select Client *</Label>
-                    <Select 
-                      value={formData.client_id} 
+                    <Select
+                      value={formData.client_id}
                       onValueChange={(value) =>
                         setFormData(prev => ({ ...prev, client_id: value }))
                       }
@@ -365,14 +382,30 @@ export function DispatchForm({
                         <SelectValue placeholder={loadingClients ? "Loading clients..." : "Choose client"} />
                       </SelectTrigger>
                       <SelectContent>
-                        {clients.sort((a, b) => a.company_name.localeCompare(b.company_name)).map((client) => (
-                          <SelectItem key={client.id} value={client.id}>
-                            <div className="flex items-center gap-2">
-                              <Building2 className="h-3 w-3" />
-                              {client.company_name} - {client.contact_person}
-                            </div>
-                          </SelectItem>
-                        ))}
+                        <SelectSearch
+                          placeholder="Search clients..."
+                          value={clientSearch}
+                          onChange={(e) => setClientSearch(e.target.value)}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        />
+                        {clients
+                          .filter((client) => {
+                            const searchLower = clientSearch.toLowerCase();
+                            return (
+                              client.company_name.toLowerCase().includes(searchLower) ||
+                              client.contact_person.toLowerCase().includes(searchLower) ||
+                              client.phone.toLowerCase().includes(searchLower)
+                            );
+                          })
+                          .sort((a, b) => a.company_name.localeCompare(b.company_name))
+                          .map((client) => (
+                            <SelectItem key={client.id} value={client.id}>
+                              <div className="flex items-center gap-2">
+                                <Building2 className="h-3 w-3" />
+                                {client.company_name} - {client.contact_person}
+                              </div>
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                     {formErrors.client_id && (

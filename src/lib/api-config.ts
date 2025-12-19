@@ -164,6 +164,14 @@ export const ROLL_TRACKING_ENDPOINTS = {
   TRACK_HIERARCHY: (barcode: string) => `${API_BASE_URL}/track/hierarchy/${encodeURIComponent(barcode)}`,
 };
 
+// Wastage endpoints
+export const WASTAGE_ENDPOINTS = {
+  GET_WASTAGE_ALLOCATION_BY_REEL: (reelNo: string) => `${API_BASE_URL}/wastage/allocation/by-reel?reel_no=${encodeURIComponent(reelNo)}`,
+  WASTAGE_INVENTORY: `${API_BASE_URL}/wastage`,
+  WASTAGE_SEARCH: `${API_BASE_URL}/wastage/search`,
+  WASTAGE_STATS: `${API_BASE_URL}/wastage/stats/summary`,
+};
+
 /**
  * Helper function to create API request options
  */

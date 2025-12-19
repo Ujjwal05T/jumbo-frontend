@@ -1,4 +1,4 @@
-import { createRequestOptions, ROLL_TRACKING_ENDPOINTS } from './api-config';
+import { createRequestOptions, ROLL_TRACKING_ENDPOINTS, WASTAGE_ENDPOINTS } from './api-config';
 
 export interface RollInfo {
   inventory_id: string;
@@ -402,6 +402,63 @@ export interface HierarchyTrackingResponse {
 
 export async function trackRollHierarchy(barcode: string): Promise<HierarchyTrackingResponse> {
   const response = await fetch(ROLL_TRACKING_ENDPOINTS.TRACK_HIERARCHY(barcode), createRequestOptions('GET'));
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    throw { response: { status: response.status, data: errorData } };
+  }
+
+  return response.json();
+}
+
+// Wastage allocation interfaces
+export interface WastageAllocationOrderInfo {
+  order_id: string | null;
+  order_frontend_id: string | null;
+  client_name: string | null;
+}
+
+export interface WastageAllocationPlanInfo {
+  plan_id: string | null;
+  plan_frontend_id: string | null;
+}
+
+export interface WastageAllocationResponse {
+  id: string;
+  frontend_id: string | null;
+  paper_id: string;
+  width_inches: number;
+  weight_kg: number;
+  roll_type: string;
+  location: string | null;
+  status: string;
+  qr_code: string | null;
+  barcode_id: string | null;
+  production_date: string;
+  allocated_to_order_id: string | null;
+  is_wastage_roll: boolean;
+  wastage_source_order_id: string | null;
+  wastage_source_plan_id: string | null;
+  parent_jumbo_id: string | null;
+  parent_118_roll_id: string | null;
+  roll_sequence: number | null;
+  individual_roll_number: number | null;
+  created_at: string;
+  created_by_id: string;
+  paper: {
+    id: string;
+    name: string;
+    gsm: number;
+    bf: number;
+    shade: string;
+    type?: string;
+  } | null;
+  order_info: WastageAllocationOrderInfo | null;
+  plan_info: WastageAllocationPlanInfo | null;
+}
+
+export async function getWastageAllocationByReelNo(reelNo: string): Promise<WastageAllocationResponse> {
+  const response = await fetch(WASTAGE_ENDPOINTS.GET_WASTAGE_ALLOCATION_BY_REEL(reelNo), createRequestOptions('GET'));
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => null);

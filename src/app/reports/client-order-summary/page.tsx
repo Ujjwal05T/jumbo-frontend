@@ -5,7 +5,7 @@ import DashboardLayout from '@/components/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSearch } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -147,6 +147,10 @@ export default function ClientOrderSummaryPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  // Search states for dropdowns
+  const [clientSearch, setClientSearch] = useState('');
+  const [statusSearch, setStatusSearch] = useState('');
 
   // Cut rolls modal state
   const [showCutRollsModal, setShowCutRollsModal] = useState(false);
@@ -623,7 +627,14 @@ export default function ClientOrderSummaryPage() {
                     <SelectValue placeholder="Select Client" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectSearch
+                      placeholder="Search clients..."
+                      value={clientSearch}
+                      onChange={(e) => setClientSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
                     {availableClients
+                      .filter((client) => client.company_name.toLowerCase().includes(clientSearch.toLowerCase()))
                       .sort((a, b) => a.company_name.localeCompare(b.company_name))
                       .map((client) => (
                         <SelectItem key={client.id} value={client.id}>
@@ -662,11 +673,27 @@ export default function ClientOrderSummaryPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="created">Created</SelectItem>
-                    <SelectItem value="in_process">In Process</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                    <SelectSearch
+                      placeholder="Search status..."
+                      value={statusSearch}
+                      onChange={(e) => setStatusSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
+                    {[
+                      { value: 'all', label: 'All Status' },
+                      { value: 'created', label: 'Created' },
+                      { value: 'in_process', label: 'In Process' },
+                      { value: 'completed', label: 'Completed' },
+                      { value: 'cancelled', label: 'Cancelled' }
+                    ]
+                      .filter((item) => item.label.toLowerCase().includes(statusSearch.toLowerCase()))
+                      .sort((a, b) => a.label.localeCompare(b.label))
+                      .map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))
+                    }
                   </SelectContent>
                 </Select>
               </div>

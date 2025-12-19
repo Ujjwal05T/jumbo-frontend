@@ -127,7 +127,7 @@ const OptimizedRow = memo(({
           {getHighlightedText(
             isWastageItem
               ? (item.reel_no || item.barcode_id || item.frontend_id || "N/A")
-              : (item.barcode_id || item.qr_code),
+              : (item.reel_no || item.barcode_id || item.qr_code),
             searchTerm
           )}
           {isSelected && (

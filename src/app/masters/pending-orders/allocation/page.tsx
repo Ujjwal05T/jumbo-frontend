@@ -18,6 +18,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSearch,
 } from "@/components/ui/select";
 import {
   Table,
@@ -112,6 +113,9 @@ export default function PendingOrderAllocationPage() {
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [quantityToTransfer, setQuantityToTransfer] = useState(1);
   const [isTransferring, setIsTransferring] = useState(false);
+
+  // Search state for order select
+  const [orderSearch, setOrderSearch] = useState("");
 
   // Load pending order items
   const loadPendingItems = async () => {
@@ -473,40 +477,64 @@ export default function PendingOrderAllocationPage() {
                         <SelectValue placeholder="Select target order" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectSearch
+                          placeholder="Search orders..."
+                          value={orderSearch}
+                          onChange={(e) => setOrderSearch(e.target.value)}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        />
                         {/* Matching Orders First */}
-                        {allocationData.matching_orders.length > 0 && (
+                        {allocationData.matching_orders.filter((order) =>
+                          order.frontend_id.toLowerCase().includes(orderSearch.toLowerCase()) ||
+                          order.client_name.toLowerCase().includes(orderSearch.toLowerCase())
+                        ).length > 0 && (
                           <>
                             <SelectItem value="matching-header" disabled>
                               <span className="font-semibold text-green-600">📋 Orders with Matching Paper Specs</span>
                             </SelectItem>
-                            {allocationData.matching_orders.map((order) => (
-                              <SelectItem key={order.id} value={order.id}>
-                                <div className="flex items-center space-x-2">
-                                  <span className="text-green-600">✓</span>
-                                  <span>{order.frontend_id} - {order.client_name}</span>
-                                  <Badge variant="outline" className="ml-2">
-                                    {order.matching_items_count} matching
-                                  </Badge>
-                                </div>
-                              </SelectItem>
-                            ))}
+                            {allocationData.matching_orders
+                              .filter((order) =>
+                                order.frontend_id.toLowerCase().includes(orderSearch.toLowerCase()) ||
+                                order.client_name.toLowerCase().includes(orderSearch.toLowerCase())
+                              )
+                              .sort((a, b) => a.frontend_id.localeCompare(b.frontend_id))
+                              .map((order) => (
+                                <SelectItem key={order.id} value={order.id}>
+                                  <div className="flex items-center space-x-2">
+                                    <span className="text-green-600">✓</span>
+                                    <span>{order.frontend_id} - {order.client_name}</span>
+                                    <Badge variant="outline" className="ml-2">
+                                      {order.matching_items_count} matching
+                                    </Badge>
+                                  </div>
+                                </SelectItem>
+                              ))}
                           </>
                         )}
 
                         {/* Other Orders */}
-                        {allocationData.other_orders.length > 0 && (
+                        {allocationData.other_orders.filter((order) =>
+                          order.frontend_id.toLowerCase().includes(orderSearch.toLowerCase()) ||
+                          order.client_name.toLowerCase().includes(orderSearch.toLowerCase())
+                        ).length > 0 && (
                           <>
                             <SelectItem value="other-header" disabled>
                               <span className="font-semibold text-gray-600">📄 Other Active Orders</span>
                             </SelectItem>
-                            {allocationData.other_orders.map((order) => (
-                              <SelectItem key={order.id} value={order.id}>
-                                <div className="flex items-center space-x-2">
-                                  <span>{order.frontend_id} - {order.client_name}</span>
-                                  {getPriorityBadge(order.priority)}
-                                </div>
-                              </SelectItem>
-                            ))}
+                            {allocationData.other_orders
+                              .filter((order) =>
+                                order.frontend_id.toLowerCase().includes(orderSearch.toLowerCase()) ||
+                                order.client_name.toLowerCase().includes(orderSearch.toLowerCase())
+                              )
+                              .sort((a, b) => a.frontend_id.localeCompare(b.frontend_id))
+                              .map((order) => (
+                                <SelectItem key={order.id} value={order.id}>
+                                  <div className="flex items-center space-x-2">
+                                    <span>{order.frontend_id} - {order.client_name}</span>
+                                    {getPriorityBadge(order.priority)}
+                                  </div>
+                                </SelectItem>
+                              ))}
                           </>
                         )}
                       </SelectContent>

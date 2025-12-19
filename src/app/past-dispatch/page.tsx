@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSearch } from "@/components/ui/select";
 import { 
   Loader2, 
   Search, 
@@ -71,6 +71,11 @@ export default function PastDispatchListPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+
+  // Search states for select dropdowns
+  const [clientSearchTerm, setClientSearchTerm] = useState("");
+  const [paperSpecSearchTerm, setPaperSpecSearchTerm] = useState("");
+  const [statusSearchTerm, setStatusSearchTerm] = useState("");
   
   const itemsPerPage = 20;
 
@@ -305,10 +310,21 @@ export default function PastDispatchListPage() {
                   <SelectValue placeholder="All Clients" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectSearch
+                    placeholder="Search clients..."
+                    value={clientSearchTerm}
+                    onChange={(e) => setClientSearchTerm(e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  />
                   <SelectItem value="all">All Clients</SelectItem>
-                  {dropdownOptions.client_names.map(client => (
-                    <SelectItem key={client} value={client}>{client}</SelectItem>
-                  ))}
+                  {dropdownOptions.client_names
+                    .filter((client) =>
+                      client.toLowerCase().includes(clientSearchTerm.toLowerCase())
+                    )
+                    .sort((a, b) => a.localeCompare(b))
+                    .map(client => (
+                      <SelectItem key={client} value={client}>{client}</SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
               
@@ -317,10 +333,21 @@ export default function PastDispatchListPage() {
                   <SelectValue placeholder="All Paper Specs" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectSearch
+                    placeholder="Search paper specs..."
+                    value={paperSpecSearchTerm}
+                    onChange={(e) => setPaperSpecSearchTerm(e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  />
                   <SelectItem value="all">All Paper Specs</SelectItem>
-                  {dropdownOptions.paper_specs.map(spec => (
-                    <SelectItem key={spec} value={spec}>{spec}</SelectItem>
-                  ))}
+                  {dropdownOptions.paper_specs
+                    .filter((spec) =>
+                      spec.toLowerCase().includes(paperSpecSearchTerm.toLowerCase())
+                    )
+                    .sort((a, b) => a.localeCompare(b))
+                    .map(spec => (
+                      <SelectItem key={spec} value={spec}>{spec}</SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
               
@@ -329,10 +356,21 @@ export default function PastDispatchListPage() {
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectSearch
+                    placeholder="Search statuses..."
+                    value={statusSearchTerm}
+                    onChange={(e) => setStatusSearchTerm(e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  />
                   <SelectItem value="all">All Statuses</SelectItem>
-                  {dropdownOptions.statuses.map(status => (
-                    <SelectItem key={status} value={status}>{status}</SelectItem>
-                  ))}
+                  {dropdownOptions.statuses
+                    .filter((status) =>
+                      status.toLowerCase().includes(statusSearchTerm.toLowerCase())
+                    )
+                    .sort((a, b) => a.localeCompare(b))
+                    .map(status => (
+                      <SelectItem key={status} value={status}>{status}</SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
               

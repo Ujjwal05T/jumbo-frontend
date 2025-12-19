@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSearch } from '@/components/ui/select';
 import { Loader2, Package } from 'lucide-react';
 import { fetchPapers, type Paper } from '@/lib/papers';
 
@@ -27,6 +27,7 @@ export function PaperSpecSelector({
   const [papers, setPapers] = useState<Paper[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [paperSearch, setPaperSearch] = useState("");
 
   // Fetch papers on component mount
   useEffect(() => {
@@ -110,12 +111,29 @@ export function PaperSpecSelector({
           </div>
         </SelectTrigger>
         <SelectContent>
+          <SelectSearch
+            placeholder="Search papers..."
+            value={paperSearch}
+            onChange={(e) => setPaperSearch(e.target.value)}
+            onKeyDown={(e) => e.stopPropagation()}
+          />
           <SelectItem value="all">Select paper specification...</SelectItem>
-          {papers.map((paper) => (
-            <SelectItem key={paper.id} value={paper.id}>
-              {formatPaperSpec(paper)}
-            </SelectItem>
-          ))}
+          {papers
+            .filter((paper) => {
+              const searchLower = paperSearch.toLowerCase();
+              const paperLabel = formatPaperSpec(paper).toLowerCase();
+              return (
+                paperLabel.includes(searchLower) ||
+                paper.gsm.toString().includes(searchLower) ||
+                paper.bf.toString().includes(searchLower) ||
+                paper.shade.toLowerCase().includes(searchLower)
+              );
+            })
+            .map((paper) => (
+              <SelectItem key={paper.id} value={paper.id}>
+                {formatPaperSpec(paper)}
+              </SelectItem>
+            ))}
         </SelectContent>
       </Select>
 

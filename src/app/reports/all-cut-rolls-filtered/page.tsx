@@ -5,7 +5,7 @@ import DashboardLayout from '@/components/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSearch } from '@/components/ui/select';
 import { MaterialReactTable, useMaterialReactTable, MRT_ColumnDef } from 'material-react-table';
 import { Package, Download, Filter, X, FileText, Search } from 'lucide-react';
 import { createRequestOptions } from '@/lib/api-config';
@@ -109,17 +109,29 @@ export default function AllCutRollsFilteredReportPage() {
   const [clientFilter, setClientFilter] = useState<string>('all');
   const [orderFilter, setOrderFilter] = useState<string>('all');
   const [planFilter, setPlanFilter] = useState<string>('all');
-  const [fromProductionDateTime, setFromProductionDateTime] = useState<string>('');
-  const [toProductionDateTime, setToProductionDateTime] = useState<string>('');
+
+  // Separate date and time states
+  const [fromDate, setFromDate] = useState<string>('');
+  const [fromTime, setFromTime] = useState<string>('');
+  const [toDate, setToDate] = useState<string>('');
+  const [toTime, setToTime] = useState<string>('');
+
+  // Search states for dropdowns
+  const [statusSearch, setStatusSearch] = useState('');
+  const [clientSearch, setClientSearch] = useState('');
+  const [orderSearch, setOrderSearch] = useState('');
+  const [planSearch, setPlanSearch] = useState('');
 
   // Client-side search (applied after data is loaded)
   const [omniSearch, setOmniSearch] = useState<string>('');
 
-  // Dropdown options
-  const [availableClients, setAvailableClients] = useState<Client[]>([]);
-  const [availableOrders, setAvailableOrders] = useState<Order[]>([]);
-  const [availablePlans, setAvailablePlans] = useState<Plan[]>([]);
+  // Dropdown options - now managed by initial DB fetch
   const [loadingDropdowns, setLoadingDropdowns] = useState(true);
+
+  // Store original full lists from database
+  const [allClients, setAllClients] = useState<Client[]>([]);
+  const [allOrders, setAllOrders] = useState<Order[]>([]);
+  const [allPlans, setAllPlans] = useState<Plan[]>([]);
 
   // Modal states
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -142,7 +154,7 @@ export default function AllCutRollsFilteredReportPage() {
           const sortedClients = clientsData
             .filter((c: Client) => c.company_name)
             .sort((a: Client, b: Client) => a.company_name.localeCompare(b.company_name));
-          setAvailableClients(sortedClients);
+          setAllClients(sortedClients); // Store original full list
         }
 
         // Fetch orders
@@ -157,7 +169,7 @@ export default function AllCutRollsFilteredReportPage() {
               const bId = b.frontend_id || '';
               return aId.localeCompare(bId);
             });
-          setAvailableOrders(sortedOrders);
+          setAllOrders(sortedOrders); // Store original full list
         }
 
         // Fetch plans
@@ -172,7 +184,7 @@ export default function AllCutRollsFilteredReportPage() {
               const bId = b.frontend_id || '';
               return aId.localeCompare(bId);
             });
-          setAvailablePlans(sortedPlans);
+          setAllPlans(sortedPlans); // Store original full list
         }
       } catch (error) {
         console.error('Error fetching dropdown options:', error);
@@ -196,8 +208,8 @@ export default function AllCutRollsFilteredReportPage() {
       (clientFilter && clientFilter !== 'all') ||
       (orderFilter && orderFilter !== 'all') ||
       (!isPending && planFilter && planFilter !== 'all') ||
-      fromProductionDateTime ||
-      toProductionDateTime
+      fromDate ||
+      toDate
     );
 
     if (!hasFilters) {
@@ -228,22 +240,19 @@ export default function AllCutRollsFilteredReportPage() {
       }
 
       // Handle datetime filters (convert IST to UTC)
-      // User enters datetime in IST, we need to send UTC to server
-      if (fromProductionDateTime) {
-        // Explicitly treat input as IST by appending +05:30 offset
-        const istDateTimeStr = fromProductionDateTime.includes(':00+')
-          ? fromProductionDateTime
-          : fromProductionDateTime + ':00+05:30';
+      // User enters date and time separately in IST, we need to send UTC to server
+      if (fromDate) {
+        // Default time is 12:00 AM (00:00:00) if not specified
+        const time = fromTime || '00:00';
+        const istDateTimeStr = `${fromDate}T${time}:00+05:30`;
         const utcDateTime = new Date(istDateTimeStr);
         const dateParam = isPending ? 'from_created_date' : 'from_production_date';
         params.append(dateParam, utcDateTime.toISOString());
       }
-      if (toProductionDateTime) {
-        // Explicitly treat input as IST by appending +05:30 offset
-        // Set to end of minute (59 seconds, 999ms)
-        const istDateTimeStr = toProductionDateTime.includes(':00+')
-          ? toProductionDateTime
-          : toProductionDateTime + ':59.999+05:30';
+      if (toDate) {
+        // Default time is 11:59:59 PM (23:59:59) if not specified
+        const time = toTime || '23:59';
+        const istDateTimeStr = `${toDate}T${time}:59.999+05:30`;
         const utcDateTime = new Date(istDateTimeStr);
         const dateParam = isPending ? 'to_created_date' : 'to_production_date';
         params.append(dateParam, utcDateTime.toISOString());
@@ -257,13 +266,9 @@ export default function AllCutRollsFilteredReportPage() {
 
       if (result.success && result.data) {
         // Handle response based on endpoint
-        if (isPending) {
-          setCutRolls(result.data.pending_orders || []);
-          setTotalItems(result.data.total_items || 0);
-        } else {
-          setCutRolls(result.data.cut_rolls || []);
-          setTotalItems(result.data.total_items || 0);
-        }
+        const fetchedData = isPending ? (result.data.pending_orders || []) : (result.data.cut_rolls || []);
+        setCutRolls(fetchedData);
+        setTotalItems(result.data.total_items || 0);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -273,64 +278,189 @@ export default function AllCutRollsFilteredReportPage() {
     }
   };
 
-  // Clear all filters
+  // Clear all filters and reset to fresh state
   const clearFilters = () => {
+    // Reset all filter values
     setOmniSearch('');
     setStatusFilter('all');
     setGsmFilter('');
-    setClientFilter('all'); // Reset to "All Clients"
-    setOrderFilter('all'); // Reset to "All Orders"
-    setPlanFilter('all'); // Reset to "All Plans"
-    setFromProductionDateTime('');
-    setToProductionDateTime('');
+    setClientFilter('all');
+    setOrderFilter('all');
+    setPlanFilter('all');
+    setFromDate('');
+    setFromTime('');
+    setToDate('');
+    setToTime('');
+
+    // Clear data
     setCutRolls([]);
     setTotalItems(0);
     setHasAppliedFilters(false);
   };
 
-  // Client-side omni search on loaded data
+  // Client-side filtering (omni search + client + plan + order filters)
   const filteredCutRolls = useMemo(() => {
-    if (!omniSearch.trim()) {
-      return cutRolls;
+    let filtered = cutRolls;
+
+    // Apply client filter (client-side)
+    if (clientFilter && clientFilter !== 'all') {
+      filtered = filtered.filter(roll =>
+        roll.allocated_order?.client_company_name === clientFilter
+      );
     }
 
-    const searchTerm = omniSearch.toLowerCase().trim();
+    // Apply order filter (client-side)
+    if (orderFilter && orderFilter !== 'all') {
+      filtered = filtered.filter(roll =>
+        roll.allocated_order?.frontend_id === orderFilter
+      );
+    }
 
-    return cutRolls.filter(roll => {
-      // Search in barcode
-      if (roll.barcode_id?.toLowerCase().includes(searchTerm)) return true;
+    // Apply plan filter (client-side, only for non-pending)
+    if (statusFilter !== 'pending' && planFilter && planFilter !== 'all') {
+      filtered = filtered.filter(roll =>
+        roll.plan_info?.frontend_id === planFilter
+      );
+    }
 
-      // Search in paper specs
-      if (roll.paper_specs?.paper_name?.toLowerCase().includes(searchTerm)) return true;
-      if (roll.paper_specs?.gsm?.toString().includes(searchTerm)) return true;
-      if (roll.paper_specs?.bf?.toString().includes(searchTerm)) return true;
-      if (roll.paper_specs?.shade?.toLowerCase().includes(searchTerm)) return true;
+    // Apply omni search
+    if (omniSearch.trim()) {
+      const searchTerm = omniSearch.toLowerCase().trim();
 
-      // Search in width and weight
-      if (roll.width_inches?.toString().includes(searchTerm)) return true;
-      if (roll.weight_kg?.toString().includes(searchTerm)) return true;
+      filtered = filtered.filter(roll => {
+        // Search in barcode
+        if (roll.barcode_id?.toLowerCase().includes(searchTerm)) return true;
 
-      // Search in status
-      if (roll.status?.toLowerCase().includes(searchTerm)) return true;
+        // Search in paper specs
+        if (roll.paper_specs?.paper_name?.toLowerCase().includes(searchTerm)) return true;
+        if (roll.paper_specs?.gsm?.toString().includes(searchTerm)) return true;
+        if (roll.paper_specs?.bf?.toString().includes(searchTerm)) return true;
+        if (roll.paper_specs?.shade?.toLowerCase().includes(searchTerm)) return true;
 
-      // Search in location
-      if (roll.location?.toLowerCase().includes(searchTerm)) return true;
+        // Search in width and weight
+        if (roll.width_inches?.toString().includes(searchTerm)) return true;
+        if (roll.weight_kg?.toString().includes(searchTerm)) return true;
 
-      // Search in parent rolls
-      if (roll.parent_118_roll?.barcode_id?.toLowerCase().includes(searchTerm)) return true;
-      if (roll.parent_jumbo_roll?.barcode_id?.toLowerCase().includes(searchTerm)) return true;
+        // Search in status
+        if (roll.status?.toLowerCase().includes(searchTerm)) return true;
 
-      // Search in plan
-      if (roll.plan_info?.frontend_id?.toLowerCase().includes(searchTerm)) return true;
-      if (roll.plan_info?.name?.toLowerCase().includes(searchTerm)) return true;
+        // Search in location
+        if (roll.location?.toLowerCase().includes(searchTerm)) return true;
 
-      // Search in order and client
-      if (roll.allocated_order?.frontend_id?.toLowerCase().includes(searchTerm)) return true;
-      if (roll.allocated_order?.client_company_name?.toLowerCase().includes(searchTerm)) return true;
+        // Search in parent rolls
+        if (roll.parent_118_roll?.barcode_id?.toLowerCase().includes(searchTerm)) return true;
+        if (roll.parent_jumbo_roll?.barcode_id?.toLowerCase().includes(searchTerm)) return true;
 
-      return false;
+        // Search in plan
+        if (roll.plan_info?.frontend_id?.toLowerCase().includes(searchTerm)) return true;
+        if (roll.plan_info?.name?.toLowerCase().includes(searchTerm)) return true;
+
+        // Search in order and client
+        if (roll.allocated_order?.frontend_id?.toLowerCase().includes(searchTerm)) return true;
+        if (roll.allocated_order?.client_company_name?.toLowerCase().includes(searchTerm)) return true;
+
+        return false;
+      });
+    }
+
+    return filtered;
+  }, [cutRolls, omniSearch, clientFilter, orderFilter, planFilter, statusFilter]);
+
+  // Dynamically calculate available dropdown options based on cascading filters
+  // This creates a cascading effect: selecting a client reduces orders, selecting an order reduces plans
+  const availableClients = useMemo(() => {
+    if (!hasAppliedFilters || cutRolls.length === 0) {
+      return allClients;
+    }
+
+    const clientMap = new Map<string, Client>();
+    cutRolls.forEach((roll: CutRoll) => {
+      if (roll.allocated_order?.client_company_name) {
+        const clientName = roll.allocated_order.client_company_name;
+        if (!clientMap.has(clientName)) {
+          clientMap.set(clientName, {
+            id: roll.allocated_order.id,
+            company_name: clientName
+          });
+        }
+      }
     });
-  }, [cutRolls, omniSearch]);
+
+    return Array.from(clientMap.values()).sort((a, b) =>
+      a.company_name.localeCompare(b.company_name)
+    );
+  }, [cutRolls, hasAppliedFilters, allClients]);
+
+  const availableOrders = useMemo(() => {
+    if (!hasAppliedFilters || cutRolls.length === 0) {
+      return allOrders;
+    }
+
+    // Filter by selected client first
+    let relevantRolls = cutRolls;
+    if (clientFilter && clientFilter !== 'all') {
+      relevantRolls = cutRolls.filter(roll =>
+        roll.allocated_order?.client_company_name === clientFilter
+      );
+    }
+
+    const orderMap = new Map<string, Order>();
+    relevantRolls.forEach((roll: CutRoll) => {
+      if (roll.allocated_order?.frontend_id) {
+        const orderId = roll.allocated_order.frontend_id;
+        if (!orderMap.has(orderId)) {
+          orderMap.set(orderId, {
+            id: roll.allocated_order.id,
+            frontend_id: orderId,
+            client: {
+              company_name: roll.allocated_order.client_company_name || ''
+            }
+          });
+        }
+      }
+    });
+
+    return Array.from(orderMap.values()).sort((a, b) =>
+      (a.frontend_id || '').localeCompare(b.frontend_id || '')
+    );
+  }, [cutRolls, hasAppliedFilters, allOrders, clientFilter]);
+
+  const availablePlans = useMemo(() => {
+    if (!hasAppliedFilters || cutRolls.length === 0 || statusFilter === 'pending') {
+      return statusFilter === 'pending' ? [] : allPlans;
+    }
+
+    // Filter by selected client and order first
+    let relevantRolls = cutRolls;
+    if (clientFilter && clientFilter !== 'all') {
+      relevantRolls = relevantRolls.filter(roll =>
+        roll.allocated_order?.client_company_name === clientFilter
+      );
+    }
+    if (orderFilter && orderFilter !== 'all') {
+      relevantRolls = relevantRolls.filter(roll =>
+        roll.allocated_order?.frontend_id === orderFilter
+      );
+    }
+
+    const planMap = new Map<string, Plan>();
+    relevantRolls.forEach((roll: CutRoll) => {
+      if (roll.plan_info?.frontend_id) {
+        const planId = roll.plan_info.frontend_id;
+        if (!planMap.has(planId)) {
+          planMap.set(planId, {
+            id: roll.plan_info.id,
+            frontend_id: planId,
+            name: roll.plan_info.name
+          });
+        }
+      }
+    });
+
+    return Array.from(planMap.values()).sort((a, b) =>
+      (a.frontend_id || '').localeCompare(b.frontend_id || '')
+    );
+  }, [cutRolls, hasAppliedFilters, allPlans, statusFilter, clientFilter, orderFilter]);
 
   // Export to PDF function
   const exportToPDF = () => {
@@ -891,7 +1021,7 @@ export default function AllCutRollsFilteredReportPage() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Filtered Cut Rolls Report</h1>
             <p className="text-muted-foreground">
-              Apply filters to load data, then use search to filter results - shows ALL matching records
+              Apply filters to load data. Client/Order/Plan dropdowns cascade - selecting a client shows only that client's orders, selecting an order shows only that order's plans
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -979,7 +1109,7 @@ export default function AllCutRollsFilteredReportPage() {
                   Apply Filters to Search
                 </CardTitle>
                 <CardDescription>
-                  Select at least one filter and click "Apply Filters" to view results
+                  Apply filters to fetch data. Client/Order/Plan dropdowns cascade automatically - each selection narrows down the next dropdown's options based on available data.
                 </CardDescription>
               </div>
               <div className="flex gap-2">
@@ -995,9 +1125,9 @@ export default function AllCutRollsFilteredReportPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {/* Search and Date Filters */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-              <div className="lg:col-span-1">
+            {/* Search and Date/Time Filters */}
+            <div className="grid grid-cols-1 lg:grid-cols-9 gap-4 mb-6">
+              <div className="lg:col-span-3">
                 <label className="text-sm font-medium mb-2 block">Search (Client-side)</label>
                 <Input
                   placeholder="Search by barcode, paper, client..."
@@ -1006,25 +1136,47 @@ export default function AllCutRollsFilteredReportPage() {
                   disabled={!hasAppliedFilters}
                 />
               </div>
-              <div className="lg:col-span-1">
+              <div className="lg:col-span-2">
                 <label className="text-sm font-medium mb-2 block">
-                  {statusFilter === 'pending' ? 'Created From (IST)' : 'Production From (IST)'}
+                  From Date (IST)
                 </label>
                 <Input
-                  type="datetime-local"
-                  value={fromProductionDateTime}
-                  onChange={(e) => setFromProductionDateTime(e.target.value)}
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
                   className="w-full"
                 />
               </div>
               <div className="lg:col-span-1">
                 <label className="text-sm font-medium mb-2 block">
-                  {statusFilter === 'pending' ? 'Created To (IST)' : 'Production To (IST)'}
+                  From Time 
                 </label>
                 <Input
-                  type="datetime-local"
-                  value={toProductionDateTime}
-                  onChange={(e) => setToProductionDateTime(e.target.value)}
+                  type="time"
+                  value={fromTime}
+                  onChange={(e) => setFromTime(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <div className="lg:col-span-2">
+                <label className="text-sm font-medium mb-2 block">
+                  To Date (IST)
+                </label>
+                <Input
+                  type="date"
+                  value={toDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <div className="lg:col-span-1">
+                <label className="text-sm font-medium mb-2 block">
+                  To Time 
+                </label>
+                <Input
+                  type="time"
+                  value={toTime}
+                  onChange={(e) => setToTime(e.target.value)}
                   className="w-full"
                 />
               </div>
@@ -1038,12 +1190,28 @@ export default function AllCutRollsFilteredReportPage() {
                     <SelectValue placeholder="All Statuses" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="weight_updated">Weight Updated</SelectItem>
-                    <SelectItem value="available">Stock</SelectItem>
-                    <SelectItem value="cutting">Planned</SelectItem>
-                    <SelectItem value="used">Dispatched</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectSearch
+                      placeholder="Search status..."
+                      value={statusSearch}
+                      onChange={(e) => setStatusSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
+                    {[
+                      { value: 'all', label: 'All Statuses' },
+                      { value: 'weight_updated', label: 'Weight Updated' },
+                      { value: 'available', label: 'Stock' },
+                      { value: 'cutting', label: 'Planned' },
+                      { value: 'used', label: 'Dispatched' },
+                      { value: 'pending', label: 'Pending' }
+                    ]
+                      .filter((item) => item.label.toLowerCase().includes(statusSearch.toLowerCase()))
+                      .sort((a, b) => a.label.localeCompare(b.label))
+                      .map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))
+                    }
                   </SelectContent>
                 </Select>
               </div>
@@ -1060,35 +1228,59 @@ export default function AllCutRollsFilteredReportPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium">Client</label>
+                <label className="text-sm font-medium">
+                  Client {hasAppliedFilters && availableClients.length > 0 && `(${availableClients.length} available)`}
+                </label>
                 <Select value={clientFilter} onValueChange={setClientFilter} disabled={loadingDropdowns}>
                   <SelectTrigger>
-                    <SelectValue placeholder={loadingDropdowns ? "Loading..." : "Select Client"} />
+                    <SelectValue placeholder={loadingDropdowns ? "Loading..." : hasAppliedFilters ? "Filter by client" : "Select Client"} />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectSearch
+                      placeholder="Search clients..."
+                      value={clientSearch}
+                      onChange={(e) => setClientSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
                     <SelectItem value="all">All Clients</SelectItem>
-                    {availableClients.map(client => (
-                      <SelectItem key={client.id} value={client.company_name}>
-                        {client.company_name}
-                      </SelectItem>
-                    ))}
+                    {availableClients
+                      .filter((client) => client.company_name.toLowerCase().includes(clientSearch.toLowerCase()))
+                      .sort((a, b) => a.company_name.localeCompare(b.company_name))
+                      .map(client => (
+                        <SelectItem key={client.id} value={client.company_name}>
+                          {client.company_name}
+                        </SelectItem>
+                      ))
+                    }
                   </SelectContent>
                 </Select>
               </div>
 
               <div>
-                <label className="text-sm font-medium">Order ID</label>
+                <label className="text-sm font-medium">
+                  Order ID {hasAppliedFilters && availableOrders.length > 0 && `(${availableOrders.length} available)`}
+                </label>
                 <Select value={orderFilter} onValueChange={setOrderFilter} disabled={loadingDropdowns}>
                   <SelectTrigger>
-                    <SelectValue placeholder={loadingDropdowns ? "Loading..." : "Select Order"} />
+                    <SelectValue placeholder={loadingDropdowns ? "Loading..." : hasAppliedFilters ? "Filter by order" : "Select Order"} />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectSearch
+                      placeholder="Search orders..."
+                      value={orderSearch}
+                      onChange={(e) => setOrderSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
                     <SelectItem value="all">All Orders</SelectItem>
-                    {availableOrders.map(order => (
-                      <SelectItem key={order.id} value={order.frontend_id}>
-                        {order.frontend_id}
-                      </SelectItem>
-                    ))}
+                    {availableOrders
+                      .filter((order) => order.frontend_id.toLowerCase().includes(orderSearch.toLowerCase()))
+                      .sort((a, b) => (a.frontend_id || '').localeCompare(b.frontend_id || ''))
+                      .map(order => (
+                        <SelectItem key={order.id} value={order.frontend_id}>
+                          {order.frontend_id}
+                        </SelectItem>
+                      ))
+                    }
                   </SelectContent>
                 </Select>
               </div>
@@ -1096,18 +1288,30 @@ export default function AllCutRollsFilteredReportPage() {
               {/* Hide Plan filter for pending orders */}
               {statusFilter !== 'pending' && (
                 <div>
-                  <label className="text-sm font-medium">Plan ID</label>
+                  <label className="text-sm font-medium">
+                    Plan ID {hasAppliedFilters && availablePlans.length > 0 && `(${availablePlans.length} available)`}
+                  </label>
                   <Select value={planFilter} onValueChange={setPlanFilter} disabled={loadingDropdowns}>
                     <SelectTrigger>
-                      <SelectValue placeholder={loadingDropdowns ? "Loading..." : "Select Plan"} />
+                      <SelectValue placeholder={loadingDropdowns ? "Loading..." : hasAppliedFilters ? "Filter by plan" : "Select Plan"} />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectSearch
+                        placeholder="Search plans..."
+                        value={planSearch}
+                        onChange={(e) => setPlanSearch(e.target.value)}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      />
                       <SelectItem value="all">All Plans</SelectItem>
-                      {availablePlans.map(plan => (
-                        <SelectItem key={plan.id} value={plan.frontend_id}>
-                          {plan.frontend_id}
-                        </SelectItem>
-                      ))}
+                      {availablePlans
+                        .filter((plan) => plan.frontend_id.toLowerCase().includes(planSearch.toLowerCase()))
+                        .sort((a, b) => (a.frontend_id || '').localeCompare(b.frontend_id || ''))
+                        .map(plan => (
+                          <SelectItem key={plan.id} value={plan.frontend_id}>
+                            {plan.frontend_id}
+                          </SelectItem>
+                        ))
+                      }
                     </SelectContent>
                   </Select>
                 </div>

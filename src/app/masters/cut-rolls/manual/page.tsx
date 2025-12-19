@@ -11,6 +11,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSearch,
 } from "@/components/ui/select";
 import {
   Card,
@@ -65,6 +66,10 @@ export default function ManualCutRollEntryPage() {
   const [reelNumber, setReelNumber] = useState<string>("");
   const [widthInches, setWidthInches] = useState<string>("");
   const [weightKg, setWeightKg] = useState<string>("");
+
+  // Search state for selects
+  const [clientSearch, setClientSearch] = useState("");
+  const [paperSearch, setPaperSearch] = useState("");
 
   useEffect(() => {
     const loadData = async () => {
@@ -332,7 +337,18 @@ export default function ManualCutRollEntryPage() {
                   <SelectValue placeholder="Select client" />
                 </SelectTrigger>
                 <SelectContent className="text-3xl font-semibold">
+                  <SelectSearch
+                    placeholder="Search clients..."
+                    value={clientSearch}
+                    onChange={(e) => setClientSearch(e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  />
                   {clients
+                    .filter((client) =>
+                      client.company_name
+                        .toLowerCase()
+                        .includes(clientSearch.toLowerCase())
+                    )
                     .sort((a, b) => a.company_name.localeCompare(b.company_name))
                     .map((client) => (
                       <SelectItem key={client.id} value={client.id}>
@@ -341,7 +357,7 @@ export default function ManualCutRollEntryPage() {
                     ))}
                 </SelectContent>
               </Select>
-              
+
             </div>
 
             {/* Cut Roll Entry Section */}
@@ -359,7 +375,21 @@ export default function ManualCutRollEntryPage() {
                       <SelectValue placeholder="Select paper" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectSearch
+                        placeholder="Search papers..."
+                        value={paperSearch}
+                        onChange={(e) => setPaperSearch(e.target.value)}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      />
                       {papers
+                        .filter((paper) => {
+                          const search = paperSearch.toLowerCase();
+                          return (
+                            paper.gsm.toString().includes(search) ||
+                            paper.bf.toString().toLowerCase().includes(search) ||
+                            paper.shade.toLowerCase().includes(search)
+                          );
+                        })
                         .sort((a, b) => a.gsm - b.gsm)
                         .map((paper) => (
                           <SelectItem key={paper.id} value={paper.id} className="font-medium">

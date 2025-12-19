@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSearch } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MaterialReactTable, useMaterialReactTable, MRT_ColumnDef } from 'material-react-table';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
@@ -203,10 +203,12 @@ export default function ReportsPage() {
   // Paper Analysis specific state
   const [selectedPaper, setSelectedPaper] = useState('');
   const [availablePapers, setAvailablePapers] = useState<any[]>([]);
+  const [paperSearch, setPaperSearch] = useState('');
 
   // Client Analysis specific state
   const [selectedClient, setSelectedClient] = useState('');
   const [availableClients, setAvailableClients] = useState<any[]>([]);
+  const [clientSearch, setClientSearch] = useState('');
 
   // Data states
   const [paperData, setPaperData] = useState<PaperReport[]>([]);
@@ -927,15 +929,32 @@ export default function ReportsPage() {
                         <SelectValue placeholder="All Papers" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectSearch
+                          placeholder="Search papers..."
+                          value={paperSearch}
+                          onChange={(e) => setPaperSearch(e.target.value)}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        />
                         <SelectItem value="all">All Papers</SelectItem>
                         {availablePapers.length === 0 ? (
                           <SelectItem value="none" disabled>No papers found</SelectItem>
                         ) : (
-                          availablePapers.sort((a, b) => a.gsm - b.gsm).map((paper) => (
-                            <SelectItem key={paper.id} value={JSON.stringify({name: paper.name, gsm: paper.gsm, bf: paper.bf, shade: paper.shade})}>
-                              {paper.name} - {paper.gsm}GSM - {paper.bf}BF - {paper.shade}
-                            </SelectItem>
-                          ))
+                          availablePapers
+                            .filter((paper) => {
+                              const search = paperSearch.toLowerCase();
+                              return (
+                                paper.name.toLowerCase().includes(search) ||
+                                paper.gsm.toString().includes(search) ||
+                                paper.bf.toString().toLowerCase().includes(search) ||
+                                paper.shade.toLowerCase().includes(search)
+                              );
+                            })
+                            .sort((a, b) => a.gsm - b.gsm)
+                            .map((paper) => (
+                              <SelectItem key={paper.id} value={JSON.stringify({name: paper.name, gsm: paper.gsm, bf: paper.bf, shade: paper.shade})}>
+                                {paper.name} - {paper.gsm}GSM - {paper.bf}BF - {paper.shade}
+                              </SelectItem>
+                            ))
                         )}
                       </SelectContent>
                     </Select>
@@ -1169,15 +1188,26 @@ export default function ReportsPage() {
                         <SelectValue placeholder="All Clients" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectSearch
+                          placeholder="Search clients..."
+                          value={clientSearch}
+                          onChange={(e) => setClientSearch(e.target.value)}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        />
                         <SelectItem value="all">All Clients</SelectItem>
                         {availableClients.length === 0 ? (
                           <SelectItem value="none" disabled>No clients found</SelectItem>
                         ) : (
-                          availableClients.map((client) => (
-                            <SelectItem key={client.id} value={client.company_name}>
-                              {client.company_name}
-                            </SelectItem>
-                          ))
+                          availableClients
+                            .filter((client) =>
+                              client.company_name.toLowerCase().includes(clientSearch.toLowerCase())
+                            )
+                            .sort((a, b) => a.company_name.localeCompare(b.company_name))
+                            .map((client) => (
+                              <SelectItem key={client.id} value={client.company_name}>
+                                {client.company_name}
+                              </SelectItem>
+                            ))
                         )}
                       </SelectContent>
                     </Select>

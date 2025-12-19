@@ -30,6 +30,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSearch,
 } from "@/components/ui/select";
 import {
   Truck,
@@ -72,6 +73,11 @@ export default function DispatchPage() {
     maxWeight: "",
     isWastage: "all",
   });
+
+  // Search state for select dropdowns
+  const [clientSearchTerm, setClientSearchTerm] = useState("");
+  const [paperSpecSearchTerm, setPaperSpecSearchTerm] = useState("");
+  const [wastageSearchTerm, setWastageSearchTerm] = useState("");
 
   // Helper function to highlight matching text
   const highlightText = (text: string, searchTerm: string) => {
@@ -460,12 +466,23 @@ export default function DispatchPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectSearch
+                            placeholder="Search clients..."
+                            value={clientSearchTerm}
+                            onChange={(e) => setClientSearchTerm(e.target.value)}
+                            onKeyDown={(e) => e.stopPropagation()}
+                          />
                           <SelectItem value="all">All Clients</SelectItem>
-                          {uniqueClients.map((client) => (
-                            <SelectItem key={client} value={client}>
-                              {client}
-                            </SelectItem>
-                          ))}
+                          {uniqueClients
+                            .filter((client) =>
+                              client.toLowerCase().includes(clientSearchTerm.toLowerCase())
+                            )
+                            .sort((a, b) => a.localeCompare(b))
+                            .map((client) => (
+                              <SelectItem key={client} value={client}>
+                                {client}
+                              </SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -481,12 +498,23 @@ export default function DispatchPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectSearch
+                            placeholder="Search paper specs..."
+                            value={paperSpecSearchTerm}
+                            onChange={(e) => setPaperSpecSearchTerm(e.target.value)}
+                            onKeyDown={(e) => e.stopPropagation()}
+                          />
                           <SelectItem value="all">All Specs</SelectItem>
-                          {uniquePaperSpecs.map((spec) => (
-                            <SelectItem key={spec} value={spec}>
-                              {spec}
-                            </SelectItem>
-                          ))}
+                          {uniquePaperSpecs
+                            .filter((spec) =>
+                              spec.toLowerCase().includes(paperSpecSearchTerm.toLowerCase())
+                            )
+                            .sort((a, b) => a.localeCompare(b))
+                            .map((spec) => (
+                              <SelectItem key={spec} value={spec}>
+                                {spec}
+                              </SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -524,6 +552,12 @@ export default function DispatchPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectSearch
+                            placeholder="Search roll types..."
+                            value={wastageSearchTerm}
+                            onChange={(e) => setWastageSearchTerm(e.target.value)}
+                            onKeyDown={(e) => e.stopPropagation()}
+                          />
                           <SelectItem value="all">All Types</SelectItem>
                           <SelectItem value="wastage">Stock Only</SelectItem>
                           <SelectItem value="non-wastage">Non-Stock Only</SelectItem>

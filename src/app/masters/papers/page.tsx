@@ -36,6 +36,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSearch,
 } from "@/components/ui/select";
 import {
   Package,
@@ -81,6 +82,7 @@ export default function PaperMasterPage() {
   const [error, setError] = useState<string | null>(null);
   const [editingPaper, setEditingPaper] = useState<Paper | null>(null);
   const [selectedPaperType, setSelectedPaperType] = useState<string>("all");
+  const [paperTypeSearch, setPaperTypeSearch] = useState("");
   const [deleteDialog, setDeleteDialog] = useState<{
     open: boolean;
     paperId: string;
@@ -275,17 +277,28 @@ export default function PaperMasterPage() {
                     <SelectValue placeholder="Filter by paper type" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectSearch
+                      placeholder="Search paper types..."
+                      value={paperTypeSearch}
+                      onChange={(e) => setPaperTypeSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
                     <SelectItem value="all">All Paper Types ({papers.length} total)</SelectItem>
                     {paperTypes.length > 0 ? (
-                      paperTypes.map((type) => {
-                        const papersOfType = papers.filter(p => p.type === type);
-                        const avgGsm = Math.round(papersOfType.reduce((sum, p) => sum + p.gsm, 0) / papersOfType.length);
-                        return (
-                          <SelectItem key={type} value={type}>
-                            {type} (Avg GSM: {avgGsm}, {papersOfType.length} papers)
-                          </SelectItem>
-                        );
-                      })
+                      paperTypes
+                        .filter((type) =>
+                          type.toLowerCase().includes(paperTypeSearch.toLowerCase())
+                        )
+                        .sort((a, b) => a.localeCompare(b))
+                        .map((type) => {
+                          const papersOfType = papers.filter(p => p.type === type);
+                          const avgGsm = Math.round(papersOfType.reduce((sum, p) => sum + p.gsm, 0) / papersOfType.length);
+                          return (
+                            <SelectItem key={type} value={type}>
+                              {type} (Avg GSM: {avgGsm}, {papersOfType.length} papers)
+                            </SelectItem>
+                          );
+                        })
                     ) : (
                       <SelectItem value="no-types" disabled>
                         No paper types available

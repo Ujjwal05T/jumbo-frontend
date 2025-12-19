@@ -11,6 +11,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSearch,
 } from "@/components/ui/select";
 import {
   Card,
@@ -67,6 +68,10 @@ export default function EditOrderPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [showOTPModal, setShowOTPModal] = useState(false);
+
+  // Search state for selects
+  const [clientSearch, setClientSearch] = useState("");
+  const [paperSearches, setPaperSearches] = useState<Record<number, string>>({});
 
   // Form state
   const [formData, setFormData] = useState({
@@ -439,11 +444,24 @@ export default function EditOrderPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {clients.sort((a, b) => a.company_name.localeCompare(b.company_name)).map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.company_name}
-                      </SelectItem>
-                    ))}
+                    <SelectSearch
+                      placeholder="Search clients..."
+                      value={clientSearch}
+                      onChange={(e) => setClientSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
+                    {clients
+                      .filter((client) =>
+                        client.company_name
+                          .toLowerCase()
+                          .includes(clientSearch.toLowerCase())
+                      )
+                      .sort((a, b) => a.company_name.localeCompare(b.company_name))
+                      .map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.company_name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -530,11 +548,32 @@ export default function EditOrderPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {papers.sort((a, b) => a.gsm - b.gsm).map((paper) => (
-                            <SelectItem key={paper.id} value={paper.id}>
-                              {paper.name} ({paper.gsm}gsm, {paper.bf}bf, {paper.shade})
-                            </SelectItem>
-                          ))}
+                          <SelectSearch
+                            placeholder="Search papers..."
+                            value={paperSearches[index] || ""}
+                            onChange={(e) =>
+                              setPaperSearches((prev) => ({
+                                ...prev,
+                                [index]: e.target.value,
+                              }))
+                            }
+                            onKeyDown={(e) => e.stopPropagation()}
+                          />
+                          {papers
+                            .filter((paper) => {
+                              const search = (paperSearches[index] || "").toLowerCase();
+                              return (
+                                paper.gsm.toString().includes(search) ||
+                                paper.bf.toString().toLowerCase().includes(search) ||
+                                paper.shade.toLowerCase().includes(search)
+                              );
+                            })
+                            .sort((a, b) => a.gsm - b.gsm)
+                            .map((paper) => (
+                              <SelectItem key={paper.id} value={paper.id}>
+                                {paper.name} ({paper.gsm}gsm, {paper.bf}bf, {paper.shade})
+                              </SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                     </div>

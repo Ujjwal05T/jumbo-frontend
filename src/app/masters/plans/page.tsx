@@ -16,7 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSearch } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Loader2, AlertCircle, Eye, Play, CheckCircle, Factory, Search, Filter, Download, FileText, MoreVertical, Printer, ScanLine } from "lucide-react";
 
@@ -190,6 +190,9 @@ export default function PlansPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [clientFilter, setClientFilter] = useState<string>("all");
   const [dateFilter, setDateFilter] = useState<string>("all");
+
+  // Search state for selects
+  const [clientSearch, setClientSearch] = useState("");
 
   useEffect(() => {
     loadClients();
@@ -1720,12 +1723,25 @@ export default function PlansPage() {
                     <SelectValue placeholder="All clients" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectSearch
+                      placeholder="Search clients..."
+                      value={clientSearch}
+                      onChange={(e) => setClientSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
                     <SelectItem value="all">All Clients</SelectItem>
-                    {clients.sort((a, b) => a.company_name.localeCompare(b.company_name)).map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.company_name}
-                      </SelectItem>
-                    ))}
+                    {clients
+                      .filter((client) =>
+                        client.company_name
+                          .toLowerCase()
+                          .includes(clientSearch.toLowerCase())
+                      )
+                      .sort((a, b) => a.company_name.localeCompare(b.company_name))
+                      .map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.company_name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>

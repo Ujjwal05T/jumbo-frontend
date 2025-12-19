@@ -12,6 +12,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSearch,
 } from "@/components/ui/select";
 import {
   Table,
@@ -67,6 +68,10 @@ export default function PlanDeletionLogsPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [selectedLog, setSelectedLog] = useState<PlanDeletionLog | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+
+  // Search state for selects (not used currently but good for consistency)
+  const [reasonSearch, setReasonSearch] = useState("");
+  const [statusSearch, setStatusSearch] = useState("");
 
   const pageSize = 20;
 

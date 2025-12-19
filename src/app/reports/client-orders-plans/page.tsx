@@ -5,7 +5,7 @@ import DashboardLayout from '@/components/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSearch } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Users, Package, TrendingUp, Calendar, BarChart3, Zap, Search, Eye, FileText } from 'lucide-react';
 import { REPORTS_ENDPOINTS, MASTER_ENDPOINTS, createRequestOptions } from '@/lib/api-config';
@@ -99,6 +99,9 @@ export default function ClientOrdersPlansPage() {
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
+
+  // Search state for client dropdown
+  const [clientSearch, setClientSearch] = useState('');
 
   const [ordersData, setOrdersData] = useState<OrderWithPlan[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -337,7 +340,14 @@ export default function ClientOrdersPlansPage() {
                     <SelectValue placeholder="Choose a client..." />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectSearch
+                      placeholder="Search clients..."
+                      value={clientSearch}
+                      onChange={(e) => setClientSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
                     {availableClients
+                      .filter((client) => client.company_name.toLowerCase().includes(clientSearch.toLowerCase()))
                       .sort((a, b) => a.company_name.localeCompare(b.company_name))
                       .map((client) => (
                       <SelectItem key={client.id} value={client.id}>

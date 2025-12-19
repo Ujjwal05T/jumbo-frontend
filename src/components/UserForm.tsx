@@ -10,12 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSearch,
 } from "@/components/ui/select";
 import { CreateUserFormData, UpdateUserData, User as ApiUser, createUser, updateUser } from "@/lib/users";
 import { User, Plus, Loader2 } from "lucide-react";
@@ -39,6 +40,8 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true, editingUs
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [roleSearch, setRoleSearch] = useState("");
+  const [departmentSearch, setDepartmentSearch] = useState("");
 
   const handleInputChange = (field: keyof CreateUserFormData, value: string) => {
     setFormData(prev => ({
@@ -182,56 +185,35 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true, editingUs
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="admin">
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-purple-100 text-purple-800">Admin</Badge>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="co_admin">
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-purple-100 text-purple-700">Co Admin</Badge>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="order_puncher">
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-blue-100 text-blue-800">Order Puncher</Badge>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="security">
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-red-100 text-red-800">Security</Badge>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="weight_update">
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-green-100 text-green-800">Weight Update</Badge>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="poduction">
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-yellow-100 text-yellow-800">Production</Badge>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="accountant">
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-indigo-100 text-indigo-800">Accountant</Badge>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="mou">
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-orange-100 text-orange-800">MOU</Badge>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="dispatch">
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-teal-100 text-teal-800">Dispatch</Badge>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="sales_person">
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-pink-100 text-pink-800">Sales Person</Badge>
-                    </div>
-                  </SelectItem>
+                  <SelectSearch
+                    placeholder="Search roles..."
+                    value={roleSearch}
+                    onChange={(e) => setRoleSearch(e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  />
+                  {[
+                    { value: "admin", label: "Admin", color: "purple" },
+                    { value: "accountant", label: "Accountant", color: "indigo" },
+                    { value: "co_admin", label: "Co Admin", color: "purple" },
+                    { value: "dispatch", label: "Dispatch", color: "teal" },
+                    { value: "mou", label: "MOU", color: "orange" },
+                    { value: "order_puncher", label: "Order Puncher", color: "blue" },
+                    { value: "poduction", label: "Production", color: "yellow" },
+                    { value: "sales_person", label: "Sales Person", color: "pink" },
+                    { value: "security", label: "Security", color: "red" },
+                    { value: "weight_update", label: "Weight Update", color: "green" },
+                  ]
+                    .filter((role) =>
+                      role.label.toLowerCase().includes(roleSearch.toLowerCase())
+                    )
+                    .sort((a, b) => a.label.localeCompare(b.label))
+                    .map((role) => (
+                      <SelectItem key={role.value} value={role.value}>
+                        <div className="flex items-center gap-2">
+                          <Badge className={`bg-${role.color}-100 text-${role.color}-800`}>{role.label}</Badge>
+                        </div>
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -256,13 +238,19 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true, editingUs
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Production">Production</SelectItem>
-                  <SelectItem value="Planning">Planning</SelectItem>
-                  <SelectItem value="Quality Control">Quality Control</SelectItem>
-                  <SelectItem value="Operations">Operations</SelectItem>
-                  <SelectItem value="Sales">Sales</SelectItem>
-                  <SelectItem value="IT">IT</SelectItem>
-                  <SelectItem value="Management">Management</SelectItem>
+                  <SelectSearch
+                    placeholder="Search departments..."
+                    value={departmentSearch}
+                    onChange={(e) => setDepartmentSearch(e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  />
+                  {["IT", "Management", "Operations", "Planning", "Production", "Quality Control", "Sales"]
+                    .filter((dept) =>
+                      dept.toLowerCase().includes(departmentSearch.toLowerCase())
+                    )
+                    .map((dept) => (
+                      <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>

@@ -22,6 +22,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSearch,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -62,6 +63,7 @@ export default function OTPVerificationModal({
   const [loadingAdmins, setLoadingAdmins] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verified, setVerified] = useState(false);
+  const [adminSearch, setAdminSearch] = useState("");
 
   useEffect(() => {
     if (open) {
@@ -188,14 +190,29 @@ export default function OTPVerificationModal({
                           <SelectValue placeholder="Choose an administrator" />
                         </SelectTrigger>
                         <SelectContent>
-                          {adminList.map((admin) => (
-                            <SelectItem key={admin.id} value={admin.id}>
-                              <div className="flex items-center gap-2">
-                                <Shield className="w-4 h-4" />
-                                {admin.name} (@{admin.username})
-                              </div>
-                            </SelectItem>
-                          ))}
+                          <SelectSearch
+                            placeholder="Search administrators..."
+                            value={adminSearch}
+                            onChange={(e) => setAdminSearch(e.target.value)}
+                            onKeyDown={(e) => e.stopPropagation()}
+                          />
+                          {adminList
+                            .filter((admin) => {
+                              const searchLower = adminSearch.toLowerCase();
+                              return (
+                                admin.name.toLowerCase().includes(searchLower) ||
+                                admin.username.toLowerCase().includes(searchLower)
+                              );
+                            })
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map((admin) => (
+                              <SelectItem key={admin.id} value={admin.id}>
+                                <div className="flex items-center gap-2">
+                                  <Shield className="w-4 h-4" />
+                                  {admin.name} (@{admin.username})
+                                </div>
+                              </SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                     </div>
