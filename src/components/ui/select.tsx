@@ -70,19 +70,41 @@ SelectScrollDownButton.displayName =
 const SelectSearch = React.forwardRef<
   HTMLInputElement,
   React.InputHTMLAttributes<HTMLInputElement>
->(({ className, ...props }, ref) => (
-  <div className="flex items-center border-b px-3 py-3">
-    <Search className="mr-2 h-5 w-5 shrink-0 opacity-50" />
-    <input
-      ref={ref}
-      className={cn(
-        "flex h-11 w-full rounded-md bg-transparent py-2 text-base outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
-        className
-      )}
-      {...props}
-    />
-  </div>
-))
+>(({ className, ...props }, ref) => {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  // Auto-focus on mount
+  React.useEffect(() => {
+    if (inputRef.current) {
+      // Small delay to ensure the dropdown is fully rendered
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
+    }
+  }, []);
+
+  return (
+    <div className="flex items-center border-b px-3 py-3">
+      <Search className="mr-2 h-5 w-5 shrink-0 opacity-50" />
+      <input
+        ref={(node) => {
+          inputRef.current = node;
+          if (typeof ref === 'function') {
+            ref(node);
+          } else if (ref) {
+            ref.current = node;
+          }
+        }}
+        className={cn(
+          "flex h-11 w-full rounded-md bg-transparent py-2 text-base outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
+          className
+        )}
+        autoFocus
+        {...props}
+      />
+    </div>
+  );
+})
 SelectSearch.displayName = "SelectSearch"
 
 const SelectContent = React.forwardRef<

@@ -25,12 +25,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -48,7 +42,6 @@ import {
 import {
   Truck,
   Search,
-  MoreHorizontal,
   Eye,
   Download,
   Calendar,
@@ -215,6 +208,9 @@ export default function DispatchHistoryPage() {
   // Edit dispatch modal
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editDispatchId, setEditDispatchId] = useState<string | null>(null);
+
+  // Selected row for actions
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
 
   const loadDispatches = async () => {
     try {
@@ -407,18 +403,57 @@ export default function DispatchHistoryPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="space-y-1">
-            <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-              <Truck className="w-8 h-8 text-primary" />
+            <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
+              <Truck className="w-6 h-6 text-primary" />
               Dispatch History
             </h1>
-            <p className="text-muted-foreground">
-              View and manage dispatch records and delivery tracking
-            </p>
+            {selectedRowId && (
+              <p className="text-sm text-muted-foreground">1 dispatch selected</p>
+            )}
           </div>
-          <Button onClick={() => setCreateModalOpen(true)} variant="default">
-            <Package className="w-4 h-4 mr-2" />
-            Create New Dispatch
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Action Buttons */}
+            <Button
+              onClick={() => selectedRowId && loadDispatchDetails(selectedRowId)}
+              disabled={!selectedRowId}
+              variant="outline"
+              size="lg"
+              className="text-xl"
+            >
+              View
+            </Button>
+            <Button
+              onClick={() => {
+                if (selectedRowId) {
+                  const dispatch = dispatches.find(d => d.id === selectedRowId);
+                  if (dispatch?.status === 'dispatched') {
+                    setEditDispatchId(selectedRowId);
+                    setEditModalOpen(true);
+                  } else {
+                    toast.error('Only dispatched records can be edited');
+                  }
+                }
+              }}
+              disabled={!selectedRowId || dispatches.find(d => d.id === selectedRowId)?.status !== 'dispatched'}
+              variant="outline"
+              size="lg"
+              className="text-xl"
+            >
+              Edit
+            </Button>
+            <Button
+              onClick={() => selectedRowId && downloadPackingSlip(selectedRowId)}
+              disabled={!selectedRowId}
+              variant="outline"
+              size="lg"
+              className="text-xl"
+            >
+              Print
+            </Button>
+            <Button onClick={() => setCreateModalOpen(true)} variant="default" size="lg" className="text-xl">
+              Create
+            </Button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -426,11 +461,8 @@ export default function DispatchHistoryPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Filter className="w-5 h-5" />
-              Filters & Search
+               Search
             </CardTitle>
-            <CardDescription>
-              Filter dispatch records by date range, status, client, or search terms
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
@@ -559,17 +591,11 @@ export default function DispatchHistoryPage() {
             <div className="flex justify-between items-center">
               <div>
                 <CardTitle>Dispatch Records</CardTitle>
-                <CardDescription>
-                  {totalCount} dispatch records found
-                </CardDescription>
+               
               </div>
-              <Button onClick={loadDispatches} variant="outline" size="sm">
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Refresh
-              </Button>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 mt-0">
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
@@ -581,13 +607,12 @@ export default function DispatchHistoryPage() {
                     <TableHead>Items</TableHead>
                     <TableHead>Weight</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-24 text-center">
+                      <TableCell colSpan={7} className="h-24 text-center">
                         <div className="flex items-center justify-center">
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Loading dispatch records...
@@ -596,7 +621,15 @@ export default function DispatchHistoryPage() {
                     </TableRow>
                   ) : dispatches.length > 0 ? (
                     dispatches.map((dispatch) => (
-                      <TableRow key={dispatch.id}>
+                      <TableRow
+                        key={dispatch.id}
+                        onClick={() => setSelectedRowId(dispatch.id === selectedRowId ? null : dispatch.id)}
+                        className={`cursor-pointer transition-colors ${
+                          selectedRowId === dispatch.id
+                            ? 'bg-orange-300/70 hover:bg-orange-300/70'
+                            : 'hover:bg-gray-50'
+                        }`}
+                      >
                         <TableCell>
                           <div className="space-y-1">
                             <div className="font-medium">{dispatch.dispatch_number}</div>
@@ -656,55 +689,11 @@ export default function DispatchHistoryPage() {
                         <TableCell>
                           {getStatusBadge(dispatch.status)}
                         </TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" className="h-8 w-8 p-0">
-                                <span className="sr-only">Open menu</span>
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() => loadDispatchDetails(dispatch.id)}
-                                disabled={detailsLoading}
-                              >
-                                <Eye className="mr-2 h-4 w-4" />
-                                View Details
-                              </DropdownMenuItem>
-                              {dispatch.status === 'dispatched' && (
-                                <DropdownMenuItem
-                                  className="text-blue-600"
-                                  onClick={() => {
-                                    setEditDispatchId(dispatch.id);
-                                    setEditModalOpen(true);
-                                  }}
-                                >
-                                  <RefreshCw className="mr-2 h-4 w-4" />
-                                  Edit Dispatch
-                                </DropdownMenuItem>
-                              )}
-                              {/* <DropdownMenuItem
-                                onClick={() => printPDF(dispatch.id, dispatch.dispatch_number)}
-                              >
-                                <Download className="mr-2 h-4 w-4" />
-                                Print PDF
-                              </DropdownMenuItem> */}
-                              <DropdownMenuItem
-                                onClick={() => downloadPackingSlip(dispatch.id)}
-                              >
-                                <FileText className="mr-2 h-4 w-4" />
-                                Print Packing Slip
-                              </DropdownMenuItem>
-                              
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-24 text-center">
+                      <TableCell colSpan={7} className="h-24 text-center">
                         <div className="text-center py-4">
                           <div className="text-muted-foreground">
                             <p className="font-medium">No dispatch records found</p>

@@ -59,141 +59,193 @@ interface CreateDispatchModalProps {
 }
 
 // Pure component for checkbox to prevent unnecessary re-renders
-const PureCheckbox = memo(({
-  checked,
-  onChange
-}: {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) => (
-  <Checkbox
-    checked={checked}
-    onCheckedChange={onChange}
-    className="w-5 h-5"
-  />
-));
+const PureCheckbox = memo(
+  ({
+    checked,
+    onChange,
+  }: {
+    checked: boolean;
+    onChange: (checked: boolean) => void;
+  }) => (
+    <Checkbox
+      checked={checked}
+      onCheckedChange={onChange}
+      className="w-5 h-5"
+    />
+  )
+);
 
 PureCheckbox.displayName = "PureCheckbox";
 
 // Highly optimized row component - minimal re-renders
-const OptimizedRow = memo(({
-  item,
-  index,
-  isSelected,
-  itemType,
-  searchTerm,
-  onToggle
-}: {
-  item: any;
-  index: number;
-  isSelected: boolean;
-  itemType: string;
-  searchTerm: string;
-  onToggle: () => void;
-}) => {
-  const isWastageItem = itemType === "wastage";
-  const isManualItem = itemType === "manual";
-  // Use inline styles for highlighting instead of mark components
-  const getHighlightedText = (text: string, highlight: string) => {
-    if (!highlight || !text) return text;
+const OptimizedRow = memo(
+  ({
+    item,
+    index,
+    isSelected,
+    itemType,
+    searchTerm,
+    onToggle,
+  }: {
+    item: any;
+    index: number;
+    isSelected: boolean;
+    itemType: string;
+    searchTerm: string;
+    onToggle: () => void;
+  }) => {
+    const isWastageItem = itemType === "wastage";
+    const isManualItem = itemType === "manual";
 
-    const parts = text.split(new RegExp(`(${highlight})`, "gi"));
-    return parts.map((part, idx) =>
-      part.toLowerCase() === highlight.toLowerCase() ? (
-        <span key={idx} style={{ backgroundColor: '#fef08a', padding: '0 2px', borderRadius: '2px' }}>
-          {part}
-        </span>
-      ) : (
-        part
-      )
-    );
-  };
+    // Format paper spec to compact format
+    const formatPaperSpec = (paperSpec: string) => {
+      if (!paperSpec) return "N/A";
 
-  const itemId = isWastageItem ? item.id : item.inventory_id;
+      // Example: "120gsm, 18.00bf, GOLDEN" -> "120, 18, G"
+      const parts = paperSpec.split(",").map(p => p.trim());
 
-  return (
-    <TableRow
-      onClick={onToggle}
-      style={{
-        backgroundColor: isSelected ? (isWastageItem ? '#fff7ed' : '#eff6ff') : 'transparent',
-        borderLeft: item.priority === 1 ? '4px solid #22c55e' : 'none',
-        cursor: 'pointer'
-      }}
-      className="hover:bg-gray-50 transition-colors"
-    >
-      <TableCell style={{ fontWeight: 500, fontSize: '16px' }}>{index + 1}</TableCell>
-      <TableCell>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '16px', fontFamily: 'monospace' }}>
-          {getHighlightedText(
-            isWastageItem
-              ? (item.reel_no || item.barcode_id || item.frontend_id || "N/A")
-              : (item.reel_no || item.barcode_id || item.qr_code),
-            searchTerm
-          )}
-          {isSelected && (
-            <span style={{
-              marginLeft: '8px',
-              fontSize: '12px',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              backgroundColor: isWastageItem ? '#ea580c' : '#2563eb',
-              color: 'white',
-              fontWeight: 500
+      if (parts.length < 3) return paperSpec; // Return original if format is unexpected
+
+      // Extract GSM (remove "gsm")
+      const gsm = parts[0].replace("gsm", "").trim();
+
+      // Extract BF (remove "bf" and convert to integer if .00)
+      const bf = parts[1].replace("bf", "").trim();
+      const bfValue = parseFloat(bf);
+      const bfFormatted = bfValue % 1 === 0 ? Math.floor(bfValue).toString() : bf;
+
+      // Extract first letter of shade
+      const shade = parts[2].trim().charAt(0).toUpperCase();
+
+      return `${gsm}gsm,${bfFormatted}bf,${shade}`;
+    };
+
+    // Use inline styles for highlighting instead of mark components
+    const getHighlightedText = (text: string, highlight: string) => {
+      if (!highlight || !text) return text;
+
+      const parts = text.split(new RegExp(`(${highlight})`, "gi"));
+      return parts.map((part, idx) =>
+        part.toLowerCase() === highlight.toLowerCase() ? (
+          <span
+            key={idx}
+            style={{
+              backgroundColor: "#fef08a",
+              padding: "0 2px",
+              borderRadius: "2px",
             }}>
-              SELECTED
-            </span>
-          )}
-        </div>
-      </TableCell>
-      <TableCell>
-        {isWastageItem ? (
-          <div style={{ color: '#6b7280', fontSize: '16px' }}>-</div>
-        ) : (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '16px', fontWeight: 500 }}>
-              <Building2 style={{ width: '14px', height: '14px', color: '#2563eb' }} />
-              {getHighlightedText(item.client_name || "N/A", searchTerm)}
-            </div>
-          </div>
-        )}
-      </TableCell>
-      <TableCell>
-        {isWastageItem ? (
-          <div style={{ color: '#6b7280', fontSize: '16px' }}>-</div>
-        ) : (
-          <div>
-           
-            <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
-              Order: {getHighlightedText(item.order_id || "N/A", searchTerm)}
-            </div>
-          </div>
-        )}
-      </TableCell>
-      <TableCell>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontWeight: 500, fontSize: '16px' }}>
-            {getHighlightedText(item.paper_spec, searchTerm)}
+            {part}
           </span>
-          {!isWastageItem && (
-            <WastageIndicator isWastageRoll={item.is_wastage_roll} />
+        ) : (
+          part
+        )
+      );
+    };
+
+    const itemId = isWastageItem ? item.id : item.inventory_id;
+
+    return (
+      <TableRow
+        onClick={onToggle}
+        style={{
+          backgroundColor: isSelected
+            ? isWastageItem
+              ? "#fff7ed"
+              : "#eff6ff"
+            : "transparent",
+          borderLeft: item.priority === 1 ? "4px solid #22c55e" : "none",
+          cursor: "pointer",
+          border: isSelected ? "1px solid #2563eb" : "none",
+        }}
+        className="hover:bg-gray-50 transition-colors">
+        <TableCell style={{ fontWeight: 500, fontSize: "14px" }}>
+          {index + 1}
+        </TableCell>
+        <TableCell>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              fontSize: "14px",
+              fontFamily: "monospace",
+            }}>
+            {getHighlightedText(
+              isWastageItem
+                ? item.reel_no || item.barcode_id || item.frontend_id || "N/A"
+                : item.reel_no || item.barcode_id || item.qr_code,
+              searchTerm
+            )}
+            {/* {isSelected && (
+              <span
+                style={{
+                  marginLeft: "8px",
+                  fontSize: "12px",
+                  padding: "4px 8px",
+                  borderRadius: "4px",
+                  backgroundColor: isWastageItem ? "#ea580c" : "#2563eb",
+                  color: "white",
+                  fontWeight: 500,
+                }}>
+                SELECTED
+              </span>
+            )} */}
+          </div>
+        </TableCell>
+        <TableCell>
+          {isWastageItem ? (
+            <div style={{ color: "#6b7280", fontSize: "16px" }}>-</div>
+          ) : (
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  fontSize: "14px",
+                  fontWeight: 500,
+                }}>
+                
+                {getHighlightedText(item.client_name || "N/A", searchTerm)}
+              </div>
+              <div
+                style={{
+                  fontSize: "12px",
+                  color: "#6b7280",
+                  marginTop: "1px",
+                }}>
+                Order: {getHighlightedText(item.order_id || "N/A", searchTerm)}
+              </div>
+            </div>
           )}
-        </div>
-      </TableCell>
-      <TableCell style={{ textAlign: 'center', fontWeight: 500, fontSize: '16px' }}>
-        {item.width_inches}"
-      </TableCell>
-      <TableCell style={{ textAlign: 'center', fontWeight: 500, fontSize: '16px' }}>
-        {item.weight_kg}kg
-      </TableCell>
-      <TableCell
-        style={{ display: 'flex', justifyContent: 'center' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <PureCheckbox checked={isSelected} onChange={onToggle} />
-      </TableCell>
-    </TableRow>
-  );
-});
+        </TableCell>
+        <TableCell>
+          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+            <span style={{ fontWeight: 500, fontSize: "14px" }}>
+              {getHighlightedText(formatPaperSpec(item.paper_spec), searchTerm)}
+            </span>
+            {!isWastageItem && (
+              <WastageIndicator isWastageRoll={item.is_wastage_roll} />
+            )}
+          </div>
+        </TableCell>
+        <TableCell
+          style={{ textAlign: "center", fontWeight: 500, fontSize: "14px" }}>
+          {item.width_inches}"
+        </TableCell>
+        <TableCell
+          style={{ textAlign: "center", fontWeight: 500, fontSize: "14px" }}>
+          {item.weight_kg}kg
+        </TableCell>
+        {/* <TableCell
+          style={{ display: "flex", justifyContent: "center" }}
+          onClick={(e) => e.stopPropagation()}>
+          <PureCheckbox checked={isSelected} onChange={onToggle} />
+        </TableCell> */}
+      </TableRow>
+    );
+  }
+);
 
 OptimizedRow.displayName = "OptimizedRow";
 
@@ -210,13 +262,16 @@ export function CreateDispatchModal({
   const [clients, setClients] = useState<any[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>("none");
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
-  const [selectedWastageIds, setSelectedWastageIds] = useState<Set<string>>(new Set());
-  const [selectedManualCutRollIds, setSelectedManualCutRollIds] = useState<Set<string>>(new Set());
+  const [selectedWastageIds, setSelectedWastageIds] = useState<Set<string>>(
+    new Set()
+  );
+  const [selectedManualCutRollIds, setSelectedManualCutRollIds] = useState<
+    Set<string>
+  >(new Set());
   const [searchTerm, setSearchTerm] = useState("");
   const [dispatchLoading, setDispatchLoading] = useState(false);
   const [successModalOpen, setSuccessModalOpen] = useState(false);
   const [dispatchResult, setDispatchResult] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<"client" | "all" | "wastage" | "manual">("client");
 
   const [dispatchDetails, setDispatchDetails] = useState({
     vehicle_number: "",
@@ -230,7 +285,6 @@ export function CreateDispatchModal({
   const [previewNumber, setPreviewNumber] = useState<string>("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [clientSearch, setClientSearch] = useState("");
-  const [summaryCollapsed, setSummaryCollapsed] = useState(false);
 
   // Debounce search to reduce re-renders
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
@@ -282,7 +336,9 @@ export function CreateDispatchModal({
 
       // Deduplicate clients based on ID
       const uniqueClients = Array.from(
-        new Map((data.clients || []).map((client: any) => [client.id, client])).values()
+        new Map(
+          (data.clients || []).map((client: any) => [client.id, client])
+        ).values()
       );
 
       setClients(uniqueClients);
@@ -295,12 +351,9 @@ export function CreateDispatchModal({
   const loadWarehouseItems = async () => {
     try {
       setLoading(true);
-      const response = await fetch(
-        `${API_BASE_URL}/dispatch/warehouse-items`,
-        {
-          headers: { "ngrok-skip-browser-warning": "true" },
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/dispatch/warehouse-items`, {
+        headers: { "ngrok-skip-browser-warning": "true" },
+      });
       if (!response.ok) throw new Error("Failed to load warehouse items");
       const data = await response.json();
       setWarehouseItems(data.warehouse_items || []);
@@ -387,7 +440,11 @@ export function CreateDispatchModal({
   }, [dispatchDetails, selectedClientId]);
 
   const handleDispatchConfirm = useCallback(async () => {
-    if (selectedItems.size === 0 && selectedWastageIds.size === 0 && selectedManualCutRollIds.size === 0) {
+    if (
+      selectedItems.size === 0 &&
+      selectedWastageIds.size === 0 &&
+      selectedManualCutRollIds.size === 0
+    ) {
       toast.error("Please select at least one item to dispatch");
       return;
     }
@@ -421,7 +478,15 @@ export function CreateDispatchModal({
     } finally {
       setDispatchLoading(false);
     }
-  }, [dispatchDetails, selectedClientId, selectedItems, selectedWastageIds, selectedManualCutRollIds, onOpenChange, onSuccess]);
+  }, [
+    dispatchDetails,
+    selectedClientId,
+    selectedItems,
+    selectedWastageIds,
+    selectedManualCutRollIds,
+    onOpenChange,
+    onSuccess,
+  ]);
 
   // Memoize selected client
   const selectedClient = useMemo(() => {
@@ -434,19 +499,36 @@ export function CreateDispatchModal({
   const filteredData = useMemo(() => {
     const clientName = selectedClient?.company_name || "";
 
-    const clientItems = warehouseItems.filter(item => item.client_name === clientName);
-    const otherItems = warehouseItems.filter(item => item.client_name !== clientName);
+    const clientItems = warehouseItems.filter(
+      (item) => item.client_name === clientName
+    );
+    const otherItems = warehouseItems.filter(
+      (item) => item.client_name !== clientName
+    );
 
     const filterItems = (items: any[], isWastage = false) => {
       if (!debouncedSearchTerm) return items;
 
-      return items.filter(item => {
+      return items.filter((item) => {
         const fields = isWastage
-          ? [item.barcode_id, item.reel_no, item.frontend_id, item.paper_spec, item.created_by]
-          : [item.barcode_id, item.qr_code, item.client_name, item.order_id, item.paper_spec, item.created_by];
+          ? [
+              item.barcode_id,
+              item.reel_no,
+              item.frontend_id,
+              item.paper_spec,
+              item.created_by,
+            ]
+          : [
+              item.barcode_id,
+              item.qr_code,
+              item.client_name,
+              item.order_id,
+              item.paper_spec,
+              item.created_by,
+            ];
 
-        return fields.some(field =>
-          field && field.toLowerCase().includes(debouncedSearchTerm)
+        return fields.some(
+          (field) => field && field.toLowerCase().includes(debouncedSearchTerm)
         );
       });
     };
@@ -456,16 +538,21 @@ export function CreateDispatchModal({
       filteredOther: filterItems(otherItems),
       filteredWastage: filterItems(wastageItems, true),
       clientItems,
-      otherItems
+      otherItems,
     };
-  }, [warehouseItems, wastageItems, selectedClient?.company_name, debouncedSearchTerm]);
+  }, [
+    warehouseItems,
+    wastageItems,
+    selectedClient?.company_name,
+    debouncedSearchTerm,
+  ]);
 
   // Memoize combined items based on active tab
   const displayItems = useMemo(() => {
     const { filteredClient, filteredOther, filteredWastage } = filteredData;
 
     // Filter manual cut rolls
-    const filteredManual = manualCutRolls.filter(roll => {
+    const filteredManual = manualCutRolls.filter((roll) => {
       if (!debouncedSearchTerm) return true;
       const fields = [
         roll.barcode_id,
@@ -476,53 +563,49 @@ export function CreateDispatchModal({
         String(roll.width_inches),
         String(roll.weight_kg),
       ];
-      return fields.some(field =>
-        field && field.toLowerCase().includes(debouncedSearchTerm)
+      return fields.some(
+        (field) => field && field.toLowerCase().includes(debouncedSearchTerm)
       );
     });
 
     const items = [];
-
-    if (activeTab === "client") {
-      items.push(
-        ...filteredClient.map(item => ({ ...item, type: "warehouse", priority: 1 })),
-        ...filteredOther.map(item => ({ ...item, type: "warehouse", priority: 2 })),
-        ...filteredWastage.map(item => ({ ...item, type: "wastage", priority: 3 })),
-        ...filteredManual.map(item => ({ ...item, type: "manual", priority: 4 }))
-      );
-    } else if (activeTab === "all") {
-      items.push(
-        ...filteredOther.map(item => ({ ...item, type: "warehouse", priority: 1 })),
-        ...filteredClient.map(item => ({ ...item, type: "warehouse", priority: 2 })),
-        ...filteredWastage.map(item => ({ ...item, type: "wastage", priority: 3 })),
-        ...filteredManual.map(item => ({ ...item, type: "manual", priority: 4 }))
-      );
-    } else if (activeTab === "wastage") {
-      items.push(
-        ...filteredWastage.map(item => ({ ...item, type: "wastage", priority: 1 })),
-        ...filteredClient.map(item => ({ ...item, type: "warehouse", priority: 2 })),
-        ...filteredOther.map(item => ({ ...item, type: "warehouse", priority: 3 })),
-        ...filteredManual.map(item => ({ ...item, type: "manual", priority: 4 }))
-      );
-    } else {
-      // manual tab
-      items.push(
-        ...filteredManual.map(item => ({ ...item, type: "manual", priority: 1 })),
-        ...filteredClient.map(item => ({ ...item, type: "warehouse", priority: 2 })),
-        ...filteredOther.map(item => ({ ...item, type: "warehouse", priority: 3 })),
-        ...filteredWastage.map(item => ({ ...item, type: "wastage", priority: 4 }))
-      );
-    }
+    items.push(
+      ...filteredClient.map((item) => ({
+        ...item,
+        type: "warehouse",
+        priority: 1,
+      })),
+      ...filteredOther.map((item) => ({
+        ...item,
+        type: "warehouse",
+        priority: 2,
+      })),
+      ...filteredWastage.map((item) => ({
+        ...item,
+        type: "wastage",
+        priority: 3,
+      })),
+      ...filteredManual.map((item) => ({
+        ...item,
+        type: "manual",
+        priority: 4,
+      }))
+    );
 
     return items;
-  }, [filteredData, activeTab, manualCutRolls, debouncedSearchTerm]);
+  }, [filteredData, manualCutRolls, debouncedSearchTerm]);
 
   // Optimized toggle handler - use Set for O(1) operations
   const handleToggleItem = useCallback((item: any, itemType: string) => {
-    const itemId = itemType === "wastage" ? item.id : (itemType === "manual" ? item.id : item.inventory_id);
+    const itemId =
+      itemType === "wastage"
+        ? item.id
+        : itemType === "manual"
+        ? item.id
+        : item.inventory_id;
 
     if (itemType === "wastage") {
-      setSelectedWastageIds(prev => {
+      setSelectedWastageIds((prev) => {
         const newSet = new Set(prev);
         if (newSet.has(itemId)) {
           newSet.delete(itemId);
@@ -532,7 +615,7 @@ export function CreateDispatchModal({
         return newSet;
       });
     } else if (itemType === "manual") {
-      setSelectedManualCutRollIds(prev => {
+      setSelectedManualCutRollIds((prev) => {
         const newSet = new Set(prev);
         if (newSet.has(itemId)) {
           newSet.delete(itemId);
@@ -542,7 +625,7 @@ export function CreateDispatchModal({
         return newSet;
       });
     } else {
-      setSelectedItems(prev => {
+      setSelectedItems((prev) => {
         const newSet = new Set(prev);
         if (newSet.has(itemId)) {
           newSet.delete(itemId);
@@ -556,22 +639,25 @@ export function CreateDispatchModal({
 
   // Memoize stats to avoid recalculation
   const stats = useMemo(() => {
-    const totalSelected = selectedItems.size + selectedWastageIds.size + selectedManualCutRollIds.size;
+    const totalSelected =
+      selectedItems.size +
+      selectedWastageIds.size +
+      selectedManualCutRollIds.size;
 
     // Calculate total weight only when needed
     let totalWeight = 0;
     if (totalSelected > 0) {
-      warehouseItems.forEach(item => {
+      warehouseItems.forEach((item) => {
         if (selectedItems.has(item.inventory_id)) {
           totalWeight += item.weight_kg || 0;
         }
       });
-      wastageItems.forEach(item => {
+      wastageItems.forEach((item) => {
         if (selectedWastageIds.has(item.id)) {
           totalWeight += item.weight_kg || 0;
         }
       });
-      manualCutRolls.forEach(item => {
+      manualCutRolls.forEach((item) => {
         if (selectedManualCutRollIds.has(item.id)) {
           totalWeight += item.weight_kg || 0;
         }
@@ -583,22 +669,30 @@ export function CreateDispatchModal({
       totalWeight,
       regularCount: selectedItems.size,
       wastageCount: selectedWastageIds.size,
-      manualCount: selectedManualCutRollIds.size
+      manualCount: selectedManualCutRollIds.size,
     };
-  }, [selectedItems, selectedWastageIds, selectedManualCutRollIds, warehouseItems, wastageItems, manualCutRolls]);
+  }, [
+    selectedItems,
+    selectedWastageIds,
+    selectedManualCutRollIds,
+    warehouseItems,
+    wastageItems,
+    manualCutRolls,
+  ]);
 
   // Render optimized table
   const renderTable = useMemo(() => {
     if (loading) {
       return (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '96px',
-          border: '1px solid #e5e7eb',
-          borderRadius: '6px'
-        }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            height: "96px",
+            border: "1px solid #e5e7eb",
+            borderRadius: "6px",
+          }}>
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           Loading items...
         </div>
@@ -607,18 +701,23 @@ export function CreateDispatchModal({
 
     if (displayItems.length === 0) {
       return (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '96px',
-          border: '1px solid #e5e7eb',
-          borderRadius: '6px'
-        }}>
-          <div style={{ textAlign: 'center', color: '#6b7280' }}>
-            <div style={{ fontWeight: 500, fontSize: '16px' }}>No items found</div>
-            <div style={{ fontSize: '14px', marginTop: '4px' }}>
-              {debouncedSearchTerm ? "Try adjusting your search" : "No items available"}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            height: "96px",
+            border: "1px solid #e5e7eb",
+            borderRadius: "6px",
+          }}>
+          <div style={{ textAlign: "center", color: "#6b7280" }}>
+            <div style={{ fontWeight: 500, fontSize: "16px" }}>
+              No items found
+            </div>
+            <div style={{ fontSize: "14px", marginTop: "4px" }}>
+              {debouncedSearchTerm
+                ? "Try adjusting your search"
+                : "No items available"}
             </div>
           </div>
         </div>
@@ -626,163 +725,301 @@ export function CreateDispatchModal({
     }
 
     return (
-      <div style={{
-        border: '1px solid #e5e7eb',
-        borderRadius: '6px',
-        maxHeight: '400px',
-        overflow: 'auto'
-      }}>
-        <Table>
-          <TableHeader style={{ position: 'sticky', top: 0, backgroundColor: 'white', zIndex: 10 }}>
-            <TableRow>
-              <TableHead style={{ width: '60px', fontSize: '16px', fontWeight: 600 }}>S.No</TableHead>
-              <TableHead style={{ width: '200px', fontSize: '16px', fontWeight: 600 }}>ID / Barcode</TableHead>
-              <TableHead style={{ width: '200px', fontSize: '16px', fontWeight: 600 }}>Client</TableHead>
-              <TableHead style={{ width: '200px', fontSize: '16px', fontWeight: 600 }}> Order</TableHead>
-              <TableHead style={{ fontSize: '16px', fontWeight: 600 }}>Paper Specs</TableHead>
-              <TableHead style={{ width: '80px', textAlign: 'center', fontSize: '16px', fontWeight: 600 }}>Width</TableHead>
-              <TableHead style={{ width: '80px', textAlign: 'center', fontSize: '16px', fontWeight: 600 }}>Weight</TableHead>
-              <TableHead style={{ width: '60px', fontSize: '16px', fontWeight: 600 }}>Select</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {displayItems.map((item: any, index) => {
-              const itemType = item.type;
-              const itemId = itemType === "wastage" ? item.id : (itemType === "manual" ? item.id : item.inventory_id);
-              const isSelected = itemType === "wastage"
-                ? selectedWastageIds.has(itemId)
-                : (itemType === "manual"
-                  ? selectedManualCutRollIds.has(itemId)
-                  : selectedItems.has(itemId));
+      <div style={{ 
+  display: 'grid', 
+  gridTemplateColumns: '1fr 1fr', 
+  gap: '16px',
+  border: '1px solid #e5e7eb',
+  borderRadius: '6px',
+  padding: '8px',
+  maxHeight: '400px',
+  overflow: 'hidden'
+}}>
+  {/* Left Column */}
+  <div style={{
+    border: '1px solid #e5e7eb',
+    borderRadius: '6px',
+    overflow: 'auto',
+    maxHeight: '385px'
+  }}>
+    <Table style={{ minWidth: '100%' }}>
+      <TableHeader
+        style={{
+          position: "sticky",
+          top: 0,
+          backgroundColor: "white",
+          zIndex: 10,
+        }}>
+        <TableRow>
+          <TableHead style={{ width: "40px", fontSize: "14px", fontWeight: 600 }}>S.No</TableHead>
+          <TableHead style={{ width: "150px", fontSize: "14px", fontWeight: 600 }}>ID / Barcode</TableHead>
+          <TableHead style={{ width: "120px", fontSize: "14px", fontWeight: 600 }}>Client&Order</TableHead>
+          <TableHead style={{ fontSize: "14px", fontWeight: 600 }}>Paper Specs</TableHead>
+          <TableHead style={{ width: "60px", textAlign: "center", fontSize: "14px", fontWeight: 600 }}>Width</TableHead>
+          <TableHead style={{ width: "60px", textAlign: "center", fontSize: "14px", fontWeight: 600 }}>Weight</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {displayItems.slice(0, Math.ceil(displayItems.length / 2)).map((item: any, index) => {
+          const itemType = item.type;
+          const itemId =
+            itemType === "wastage"
+              ? item.id
+              : itemType === "manual"
+              ? item.id
+              : item.inventory_id;
+          const isSelected =
+            itemType === "wastage"
+              ? selectedWastageIds.has(itemId)
+              : itemType === "manual"
+              ? selectedManualCutRollIds.has(itemId)
+              : selectedItems.has(itemId);
 
-              return (
-                <OptimizedRow
-                  key={`${itemType.charAt(0)}-${itemId}`}
-                  item={item}
-                  index={index}
-                  isSelected={isSelected}
-                  itemType={itemType}
-                  searchTerm={searchTerm}
-                  onToggle={() => handleToggleItem(item, itemType)}
-                />
-              );
-            })}
-          </TableBody>
-        </Table>
-      </div>
+          return (
+            <OptimizedRow
+              key={`${itemType.charAt(0)}-${itemId}`}
+              item={item}
+              index={index}
+              isSelected={isSelected}
+              itemType={itemType}
+              searchTerm={searchTerm}
+              onToggle={() => handleToggleItem(item, itemType)}
+            />
+          );
+        })}
+      </TableBody>
+    </Table>
+  </div>
+
+  {/* Right Column */}
+  <div style={{
+    border: '1px solid #e5e7eb',
+    borderRadius: '6px',
+    overflow: 'auto',
+    maxHeight: '385px'
+  }}>
+    <Table style={{ minWidth: '100%' }}>
+      <TableHeader
+        style={{
+          position: "sticky",
+          top: 0,
+          backgroundColor: "white",
+          zIndex: 10,
+        }}>
+        <TableRow>
+          <TableHead style={{ width: "40px", fontSize: "14px", fontWeight: 600 }}>S.No</TableHead>
+          <TableHead style={{ width: "150px", fontSize: "14px", fontWeight: 600 }}>ID / Barcode</TableHead>
+          <TableHead style={{ width: "120px", fontSize: "14px", fontWeight: 600 }}>Client & Order</TableHead>
+          <TableHead style={{ fontSize: "14px", fontWeight: 600 }}>Paper Specs</TableHead>
+          <TableHead style={{ width: "60px", textAlign: "center", fontSize: "14px", fontWeight: 600 }}>Width</TableHead>
+          <TableHead style={{ width: "60px", textAlign: "center", fontSize: "14px", fontWeight: 600 }}>Weight</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {displayItems.slice(Math.ceil(displayItems.length / 2)).map((item: any, index) => {
+          const itemType = item.type;
+          const itemId =
+            itemType === "wastage"
+              ? item.id
+              : itemType === "manual"
+              ? item.id
+              : item.inventory_id;
+          const isSelected =
+            itemType === "wastage"
+              ? selectedWastageIds.has(itemId)
+              : itemType === "manual"
+              ? selectedManualCutRollIds.has(itemId)
+              : selectedItems.has(itemId);
+
+          return (
+            <OptimizedRow
+              key={`${itemType.charAt(0)}-${itemId}`}
+              item={item}
+              index={index + Math.ceil(displayItems.length / 2)}
+              isSelected={isSelected}
+              itemType={itemType}
+              searchTerm={searchTerm}
+              onToggle={() => handleToggleItem(item, itemType)}
+            />
+          );
+        })}
+      </TableBody>
+    </Table>
+  </div>
+</div>
     );
-  }, [loading, displayItems, debouncedSearchTerm, searchTerm, selectedItems, selectedWastageIds, selectedManualCutRollIds, handleToggleItem]);
+  }, [
+    loading,
+    displayItems,
+    debouncedSearchTerm,
+    searchTerm,
+    selectedItems,
+    selectedWastageIds,
+    selectedManualCutRollIds,
+    handleToggleItem,
+  ]);
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent style={{ maxWidth: '1500px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-          <DialogHeader>
-            
-            <DialogDescription style={{ fontSize: '16px' }}>
-              {step === 1 ? "Step 1: Fill dispatch details" : "Step 2: Select items to dispatch"}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div style={{ flex: 1, overflow: 'auto' }}>
+        <DialogContent
+          style={{
+            maxWidth: "1500px",
+            maxHeight: "90vh",
+            display: "flex",
+            flexDirection: "column",
+          }}>
+          <div style={{ flex: 1, overflow: "auto" }}>
             {step === 1 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '8px' }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                  padding: "8px",
+                }}>
                 {/* Form fields... */}
-                <div style={{ display: 'grid',gap: '16px' }}>
+                <div style={{ display: "grid",gridTemplateColumns: "repeat(5, 1fr)", gap: "16px" }}>
+                  <div style={{ gridColumn: "span 3" }}>
+                  <label
+                    style={{
+                    fontSize: "16px",
+                    fontWeight: 500,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    marginBottom: "8px",
+                    }}>
+                    <Building2 style={{ width: "18px", height: "18px" }} />
+                    Select Client *
+                  </label>
+                  <Select
+                    value={selectedClientId}
+                    onValueChange={(value) => {
+                    setSelectedClientId(value);
+                    setSelectedItems(new Set());
+                    }}>
+                    <SelectTrigger>
+                    <SelectValue placeholder="Select a client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                    <SelectSearch
+                      placeholder="Search clients..."
+                      value={clientSearch}
+                      onChange={(e) => setClientSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
+                    <SelectItem value="none" disabled>
+                      Select a client
+                    </SelectItem>
+                    {clients
+                      .filter((client) =>
+                      client.company_name
+                        .toLowerCase()
+                        .includes(clientSearch.toLowerCase())
+                      )
+                      .sort((a, b) =>
+                      a.company_name.localeCompare(b.company_name)
+                      )
+                      .map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.company_name}
+                      </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  </div>
+
+                   <div>
+                  <label
+                    style={{
+                    fontSize: "16px",
+                    fontWeight: 500,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    marginBottom: "8px",
+                    }}>
+                    Challan Number *
+                    <span
+                    style={{
+                      fontSize: "12px",
+                      color: "#2563eb",
+                      backgroundColor: "#dbeafe",
+                      padding: "2px 6px",
+                      borderRadius: "4px",
+                    }}>
+                    Preview
+                    </span>
+                  </label>
+                  <Input
+                    value={
+                    previewLoading
+                      ? "Loading..."
+                      : previewNumber || "Loading..."
+                    }
+                    readOnly
+                    style={{
+                    fontFamily: "monospace",
+                    backgroundColor: "#f9fafb",
+                    borderColor: "#bfdbfe",
+                    color: "#1d4ed8",
+                    fontSize: "16px",
+                    padding: "12px",
+                    }}
+                    placeholder="Loading preview..."
+                  />
+                  </div>
+
                   <div>
-                    <label style={{ fontSize: '16px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                      <Building2 style={{ width: '18px', height: '18px' }} />
-                      Select Client *
-                    </label>
-                    <Select
-                      value={selectedClientId}
-                      onValueChange={(value) => {
-                        setSelectedClientId(value);
-                        setSelectedItems(new Set());
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a client" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectSearch
-                          placeholder="Search clients..."
-                          value={clientSearch}
-                          onChange={(e) => setClientSearch(e.target.value)}
-                          onKeyDown={(e) => e.stopPropagation()}
-                        />
-                        <SelectItem value="none" disabled>Select a client</SelectItem>
-                        {clients
-                          .filter((client) =>
-                            client.company_name
-                              .toLowerCase()
-                              .includes(clientSearch.toLowerCase())
-                          )
-                          .sort((a, b) => a.company_name.localeCompare(b.company_name))
-                          .map((client) => (
-                            <SelectItem key={client.id} value={client.id}>
-                              {client.company_name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
+                  <label
+                    style={{
+                    fontSize: "16px",
+                    fontWeight: 500,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    marginBottom: "8px",
+                    }}>
+                    Date
+                  </label>
+                  <Input
+                    value={new Date().toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                    })}
+                    readOnly
+                    style={{
+                    fontSize: "16px",
+                    padding: "12px",
+                    backgroundColor: "#f3f4f6",
+                    cursor: "not-allowed",
+                    color: "#374151",
+                    }}
+                  />
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(5, 1fr)",
+                    gap: "16px",
+                  }}>
+                 
 
                   <div>
-                    <label style={{ fontSize: '16px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                      Challan Number *
-                      <span style={{
-                        fontSize: '12px',
-                        color: '#2563eb',
-                        backgroundColor: '#dbeafe',
-                        padding: '2px 6px',
-                        borderRadius: '4px'
+                    <label
+                      style={{
+                        fontSize: "16px",
+                        fontWeight: 500,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        marginBottom: "8px",
                       }}>
-                        Preview
-                      </span>
-                    </label>
-                    <Input
-                      value={previewLoading ? "Loading..." : previewNumber || "Loading..."}
-                      readOnly
-                      style={{
-                        fontFamily: 'monospace',
-                        backgroundColor: '#f9fafb',
-                        borderColor: '#bfdbfe',
-                        color: '#1d4ed8',
-                        fontSize: '16px',
-                        padding: '12px'
-                      }}
-                      placeholder="Loading preview..."
-                    />
-                  </div>
-
-                    <div>
-                    <label style={{ fontSize: '16px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                      Date
-                    </label>
-                    <Input
-                      value={new Date().toLocaleDateString('en-GB', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric'
-                      })}
-                      readOnly
-                      style={{
-                        fontSize: '16px',
-                        padding: '12px',
-                        backgroundColor: '#f3f4f6',
-                        cursor: 'not-allowed',
-                        color: '#374151'
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: '16px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                      <Truck style={{ width: '18px', height: '18px' }} />
+                      <Truck style={{ width: "18px", height: "18px" }} />
                       Vehicle Number *
                     </label>
                     <Input
@@ -793,13 +1030,21 @@ export function CreateDispatchModal({
                           vehicle_number: e.target.value,
                         }))
                       }
-                      style={{ fontSize: '16px', padding: '12px' }}
+                      style={{ fontSize: "16px", padding: "12px" }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ fontSize: '16px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                      <User style={{ width: '18px', height: '18px' }} />
+                    <label
+                      style={{
+                        fontSize: "16px",
+                        fontWeight: 500,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        marginBottom: "8px",
+                      }}>
+                      <User style={{ width: "18px", height: "18px" }} />
                       Driver Name *
                     </label>
                     <Input
@@ -810,13 +1055,21 @@ export function CreateDispatchModal({
                           driver_name: e.target.value,
                         }))
                       }
-                      style={{ fontSize: '16px', padding: '12px' }}
+                      style={{ fontSize: "16px", padding: "12px" }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ fontSize: '16px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                      <Phone style={{ width: '18px', height: '18px' }} />
+                    <label
+                      style={{
+                        fontSize: "16px",
+                        fontWeight: 500,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        marginBottom: "8px",
+                      }}>
+                      <Phone style={{ width: "18px", height: "18px" }} />
                       Driver Mobile
                     </label>
                     <Input
@@ -827,12 +1080,20 @@ export function CreateDispatchModal({
                           driver_mobile: e.target.value,
                         }))
                       }
-                      style={{ fontSize: '16px', padding: '12px' }}
+                      style={{ fontSize: "16px", padding: "12px" }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ fontSize: '16px', fontWeight: 500, marginBottom: '8px' }}>
+                    <label
+                      style={{
+                        fontSize: "16px",
+                        fontWeight: 500,
+                        marginBottom: "8px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}>
                       Dispatch Number (Optional)
                     </label>
                     <Input
@@ -843,12 +1104,20 @@ export function CreateDispatchModal({
                           locket_no: e.target.value,
                         }))
                       }
-                      style={{ fontSize: '16px', padding: '12px' }}
+                      style={{ fontSize: "16px", padding: "12px" }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ fontSize: '16px', fontWeight: 500, marginBottom: '8px' }}>
+                    <label
+                      style={{
+                        fontSize: "16px",
+                        fontWeight: 500,
+                        marginBottom: "8px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}>
                       Reference Number (Optional)
                     </label>
                     <Input
@@ -859,143 +1128,272 @@ export function CreateDispatchModal({
                           reference_number: e.target.value,
                         }))
                       }
-                      style={{ fontSize: '16px', padding: '12px' }}
+                      style={{ fontSize: "16px", padding: "12px" }}
                     />
                   </div>
                 </div>
 
-                <Button onClick={handleSaveDetails} style={{ width: '100%', fontSize: '16px', padding: '12px' }} size="lg">
-                  <CheckCircle style={{ width: '20px', height: '20px', marginRight: '8px' }} />
+                <Button
+                  onClick={handleSaveDetails}
+                  style={{ width: "100%", fontSize: "16px", padding: "12px" }}
+                  size="lg">
+                  <CheckCircle
+                    style={{
+                      width: "20px",
+                      height: "20px",
+                      marginRight: "8px",
+                    }}
+                  />
                   Continue to Item Selection
                 </Button>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '8px' }}>
-                {/* Summary */}
-                <div style={{
-                  backgroundColor: '#f0fdf4',
-                  border: '1px solid #86efac',
-                  borderRadius: '6px',
-                  padding: '10px 16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '16px'
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                  padding: "8px",
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '24px', fontSize: '14px', flex: 1 }}>
-                    {!summaryCollapsed && (
-                      <>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ color: '#6b7280', fontWeight: 500 }}>Client:</span>
-                          <span style={{ fontWeight: 600}}>{selectedClient?.company_name}</span>
-                        </div>
-                        <div style={{ height: '20px', width: '1px', backgroundColor: '#86efac' }} />
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ color: '#6b7280', fontWeight: 500 }}>Vehicle:</span>
-                          <span style={{ fontWeight: 600 }}>{dispatchDetails.vehicle_number}</span>
-                        </div>
-                        <div style={{ height: '20px', width: '1px', backgroundColor: '#86efac' }} />
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ color: '#6b7280', fontWeight: 500 }}>Driver:</span>
-                          <span style={{ fontWeight: 600 }}>{dispatchDetails.driver_name}</span>
-                        </div>
-                      </>
-                    )}
-                    {summaryCollapsed && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ color: '#6b7280', fontWeight: 500 }}>Dispatch Details</span>
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                {/* Summary */}
+                <div
+                  style={{
+                    border: "1px solid #86efac",
+                    borderRadius: "6px",
+                    padding: "6px 10px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "20px",
+                    backgroundColor: "#fafafa",
+                  }}>
+                  {/* Left Section - Dispatch Details */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "20px",
+                      flex: "0 0 auto",
+                    }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}>
+                      <span
+                        style={{
+                          color: "#6b7280",
+                          fontWeight: 500,
+                          fontSize: "15px",
+                        }}>
+                        Client:
+                      </span>
+                      <span
+                        style={{
+                          fontWeight: 600,
+                          fontSize: "15px",
+                          color: "#000",
+                        }}>
+                        {selectedClient?.company_name}
+                      </span>
+                    </div>
+
+                    <div
+                      style={{
+                        height: "24px",
+                        width: "2px",
+                        backgroundColor: "#d1d5db",
+                      }}
+                    />
+
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}>
+                      <span
+                        style={{
+                          color: "#6b7280",
+                          fontWeight: 500,
+                          fontSize: "15px",
+                        }}>
+                        Vehicle:
+                      </span>
+                      <span
+                        style={{
+                          fontWeight: 600,
+                          fontSize: "15px",
+                          color: "#000",
+                        }}>
+                        {dispatchDetails.vehicle_number}
+                      </span>
+                    </div>
+
+                    <div
+                      style={{
+                        height: "24px",
+                        width: "2px",
+                        backgroundColor: "#d1d5db",
+                      }}
+                    />
+
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}>
+                      <span
+                        style={{
+                          color: "#6b7280",
+                          fontWeight: 500,
+                          fontSize: "15px",
+                        }}>
+                        Driver:
+                      </span>
+                      <span
+                        style={{
+                          fontWeight: 600,
+                          fontSize: "15px",
+                          color: "#000",
+                        }}>
+                        {dispatchDetails.driver_name}
+                      </span>
+                    </div>
+
+                    <div
+                      style={{
+                        height: "24px",
+                        width: "2px",
+                        backgroundColor: "#d1d5db",
+                      }}
+                    />
+
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      onClick={() => setSummaryCollapsed(!summaryCollapsed)}
-                      style={{ padding: '4px 8px' }}
-                    >
-                      {summaryCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => setStep(1)}>
+                      onClick={() => setStep(1)}>
                       Edit
                     </Button>
                   </div>
-                </div>
 
-                {/* Stats */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-                  <div style={{
-                    backgroundColor: '#eff6ff',
-                    border: '1px solid #93c5fd',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                    textAlign: 'center'
-                  }}>
-                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#2563eb' }}>
-                      {stats.totalSelected}
+                  {/* Right Section - Stats and Action */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "24px",
+                      flex: "0 0 auto",
+                    }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}>
+                      <span
+                        style={{
+                          fontSize: "15px",
+                          color: "#6b7280",
+                          fontWeight: 500,
+                        }}>
+                        Total Selected:
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "18px",
+                          fontWeight: "bold",
+                          color: "#2563eb",
+                          minWidth: "30px",
+                          textAlign: "center",
+                        }}>
+                        {stats.totalSelected}
+                      </span>
                     </div>
-                    <div style={{ fontSize: '12px', color: '#6b7280' }}>Total Selected</div>
-                  </div>
-                  <div style={{
-                    backgroundColor: '#f0fdf4',
-                    border: '1px solid #86efac',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                    textAlign: 'center'
-                  }}>
-                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#16a34a' }}>
-                      {stats.totalWeight.toFixed(1)} kg
+
+                    <div
+                      style={{
+                        height: "24px",
+                        width: "2px",
+                        backgroundColor: "#d1d5db",
+                      }}
+                    />
+
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}>
+                      <span
+                        style={{
+                          fontSize: "15px",
+                          color: "#6b7280",
+                          fontWeight: 500,
+                        }}>
+                        Total Weight:
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "18px",
+                          fontWeight: "bold",
+                          color: "#16a34a",
+                          minWidth: "80px",
+                          textAlign: "center",
+                        }}>
+                        {stats.totalWeight.toFixed(1)} kg
+                      </span>
                     </div>
-                    <div style={{ fontSize: '12px', color: '#6b7280' }}>Total Weight</div>
-                  </div>
-                  <div style={{
-                    backgroundColor: '#faf5ff',
-                    border: '1px solid #d8b4fe',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                    textAlign: 'center'
-                  }}>
-                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#9333ea' }}>
-                      {stats.regularCount}
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#6b7280' }}>Regular Items</div>
-                  </div>
-                  <div style={{
-                    backgroundColor: '#fff7ed',
-                    border: '1px solid #fed7aa',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                    textAlign: 'center'
-                  }}>
-                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#ea580c' }}>
-                      {stats.wastageCount}
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#6b7280' }}>Stock Items</div>
+
+                    <div
+                      style={{
+                        height: "24px",
+                        width: "2px",
+                        backgroundColor: "#d1d5db",
+                      }}
+                    />
+
+                    <Button
+                      onClick={handleDispatchConfirm}
+                      disabled={stats.totalSelected === 0 || dispatchLoading}
+                      style={{
+                        backgroundColor: "#16a34a",
+                        fontSize: "20px",
+                        padding: "10px 24px",
+                        minWidth: "100px",
+                      }}
+                      size="lg">
+                      {dispatchLoading ? <>Saving...</> : <>Save</>}
+                    </Button>
                   </div>
                 </div>
 
                 {/* Search */}
                 <div>
-                  <div style={{ position: 'relative' }}>
-                    <Search style={{
-                      position: 'absolute',
-                      left: '16px',
-                      top: '16px',
-                      width: '24px',
-                      height: '24px',
-                      color: '#6b7280'
-                    }} />
+                  <div style={{ position: "relative" }}>
+                    <Search
+                      style={{
+                        position: "absolute",
+                        left: "16px",
+                        top: "22px",
+                        width: "24px",
+                        height: "24px",
+                        color: "#6b7280",
+                      }}
+                    />
                     <Input
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
+                      className="border-3 border-orange-700"
                       placeholder="Search across all items: QR code, barcode, reel no, order, paper spec, creator..."
                       style={{
-                        paddingLeft: '48px',
-                        paddingRight: '48px',
-                        height: '56px',
-                        fontSize: '20px'
+                        paddingLeft: "48px",
+                        paddingRight: "48px",
+                        height: "66px",
+                        fontSize: "22px",
                       }}
-
                     />
                     {searchTerm && (
                       <Button
@@ -1003,15 +1401,14 @@ export function CreateDispatchModal({
                         variant="ghost"
                         onClick={() => setSearchTerm("")}
                         style={{
-                          position: 'absolute',
-                          right: '8px',
-                          top: '8px',
-                          width: '40px',
-                          height: '40px',
-                          padding: 0
-                        }}
-                      >
-                        <X style={{ width: '20px', height: '20px' }} />
+                          position: "absolute",
+                          right: "8px",
+                          top: "8px",
+                          width: "40px",
+                          height: "40px",
+                          padding: 0,
+                        }}>
+                        <X style={{ width: "20px", height: "20px" }} />
                       </Button>
                     )}
                   </div>
@@ -1019,16 +1416,20 @@ export function CreateDispatchModal({
 
                 {/* Tab content with optimized table */}
                 <div>
-                  <div style={{
-                    marginBottom: '8px',
-                    fontSize: '14px',
-                    color: '#6b7280',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between'
-                  }}>
+                  <div
+                    style={{
+                      marginBottom: "8px",
+                      fontSize: "14px",
+                      color: "#6b7280",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}>
                     <span>
-                      <span style={{ color: '#22c55e', fontWeight: 500 }}>●</span> Green border = Priority items
+                      <span style={{ color: "#22c55e", fontWeight: 500 }}>
+                        ●
+                      </span>{" "}
+                      Green border = Priority items
                     </span>
                     <span style={{ fontWeight: 500 }}>
                       Showing {displayItems.length} total items
@@ -1036,31 +1437,6 @@ export function CreateDispatchModal({
                   </div>
                   {renderTable}
                 </div>
-
-                {/* Dispatch Button */}
-                <Button
-                  onClick={handleDispatchConfirm}
-                  disabled={stats.totalSelected === 0 || dispatchLoading}
-                  style={{
-                    width: '100%',
-                    backgroundColor: '#16a34a',
-                    fontSize: '16px',
-                    padding: '12px'
-                  }}
-                  size="lg"
-                >
-                  {dispatchLoading ? (
-                    <>
-                      <Loader2 style={{ marginRight: '8px', width: '20px', height: '20px', animation: 'spin 1s linear infinite' }} />
-                      Creating Dispatch...
-                    </>
-                  ) : (
-                    <>
-                      <Truck style={{ marginRight: '8px', width: '20px', height: '20px' }} />
-                      Dispatch {stats.totalSelected} Items
-                    </>
-                  )}
-                </Button>
               </div>
             )}
           </div>
