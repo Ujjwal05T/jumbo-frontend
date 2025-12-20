@@ -46,6 +46,7 @@ import {
   Phone,
   ChevronDown,
   ChevronUp,
+  ArrowLeft,
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/api-config";
 import { createDispatchRecord } from "@/lib/dispatch";
@@ -439,7 +440,7 @@ export function CreateDispatchModal({
     toast.success("Details saved! Now select items to dispatch");
   }, [dispatchDetails, selectedClientId]);
 
-  const handleDispatchConfirm = useCallback(async () => {
+  const handleProceedToConfirmation = useCallback(() => {
     if (
       selectedItems.size === 0 &&
       selectedWastageIds.size === 0 &&
@@ -448,7 +449,10 @@ export function CreateDispatchModal({
       toast.error("Please select at least one item to dispatch");
       return;
     }
+    setStep(3);
+  }, [selectedItems, selectedWastageIds, selectedManualCutRollIds]);
 
+  const handleDispatchConfirm = useCallback(async () => {
     try {
       setDispatchLoading(true);
 
@@ -1135,7 +1139,7 @@ export function CreateDispatchModal({
 
                 <Button
                   onClick={handleSaveDetails}
-                  style={{ width: "100%", fontSize: "16px", padding: "12px" }}
+                  style={{ width: "100%", fontSize: "16px", padding: "12px",marginTop: "8px" }}
                   size="lg">
                   <CheckCircle
                     style={{
@@ -1147,7 +1151,7 @@ export function CreateDispatchModal({
                   Continue to Item Selection
                 </Button>
               </div>
-            ) : (
+            ) : step === 2 ? (
               <div
                 style={{
                   display: "flex",
@@ -1356,16 +1360,16 @@ export function CreateDispatchModal({
                     />
 
                     <Button
-                      onClick={handleDispatchConfirm}
-                      disabled={stats.totalSelected === 0 || dispatchLoading}
+                      onClick={handleProceedToConfirmation}
+                      disabled={stats.totalSelected === 0}
                       style={{
                         backgroundColor: "#16a34a",
                         fontSize: "20px",
                         padding: "10px 24px",
-                        minWidth: "100px",
+                        minWidth: "150px",
                       }}
                       size="lg">
-                      {dispatchLoading ? <>Saving...</> : <>Save</>}
+                      Review & Confirm
                     </Button>
                   </div>
                 </div>
@@ -1436,6 +1440,189 @@ export function CreateDispatchModal({
                     </span>
                   </div>
                   {renderTable}
+                </div>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "16px",
+                  padding: "8px",
+                }}>
+                {/* Header with Action Buttons */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <div>
+                    <h2 style={{ fontSize: "24px", fontWeight: "bold", marginBottom: "4px" }}>
+                      Confirm Dispatch
+                    </h2>
+                  </div>
+                  <div style={{ display: "flex", gap: "12px" }}>
+                    <Button
+                      variant="outline"
+                      onClick={() => setStep(2)}
+                      disabled={dispatchLoading}
+                      size="lg"
+                      style={{ fontSize: "16px", padding: "12px 24px" }}>
+                      <ArrowLeft style={{ width: "20px", height: "20px", marginRight: "8px" }} />
+                      Back 
+                    </Button>
+                    <Button
+                      onClick={handleDispatchConfirm}
+                      disabled={dispatchLoading}
+                      style={{
+                        backgroundColor: "#16a34a",
+                        fontSize: "16px",
+                        padding: "12px 24px",
+                      }}
+                      size="lg">
+                      {dispatchLoading ? (
+                        <>
+                          <Loader2 style={{ marginRight: "8px", width: "20px", height: "20px", animation: "spin 1s linear infinite" }} />
+                          Creating Dispatch...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle style={{ width: "20px", height: "20px", marginRight: "8px" }} />
+                          Save
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Dispatch Summary */}
+                <div
+                  style={{
+                    border: "1px solid #86efac",
+                    borderRadius: "6px",
+                    padding: "12px",
+                    backgroundColor: "#f0fdf4",
+                  }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "12px" }}>
+                    <div>
+                      <div style={{ fontSize: "12px", color: "#6b7280", marginBottom: "4px" }}>Client</div>
+                      <div style={{ fontWeight: 600, fontSize: "14px" }}>{selectedClient?.company_name}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "12px", color: "#6b7280", marginBottom: "4px" }}>Vehicle</div>
+                      <div style={{ fontWeight: 600, fontSize: "14px" }}>{dispatchDetails.vehicle_number}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "12px", color: "#6b7280", marginBottom: "4px" }}>Driver</div>
+                      <div style={{ fontWeight: 600, fontSize: "14px" }}>{dispatchDetails.driver_name}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "12px", color: "#6b7280", marginBottom: "4px" }}>Total Items</div>
+                      <div style={{ fontWeight: 600, fontSize: "14px", color: "#2563eb" }}>{stats.totalSelected}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "12px", color: "#6b7280", marginBottom: "4px" }}>Total Weight</div>
+                      <div style={{ fontWeight: 600, fontSize: "14px", color: "#16a34a" }}>{stats.totalWeight.toFixed(1)} kg</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Selected Items in Two Columns */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", maxHeight: "450px", overflow: "hidden" }}>
+                  {/* Left Column */}
+                  <div style={{ border: "1px solid #e5e7eb", borderRadius: "6px", overflow: "auto", maxHeight: "450px" }}>
+                    <Table>
+                      <TableHeader style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10 }}>
+                        <TableRow>
+                          <TableHead style={{ fontSize: "14px", fontWeight: 600 }}>S.No</TableHead>
+                          <TableHead style={{ fontSize: "14px", fontWeight: 600 }}>ID / Barcode</TableHead>
+                          <TableHead style={{ fontSize: "14px", fontWeight: 600 }}>Paper Spec</TableHead>
+                          <TableHead style={{ fontSize: "14px", fontWeight: 600, textAlign: "center" }}>Width</TableHead>
+                          <TableHead style={{ fontSize: "14px", fontWeight: 600, textAlign: "center" }}>Weight</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {displayItems
+                          .filter((item: any) => {
+                            const itemType = item.type;
+                            const itemId = itemType === "wastage" ? item.id : (itemType === "manual" ? item.id : item.inventory_id);
+                            return itemType === "wastage" ? selectedWastageIds.has(itemId) : (itemType === "manual" ? selectedManualCutRollIds.has(itemId) : selectedItems.has(itemId));
+                          })
+                          .slice(0, Math.ceil(stats.totalSelected / 2))
+                          .map((item: any, index: number) => {
+                            const isWastageItem = item.type === "wastage";
+                            const formatPaperSpec = (paperSpec: string) => {
+                              if (!paperSpec) return "N/A";
+                              const parts = paperSpec.split(",").map((p: string) => p.trim());
+                              if (parts.length < 3) return paperSpec;
+                              const gsm = parts[0].replace("gsm", "").trim();
+                              const bf = parts[1].replace("bf", "").trim();
+                              const bfValue = parseFloat(bf);
+                              const bfFormatted = bfValue % 1 === 0 ? Math.floor(bfValue).toString() : bf;
+                              const shade = parts[2].trim().charAt(0).toUpperCase();
+                              return `${gsm}gsm,${bfFormatted}bf,${shade}`;
+                            };
+                            return (
+                              <TableRow key={index} style={{ backgroundColor: isWastageItem ? "#fff7ed" : "#eff6ff" }}>
+                                <TableCell style={{ fontSize: "14px", fontWeight: 500 }}>{index + 1}</TableCell>
+                                <TableCell style={{ fontSize: "14px", fontFamily: "monospace" }}>
+                                  {isWastageItem ? (item.reel_no || item.barcode_id || item.frontend_id) : (item.reel_no || item.barcode_id || item.qr_code)}
+                                </TableCell>
+                                <TableCell style={{ fontSize: "14px" }}>{formatPaperSpec(item.paper_spec)}</TableCell>
+                                <TableCell style={{ fontSize: "14px", textAlign: "center" }}>{item.width_inches}"</TableCell>
+                                <TableCell style={{ fontSize: "14px", textAlign: "center" }}>{item.weight_kg}kg</TableCell>
+                              </TableRow>
+                            );
+                          })}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Right Column */}
+                  <div style={{ border: "1px solid #e5e7eb", borderRadius: "6px", overflow: "auto", maxHeight: "450px" }}>
+                    <Table>
+                      <TableHeader style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10 }}>
+                        <TableRow>
+                          <TableHead style={{ fontSize: "14px", fontWeight: 600 }}>S.No</TableHead>
+                          <TableHead style={{ fontSize: "14px", fontWeight: 600 }}>ID / Barcode</TableHead>
+                          <TableHead style={{ fontSize: "14px", fontWeight: 600 }}>Paper Spec</TableHead>
+                          <TableHead style={{ fontSize: "14px", fontWeight: 600, textAlign: "center" }}>Width</TableHead>
+                          <TableHead style={{ fontSize: "14px", fontWeight: 600, textAlign: "center" }}>Weight</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {displayItems
+                          .filter((item: any) => {
+                            const itemType = item.type;
+                            const itemId = itemType === "wastage" ? item.id : (itemType === "manual" ? item.id : item.inventory_id);
+                            return itemType === "wastage" ? selectedWastageIds.has(itemId) : (itemType === "manual" ? selectedManualCutRollIds.has(itemId) : selectedItems.has(itemId));
+                          })
+                          .slice(Math.ceil(stats.totalSelected / 2))
+                          .map((item: any, index: number) => {
+                            const isWastageItem = item.type === "wastage";
+                            const startIndex = Math.ceil(stats.totalSelected / 2);
+                            const formatPaperSpec = (paperSpec: string) => {
+                              if (!paperSpec) return "N/A";
+                              const parts = paperSpec.split(",").map((p: string) => p.trim());
+                              if (parts.length < 3) return paperSpec;
+                              const gsm = parts[0].replace("gsm", "").trim();
+                              const bf = parts[1].replace("bf", "").trim();
+                              const bfValue = parseFloat(bf);
+                              const bfFormatted = bfValue % 1 === 0 ? Math.floor(bfValue).toString() : bf;
+                              const shade = parts[2].trim().charAt(0).toUpperCase();
+                              return `${gsm}gsm,${bfFormatted}bf,${shade}`;
+                            };
+                            return (
+                              <TableRow key={index} style={{ backgroundColor: isWastageItem ? "#fff7ed" : "#eff6ff" }}>
+                                <TableCell style={{ fontSize: "14px", fontWeight: 500 }}>{startIndex + index + 1}</TableCell>
+                                <TableCell style={{ fontSize: "14px", fontFamily: "monospace" }}>
+                                  {isWastageItem ? (item.reel_no || item.barcode_id || item.frontend_id) : (item.reel_no || item.barcode_id || item.qr_code)}
+                                </TableCell>
+                                <TableCell style={{ fontSize: "14px" }}>{formatPaperSpec(item.paper_spec)}</TableCell>
+                                <TableCell style={{ fontSize: "14px", textAlign: "center" }}>{item.width_inches}"</TableCell>
+                                <TableCell style={{ fontSize: "14px", textAlign: "center" }}>{item.weight_kg}kg</TableCell>
+                              </TableRow>
+                            );
+                          })}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
               </div>
             )}
