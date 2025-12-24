@@ -8,6 +8,7 @@ export interface PackingSlipItem {
   reel: string | number; // barcode_id or qr_code identifier
   weight: number;
   natgold: string;
+  order_frontend_id?:string;
 }
 
 export interface PackingSlipData {
@@ -67,8 +68,8 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
     doc.setFont('helvetica', 'normal');
     
     // Define margins
-    const leftMargin = 20;
-    const rightMargin = 20;
+    const leftMargin = 15;
+    const rightMargin = 35;
     const usableWidth = pageWidth - leftMargin - rightMargin;
     const bottomMargin = 20;
 
@@ -94,7 +95,7 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
         formatAddress = data.client.address?.length > 36 ?data.client.address?.substring(0,35)+'...': data.client.address
     }
 
-    doc.text(`Address: ${formatAddress}`, 20, yPosition);
+    doc.text(`Address: ${formatAddress}`, leftMargin, yPosition);
     yPosition += 14;
     
 
@@ -103,7 +104,7 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
     const totalItems = data.items.length;
 
     // Prepare table data
-    const tableHeaders = ['S.No', 'GSM', 'BF', 'Size', 'Reel', 'Weight', 'Nat/Gold'];
+    const tableHeaders = ['S.No', 'GSM', 'BF', 'Size', 'Reel', 'Weight', 'Nat/Gold', 'Order Id'];
 
     const sortedItems = data.items.sort((a:any, b:any) => {
       // Sort by size first
@@ -134,7 +135,8 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
       item.size.toString() || '',
       item.reel.toString() || '',
       item.weight.toString(),
-      item.natgold || ''
+      item.natgold || '',
+      item.order_frontend_id || ''
     ]);
 
     
@@ -147,12 +149,13 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
       '',
       totalItems.toString(),
       totalWeight.toString(),
+      '',
       ''
     ]);
 
     // Draw table manually with pagination support
     const totalTableWidth = usableWidth - 10; // Leave some extra space on right
-    const colWidths = [totalTableWidth * 0.08, totalTableWidth * 0.12, totalTableWidth * 0.10, totalTableWidth * 0.12, totalTableWidth * 0.20, totalTableWidth * 0.18, totalTableWidth * 0.20]; // Responsive column widths
+    const colWidths = [totalTableWidth * 0.08, totalTableWidth * 0.12, totalTableWidth * 0.10, totalTableWidth * 0.12, totalTableWidth * 0.20, totalTableWidth * 0.18, totalTableWidth * 0.20, totalTableWidth * 0.20]; // Responsive column widths
     const rowHeight = 8;
     const headerHeight = 10;
     const tableWidth = colWidths.reduce((a, b) => a + b, 0);
@@ -309,6 +312,7 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
 export const convertDispatchToPackingSlip = (dispatch: any): PackingSlipData => {
   // Handle both 'items' and 'dispatch_items' field names
   const itemsArray = dispatch.items || dispatch.dispatch_items || [];
+  // console.log(dispatch)
   
   const items: PackingSlipItem[] = itemsArray.map((item: any, index: number) => ({
     sno: index + 1,
@@ -317,7 +321,8 @@ export const convertDispatchToPackingSlip = (dispatch: any): PackingSlipData => 
     size: parseFloat(item.width_inches) || '',
     reel: extractReelNumber(item.barcode_id) || item.qr_code || item.barcode_id || '',
     weight: Math.round(parseFloat(item.weight_kg) || 0),
-    natgold: extractShadeFromSpec(item.paper_spec) || ''
+    natgold: extractShadeFromSpec(item.paper_spec) || '',
+    order_frontend_id:item.order_frontend_id
   }));
 
   return {

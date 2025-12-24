@@ -118,9 +118,9 @@ export default function BarcodeLookupPage() {
   const getStatusDisplayText = (status: string) => {
     switch (status.toLowerCase()) {
       case 'cutting':
-        return 'Planned';
+        return 'Not in Stock (Planned)';
       case 'available':
-        return 'Weight Updated';
+        return 'In Stock';
       case 'used':
         return 'Dispatched';
       default:

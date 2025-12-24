@@ -47,6 +47,7 @@ import {
   ChevronDown,
   ChevronUp,
   ArrowLeft,
+  Printer,
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/api-config";
 import { createDispatchRecord } from "@/lib/dispatch";
@@ -238,11 +239,11 @@ const OptimizedRow = memo(
           style={{ textAlign: "center", fontWeight: 500, fontSize: "14px" }}>
           {item.weight_kg}kg
         </TableCell>
-        {/* <TableCell
+        <TableCell
           style={{ display: "flex", justifyContent: "center" }}
           onClick={(e) => e.stopPropagation()}>
           <PureCheckbox checked={isSelected} onChange={onToggle} />
-        </TableCell> */}
+        </TableCell>
       </TableRow>
     );
   }
@@ -286,6 +287,9 @@ export function CreateDispatchModal({
   const [previewNumber, setPreviewNumber] = useState<string>("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [clientSearch, setClientSearch] = useState("");
+  const [orders, setOrders] = useState<any[]>([]);
+  const [selectedOrderId, setSelectedOrderId] = useState<string>("");
+  const [orderSearch, setOrderSearch] = useState("");
 
   // Debounce search to reduce re-renders
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
@@ -305,10 +309,12 @@ export function CreateDispatchModal({
       loadWastageItems();
       loadManualCutRolls();
       loadPreviewNumber();
+      loadOrders();
     } else {
       // Reset state
       setStep(1);
       setSelectedClientId("none");
+      setSelectedOrderId("");
       setSelectedItems(new Set());
       setSelectedWastageIds(new Set());
       setSelectedManualCutRollIds(new Set());
@@ -316,6 +322,7 @@ export function CreateDispatchModal({
       setDebouncedSearchTerm("");
       setPreviewNumber("");
       setClientSearch("");
+      setOrderSearch("");
       setDispatchDetails({
         vehicle_number: "",
         driver_name: "",
@@ -346,6 +353,24 @@ export function CreateDispatchModal({
     } catch (err) {
       console.error("Error loading clients:", err);
       toast.error("Failed to load clients");
+    }
+  };
+
+  const loadOrders = async (searchQuery: string = "") => {
+    try {
+      const url = searchQuery
+        ? `${API_BASE_URL}/orders/list-for-dispatch?search=${encodeURIComponent(searchQuery)}`
+        : `${API_BASE_URL}/orders/list-for-dispatch?limit=1000`;
+
+      const response = await fetch(url, {
+        headers: { "ngrok-skip-browser-warning": "true" },
+      });
+      if (!response.ok) throw new Error("Failed to load orders");
+      const data = await response.json();
+      setOrders(data || []);
+    } catch (err) {
+      console.error("Error loading orders:", err);
+      toast.error("Failed to load orders");
     }
   };
 
@@ -460,6 +485,7 @@ export function CreateDispatchModal({
         ...dispatchDetails,
         dispatch_number: "",
         client_id: selectedClientId,
+        primary_order_id: selectedOrderId || undefined,
         inventory_ids: Array.from(selectedItems),
         wastage_ids: Array.from(selectedWastageIds),
         manual_cut_roll_ids: Array.from(selectedManualCutRollIds),
@@ -485,6 +511,7 @@ export function CreateDispatchModal({
   }, [
     dispatchDetails,
     selectedClientId,
+    selectedOrderId,
     selectedItems,
     selectedWastageIds,
     selectedManualCutRollIds,
@@ -684,6 +711,151 @@ export function CreateDispatchModal({
     manualCutRolls,
   ]);
 
+  // Print Preview Handler
+  const handlePrintPreview = useCallback(() => {
+    // Collect selected items data
+    const selectedWarehouseItems = warehouseItems.filter(item =>
+      selectedItems.has(item.inventory_id)
+    );
+    const selectedWastageItemsData = wastageItems.filter(item =>
+      selectedWastageIds.has(item.id)
+    );
+    const selectedManualItems = manualCutRolls.filter(item =>
+      selectedManualCutRollIds.has(item.id)
+    );
+
+    // Create preview dispatch object
+    const previewDispatch = {
+      dispatch_number: previewNumber,
+      client: selectedClient,
+      vehicle_number: dispatchDetails.vehicle_number,
+      driver_name: dispatchDetails.driver_name,
+      driver_mobile: dispatchDetails.driver_mobile,
+      locket_no: dispatchDetails.locket_no,
+      reference_number: dispatchDetails.reference_number,
+      items: [
+        ...selectedWarehouseItems.map((item: any) => ({
+          ...item,
+          item_type: 'warehouse'
+        })),
+        ...selectedWastageItemsData.map((item: any) => ({
+          ...item,
+          item_type: 'wastage'
+        })),
+        ...selectedManualItems.map((item: any) => ({
+          ...item,
+          item_type: 'manual'
+        }))
+      ],
+      total_items: stats.totalSelected,
+      total_weight: stats.totalWeight,
+      created_at: new Date().toISOString(),
+    };
+
+    // Open print window
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Packing Slip - ${previewNumber}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            .header { text-align: center; margin-bottom: 6px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+            .info-section { display: flex; justify-content: space-between; margin-bottom: 20px; }
+            .info-block { display: grid; grid-template-columns: 2fr 1fr; }
+            .info-block strong { display: inline-block; width: 150px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #000; padding: 8px; text-align: left; font-size: 12px; }
+            th { background-color: #f0f0f0; font-weight: bold; }
+            .summary { margin-top: 20px; text-align: right; font-size: 14px; font-weight: bold; }
+            @media print {
+              button { display: none; }
+            }
+            .print-button { margin: 20px 0; padding: 10px 20px; font-size: 16px; cursor: pointer; }
+          </style>
+        </head>
+        <body>
+          <button class="print-button" onclick="window.print()">Print This Document</button>
+
+          <div class="header" style="display: flex; justify-content: space-between; align-items: center; ">
+            <h2>Challan No: ${previewNumber}</h2>
+            <p>Date: ${new Date().toLocaleDateString('en-GB')}</p>
+          </div>
+
+          <div class="info-section">
+            <div class="info-block">
+              <p><strong>Client:</strong> ${selectedClient?.company_name || 'N/A'}</p>
+              <p><strong>Vehicle No:</strong> ${dispatchDetails.vehicle_number}</p>
+              <p><strong>Driver Name:</strong> ${dispatchDetails.driver_name}</p>
+              ${dispatchDetails.driver_mobile ? `<p><strong>Driver Mobile:</strong> ${dispatchDetails.driver_mobile}</p>` : ''}
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>S.No</th>
+                <th>Barcode/QR Code</th>
+                <th>Paper Specification</th>
+                <th>Width (inches)</th>
+                <th>Weight (kg)</th>
+                ${selectedWarehouseItems.length > 0 ? '<th>Order ID</th>' : ''}
+              </tr>
+            </thead>
+            <tbody>
+              ${previewDispatch.items.map((item: any, index: number) => `
+                <tr>
+                  <td>${index + 1}</td>
+                  <td>${item.reel_no || item.barcode_id || item.qr_code || item.frontend_id || 'N/A'}</td>
+                  <td>${item.paper_spec || 'N/A'}</td>
+                  <td>${item.width_inches || 'N/A'}</td>
+                  <td>${item.weight_kg || 'N/A'}</td>
+                  ${selectedWarehouseItems.length > 0 ? `<td>${item.order_id || '-'}</td>` : ''}
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <div class="summary">
+            <p>Total Items: ${stats.totalSelected} | Total Weight: ${stats.totalWeight.toFixed(2)} kg</p>
+          </div>
+
+          <div style="margin-top: 50px; display: flex; justify-content: space-between;">
+            <div>
+              <p>_______________________</p>
+              <p>Prepared By</p>
+            </div>
+            <div>
+              <p>_______________________</p>
+              <p>Checked By</p>
+            </div>
+            <div>
+              <p>_______________________</p>
+              <p>Received By</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+    } else {
+      toast.error("Unable to open print preview. Please check your browser's popup settings.");
+    }
+  }, [
+    warehouseItems,
+    wastageItems,
+    manualCutRolls,
+    selectedItems,
+    selectedWastageIds,
+    selectedManualCutRollIds,
+    selectedClient,
+    dispatchDetails,
+    previewNumber,
+    stats,
+  ]);
+
   // Render optimized table
   const renderTable = useMemo(() => {
     if (loading) {
@@ -728,29 +900,63 @@ export function CreateDispatchModal({
       );
     }
 
+    // Filter unselected items for left column
+    const unselectedDisplayItems = displayItems.filter((item: any) => {
+      const itemType = item.type;
+      const itemId =
+        itemType === "wastage"
+          ? item.id
+          : itemType === "manual"
+          ? item.id
+          : item.inventory_id;
+      const isSelected = itemType === "wastage"
+        ? selectedWastageIds.has(itemId)
+        : itemType === "manual"
+        ? selectedManualCutRollIds.has(itemId)
+        : selectedItems.has(itemId);
+      return !isSelected; // Only return unselected items
+    });
+
+    // Filter selected items for right column
+    const selectedDisplayItems = displayItems.filter((item: any) => {
+      const itemType = item.type;
+      const itemId =
+        itemType === "wastage"
+          ? item.id
+          : itemType === "manual"
+          ? item.id
+          : item.inventory_id;
+      return itemType === "wastage"
+        ? selectedWastageIds.has(itemId)
+        : itemType === "manual"
+        ? selectedManualCutRollIds.has(itemId)
+        : selectedItems.has(itemId);
+    });
+
     return (
-      <div style={{ 
-  display: 'grid', 
-  gridTemplateColumns: '1fr 1fr', 
+      <div style={{
+  display: 'grid',
+  gridTemplateColumns: '1fr 1fr',
   gap: '16px',
   border: '1px solid #e5e7eb',
   borderRadius: '6px',
+  height: '550px',
   padding: '8px',
-  maxHeight: '400px',
+  maxHeight: '900px',
   overflow: 'hidden'
 }}>
-  {/* Left Column */}
+  {/* Left Column - Unselected Items */}
   <div style={{
     border: '1px solid #e5e7eb',
     borderRadius: '6px',
     overflow: 'auto',
-    maxHeight: '385px'
+    maxHeight: '545px'
   }}>
+
     <Table style={{ minWidth: '100%' }}>
       <TableHeader
         style={{
           position: "sticky",
-          top: 0,
           backgroundColor: "white",
           zIndex: 10,
         }}>
@@ -761,52 +967,56 @@ export function CreateDispatchModal({
           <TableHead style={{ fontSize: "14px", fontWeight: 600 }}>Paper Specs</TableHead>
           <TableHead style={{ width: "60px", textAlign: "center", fontSize: "14px", fontWeight: 600 }}>Width</TableHead>
           <TableHead style={{ width: "60px", textAlign: "center", fontSize: "14px", fontWeight: 600 }}>Weight</TableHead>
+          <TableHead style={{ width: "50px", textAlign: "center", fontSize: "14px", fontWeight: 600 }}>Select</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        {displayItems.slice(0, Math.ceil(displayItems.length / 2)).map((item: any, index) => {
-          const itemType = item.type;
-          const itemId =
-            itemType === "wastage"
-              ? item.id
-              : itemType === "manual"
-              ? item.id
-              : item.inventory_id;
-          const isSelected =
-            itemType === "wastage"
-              ? selectedWastageIds.has(itemId)
-              : itemType === "manual"
-              ? selectedManualCutRollIds.has(itemId)
-              : selectedItems.has(itemId);
+        {unselectedDisplayItems.length === 0 ? (
+          <TableRow>
+            <TableCell colSpan={7} style={{ textAlign: "center", padding: "32px", color: "#6b7280" }}>
+              <div style={{ fontSize: "14px" }}>All items selected!</div>
+              <div style={{ fontSize: "12px", marginTop: "4px" }}>Deselect items from the right to see them here</div>
+            </TableCell>
+          </TableRow>
+        ) : (
+          unselectedDisplayItems.map((item: any, index) => {
+            const itemType = item.type;
+            const itemId =
+              itemType === "wastage"
+                ? item.id
+                : itemType === "manual"
+                ? item.id
+                : item.inventory_id;
+            const isSelected = false; // Always false in this column
 
-          return (
-            <OptimizedRow
-              key={`${itemType.charAt(0)}-${itemId}`}
-              item={item}
-              index={index}
-              isSelected={isSelected}
-              itemType={itemType}
-              searchTerm={searchTerm}
-              onToggle={() => handleToggleItem(item, itemType)}
-            />
-          );
-        })}
+            return (
+              <OptimizedRow
+                key={`all-${itemType.charAt(0)}-${itemId}`}
+                item={item}
+                index={index}
+                isSelected={isSelected}
+                itemType={itemType}
+                searchTerm={searchTerm}
+                onToggle={() => handleToggleItem(item, itemType)}
+              />
+            );
+          })
+        )}
       </TableBody>
     </Table>
   </div>
 
-  {/* Right Column */}
+  {/* Right Column - Selected Items Only */}
   <div style={{
     border: '1px solid #e5e7eb',
     borderRadius: '6px',
     overflow: 'auto',
-    maxHeight: '385px'
+    maxHeight: '545px'
   }}>
     <Table style={{ minWidth: '100%' }}>
       <TableHeader
         style={{
           position: "sticky",
-          top: 0,
           backgroundColor: "white",
           zIndex: 10,
         }}>
@@ -817,36 +1027,41 @@ export function CreateDispatchModal({
           <TableHead style={{ fontSize: "14px", fontWeight: 600 }}>Paper Specs</TableHead>
           <TableHead style={{ width: "60px", textAlign: "center", fontSize: "14px", fontWeight: 600 }}>Width</TableHead>
           <TableHead style={{ width: "60px", textAlign: "center", fontSize: "14px", fontWeight: 600 }}>Weight</TableHead>
+          <TableHead style={{ width: "50px", textAlign: "center", fontSize: "14px", fontWeight: 600 }}>Select</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        {displayItems.slice(Math.ceil(displayItems.length / 2)).map((item: any, index) => {
-          const itemType = item.type;
-          const itemId =
-            itemType === "wastage"
-              ? item.id
-              : itemType === "manual"
-              ? item.id
-              : item.inventory_id;
-          const isSelected =
-            itemType === "wastage"
-              ? selectedWastageIds.has(itemId)
-              : itemType === "manual"
-              ? selectedManualCutRollIds.has(itemId)
-              : selectedItems.has(itemId);
+        {selectedDisplayItems.length === 0 ? (
+          <TableRow>
+            <TableCell colSpan={7} style={{ textAlign: "center", padding: "32px", color: "#6b7280" }}>
+              <div style={{ fontSize: "14px" }}>No items selected</div>
+              <div style={{ fontSize: "12px", marginTop: "4px" }}>Click on items from the left to select them</div>
+            </TableCell>
+          </TableRow>
+        ) : (
+          selectedDisplayItems.map((item: any, index) => {
+            const itemType = item.type;
+            const itemId =
+              itemType === "wastage"
+                ? item.id
+                : itemType === "manual"
+                ? item.id
+                : item.inventory_id;
+            const isSelected = true; // Always true in this column
 
-          return (
-            <OptimizedRow
-              key={`${itemType.charAt(0)}-${itemId}`}
-              item={item}
-              index={index + Math.ceil(displayItems.length / 2)}
-              isSelected={isSelected}
-              itemType={itemType}
-              searchTerm={searchTerm}
-              onToggle={() => handleToggleItem(item, itemType)}
-            />
-          );
-        })}
+            return (
+              <OptimizedRow
+                key={`selected-${itemType.charAt(0)}-${itemId}`}
+                item={item}
+                index={index}
+                isSelected={isSelected}
+                itemType={itemType}
+                searchTerm={searchTerm}
+                onToggle={() => handleToggleItem(item, itemType)}
+              />
+            );
+          })
+        )}
       </TableBody>
     </Table>
   </div>
@@ -861,6 +1076,7 @@ export function CreateDispatchModal({
     selectedWastageIds,
     selectedManualCutRollIds,
     handleToggleItem,
+    stats.totalSelected, // Add to trigger re-render when selection changes
   ]);
 
   return (
@@ -868,8 +1084,8 @@ export function CreateDispatchModal({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
           style={{
-            maxWidth: "1500px",
-            maxHeight: "90vh",
+            maxWidth: step === 1 ? "1200px" : "1680px",
+            maxHeight: "100vh",
             display: "flex",
             flexDirection: "column",
           }}>
@@ -884,7 +1100,7 @@ export function CreateDispatchModal({
                 }}>
                 {/* Form fields... */}
                 <div style={{ display: "grid",gridTemplateColumns: "repeat(5, 1fr)", gap: "16px" }}>
-                  <div style={{ gridColumn: "span 3" }}>
+                  <div style={{ gridColumn: "span 2" }}>
                   <label
                     style={{
                     fontSize: "16px",
@@ -930,6 +1146,47 @@ export function CreateDispatchModal({
                         {client.company_name}
                       </SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                  </div>
+
+                  <div style={{ gridColumn: "span 1" }}>
+                  <label
+                    style={{
+                    fontSize: "16px",
+                    fontWeight: 500,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    marginBottom: "8px",
+                    }}>
+                    <Package style={{ width: "18px", height: "18px" }} />
+                    Select Order
+                  </label>
+                  <Select
+                    value={selectedOrderId}
+                    onValueChange={setSelectedOrderId}>
+                    <SelectTrigger>
+                    <SelectValue placeholder="Select order" />
+                    </SelectTrigger>
+                    <SelectContent>
+                    <SelectSearch
+                      placeholder="Search orders..."
+                      value={orderSearch}
+                      onChange={(e) => {
+                        setOrderSearch(e.target.value);
+                        loadOrders(e.target.value);
+                      }}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
+                    <SelectItem value="all">
+                      No order selected
+                    </SelectItem>
+                    {orders.map((order) => (
+                      <SelectItem key={order.id} value={order.id}>
+                        {order.frontend_id} - {order.client_name}
+                      </SelectItem>
+                    ))}
                     </SelectContent>
                   </Select>
                   </div>
@@ -1122,7 +1379,7 @@ export function CreateDispatchModal({
                         alignItems: "center",
                         gap: "8px",
                       }}>
-                      Reference Number (Optional)
+                      Reference Number
                     </label>
                     <Input
                       value={dispatchDetails.reference_number}
@@ -1158,8 +1415,120 @@ export function CreateDispatchModal({
                   flexDirection: "column",
                   gap: "10px",
                   padding: "8px",
+                  height: "90vh",
                 }}>
                 {/* Summary */}
+                {/* Search */}
+                <div className="flex items-center justify-between">
+                  <div style={{ position: "relative", width: "50%" }}>
+                    <Search
+                      style={{
+                        position: "absolute",
+                        left: "16px",
+                        top: "22px",
+                        width: "24px",
+                        height: "24px",
+                        color: "#6b7280",
+                      }}
+                    />
+                    <Input
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="border-3 border-orange-700"
+                      placeholder="Search across all items: QR code, barcode, reel no, order, paper spec, creator..."
+                      style={{
+                        paddingLeft: "48px",
+                        paddingRight: "48px",
+                        height: "66px",
+                        fontSize: "22px",
+                      }}
+                    />
+                    {searchTerm && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setSearchTerm("")}
+                        style={{
+                          position: "absolute",
+                          right: "8px",
+                          top: "8px",
+                          width: "40px",
+                          height: "40px",
+                          padding: 0,
+                        }}>
+                        <X style={{ width: "20px", height: "20px" }} />
+                      </Button>
+                    )}
+                  </div>
+                  <div className="space-x-7">
+                    <Button
+                      onClick={handlePrintPreview}
+                      disabled={stats.totalSelected === 0}
+                      variant="outline"
+                      style={{
+                        fontSize: "20px",
+                        padding: "10px 24px",
+                        minWidth: "150px",
+                        borderColor: "#2563eb",
+                        color: "#2563eb",
+                      }}
+                      size="lg">
+                      <Printer style={{ width: "20px", height: "20px", marginRight: "8px" }} />
+                      Print
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        handleProceedToConfirmation()
+                        handlePrintPreview()
+                      }}
+                      disabled={stats.totalSelected === 0}
+                      style={{
+                        backgroundColor: "#16a34a",
+                        fontSize: "20px",
+                        padding: "10px 24px",
+                        minWidth: "150px",
+                      }}
+                      size="lg">
+                      Review
+                    </Button>
+                    <Button
+                      onClick={handleDispatchConfirm}
+                      disabled={stats.totalSelected === 0}
+                      style={{
+                        backgroundColor: "#16a34a",
+                        fontSize: "20px",
+                        padding: "10px 24px",
+                        minWidth: "150px",
+                      }}
+                      size="lg">
+                      Save
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Tab content with optimized table */}
+                <div className="h-full">
+                  <div
+                    style={{
+                      marginBottom: "8px",
+                      fontSize: "14px",
+                      color: "#6b7280",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}>
+                    <span>
+                      <span style={{ color: "#22c55e", fontWeight: 500 }}>
+                        ●
+                      </span>{" "}
+                      Green border = Priority items | Select items to move them to the right
+                    </span>
+                    <span style={{ fontWeight: 500 }}>
+                      Total: {displayItems.length} items | Selected: {stats.totalSelected} | Available: {displayItems.length - stats.totalSelected}
+                    </span>
+                  </div>
+                  {renderTable}
+                </div>
                 <div
                   style={{
                     border: "1px solid #86efac",
@@ -1358,88 +1727,7 @@ export function CreateDispatchModal({
                         backgroundColor: "#d1d5db",
                       }}
                     />
-
-                    <Button
-                      onClick={handleProceedToConfirmation}
-                      disabled={stats.totalSelected === 0}
-                      style={{
-                        backgroundColor: "#16a34a",
-                        fontSize: "20px",
-                        padding: "10px 24px",
-                        minWidth: "150px",
-                      }}
-                      size="lg">
-                      Review & Confirm
-                    </Button>
                   </div>
-                </div>
-
-                {/* Search */}
-                <div>
-                  <div style={{ position: "relative" }}>
-                    <Search
-                      style={{
-                        position: "absolute",
-                        left: "16px",
-                        top: "22px",
-                        width: "24px",
-                        height: "24px",
-                        color: "#6b7280",
-                      }}
-                    />
-                    <Input
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="border-3 border-orange-700"
-                      placeholder="Search across all items: QR code, barcode, reel no, order, paper spec, creator..."
-                      style={{
-                        paddingLeft: "48px",
-                        paddingRight: "48px",
-                        height: "66px",
-                        fontSize: "22px",
-                      }}
-                    />
-                    {searchTerm && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setSearchTerm("")}
-                        style={{
-                          position: "absolute",
-                          right: "8px",
-                          top: "8px",
-                          width: "40px",
-                          height: "40px",
-                          padding: 0,
-                        }}>
-                        <X style={{ width: "20px", height: "20px" }} />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Tab content with optimized table */}
-                <div>
-                  <div
-                    style={{
-                      marginBottom: "8px",
-                      fontSize: "14px",
-                      color: "#6b7280",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}>
-                    <span>
-                      <span style={{ color: "#22c55e", fontWeight: 500 }}>
-                        ●
-                      </span>{" "}
-                      Green border = Priority items
-                    </span>
-                    <span style={{ fontWeight: 500 }}>
-                      Showing {displayItems.length} total items
-                    </span>
-                  </div>
-                  {renderTable}
                 </div>
               </div>
             ) : (
@@ -1465,7 +1753,16 @@ export function CreateDispatchModal({
                       size="lg"
                       style={{ fontSize: "16px", padding: "12px 24px" }}>
                       <ArrowLeft style={{ width: "20px", height: "20px", marginRight: "8px" }} />
-                      Back 
+                      Back
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={handlePrintPreview}
+                      disabled={dispatchLoading}
+                      size="lg"
+                      style={{ fontSize: "16px", padding: "12px 24px", borderColor: "#2563eb", color: "#2563eb" }}>
+                      <Printer style={{ width: "20px", height: "20px", marginRight: "8px" }} />
+                      Print Preview
                     </Button>
                     <Button
                       onClick={handleDispatchConfirm}
