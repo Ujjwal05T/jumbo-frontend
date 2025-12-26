@@ -224,6 +224,17 @@ export default function ChallanPage() {
   const [selectedDispatchForBill, setSelectedDispatchForBill] = useState<DispatchRecord | null>(null);
   const [billInvoiceAmount, setBillInvoiceAmount] = useState<string>("");
 
+  // Generate modal state
+  const [generateModalOpen, setGenerateModalOpen] = useState(false);
+  const [selectedDispatchForGenerate, setSelectedDispatchForGenerate] = useState<DispatchRecord | null>(null);
+  const [generatePaymentType, setGeneratePaymentType] = useState<"bill" | "cash" | string>("bill");
+  const [generateTallyNo, setGenerateTallyNo] = useState<string>("");
+  const [generateBillNo, setGenerateBillNo] = useState<string>("");
+  const [generateDate, setGenerateDate] = useState<string>("");
+  const [generateEbayNo, setGenerateEbayNo] = useState<string>("");
+  const [generateDispatchItems, setGenerateDispatchItems] = useState<any[]>([]);
+  const [generateItemsLoading, setGenerateItemsLoading] = useState(false);
+
   const loadDispatches = async () => {
     try {
       setLoading(true);
@@ -309,6 +320,48 @@ export default function ChallanPage() {
       toast.error(errorMessage);
     } finally {
       setDetailsLoading(false);
+    }
+  };
+
+  const loadDispatchItemsForGenerate = async (dispatchId: string) => {
+    try {
+      setGenerateItemsLoading(true);
+      const response = await fetch(`${API_BASE_URL}/dispatch/${dispatchId}/details`, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      });
+
+      if (!response.ok) throw new Error('Failed to load dispatch details');
+      const data = await response.json();
+
+      // Group items by width and paper_spec
+      const groupedItems = (data.items || []).reduce((acc: any, item: any) => {
+        const key = `${item.width_inches}_${item.paper_spec}`;
+
+        if (!acc[key]) {
+          acc[key] = {
+            width_inches: item.width_inches,
+            paper_spec: item.paper_spec,
+            quantity: 0,
+            total_weight_kg: 0,
+            rate: Math.floor(Math.random() * 23) + 8 // Random rate between 8-30
+          };
+        }
+
+        acc[key].quantity += 1;
+        acc[key].total_weight_kg += parseFloat(item.weight_kg) || 0;
+
+        return acc;
+      }, {});
+
+      // Convert to array
+      const uniqueItems = Object.values(groupedItems);
+
+      setGenerateDispatchItems(uniqueItems);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load dispatch items';
+      toast.error(errorMessage);
+    } finally {
+      setGenerateItemsLoading(false);
     }
   };
 
@@ -507,6 +560,54 @@ export default function ChallanPage() {
   };
 
   // PDF generation handlers
+  const handleGeneratePaymentSlip = async () => {
+    try {
+      if (!selectedDispatchForGenerate) {
+        toast.error("No dispatch selected");
+        return;
+      }
+
+      // Calculate total amount from items
+      const totalAmount = generateDispatchItems.reduce((sum, item) => {
+        return sum + (item.rate * item.total_weight_kg);
+      }, 0);
+
+      // Fetch full dispatch details with items
+      const response = await fetch(`${API_BASE_URL}/dispatch/${selectedDispatchForGenerate.id}/details`, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch dispatch details');
+
+      const dispatchDetails = await response.json();
+
+      // Convert dispatch to challan data format with the calculated amount
+      const challanData = convertDispatchToChallanData(dispatchDetails, generatePaymentType, totalAmount);
+
+      // Generate PDF based on payment type
+      if (generatePaymentType === 'cash') {
+        generateCashChallanPDF(challanData);
+        toast.success("Cash challan PDF generated successfully");
+      } else {
+        generateBillInvoicePDF(challanData);
+        toast.success("GST Tax Invoice PDF generated successfully");
+      }
+
+      // Close modal and reset state
+      setGenerateModalOpen(false);
+      setSelectedDispatchForGenerate(null);
+      setGeneratePaymentType("bill");
+      setGenerateTallyNo("");
+      setGenerateBillNo("");
+      setGenerateDate("");
+      setGenerateEbayNo("");
+      setGenerateDispatchItems([]);
+    } catch (error) {
+      console.error("Error generating payment slip PDF:", error);
+      toast.error("Failed to generate payment slip PDF");
+    }
+  };
+
   const handleGenerateCashChallan = async (dispatch: DispatchRecord) => {
     try {
       // Fetch full dispatch details with items
@@ -638,11 +739,8 @@ export default function ChallanPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Filter className="w-5 h-5" />
-            Filters & Search
+            Search
           </CardTitle>
-          <CardDescription>
-            Filter packing slip records by date range, status, client, or search terms
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
@@ -767,7 +865,7 @@ export default function ChallanPage() {
                   <TableHead>Weight</TableHead>
                   <TableHead>Payment</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>Generate</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -845,54 +943,19 @@ export default function ChallanPage() {
                       <TableCell>
                         {getStatusBadge(dispatch.status)}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                              <span className="sr-only">Open menu</span>
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => loadDispatchDetails(dispatch.id)}
-                              disabled={detailsLoading}
-                            >
-                              <Eye className="mr-2 h-4 w-4" />
-                              View Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => printPDF(dispatch.id, dispatch.dispatch_number)}
-                            >
-                              <Download className="mr-2 h-4 w-4" />
-                              Print PDF
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => downloadPackingSlip(dispatch.id)}
-                            >
-                              <FileText className="mr-2 h-4 w-4" />
-                              Download Packing Slip
-                            </DropdownMenuItem>
-                            {dispatch.status === 'dispatched' && (
-                              <DropdownMenuItem
-                                className="text-green-600"
-                                onClick={() => updateDispatchStatus(dispatch.id, 'delivered')}
-                              >
-                                <CheckCircle className="mr-2 h-4 w-4" />
-                                Mark as Delivered
-                              </DropdownMenuItem>
-                            )}
-                            {dispatch.status === 'dispatched' && (
-                              <DropdownMenuItem
-                                className="text-red-600"
-                                onClick={() => updateDispatchStatus(dispatch.id, 'returned')}
-                              >
-                                <XCircle className="mr-2 h-4 w-4" />
-                                Mark as Returned
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={() => {
+                            setSelectedDispatchForGenerate(dispatch);
+                            setGenerateModalOpen(true);
+                            loadDispatchItemsForGenerate(dispatch.id);
+                          }}
+                        >
+                          <FileText className="w-4 h-4 mr-1" />
+                          Generate
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))
@@ -1363,36 +1426,9 @@ export default function ChallanPage() {
             Create New Dispatch
           </Button>
         </div>
-
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="packing-slip" className="flex items-center gap-2">
-              <Receipt className="w-4 h-4" />
-              Packing Slip
-            </TabsTrigger>
-            <TabsTrigger value="cash" className="flex items-center gap-2">
-              <Banknote className="w-4 h-4" />
-              Cash
-            </TabsTrigger>
-            <TabsTrigger value="bill" className="flex items-center gap-2">
-              <ScrollText className="w-4 h-4" />
-              Bill
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="packing-slip">
-            {renderPackingSlipTab()}
-          </TabsContent>
-
-          <TabsContent value="cash">
-            {renderCashTab()}
-          </TabsContent>
-
-          <TabsContent value="bill">
-            {renderBillTab()}
-          </TabsContent>
-        </Tabs>
+        
+        {/* Payment Slip Content */}
+        {renderPackingSlipTab()}
       </div>
 
       {/* Dispatch Details Modal - Only for Packing Slip tab */}
@@ -1598,6 +1634,179 @@ export default function ChallanPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Generate Modal */}
+      <Dialog open={generateModalOpen} onOpenChange={setGenerateModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              Generate Payment Slip
+            </DialogTitle>
+            <DialogDescription>
+              Fill in the form details to generate the payment slip
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedDispatchForGenerate && (
+            <div className="space-y-6">
+              {/* Form Fields */}
+              <div className="space-y-4">
+                {/* Row 1: Payment Type and Date */}
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Payment Type Selection */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Payment Type *</label>
+                    <Select value={generatePaymentType} onValueChange={setGeneratePaymentType}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select payment type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="bill">Bill</SelectItem>
+                        <SelectItem value="cash">Cash</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Date */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Date</label>
+                    <Input
+                      type="date"
+                      value={generateDate}
+                      onChange={(e) => setGenerateDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Row 2: Tally No., Bill No., eBay No. */}
+                <div className="grid grid-cols-3 gap-4">
+                  {/* Tally No. */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Tally No.</label>
+                    <Input
+                      type="text"
+                      placeholder="Enter tally number"
+                      value={generateTallyNo}
+                      onChange={(e) => setGenerateTallyNo(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Bill No. */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Bill No.</label>
+                    <Input
+                      type="text"
+                      placeholder="Enter bill number"
+                      value={generateBillNo}
+                      onChange={(e) => setGenerateBillNo(e.target.value)}
+                    />
+                  </div>
+
+                  {/* eBay No. */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">eBay No.</label>
+                    <Input
+                      type="text"
+                      placeholder="Enter eBay number"
+                      value={generateEbayNo}
+                      onChange={(e) => setGenerateEbayNo(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Dispatch Items with Rates */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Dispatch Items</label>
+                {generateItemsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Loading items...
+                  </div>
+                ) : (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>S.No</TableHead>
+                          <TableHead>Width</TableHead>
+                          <TableHead>Paper Spec</TableHead>
+                          <TableHead className="text-right">Quantity</TableHead>
+                          <TableHead className="text-right">Total Weight</TableHead>
+                          <TableHead className="text-right">Rate</TableHead>
+                          <TableHead className="text-right">Amount</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {generateDispatchItems.length > 0 ? (
+                          generateDispatchItems.map((item, index) => {
+                            const amount = (item.rate * item.total_weight_kg).toFixed(2);
+                            return (
+                              <TableRow key={index}>
+                                <TableCell>{index + 1}</TableCell>
+                                <TableCell>{item.width_inches}"</TableCell>
+                                <TableCell>{item.paper_spec}</TableCell>
+                                <TableCell className="text-right font-medium">{item.quantity}</TableCell>
+                                <TableCell className="text-right">{item.total_weight_kg.toFixed(2)}kg</TableCell>
+                                <TableCell className="text-right">
+                                  <Input
+                                    type="number"
+                                    value={item.rate}
+                                    onChange={(e) => {
+                                      const newRate = parseFloat(e.target.value) || 0;
+                                      const updatedItems = [...generateDispatchItems];
+                                      updatedItems[index].rate = newRate;
+                                      setGenerateDispatchItems(updatedItems);
+                                    }}
+                                    className="w-20 ml-auto text-right"
+                                    min="0"
+                                    step="1"
+                                  />
+                                </TableCell>
+                                <TableCell className="text-right font-semibold">₹{amount}</TableCell>
+                              </TableRow>
+                            );
+                          })
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                              No items found
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end space-x-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setGenerateModalOpen(false);
+                    setSelectedDispatchForGenerate(null);
+                    setGeneratePaymentType("bill");
+                    setGenerateTallyNo("");
+                    setGenerateBillNo("");
+                    setGenerateDate("");
+                    setGenerateEbayNo("");
+                    setGenerateDispatchItems([]);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleGeneratePaymentSlip}>
+                  <FileText className="w-4 h-4 mr-2" />
+                  Generate
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

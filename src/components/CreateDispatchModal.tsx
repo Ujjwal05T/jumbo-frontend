@@ -581,6 +581,7 @@ export function CreateDispatchModal({
   // Memoize combined items based on active tab
   const displayItems = useMemo(() => {
     const { filteredClient, filteredOther, filteredWastage } = filteredData;
+    const selectedClientName = selectedClient?.company_name || "";
 
     // Filter manual cut rolls
     const filteredManual = manualCutRolls.filter((roll) => {
@@ -599,6 +600,28 @@ export function CreateDispatchModal({
       );
     });
 
+    // Separate manual rolls by selected client
+    const selectedClientManual = filteredManual.filter(
+      (roll) => roll.client_name === selectedClientName
+    );
+    const otherClientManual = filteredManual.filter(
+      (roll) => roll.client_name !== selectedClientName
+    );
+
+    // Sort "other" items alphabetically by client name
+    const sortedOtherWarehouse = [...filteredOther].sort((a, b) =>
+      (a.client_name || "").localeCompare(b.client_name || "")
+    );
+    const sortedOtherManual = [...otherClientManual].sort((a, b) =>
+      (a.client_name || "").localeCompare(b.client_name || "")
+    );
+
+    // Build items array in correct order:
+    // 1. Selected client warehouse items
+    // 2. Selected client manual rolls
+    // 3. Other warehouse items (alphabetically by client)
+    // 4. Other manual rolls (alphabetically by client)
+    // 5. Wastage items
     const items = [];
     items.push(
       ...filteredClient.map((item) => ({
@@ -606,25 +629,30 @@ export function CreateDispatchModal({
         type: "warehouse",
         priority: 1,
       })),
-      ...filteredOther.map((item) => ({
+      ...selectedClientManual.map((item) => ({
+        ...item,
+        type: "manual",
+        priority: 2,
+      })),
+      ...sortedOtherWarehouse.map((item) => ({
         ...item,
         type: "warehouse",
-        priority: 2,
+        priority: 3,
+      })),
+      ...sortedOtherManual.map((item) => ({
+        ...item,
+        type: "manual",
+        priority: 4,
       })),
       ...filteredWastage.map((item) => ({
         ...item,
         type: "wastage",
-        priority: 3,
-      })),
-      ...filteredManual.map((item) => ({
-        ...item,
-        type: "manual",
-        priority: 4,
+        priority: 5,
       }))
     );
 
     return items;
-  }, [filteredData, manualCutRolls, debouncedSearchTerm]);
+  }, [filteredData, manualCutRolls, debouncedSearchTerm, selectedClient]);
 
   // Optimized toggle handler - use Set for O(1) operations
   const handleToggleItem = useCallback((item: any, itemType: string) => {
@@ -1461,21 +1489,7 @@ export function CreateDispatchModal({
                     )}
                   </div>
                   <div className="space-x-7">
-                    <Button
-                      onClick={handlePrintPreview}
-                      disabled={stats.totalSelected === 0}
-                      variant="outline"
-                      style={{
-                        fontSize: "20px",
-                        padding: "10px 24px",
-                        minWidth: "150px",
-                        borderColor: "#2563eb",
-                        color: "#2563eb",
-                      }}
-                      size="lg">
-                      <Printer style={{ width: "20px", height: "20px", marginRight: "8px" }} />
-                      Print
-                    </Button>
+                   
                     <Button
                       onClick={() => {
                         handleProceedToConfirmation()

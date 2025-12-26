@@ -54,6 +54,8 @@ import {
   SplinePointer,
   LoaderCircle,
   LogOut,
+  Search,
+  X,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -129,7 +131,7 @@ export default function InOutPage() {
   const [inwardClientFilter, setInwardClientFilter] = useState<string>("all");
   const [inwardMaterialFilter, setInwardMaterialFilter] = useState<string>("all");
   const [outwardMaterialFilter, setOutwardMaterialFilter] = useState<string>("all");
-  const [outwardPartyFilter, setOutwardPartyFilter] = useState<string>("all");
+  const [outwardSearchTerm, setOutwardSearchTerm] = useState<string>("");
 
   // Fetch next serial numbers from database
   const loadNextSerialNumbers = async () => {
@@ -187,7 +189,13 @@ export default function InOutPage() {
 
   const getFilteredOutwardChallans = () => {
     return outwardChallans.filter((challan) => {
-      const matchesParty = outwardPartyFilter === "all" || challan.party_name === outwardPartyFilter;
+      // Omni search across serial_no, party_name, rst_no, vehicle_number
+      const searchLower = outwardSearchTerm.toLowerCase().trim();
+      const matchesSearch = !searchLower ||
+        (challan.serial_no || "").toLowerCase().includes(searchLower) ||
+        (challan.party_name || "").toLowerCase().includes(searchLower) ||
+        (challan.rst_no || "").toLowerCase().includes(searchLower) ||
+        (challan.vehicle_number || "").toLowerCase().includes(searchLower);
 
       // Date range filter
       if (!challan.date) return false;
@@ -212,8 +220,30 @@ export default function InOutPage() {
 
       const matchesDate = challanDateOnly >= fromDateOnly && challanDateOnly <= toDateOnly;
 
-      return matchesParty && matchesDate;
+      return matchesSearch && matchesDate;
     });
+  };
+
+  // Helper function to highlight search term in text
+  const highlightText = (text: string | null | undefined, searchTerm: string) => {
+    if (!text || !searchTerm.trim()) return text || "-";
+
+    const regex = new RegExp(`(${searchTerm.trim()})`, "gi");
+    const parts = text.split(regex);
+
+    return (
+      <>
+        {parts.map((part, index) =>
+          regex.test(part) ? (
+            <span key={index} className="bg-yellow-200 font-semibold">
+              {part}
+            </span>
+          ) : (
+            part
+          )
+        )}
+      </>
+    );
   };
 
   // PDF generation function
@@ -1907,7 +1937,7 @@ export default function InOutPage() {
                         placeholder="Auto-generated"
                         value={outwardForm.serial_no || nextOutwardSerial}
                         readOnly
-                        className="bg-gray-50 cursor-not-allowed"
+                        className="bg-gray-50 border-orange-700/70 border-2 cursor-not-allowed"
                         title="This field is automatically generated"
                       />
                     </div>
@@ -1945,20 +1975,38 @@ export default function InOutPage() {
 
                     {/* Purpose - Security & Admin can see */}
                     {canViewField("security") && (
-                      <div className="flex flex-col space-y-2">
-                        <Label htmlFor="purpose">Purpose</Label>
-                        <Input
-                          id="purpose"
-                          placeholder="Enter purpose"
+                        <div className="flex flex-col space-y-2">
+                        <Label htmlFor="purpose">Purpose *</Label>
+                        <Select
                           value={outwardForm.purpose || ""}
-                          onChange={(e) =>
-                            setOutwardForm({
-                              ...outwardForm,
-                              purpose: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
+                          onValueChange={(value) =>
+                          setOutwardForm({
+                            ...outwardForm,
+                            purpose: value,
+                          })
+                          }>
+                          <SelectTrigger id="purpose">
+                          <SelectValue placeholder="Select purpose" />
+                          </SelectTrigger>
+                          <SelectContent>
+                          <SelectItem value="Paper Load" className="focus:bg-orange-300">
+                            Paper Load
+                          </SelectItem>
+                          <SelectItem value="Scrap" className="focus:bg-orange-300">
+                            Scrap
+                          </SelectItem>
+                          <SelectItem value="Rakh" className="focus:bg-orange-300">
+                            Rakh
+                          </SelectItem>
+                          <SelectItem value="Material Parts" className="focus:bg-orange-300">
+                            Material Parts
+                          </SelectItem>
+                          <SelectItem value="Other" className="focus:bg-orange-300">
+                            Other
+                          </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        </div>
                     )}
 
                     {/* Driver Name - Accountant & Admin can see */}
@@ -2146,45 +2194,38 @@ export default function InOutPage() {
             </div>
 
             {/* Filters */}
-            <Card className="mb-4">
-              <CardContent className="p-4">
+            
                 <div className="flex flex-col md:flex-row gap-4">
                   <div className="flex-1">
-                    <Label htmlFor="outwardPartyFilter" className="mb-2 block">Filter by Party Name</Label>
-                    <Select
-                      value={outwardPartyFilter}
-                      onValueChange={setOutwardPartyFilter}
-                    >
-                      <SelectTrigger id="outwardPartyFilter">
-                        <SelectValue placeholder="All Parties" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Parties</SelectItem>
-                        {[...new Set(outwardChallans.map(c => c.party_name).filter(Boolean))]
-                          .sort((a, b) => a!.localeCompare(b!, "en", { sensitivity: "base" }))
-                          .map((partyName) => (
-                            <SelectItem key={partyName} value={partyName!}>
-                              {partyName}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {outwardPartyFilter !== "all" && (
-                    <div className="flex items-end">
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setOutwardPartyFilter("all");
-                        }}
-                      >
-                        Clear Filters
-                      </Button>
+                   
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="outwardSearch"
+                        type="text"
+                        placeholder="Search by Serial No., Party Name, RST No., or Vehicle No..."
+                        value={outwardSearchTerm}
+                        onChange={(e) => setOutwardSearchTerm(e.target.value)}
+                        className="pl-10 pr-10 sm:py-6 text-xl border-3 border-orange-700/70"
+                      />
+                      {outwardSearchTerm && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7 p-0"
+                          onClick={() => setOutwardSearchTerm("")}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
-                  )}
+                    {outwardSearchTerm && (
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Found {getFilteredOutwardChallans().length} result(s)
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
 
             {/* Desktop Table */}
             <Card className="hidden md:block">
@@ -2208,13 +2249,13 @@ export default function InOutPage() {
                     {getFilteredOutwardChallans().map((challan) => (
                       <TableRow key={challan.id}>
                         <TableCell className="font-mono text-sm">
-                          {challan.serial_no || "Auto-generated"}
+                          {highlightText(challan.serial_no || "Auto-generated", outwardSearchTerm)}
                         </TableCell>
-                        <TableCell>{challan.party_name || "-"}</TableCell>
+                        <TableCell>{highlightText(challan.party_name, outwardSearchTerm)}</TableCell>
                         <TableCell>{formatDate(challan.date)}</TableCell>
-                        <TableCell>{challan.vehicle_number || "-"}</TableCell>
+                        <TableCell>{highlightText(challan.vehicle_number, outwardSearchTerm)}</TableCell>
                         <TableCell>{challan.driver_name || "-"}</TableCell>
-                        <TableCell>{challan.rst_no || "-"}</TableCell>
+                        <TableCell>{highlightText(challan.rst_no, outwardSearchTerm)}</TableCell>
                         <TableCell>{challan.purpose || "-"}</TableCell>
                         <TableCell>{challan.net_weight || "-"}</TableCell>
                         <TableCell>
@@ -2265,7 +2306,7 @@ export default function InOutPage() {
                         <div className="flex items-start justify-between">
                           <div>
                             <div className="text-xs text-muted-foreground">Serial No.</div>
-                            <div className="font-mono font-semibold">{challan.serial_no || "Auto"}</div>
+                            <div className="font-mono font-semibold">{highlightText(challan.serial_no || "Auto", outwardSearchTerm)}</div>
                           </div>
                           <div className="text-xs text-muted-foreground">{formatDate(challan.date)}</div>
                         </div>
@@ -2273,11 +2314,11 @@ export default function InOutPage() {
                         <div className="grid grid-cols-2 gap-3 text-sm">
                           <div>
                             <div className="text-xs text-muted-foreground">Party</div>
-                            <div className="font-medium">{challan.party_name || "-"}</div>
+                            <div className="font-medium">{highlightText(challan.party_name, outwardSearchTerm)}</div>
                           </div>
                           <div>
                             <div className="text-xs text-muted-foreground">Vehicle</div>
-                            <div>{challan.vehicle_number || "-"}</div>
+                            <div>{highlightText(challan.vehicle_number, outwardSearchTerm)}</div>
                           </div>
                           <div>
                             <div className="text-xs text-muted-foreground">Driver</div>
@@ -2293,7 +2334,7 @@ export default function InOutPage() {
                           </div>
                           <div>
                             <div className="text-xs text-muted-foreground">RST No.</div>
-                            <div>{challan.rst_no || "-"}</div>
+                            <div>{highlightText(challan.rst_no, outwardSearchTerm)}</div>
                           </div>
                           <div className="col-span-2">
                             <div className="text-xs text-muted-foreground">Time In/Out</div>

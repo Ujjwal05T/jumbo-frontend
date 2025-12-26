@@ -31,7 +31,7 @@ export interface ChallanOrderItem {
 }
 
 export interface ChallanData {
-  type: 'cash' | 'bill';
+  type: 'cash' | 'bill' | string;
   orders: ChallanOrderItem[];
   invoice_number?: string;
   invoice_date: string;
@@ -647,7 +647,7 @@ export const convertOrdersToChallanData = (orders: any[], type: 'cash' | 'bill',
 
 export function convertDispatchToChallanData(
   dispatchDetails: any, 
-  type: 'cash' | 'bill', 
+  type: 'cash' | 'bill' | string, 
   customAmount?: number
 ): ChallanData {
   const items = dispatchDetails.items || [];
