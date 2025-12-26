@@ -205,7 +205,8 @@ export const generateCashChallanPDF = (data: ChallanData, printInsteadOfSave: bo
         // Description - Compact
         const paperName = item.paper.name;
         doc.setFont('helvetica', 'bold');
-        doc.text(paperName, currentX + 1, yPosition + 3);
+        doc.text(paperName, currentX + colWidths[1] / 2, yPosition + 6, { align: 'center' });
+         currentX += colWidths[1];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
         // UOM
