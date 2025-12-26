@@ -326,37 +326,15 @@ export default function ChallanPage() {
   const loadDispatchItemsForGenerate = async (dispatchId: string) => {
     try {
       setGenerateItemsLoading(true);
-      const response = await fetch(`${API_BASE_URL}/dispatch/${dispatchId}/details`, {
+      const response = await fetch(`${API_BASE_URL}/dispatch/${dispatchId}/items-with-rates`, {
         headers: { 'ngrok-skip-browser-warning': 'true' }
       });
 
-      if (!response.ok) throw new Error('Failed to load dispatch details');
+      if (!response.ok) throw new Error('Failed to load dispatch items with rates');
       const data = await response.json();
 
-      // Group items by width and paper_spec
-      const groupedItems = (data.items || []).reduce((acc: any, item: any) => {
-        const key = `${item.width_inches}_${item.paper_spec}`;
-
-        if (!acc[key]) {
-          acc[key] = {
-            width_inches: item.width_inches,
-            paper_spec: item.paper_spec,
-            quantity: 0,
-            total_weight_kg: 0,
-            rate: Math.floor(Math.random() * 23) + 8 // Random rate between 8-30
-          };
-        }
-
-        acc[key].quantity += 1;
-        acc[key].total_weight_kg += parseFloat(item.weight_kg) || 0;
-
-        return acc;
-      }, {});
-
-      // Convert to array
-      const uniqueItems = Object.values(groupedItems);
-
-      setGenerateDispatchItems(uniqueItems);
+      // API already returns grouped items with rates fetched from order items
+      setGenerateDispatchItems(data.items || []);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load dispatch items';
       toast.error(errorMessage);
