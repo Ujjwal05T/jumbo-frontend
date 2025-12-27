@@ -335,8 +335,13 @@ export default function ChallanPage() {
       if (!response.ok) throw new Error('Failed to load dispatch items with rates');
       const data = await response.json();
 
-      // API already returns grouped items with rates fetched from order items
-      setGenerateDispatchItems(data.items || []);
+      // Set random rate between 29-31 for items with rate 0
+      const itemsWithRates = (data.items || []).map((item: any) => ({
+        ...item,
+        rate: item.rate === 0 ? Math.floor(Math.random() * 3) + 29 : item.rate
+      }));
+
+      setGenerateDispatchItems(itemsWithRates);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load dispatch items';
       toast.error(errorMessage);
@@ -1795,8 +1800,7 @@ export default function ChallanPage() {
                                 <TableCell className="text-right">
                                   <Input
                                     type="number"
-                                    value={item.rate || ""}
-                                    placeholder={item.rate === 0 ? "29-31" : ""}
+                                    value={item.rate}
                                     onChange={(e) => {
                                       const newRate = parseFloat(e.target.value) || 0;
                                       const updatedItems = [...generateDispatchItems];
