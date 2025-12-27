@@ -1795,7 +1795,8 @@ export default function ChallanPage() {
                                 <TableCell className="text-right">
                                   <Input
                                     type="number"
-                                    value={item.rate}
+                                    value={item.rate || ""}
+                                    placeholder={item.rate === 0 ? "29-31" : ""}
                                     onChange={(e) => {
                                       const newRate = parseFloat(e.target.value) || 0;
                                       const updatedItems = [...generateDispatchItems];
