@@ -291,6 +291,9 @@ export function CreateDispatchModal({
   const [selectedOrderId, setSelectedOrderId] = useState<string>("");
   const [orderSearch, setOrderSearch] = useState("");
 
+  // Detect mobile device to prevent keyboard auto-focus issues with Select dropdowns
+  const isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || 'ontouchstart' in window);
+
   // Debounce search to reduce re-renders
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
 
@@ -1144,12 +1147,14 @@ export function CreateDispatchModal({
                     <SelectValue placeholder="Select a client" />
                     </SelectTrigger>
                     <SelectContent>
-                    <SelectSearch
-                      placeholder="Search clients..."
-                      value={clientSearch}
-                      onChange={(e) => setClientSearch(e.target.value)}
-                      onKeyDown={(e) => e.stopPropagation()}
-                    />
+                    {!isMobile && (
+                      <SelectSearch
+                        placeholder="Search clients..."
+                        value={clientSearch}
+                        onChange={(e) => setClientSearch(e.target.value)}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      />
+                    )}
                     <SelectItem value="none" disabled>
                       Select a client
                     </SelectItem>
@@ -1191,15 +1196,17 @@ export function CreateDispatchModal({
                     <SelectValue placeholder="Select order" />
                     </SelectTrigger>
                     <SelectContent>
-                    <SelectSearch
-                      placeholder="Search orders..."
-                      value={orderSearch}
-                      onChange={(e) => {
-                        setOrderSearch(e.target.value);
-                        loadOrders(e.target.value);
-                      }}
-                      onKeyDown={(e) => e.stopPropagation()}
-                    />
+                    {!isMobile && (
+                      <SelectSearch
+                        placeholder="Search orders..."
+                        value={orderSearch}
+                        onChange={(e) => {
+                          setOrderSearch(e.target.value);
+                          loadOrders(e.target.value);
+                        }}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      />
+                    )}
                     <SelectItem value="all">
                       No order selected
                     </SelectItem>
