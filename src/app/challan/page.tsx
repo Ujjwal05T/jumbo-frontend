@@ -621,7 +621,7 @@ export default function ChallanPage() {
 
       const savedData = await saveResponse.json();
 
-      // Fetch full dispatch details for PDF generation
+      // Fetch full dispatch details for client and vehicle info
       const dispatchResponse = await fetch(`${API_BASE_URL}/dispatch/${selectedDispatchForGenerate.id}/details`, {
         headers: { 'ngrok-skip-browser-warning': 'true' }
       });
@@ -630,8 +630,60 @@ export default function ChallanPage() {
 
       const dispatchDetails = await dispatchResponse.json();
 
-      // Convert dispatch to challan data format with the calculated amount
-      const challanData = convertDispatchToChallanData(dispatchDetails, generatePaymentType as string, totalAmount);
+      // Build challan data using form items with actual rates
+      const orderItems = generateDispatchItems.map((item) => {
+        // Parse paper_spec to extract gsm, bf, shade
+        const specsString = item.paper_spec || '';
+        const parts = specsString.split(', ');
+        const gsm = parts[0] ? parseInt(parts[0].replace('gsm', '')) : 0;
+        const bf = parts[1] ? parseFloat(parts[1].replace('bf', '')) : 0;
+        const shade = parts[2] || 'N/A';
+
+        return {
+          id: `${selectedDispatchForGenerate.id}_${item.width_inches}_${item.paper_spec}`,
+          paper: {
+            name: `${gsm}GSM ${bf}BF ${shade}`,
+            gsm: gsm,
+            bf: bf,
+            shade: shade
+          },
+          width_inches: item.width_inches,
+          quantity_rolls: item.quantity,
+          rate: item.rate,
+          amount: item.rate * item.total_weight_kg,
+          quantity_kg: item.total_weight_kg
+        };
+      });
+
+      const challanData = {
+        type: generatePaymentType,
+        orders: [{
+          id: selectedDispatchForGenerate.id,
+          frontend_id: selectedDispatchForGenerate.dispatch_number,
+          order_items: orderItems,
+          client: {
+            company_name: selectedDispatchForGenerate.client.company_name,
+            contact_person: selectedDispatchForGenerate.client.contact_person,
+            address: dispatchDetails.client?.address,
+            phone: dispatchDetails.client?.mobile,
+            email: dispatchDetails.client?.email,
+            gst_number: dispatchDetails.client?.gst_number
+          },
+          payment_type: generatePaymentType,
+          delivery_date: selectedDispatchForGenerate.dispatch_date,
+          created_at: selectedDispatchForGenerate.created_at
+        }],
+        invoice_number: savedData.frontend_id,
+        invoice_date: generateDate || new Date().toISOString().split('T')[0],
+        vehicle_info: {
+          vehicle_number: selectedDispatchForGenerate.vehicle_number,
+          driver_name: selectedDispatchForGenerate.driver_name,
+          driver_mobile: selectedDispatchForGenerate.driver_mobile,
+          dispatch_date: selectedDispatchForGenerate.dispatch_date,
+          dispatch_number: selectedDispatchForGenerate.dispatch_number,
+          reference_number: selectedDispatchForGenerate.reference_number
+        }
+      };
 
       // Generate PDF based on payment type
       if (generatePaymentType === 'cash') {
@@ -651,6 +703,9 @@ export default function ChallanPage() {
       setGenerateDate("");
       setGenerateEbayNo("");
       setGenerateDispatchItems([]);
+
+      // Reload dispatches to update the list (item will move to Bills page)
+      loadDispatches();
     } catch (error) {
       console.error("Error generating payment slip:", error);
       toast.error(error instanceof Error ? error.message : "Failed to generate payment slip");

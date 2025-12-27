@@ -962,14 +962,8 @@ export function CreateDispatchModal({
     });
 
     return (
-      <div style={{
-  display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
-  gap: '16px',
-  border: '1px solid #e5e7eb',
-  borderRadius: '6px',
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 border border-gray-200 rounded-md p-2" style={{
   height: '550px',
-  padding: '8px',
   maxHeight: '900px',
   overflow: 'hidden'
 }}>
@@ -989,13 +983,13 @@ export function CreateDispatchModal({
           zIndex: 10,
         }}>
         <TableRow>
-          <TableHead style={{ width: "40px", fontSize: "14px", fontWeight: 600 }}>S.No</TableHead>
-          <TableHead style={{ width: "150px", fontSize: "14px", fontWeight: 600 }}>ID / Barcode</TableHead>
-          <TableHead style={{ width: "120px", fontSize: "14px", fontWeight: 600 }}>Client&Order</TableHead>
-          <TableHead style={{ fontSize: "14px", fontWeight: 600 }}>Paper Specs</TableHead>
-          <TableHead style={{ width: "60px", textAlign: "center", fontSize: "14px", fontWeight: 600 }}>Width</TableHead>
-          <TableHead style={{ width: "60px", textAlign: "center", fontSize: "14px", fontWeight: 600 }}>Weight</TableHead>
-          <TableHead style={{ width: "50px", textAlign: "center", fontSize: "14px", fontWeight: 600 }}>Select</TableHead>
+          <TableHead className="w-8 md:w-10 text-xs md:text-sm font-semibold">S.No</TableHead>
+          <TableHead className="w-32 md:w-36 text-xs md:text-sm font-semibold">ID / Barcode</TableHead>
+          <TableHead className="w-28 md:w-32 text-xs md:text-sm font-semibold">Client&Order</TableHead>
+          <TableHead className="text-xs md:text-sm font-semibold">Paper Specs</TableHead>
+          <TableHead className="w-16 md:w-20 text-center text-xs md:text-sm font-semibold">Width</TableHead>
+          <TableHead className="w-16 md:w-20 text-center text-xs md:text-sm font-semibold">Weight</TableHead>
+          <TableHead className="w-12 md:w-14 text-center text-xs md:text-sm font-semibold">Select</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -1049,13 +1043,13 @@ export function CreateDispatchModal({
           zIndex: 10,
         }}>
         <TableRow>
-          <TableHead style={{ width: "40px", fontSize: "14px", fontWeight: 600 }}>S.No</TableHead>
-          <TableHead style={{ width: "150px", fontSize: "14px", fontWeight: 600 }}>ID / Barcode</TableHead>
-          <TableHead style={{ width: "120px", fontSize: "14px", fontWeight: 600 }}>Client & Order</TableHead>
-          <TableHead style={{ fontSize: "14px", fontWeight: 600 }}>Paper Specs</TableHead>
-          <TableHead style={{ width: "60px", textAlign: "center", fontSize: "14px", fontWeight: 600 }}>Width</TableHead>
-          <TableHead style={{ width: "60px", textAlign: "center", fontSize: "14px", fontWeight: 600 }}>Weight</TableHead>
-          <TableHead style={{ width: "50px", textAlign: "center", fontSize: "14px", fontWeight: 600 }}>Select</TableHead>
+          <TableHead className="w-8 md:w-10 text-xs md:text-sm font-semibold">S.No</TableHead>
+          <TableHead className="w-32 md:w-36 text-xs md:text-sm font-semibold">ID / Barcode</TableHead>
+          <TableHead className="w-28 md:w-32 text-xs md:text-sm font-semibold">Client & Order</TableHead>
+          <TableHead className="text-xs md:text-sm font-semibold">Paper Specs</TableHead>
+          <TableHead className="w-16 md:w-20 text-center text-xs md:text-sm font-semibold">Width</TableHead>
+          <TableHead className="w-16 md:w-20 text-center text-xs md:text-sm font-semibold">Weight</TableHead>
+          <TableHead className="w-12 md:w-14 text-center text-xs md:text-sm font-semibold">Select</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -1111,9 +1105,8 @@ export function CreateDispatchModal({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
+          className="w-[95vw] max-w-[1200px] lg:max-w-[1680px] max-h-[95vh] flex flex-col p-4 md:p-6"
           style={{
-            maxWidth: step === 1 ? "1200px" : "1680px",
-            maxHeight: "100vh",
             display: "flex",
             flexDirection: "column",
           }}>
@@ -1127,8 +1120,8 @@ export function CreateDispatchModal({
                   padding: "8px",
                 }}>
                 {/* Form fields... */}
-                <div style={{ display: "grid",gridTemplateColumns: "repeat(5, 1fr)", gap: "16px" }}>
-                  <div style={{ gridColumn: "span 2" }}>
+                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                  <div className="md:col-span-2 lg:col-span-2">
                   <label
                     style={{
                     fontSize: "16px",
@@ -1178,7 +1171,7 @@ export function CreateDispatchModal({
                   </Select>
                   </div>
 
-                  <div style={{ gridColumn: "span 1" }}>
+                  <div className="md:col-span-1 lg:col-span-1">
                   <label
                     style={{
                     fontSize: "16px",
@@ -1290,12 +1283,7 @@ export function CreateDispatchModal({
                   </div>
                 </div>
 
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(5, 1fr)",
-                    gap: "16px",
-                  }}>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                  
 
                   <div>
@@ -1424,7 +1412,7 @@ export function CreateDispatchModal({
 
                 <Button
                   onClick={handleSaveDetails}
-                  style={{ width: "100%", fontSize: "16px", padding: "12px",marginTop: "8px" }}
+                  className="w-full text-sm md:text-base mt-2"
                   size="lg">
                   <CheckCircle
                     style={{
@@ -1447,48 +1435,26 @@ export function CreateDispatchModal({
                 }}>
                 {/* Summary */}
                 {/* Search */}
-                <div className="flex items-center justify-between">
-                  <div style={{ position: "relative", width: "50%" }}>
-                    <Search
-                      style={{
-                        position: "absolute",
-                        left: "16px",
-                        top: "22px",
-                        width: "24px",
-                        height: "24px",
-                        color: "#6b7280",
-                      }}
-                    />
+                <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+                  <div className="relative w-full md:w-1/2">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 md:w-6 md:h-6 text-gray-500" />
                     <Input
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="border-3 border-orange-700"
+                      className="border-3 border-orange-700 h-12 md:h-16 text-base md:text-xl pl-12 pr-12"
                       placeholder="Search across all items: QR code, barcode, reel no, order, paper spec, creator..."
-                      style={{
-                        paddingLeft: "48px",
-                        paddingRight: "48px",
-                        height: "66px",
-                        fontSize: "22px",
-                      }}
                     />
                     {searchTerm && (
                       <Button
                         size="sm"
                         variant="ghost"
                         onClick={() => setSearchTerm("")}
-                        style={{
-                          position: "absolute",
-                          right: "8px",
-                          top: "8px",
-                          width: "40px",
-                          height: "40px",
-                          padding: 0,
-                        }}>
-                        <X style={{ width: "20px", height: "20px" }} />
+                        className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 md:w-10 md:h-10 p-0">
+                        <X className="w-4 h-4 md:w-5 md:h-5" />
                       </Button>
                     )}
                   </div>
-                  <div className="space-x-7">
+                  <div className="flex gap-2 md:gap-4 w-full md:w-auto">
                    
                     <Button
                       onClick={() => {
@@ -1496,24 +1462,16 @@ export function CreateDispatchModal({
                         handlePrintPreview()
                       }}
                       disabled={stats.totalSelected === 0}
-                      style={{
-                        backgroundColor: "#16a34a",
-                        fontSize: "20px",
-                        padding: "10px 24px",
-                        minWidth: "150px",
-                      }}
+                      className="flex-1 md:flex-none bg-green-600 text-base md:text-lg"
+                      style={{ minWidth: "120px" }}
                       size="lg">
                       Review
                     </Button>
                     <Button
                       onClick={handleDispatchConfirm}
                       disabled={stats.totalSelected === 0}
-                      style={{
-                        backgroundColor: "#16a34a",
-                        fontSize: "20px",
-                        padding: "10px 24px",
-                        minWidth: "150px",
-                      }}
+                      className="flex-1 md:flex-none bg-green-600 text-base md:text-lg"
+                      style={{ minWidth: "120px" }}
                       size="lg">
                       Save
                     </Button>
@@ -1522,46 +1480,22 @@ export function CreateDispatchModal({
 
                 {/* Tab content with optimized table */}
                 <div className="h-full">
-                  <div
-                    style={{
-                      marginBottom: "8px",
-                      fontSize: "14px",
-                      color: "#6b7280",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}>
+                  <div className="mb-2 text-xs md:text-sm text-gray-600 flex flex-col md:flex-row md:items-center justify-between gap-2">
                     <span>
-                      <span style={{ color: "#22c55e", fontWeight: 500 }}>
-                        ●
-                      </span>{" "}
-                      Green border = Priority items | Select items to move them to the right
+                      <span className="text-green-500 font-medium">●</span>{" "}
+                      <span className="hidden md:inline">Green border = Priority items | Select items to move them to the right</span>
+                      <span className="md:hidden">Priority items (green border)</span>
                     </span>
-                    <span style={{ fontWeight: 500 }}>
-                      Total: {displayItems.length} items | Selected: {stats.totalSelected} | Available: {displayItems.length - stats.totalSelected}
+                    <span className="font-medium text-xs md:text-sm">
+                      <span className="hidden md:inline">Total: {displayItems.length} items | Selected: {stats.totalSelected} | Available: {displayItems.length - stats.totalSelected}</span>
+                      <span className="md:hidden">Selected: {stats.totalSelected} / {displayItems.length}</span>
                     </span>
                   </div>
                   {renderTable}
                 </div>
-                <div
-                  style={{
-                    border: "1px solid #86efac",
-                    borderRadius: "6px",
-                    padding: "6px 10px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "20px",
-                    backgroundColor: "#fafafa",
-                  }}>
+                <div className="border border-green-300 rounded-md p-2 md:p-3 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-gray-50">
                   {/* Left Section - Dispatch Details */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "20px",
-                      flex: "0 0 auto",
-                    }}>
+                  <div className="flex flex-wrap items-center gap-2 md:gap-4 flex-1">
                     <div
                       style={{
                         display: "flex",
@@ -1667,13 +1601,7 @@ export function CreateDispatchModal({
                   </div>
 
                   {/* Right Section - Stats and Action */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "24px",
-                      flex: "0 0 auto",
-                    }}>
+                  <div className="flex flex-wrap items-center gap-2 md:gap-4">
                     <div
                       style={{
                         display: "flex",
@@ -1753,39 +1681,35 @@ export function CreateDispatchModal({
                   padding: "8px",
                 }}>
                 {/* Header with Action Buttons */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
                   <div>
-                    <h2 style={{ fontSize: "24px", fontWeight: "bold", marginBottom: "4px" }}>
+                    <h2 className="text-xl md:text-2xl font-bold">
                       Confirm Dispatch
                     </h2>
                   </div>
-                  <div style={{ display: "flex", gap: "12px" }}>
+                  <div className="flex flex-wrap gap-2 md:gap-3 w-full md:w-auto">
                     <Button
                       variant="outline"
                       onClick={() => setStep(2)}
                       disabled={dispatchLoading}
-                      size="lg"
-                      style={{ fontSize: "16px", padding: "12px 24px" }}>
-                      <ArrowLeft style={{ width: "20px", height: "20px", marginRight: "8px" }} />
+                      className="flex-1 md:flex-none text-sm md:text-base"
+                      size="lg">
+                      <ArrowLeft className="w-4 h-4 md:w-5 md:h-5 mr-2" />
                       Back
                     </Button>
                     <Button
                       variant="outline"
                       onClick={handlePrintPreview}
                       disabled={dispatchLoading}
-                      size="lg"
-                      style={{ fontSize: "16px", padding: "12px 24px", borderColor: "#2563eb", color: "#2563eb" }}>
-                      <Printer style={{ width: "20px", height: "20px", marginRight: "8px" }} />
+                      className="flex-1 md:flex-none text-sm md:text-base border-blue-600 text-blue-600"
+                      size="lg">
+                      <Printer className="w-4 h-4 md:w-5 md:h-5 mr-2" />
                       Print Preview
                     </Button>
                     <Button
                       onClick={handleDispatchConfirm}
                       disabled={dispatchLoading}
-                      style={{
-                        backgroundColor: "#16a34a",
-                        fontSize: "16px",
-                        padding: "12px 24px",
-                      }}
+                      className="flex-1 md:flex-none bg-green-600 text-sm md:text-base"
                       size="lg">
                       {dispatchLoading ? (
                         <>
@@ -1803,14 +1727,8 @@ export function CreateDispatchModal({
                 </div>
 
                 {/* Dispatch Summary */}
-                <div
-                  style={{
-                    border: "1px solid #86efac",
-                    borderRadius: "6px",
-                    padding: "12px",
-                    backgroundColor: "#f0fdf4",
-                  }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "12px" }}>
+                <div className="border border-green-300 rounded-md p-3 bg-green-50">
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                     <div>
                       <div style={{ fontSize: "12px", color: "#6b7280", marginBottom: "4px" }}>Client</div>
                       <div style={{ fontWeight: 600, fontSize: "14px" }}>{selectedClient?.company_name}</div>
@@ -1835,17 +1753,17 @@ export function CreateDispatchModal({
                 </div>
 
                 {/* Selected Items in Two Columns */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", maxHeight: "450px", overflow: "hidden" }}>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" style={{ maxHeight: "450px", overflow: "hidden" }}>
                   {/* Left Column */}
-                  <div style={{ border: "1px solid #e5e7eb", borderRadius: "6px", overflow: "auto", maxHeight: "450px" }}>
+                  <div className="border border-gray-200 rounded-md overflow-auto" style={{ maxHeight: "450px" }}>
                     <Table>
                       <TableHeader style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10 }}>
                         <TableRow>
-                          <TableHead style={{ fontSize: "14px", fontWeight: 600 }}>S.No</TableHead>
-                          <TableHead style={{ fontSize: "14px", fontWeight: 600 }}>ID / Barcode</TableHead>
-                          <TableHead style={{ fontSize: "14px", fontWeight: 600 }}>Paper Spec</TableHead>
-                          <TableHead style={{ fontSize: "14px", fontWeight: 600, textAlign: "center" }}>Width</TableHead>
-                          <TableHead style={{ fontSize: "14px", fontWeight: 600, textAlign: "center" }}>Weight</TableHead>
+                          <TableHead className="text-xs md:text-sm font-semibold">S.No</TableHead>
+                          <TableHead className="text-xs md:text-sm font-semibold">ID / Barcode</TableHead>
+                          <TableHead className="text-xs md:text-sm font-semibold">Paper Spec</TableHead>
+                          <TableHead className="text-xs md:text-sm font-semibold text-center">Width</TableHead>
+                          <TableHead className="text-xs md:text-sm font-semibold text-center">Weight</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1886,15 +1804,15 @@ export function CreateDispatchModal({
                   </div>
 
                   {/* Right Column */}
-                  <div style={{ border: "1px solid #e5e7eb", borderRadius: "6px", overflow: "auto", maxHeight: "450px" }}>
+                  <div className="border border-gray-200 rounded-md overflow-auto" style={{ maxHeight: "450px" }}>
                     <Table>
                       <TableHeader style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10 }}>
                         <TableRow>
-                          <TableHead style={{ fontSize: "14px", fontWeight: 600 }}>S.No</TableHead>
-                          <TableHead style={{ fontSize: "14px", fontWeight: 600 }}>ID / Barcode</TableHead>
-                          <TableHead style={{ fontSize: "14px", fontWeight: 600 }}>Paper Spec</TableHead>
-                          <TableHead style={{ fontSize: "14px", fontWeight: 600, textAlign: "center" }}>Width</TableHead>
-                          <TableHead style={{ fontSize: "14px", fontWeight: 600, textAlign: "center" }}>Weight</TableHead>
+                          <TableHead className="text-xs md:text-sm font-semibold">S.No</TableHead>
+                          <TableHead className="text-xs md:text-sm font-semibold">ID / Barcode</TableHead>
+                          <TableHead className="text-xs md:text-sm font-semibold">Paper Spec</TableHead>
+                          <TableHead className="text-xs md:text-sm font-semibold text-center">Width</TableHead>
+                          <TableHead className="text-xs md:text-sm font-semibold text-center">Weight</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>

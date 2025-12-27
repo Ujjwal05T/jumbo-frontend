@@ -45,8 +45,7 @@ import {
 import { API_BASE_URL } from "@/lib/api-config";
 import {
   generateCashChallanPDF,
-  generateBillInvoicePDF,
-  convertDispatchToChallanData
+  generateBillInvoicePDF
 } from "@/lib/challan-pdf";
 
 interface DispatchRecord {
@@ -139,17 +138,70 @@ export default function BillsPage() {
 
   const handlePrintChallan = async (dispatch: DispatchRecord) => {
     try {
-      // Fetch full dispatch details
-      const response = await fetch(`${API_BASE_URL}/dispatch/${dispatch.id}/details`, {
+      // Fetch saved payment slip data with items
+      const response = await fetch(`${API_BASE_URL}/payment-slip/by-dispatch/${dispatch.id}`, {
         headers: { 'ngrok-skip-browser-warning': 'true' }
       });
 
-      if (!response.ok) throw new Error('Failed to fetch dispatch details');
+      if (!response.ok) throw new Error('Failed to fetch payment slip details');
 
-      const dispatchDetails = await response.json();
+      const data = await response.json();
+      const { payment_slip, dispatch: dispatchInfo } = data;
 
-      // Convert dispatch to challan data format
-      const challanData = convertDispatchToChallanData(dispatchDetails, dispatch.payment_type);
+      // Build challan data using saved payment slip items with actual rates
+      const orderItems = payment_slip.items.map((item: any) => {
+        // Parse paper_spec to extract gsm, bf, shade
+        const specsString = item.paper_spec || '';
+        const parts = specsString.split(', ');
+        const gsm = parts[0] ? parseInt(parts[0].replace('gsm', '')) : 0;
+        const bf = parts[1] ? parseFloat(parts[1].replace('bf', '')) : 0;
+        const shade = parts[2] || 'N/A';
+
+        return {
+          id: `${dispatch.id}_${item.width_inches}_${item.paper_spec}`,
+          paper: {
+            name: `${gsm}GSM ${bf}BF ${shade}`,
+            gsm: gsm,
+            bf: bf,
+            shade: shade
+          },
+          width_inches: item.width_inches,
+          quantity_rolls: item.quantity,
+          rate: item.rate,
+          amount: item.amount,
+          quantity_kg: item.total_weight_kg
+        };
+      });
+
+      const challanData = {
+        type: payment_slip.payment_type,
+        orders: [{
+          id: dispatch.id,
+          frontend_id: dispatchInfo.dispatch_number,
+          order_items: orderItems,
+          client: {
+            company_name: dispatchInfo.client.company_name,
+            contact_person: dispatchInfo.client.contact_person,
+            address: dispatchInfo.client.address,
+            phone: dispatchInfo.client.phone,
+            email: dispatchInfo.client.email,
+            gst_number: dispatchInfo.client.gst_number
+          },
+          payment_type: payment_slip.payment_type,
+          delivery_date: dispatchInfo.dispatch_date,
+          created_at: dispatch.created_at
+        }],
+        invoice_number: payment_slip.frontend_id,
+        invoice_date: payment_slip.slip_date || new Date().toISOString().split('T')[0],
+        vehicle_info: {
+          vehicle_number: dispatchInfo.vehicle_number,
+          driver_name: dispatchInfo.driver_name,
+          driver_mobile: dispatchInfo.driver_mobile,
+          dispatch_date: dispatchInfo.dispatch_date,
+          dispatch_number: dispatchInfo.dispatch_number,
+          reference_number: dispatchInfo.reference_number
+        }
+      };
 
       // Generate PDF based on payment type
       if (dispatch.payment_type === 'cash') {

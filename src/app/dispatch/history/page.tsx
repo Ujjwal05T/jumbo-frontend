@@ -399,26 +399,26 @@ export default function DispatchHistoryPage() {
   
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6 p-2 md:p-0">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="space-y-1">
-            <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
-              <Truck className="w-6 h-6 text-primary" />
+            <h1 className="text-lg md:text-xl font-bold tracking-tight flex items-center gap-2">
+              <Truck className="w-5 h-5 md:w-6 md:h-6 text-primary" />
               Dispatch History
             </h1>
             {selectedRowId && (
               <p className="text-sm text-muted-foreground">1 dispatch selected</p>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
             {/* Action Buttons */}
             <Button
               onClick={() => selectedRowId && loadDispatchDetails(selectedRowId)}
               disabled={!selectedRowId}
               variant="outline"
               size="lg"
-              className="text-xl"
+              className="flex-1 md:flex-none text-base md:text-xl"
             >
               View
             </Button>
@@ -437,7 +437,7 @@ export default function DispatchHistoryPage() {
               disabled={!selectedRowId || dispatches.find(d => d.id === selectedRowId)?.status !== 'dispatched'}
               variant="outline"
               size="lg"
-              className="text-xl"
+              className="flex-1 md:flex-none text-base md:text-xl"
             >
               Edit
             </Button>
@@ -446,11 +446,11 @@ export default function DispatchHistoryPage() {
               disabled={!selectedRowId}
               variant="outline"
               size="lg"
-              className="text-xl"
+              className="flex-1 md:flex-none text-base md:text-xl"
             >
               Print
             </Button>
-            <Button onClick={() => setCreateModalOpen(true)} variant="default" size="lg" className="text-xl">
+            <Button onClick={() => setCreateModalOpen(true)} variant="default" size="lg" className="flex-1 md:flex-none text-base md:text-xl">
               Create
             </Button>
           </div>
@@ -459,8 +459,8 @@ export default function DispatchHistoryPage() {
         {/* Filters */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="w-5 h-5" />
+            <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+              <Filter className="w-4 h-4 md:w-5 md:h-5" />
                Search
             </CardTitle>
           </CardHeader>
@@ -590,14 +590,14 @@ export default function DispatchHistoryPage() {
           <CardHeader>
             <div className="flex justify-between items-center">
               <div>
-                <CardTitle>Dispatch Records</CardTitle>
-               
+                <CardTitle className="text-base md:text-lg">Dispatch Records</CardTitle>
+
               </div>
             </div>
           </CardHeader>
           <CardContent className="px-4 mt-0">
-            <div className="rounded-md border">
-              <Table>
+            <div className="rounded-md border overflow-x-auto">
+              <Table className="min-w-[800px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Dispatch #</TableHead>
@@ -709,9 +709,10 @@ export default function DispatchHistoryPage() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-between space-x-2 py-4">
-                <div className="text-sm text-muted-foreground">
-                  Showing {((currentPage - 1) * limit) + 1} to {Math.min(currentPage * limit, totalCount)} of {totalCount} results
+              <div className="flex flex-col md:flex-row items-center justify-between gap-2 md:space-x-2 py-4">
+                <div className="text-xs md:text-sm text-muted-foreground">
+                  <span className="hidden md:inline">Showing {((currentPage - 1) * limit) + 1} to {Math.min(currentPage * limit, totalCount)} of {totalCount} results</span>
+                  <span className="md:hidden">{((currentPage - 1) * limit) + 1}-{Math.min(currentPage * limit, totalCount)} of {totalCount}</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Button
@@ -719,10 +720,11 @@ export default function DispatchHistoryPage() {
                     size="sm"
                     onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                     disabled={currentPage <= 1}
+                    className="text-xs md:text-sm"
                   >
                     Previous
                   </Button>
-                  <div className="text-sm">
+                  <div className="text-xs md:text-sm">
                     Page {currentPage} of {totalPages}
                   </div>
                   <Button
@@ -730,6 +732,7 @@ export default function DispatchHistoryPage() {
                     size="sm"
                     onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                     disabled={currentPage >= totalPages}
+                    className="text-xs md:text-sm"
                   >
                     Next
                   </Button>
@@ -742,7 +745,7 @@ export default function DispatchHistoryPage() {
 
       {/* Dispatch Details Modal */}
       <Dialog open={detailsModalOpen} onOpenChange={setDetailsModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="w-5 h-5" />
@@ -761,7 +764,7 @@ export default function DispatchHistoryPage() {
           ) : selectedDispatch && (
             <div className="space-y-6">
               {/* Basic Info */}
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg">Dispatch Information</CardTitle>
@@ -821,7 +824,7 @@ export default function DispatchHistoryPage() {
                   <CardTitle className="text-lg">Transport Details</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">Vehicle Number</label>
                       <div className="font-medium flex items-center gap-2">
@@ -853,7 +856,7 @@ export default function DispatchHistoryPage() {
                   <CardTitle className="text-lg">Summary</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="text-center">
                       <div className="text-2xl font-bold text-blue-600">{selectedDispatch.total_items}</div>
                       <div className="text-sm text-muted-foreground">Total Items</div>
@@ -881,8 +884,8 @@ export default function DispatchHistoryPage() {
                     <CardTitle className="text-lg">Dispatched Items</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="rounded-md border">
-                      <Table>
+                    <div className="rounded-md border overflow-x-auto">
+                      <Table className="min-w-[600px]">
                         <TableHeader>
                           <TableRow>
                             <TableHead>S.No</TableHead>
@@ -914,10 +917,11 @@ export default function DispatchHistoryPage() {
               )}
 
               {/* Action Buttons */}
-              <div className="flex justify-end gap-2">
+              <div className="flex flex-col md:flex-row justify-end gap-2">
                 <Button
                   variant="outline"
                   onClick={() => printPDF(selectedDispatch.id, selectedDispatch.dispatch_number)}
+                  className="w-full md:w-auto"
                 >
                   <Download className="w-4 h-4 mr-2" />
                   Print PDF
@@ -925,11 +929,12 @@ export default function DispatchHistoryPage() {
                 <Button
                   variant="outline"
                   onClick={() => downloadPackingSlip(selectedDispatch.id)}
+                  className="w-full md:w-auto"
                 >
                   <FileText className="w-4 h-4 mr-2" />
                   Print Packing Slip
                 </Button>
-                <Button onClick={() => setDetailsModalOpen(false)}>
+                <Button onClick={() => setDetailsModalOpen(false)} className="w-full md:w-auto">
                   Close
                 </Button>
               </div>
