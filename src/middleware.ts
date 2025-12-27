@@ -8,6 +8,7 @@ import type { NextRequest } from 'next/server';
 const roleBasedRoutes = {
   admin: [
     '/',
+    '/bills',
     '/all-cut-rolls',
     '/all-cut-rolls-filtered',
     '/current-jumbo',

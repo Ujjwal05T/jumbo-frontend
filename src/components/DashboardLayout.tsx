@@ -127,10 +127,13 @@ const getNavigationForRole = (role: string | null) => {
     { name: "Filter Cut Rolls",icon: BarChart3, href: "/reports/all-cut-rolls-filtered", roles: ["dispatch"] },
     
     {
-      name: "Challan",
-      href: "/challan",
+      name: "Bills",
       icon: Receipt,
       roles: ["admin", "accountant"],
+      children: [
+        { name: "Bill Management", href: "/challan", roles: ["admin", "accountant"] },
+        { name: "Added Bills", href: "/bills", roles: ["admin", "accountant"] },
+      ],
     },
     {
       name: "Set Jumbo Roll",

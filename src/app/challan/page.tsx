@@ -66,6 +66,7 @@ import {
   MapPin,
   Phone,
   CheckCircle,
+  CheckCircle2,
   Clock,
   XCircle,
   Filter,
@@ -115,6 +116,7 @@ interface DispatchRecord {
   created_at: string;
   delivered_at?: string;
   items_count: number;
+  has_payment_slip: boolean;
 }
 
 interface DispatchDetails {
@@ -227,8 +229,8 @@ export default function ChallanPage() {
   // Generate modal state
   const [generateModalOpen, setGenerateModalOpen] = useState(false);
   const [selectedDispatchForGenerate, setSelectedDispatchForGenerate] = useState<DispatchRecord | null>(null);
-  const [generatePaymentType, setGeneratePaymentType] = useState<"bill" | "cash" | string>("bill");
-  const [generateTallyNo, setGenerateTallyNo] = useState<string>("");
+  const [generatePaymentType, setGeneratePaymentType] = useState<"bill" | "cash" | string | undefined>(undefined);
+  const [generatePreviewId, setGeneratePreviewId] = useState<string>("");
   const [generateBillNo, setGenerateBillNo] = useState<string>("");
   const [generateDate, setGenerateDate] = useState<string>("");
   const [generateEbayNo, setGenerateEbayNo] = useState<string>("");
@@ -340,6 +342,22 @@ export default function ChallanPage() {
       toast.error(errorMessage);
     } finally {
       setGenerateItemsLoading(false);
+    }
+  };
+
+  const loadPaymentSlipPreviewId = async (paymentType: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/payment-slip/preview-id?payment_type=${paymentType}`, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      });
+
+      if (!response.ok) throw new Error('Failed to load preview ID');
+      const data = await response.json();
+
+      setGeneratePreviewId(data.preview_id);
+    } catch (err) {
+      console.error('Error loading preview ID:', err);
+      setGeneratePreviewId("");
     }
   };
 
@@ -545,44 +563,92 @@ export default function ChallanPage() {
         return;
       }
 
+      if (!generatePaymentType) {
+        toast.error("Please select payment type");
+        return;
+      }
+
+      // Get current user ID
+      const userId = localStorage.getItem('user_id');
+      if (!userId) {
+        toast.error("User not authenticated");
+        return;
+      }
+
       // Calculate total amount from items
       const totalAmount = generateDispatchItems.reduce((sum, item) => {
         return sum + (item.rate * item.total_weight_kg);
       }, 0);
 
-      // Fetch full dispatch details with items
-      const response = await fetch(`${API_BASE_URL}/dispatch/${selectedDispatchForGenerate.id}/details`, {
+      // Prepare items data with calculated amounts
+      const itemsData = generateDispatchItems.map(item => ({
+        width_inches: item.width_inches,
+        paper_spec: item.paper_spec,
+        quantity: item.quantity,
+        total_weight_kg: item.total_weight_kg,
+        rate: item.rate,
+        amount: item.rate * item.total_weight_kg
+      }));
+
+      // Save payment slip to database
+      const saveResponse = await fetch(`${API_BASE_URL}/payment-slip/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
+        body: JSON.stringify({
+          dispatch_record_id: selectedDispatchForGenerate.id,
+          payment_type: generatePaymentType,
+          slip_date: generateDate || null,
+          bill_no: generateBillNo || null,
+          ebay_no: generateEbayNo || null,
+          total_amount: totalAmount,
+          items: itemsData,
+          created_by_id: userId
+        })
+      });
+
+      if (!saveResponse.ok) {
+        const errorData = await saveResponse.json();
+        throw new Error(errorData.detail || 'Failed to save payment slip');
+      }
+
+      const savedData = await saveResponse.json();
+
+      // Fetch full dispatch details for PDF generation
+      const dispatchResponse = await fetch(`${API_BASE_URL}/dispatch/${selectedDispatchForGenerate.id}/details`, {
         headers: { 'ngrok-skip-browser-warning': 'true' }
       });
 
-      if (!response.ok) throw new Error('Failed to fetch dispatch details');
+      if (!dispatchResponse.ok) throw new Error('Failed to fetch dispatch details');
 
-      const dispatchDetails = await response.json();
+      const dispatchDetails = await dispatchResponse.json();
 
       // Convert dispatch to challan data format with the calculated amount
-      const challanData = convertDispatchToChallanData(dispatchDetails, generatePaymentType, totalAmount);
+      const challanData = convertDispatchToChallanData(dispatchDetails, generatePaymentType as string, totalAmount);
 
       // Generate PDF based on payment type
       if (generatePaymentType === 'cash') {
         generateCashChallanPDF(challanData);
-        toast.success("Cash challan PDF generated successfully");
+        toast.success(`Cash challan ${savedData.frontend_id} saved and PDF generated successfully`);
       } else {
         generateBillInvoicePDF(challanData);
-        toast.success("GST Tax Invoice PDF generated successfully");
+        toast.success(`Bill invoice ${savedData.frontend_id} saved and PDF generated successfully`);
       }
 
       // Close modal and reset state
       setGenerateModalOpen(false);
       setSelectedDispatchForGenerate(null);
-      setGeneratePaymentType("bill");
-      setGenerateTallyNo("");
+      setGeneratePaymentType(undefined);
+      setGeneratePreviewId("");
       setGenerateBillNo("");
       setGenerateDate("");
       setGenerateEbayNo("");
       setGenerateDispatchItems([]);
     } catch (error) {
-      console.error("Error generating payment slip PDF:", error);
-      toast.error("Failed to generate payment slip PDF");
+      console.error("Error generating payment slip:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to generate payment slip");
     }
   };
 
@@ -817,18 +883,7 @@ export default function ChallanPage() {
       {/* Packing Slip Records Table */}
       <Card>
         <CardHeader>
-          <div className="flex justify-between items-center">
-            <div>
-              <CardTitle>Packing Slip Records</CardTitle>
-              <CardDescription>
-                {totalCount} packing slip records found
-              </CardDescription>
-            </div>
-            <Button onClick={loadDispatches} variant="outline" size="sm">
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Refresh
-            </Button>
-          </div>
+              <CardTitle className="p-0 m-0">Challan Records</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border">
@@ -857,7 +912,7 @@ export default function ChallanPage() {
                     </TableCell>
                   </TableRow>
                 ) : dispatches.length > 0 ? (
-                  dispatches.map((dispatch) => (
+                  dispatches.filter(d => !d.has_payment_slip).map((dispatch) => (
                     <TableRow key={dispatch.id}>
                       <TableCell>
                         <div className="space-y-1">
@@ -922,18 +977,25 @@ export default function ChallanPage() {
                         {getStatusBadge(dispatch.status)}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          size="sm"
-                          variant="default"
-                          onClick={() => {
-                            setSelectedDispatchForGenerate(dispatch);
-                            setGenerateModalOpen(true);
-                            loadDispatchItemsForGenerate(dispatch.id);
-                          }}
-                        >
-                          <FileText className="w-4 h-4 mr-1" />
-                          Generate
-                        </Button>
+                        {dispatch.has_payment_slip ? (
+                          <div className="flex items-center gap-1 text-green-600 text-sm font-medium">
+                            <CheckCircle2 className="w-4 h-4" />
+                            Generated
+                          </div>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={() => {
+                              setSelectedDispatchForGenerate(dispatch);
+                              setGenerateModalOpen(true);
+                              loadDispatchItemsForGenerate(dispatch.id);
+                            }}
+                          >
+                            <FileText className="w-4 h-4 mr-1" />
+                            Generate
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
@@ -1393,11 +1455,8 @@ export default function ChallanPage() {
           <div className="space-y-1">
             <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
               <Receipt className="w-8 h-8 text-primary" />
-              Challan Management
+              Bill Management
             </h1>
-            <p className="text-muted-foreground">
-              Manage packing slips, cash challans, and billing records
-            </p>
           </div>
           <Button onClick={() => window.location.href = '/dispatch'} variant="outline">
             <Package className="w-4 h-4 mr-2" />
@@ -1434,7 +1493,7 @@ export default function ChallanPage() {
                 <div className="grid grid-cols-2 gap-6">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-lg">Packing Slip Information</CardTitle>
+                      <CardTitle className="text-lg">Challan Information</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <div>
@@ -1619,23 +1678,26 @@ export default function ChallanPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="w-5 h-5" />
-              Generate Payment Slip
+              Generate Bill
             </DialogTitle>
-            <DialogDescription>
-              Fill in the form details to generate the payment slip
-            </DialogDescription>
           </DialogHeader>
 
           {selectedDispatchForGenerate && (
             <div className="space-y-6">
               {/* Form Fields */}
               <div className="space-y-4">
-                {/* Row 1: Payment Type and Date */}
-                <div className="grid grid-cols-2 gap-4">
+                {/* Row 1: Payment Type, Date, and Preview ID */}
+                <div className="grid grid-cols-3 gap-4">
                   {/* Payment Type Selection */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Payment Type *</label>
-                    <Select value={generatePaymentType} onValueChange={setGeneratePaymentType}>
+                    <Select
+                      value={generatePaymentType}
+                      onValueChange={(value) => {
+                        setGeneratePaymentType(value);
+                        loadPaymentSlipPreviewId(value);
+                      }}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Select payment type" />
                       </SelectTrigger>
@@ -1644,6 +1706,18 @@ export default function ChallanPage() {
                         <SelectItem value="cash">Cash</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  {/* Preview ID */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Invoice No.</label>
+                    <Input
+                      type="text"
+                      value={generatePreviewId || ""}
+                      readOnly
+                      placeholder="Select payment type"
+                      className="bg-gray-50 font-semibold"
+                    />
                   </div>
 
                   {/* Date */}
@@ -1657,41 +1731,32 @@ export default function ChallanPage() {
                   </div>
                 </div>
 
-                {/* Row 2: Tally No., Bill No., eBay No. */}
-                <div className="grid grid-cols-3 gap-4">
-                  {/* Tally No. */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Tally No.</label>
-                    <Input
-                      type="text"
-                      placeholder="Enter tally number"
-                      value={generateTallyNo}
-                      onChange={(e) => setGenerateTallyNo(e.target.value)}
-                    />
-                  </div>
+                {/* Row 2: Bill No., eBay No. (Only for Bill type) */}
+                {generatePaymentType === 'bill' && (
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Bill No. */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Bill No.</label>
+                      <Input
+                        type="text"
+                        placeholder="Enter bill number"
+                        value={generateBillNo}
+                        onChange={(e) => setGenerateBillNo(e.target.value)}
+                      />
+                    </div>
 
-                  {/* Bill No. */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Bill No.</label>
-                    <Input
-                      type="text"
-                      placeholder="Enter bill number"
-                      value={generateBillNo}
-                      onChange={(e) => setGenerateBillNo(e.target.value)}
-                    />
+                    {/* eBay No. */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">eBay No.</label>
+                      <Input
+                        type="text"
+                        placeholder="Enter eBay number"
+                        value={generateEbayNo}
+                        onChange={(e) => setGenerateEbayNo(e.target.value)}
+                      />
+                    </div>
                   </div>
-
-                  {/* eBay No. */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">eBay No.</label>
-                    <Input
-                      type="text"
-                      placeholder="Enter eBay number"
-                      value={generateEbayNo}
-                      onChange={(e) => setGenerateEbayNo(e.target.value)}
-                    />
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* Dispatch Items with Rates */}
@@ -1766,8 +1831,8 @@ export default function ChallanPage() {
                   onClick={() => {
                     setGenerateModalOpen(false);
                     setSelectedDispatchForGenerate(null);
-                    setGeneratePaymentType("bill");
-                    setGenerateTallyNo("");
+                    setGeneratePaymentType(undefined);
+                    setGeneratePreviewId("");
                     setGenerateBillNo("");
                     setGenerateDate("");
                     setGenerateEbayNo("");
@@ -1778,7 +1843,7 @@ export default function ChallanPage() {
                 </Button>
                 <Button onClick={handleGeneratePaymentSlip}>
                   <FileText className="w-4 h-4 mr-2" />
-                  Generate
+                  Save
                 </Button>
               </div>
             </div>
