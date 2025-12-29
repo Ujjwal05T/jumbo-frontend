@@ -14,7 +14,8 @@ import {
   type JumboHierarchy,
   type SetHierarchy,
   type CutRollHierarchy,
-  type WastageAllocationResponse
+  type WastageAllocationResponse,
+  type ManualRollInfo
 } from '@/lib/roll-tracking';
 import {
   Search,
@@ -84,6 +85,8 @@ export default function BarcodeLookupPage() {
         // Search by barcode for hierarchy
         // Append year suffix if not already present
         const barcodeWithYear = query.includes('-') ? query : `${query}-${selectedYear}`;
+        //for old backend compatibility
+        // const barcodeWithYear = query
         const data = await trackRollHierarchy(barcodeWithYear);
         setHierarchyData(data);
         // Expand all sets by default
@@ -698,13 +701,134 @@ export default function BarcodeLookupPage() {
     );
   };
 
+  const renderManualCutRoll = (rollInfo: ManualRollInfo) => {
+    return (
+      <div className="space-y-6">
+        {/* Manual Cut Roll Card */}
+        <Card className="border-orange-200 bg-orange-50">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Scissors className="h-6 w-6 text-orange-600" />
+                <div>
+                  <CardTitle className="text-xl">Manual Cut Roll</CardTitle>
+                  <CardDescription className="font-mono">{rollInfo.barcode_id}</CardDescription>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Badge variant="outline" className="text-sm px-3 py-1 bg-orange-100 border-orange-400">
+                  Manual Entry
+                </Badge>
+                <Badge variant={getStatusBadgeVariant(rollInfo.status)} className="text-sm px-3 py-1">
+                  {getStatusDisplayText(rollInfo.status)}
+                </Badge>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <p className="text-muted-foreground">Frontend ID</p>
+                <p className="font-semibold font-mono">{rollInfo.frontend_id}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Reel Number</p>
+                <p className="font-semibold">{rollInfo.reel_number}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Width</p>
+                <p className="font-semibold">{rollInfo.width_inches}"</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Weight</p>
+                <p className="font-semibold">{rollInfo.weight_kg} kg</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm mt-4">
+              <div>
+                <p className="text-muted-foreground">Location</p>
+                <p className="font-semibold">{rollInfo.location || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Created At</p>
+                <p className="font-semibold">{new Date(rollInfo.created_at).toLocaleDateString()}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Client Information */}
+        {rollInfo.client && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Client Information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Company Name</p>
+                  <p className="font-semibold">{rollInfo.client.company_name}</p>
+                </div>
+                {rollInfo.client.contact_person && (
+                  <div>
+                    <p className="text-muted-foreground">Contact Person</p>
+                    <p className="font-semibold">{rollInfo.client.contact_person}</p>
+                  </div>
+                )}
+                {rollInfo.client.phone && (
+                  <div>
+                    <p className="text-muted-foreground">Phone</p>
+                    <p className="font-semibold">{rollInfo.client.phone}</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Paper Specifications */}
+        {rollInfo.paper && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Paper Specifications</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Name</p>
+                  <p className="font-semibold">{rollInfo.paper.name}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">GSM</p>
+                  <p className="font-semibold">{rollInfo.paper.gsm}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">BF</p>
+                  <p className="font-semibold">{rollInfo.paper.bf}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Shade</p>
+                  <p className="font-semibold">{rollInfo.paper.shade}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Type</p>
+                  <p className="font-semibold">{rollInfo.paper.type}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Barcode Lookup</h1>
           <p className="text-muted-foreground mt-1">
-            Track production hierarchy by entering any barcode (Jumbo, SET, or Cut Roll)
+            Track production hierarchy by entering any barcode (Jumbo, SET, Cut Roll, or Manual Roll)
           </p>
         </div>
       </div>
@@ -784,6 +908,7 @@ export default function BarcodeLookupPage() {
       {hierarchyData && (
         <div className="space-y-6">
           {/* Render hierarchy based on roll type */}
+          {hierarchyData.roll_type === 'manual_cut' && hierarchyData.manual_roll_info && renderManualCutRoll(hierarchyData.manual_roll_info)}
           {hierarchyData.roll_type === 'jumbo' && renderJumboHierarchy(hierarchyData.hierarchy as JumboHierarchy)}
           {hierarchyData.roll_type === '118' && renderSetHierarchy(hierarchyData.hierarchy as SetHierarchy)}
           {hierarchyData.roll_type === 'cut' && renderCutRollHierarchy(hierarchyData.hierarchy as CutRollHierarchy)}

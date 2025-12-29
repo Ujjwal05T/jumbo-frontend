@@ -312,7 +312,7 @@ export function CreateDispatchModal({
       loadWastageItems();
       loadManualCutRolls();
       loadPreviewNumber();
-      // loadOrders(); // Load all orders on mount
+      loadOrders(); // Load all orders on mount
     } else {
       // Reset state
       setStep(1);
@@ -1197,7 +1197,7 @@ export function CreateDispatchModal({
                   </Select>
                   </div>
 
-                  {/* <div className="md:col-span-1 lg:col-span-1">
+                  <div className="md:col-span-1 lg:col-span-1">
                   <label
                     style={{
                     fontSize: "16px",
@@ -1247,7 +1247,7 @@ export function CreateDispatchModal({
                     )}
                     </SelectContent>
                   </Select>
-                  </div> */}
+                  </div>
 
                    <div>
                   <label

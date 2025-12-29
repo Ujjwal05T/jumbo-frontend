@@ -371,11 +371,39 @@ export interface CutRollHierarchy {
   all_sets_from_jumbo: SetRollInfo[];
 }
 
+export interface ManualRollInfo {
+  id: string;
+  barcode_id: string;
+  frontend_id: string;
+  reel_number: string;
+  width_inches: number;
+  weight_kg: number;
+  status: string;
+  location: string;
+  created_at: string;
+  client?: {
+    id: string;
+    company_name: string;
+    contact_person?: string;
+    phone?: string;
+  };
+  paper?: {
+    id: string;
+    name: string;
+    gsm: number;
+    bf: number;
+    shade: string;
+    type: string;
+  };
+}
+
 export interface HierarchyTrackingResponse {
   searched_barcode: string;
-  roll_type: 'jumbo' | '118' | 'cut';
-  hierarchy: JumboHierarchy | SetHierarchy | CutRollHierarchy;
-  searched_roll_info: {
+  roll_type: 'jumbo' | '118' | 'cut' | 'manual_cut';
+  hierarchy?: JumboHierarchy | SetHierarchy | CutRollHierarchy | null;
+  is_manual_roll?: boolean;
+  manual_roll_info?: ManualRollInfo;
+  searched_roll_info?: {
     id: string;
     barcode_id: string;
     qr_code?: string;
