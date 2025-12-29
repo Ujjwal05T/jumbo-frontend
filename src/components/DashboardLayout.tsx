@@ -94,7 +94,7 @@ const getNavigationForRole = (role: string | null) => {
       name: "Weight Update",
       href: "/weight-update",
       icon: Database,
-      roles: ["admin", "weight_update", "accountant"],
+      roles: ["admin", "weight_update", "accountant",'dispatch'],
     },
     {
       name: "In/Out",
@@ -126,15 +126,15 @@ const getNavigationForRole = (role: string | null) => {
     { name: "All cut rolls",icon: BarChart3, href: "/reports/all-cut-rolls", roles: ["dispatch"] },
     { name: "Filter Cut Rolls",icon: BarChart3, href: "/reports/all-cut-rolls-filtered", roles: ["dispatch"] },
     
-    {
-      name: "Bills",
-      icon: Receipt,
-      roles: ["admin", "accountant"],
-      children: [
-        { name: "Bill Management", href: "/challan", roles: ["admin", "accountant"] },
-        { name: "Added Bills", href: "/bills", roles: ["admin", "accountant"] },
-      ],
-    },
+    // {
+    //   name: "Bills",
+    //   icon: Receipt,
+    //   roles: ["admin", "accountant"],
+    //   children: [
+    //     { name: "Bill Management", href: "/challan", roles: ["admin", "accountant"] },
+    //     { name: "Added Bills", href: "/bills", roles: ["admin", "accountant"] },
+    //   ],
+    // },
     {
       name: "Set Jumbo Roll",
       href: "/current-jumbo",
@@ -151,7 +151,7 @@ const getNavigationForRole = (role: string | null) => {
       name: "Barcode Lookup",
       href: "/barcode-lookup",
       icon: Barcode,
-      roles: ["admin"],
+      roles: ["admin","dispatch"],
     },
     {
       name: "Reports",

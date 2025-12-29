@@ -86,6 +86,8 @@ const roleBasedRoutes = {
     '/plan-weights',
     '/hour-calculator',
     '/reports/all-cut-rolls',
+    '/barcode-lookup',
+    '/weight-update',
   ],
   sales_person: [
     '/masters/orders',

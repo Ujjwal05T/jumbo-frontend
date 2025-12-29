@@ -482,10 +482,25 @@ export default function WeightUpdateScanner() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [barcodeInput, setBarcodeInput] = useState('CR_');
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString().slice(-2));
   const [scanResult, setScanResult] = useState<QRScanResult | null>(null);
   const [userName, setUserName] = useState<string>('');
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+
+  // Generate dynamic year options (current year ± 2 years)
+  const getYearOptions = () => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let i = -2; i <= 2; i++) {
+      const year = currentYear + i;
+      years.push({
+        value: year.toString().slice(-2),
+        label: year.toString()
+      });
+    }
+    return years;
+  };
 
   useEffect(() => {
     // Get user name from localStorage
@@ -526,16 +541,19 @@ export default function WeightUpdateScanner() {
       toast.error('Invalid barcode format');
       return;
     }
-    
+
+    // Append year suffix if not already present
+    const barcodeWithYear = qrCode.includes('-') ? qrCode : `${qrCode}-${selectedYear}`;
+
     try {
       setLoading(true);
       setError(null);
-      
-      const result = await scanQRCode(qrCode);
+
+      const result = await scanQRCode(barcodeWithYear);
       setScanResult(result);
-      
+
       toast.success('Barcode scanned successfully!');
-      
+
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to scan barcode';
       setError(errorMessage);
@@ -621,27 +639,46 @@ export default function WeightUpdateScanner() {
               <form onSubmit={handleBarcodeSubmit} className="space-y-4 sm:space-y-6">
                 <div>
                   <Label htmlFor="barcode-input" className="text-base sm:text-lg font-medium mb-2 sm:mb-3 block">
-                    Barcode
+                    Barcode & Year
                   </Label>
-                  <div className="flex items-center">
-                    <div className="text-lg sm:text-xl p-3 sm:p-4 h-12 sm:h-14 bg-gray-100 border border-gray-300 rounded-l-md flex items-center font-mono">
-                      CR_
+                  <div className="flex gap-2">
+                    <div className="flex items-center flex-1">
+                      <div className="text-lg sm:text-xl p-3 sm:p-4 h-12 sm:h-14 bg-gray-100 border border-gray-300 rounded-l-md flex items-center font-mono">
+                        CR_
+                      </div>
+                      <Input
+                        ref={barcodeInputRef}
+                        id="barcode-input"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={barcodeInput.replace('CR_', '')}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/[^0-9]/g, '');
+                          setBarcodeInput('CR_' + value);
+                        }}
+                        placeholder="Enter barcode number"
+                        className="text-lg sm:text-xl p-3 sm:p-4 h-12 sm:h-14 rounded-l-none rounded-r-md"
+                        autoComplete="off"
+                      />
                     </div>
-                    <Input
-                      ref={barcodeInputRef}
-                      id="barcode-input"
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={barcodeInput.replace('CR_', '')}
-                      onChange={(e) => {
-                        const value = e.target.value.replace(/[^0-9]/g, '');
-                        setBarcodeInput('CR_' + value);
-                      }}
-                      placeholder="Enter barcode number"
-                      className="text-lg sm:text-xl p-3 sm:p-4 h-12 sm:h-14 rounded-l-none"
-                      autoComplete="off"
-                    />
+                    <div className="relative">
+                      <select
+                        id="year-select"
+                        value={selectedYear}
+                        onChange={(e) => setSelectedYear(e.target.value)}
+                        className="appearance-none text-lg sm:text-xl p-3 sm:p-4 h-12 sm:h-14 pr-10 border border-gray-300 rounded-md bg-white font-semibold text-blue-600 cursor-pointer hover:bg-blue-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[90px] sm:min-w-[110px]"
+                      >
+                        {getYearOptions().map(year => (
+                          <option key={year.value} value={year.value}>{year.label}</option>
+                        ))}
+                      </select>
+                      <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                        <svg className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </div>
                   </div>
                 </div>
 

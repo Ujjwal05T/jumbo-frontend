@@ -30,12 +30,27 @@ import {
 
 export default function BarcodeLookupPage() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString().slice(-2));
   const [isSearching, setIsSearching] = useState(false);
   const [hierarchyData, setHierarchyData] = useState<HierarchyTrackingResponse | null>(null);
   const [wastageData, setWastageData] = useState<WastageAllocationResponse | null>(null);
   const [searchType, setSearchType] = useState<'barcode' | 'reel_no' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedSets, setExpandedSets] = useState<Set<string>>(new Set());
+
+  // Generate dynamic year options (current year ± 2 years)
+  const getYearOptions = () => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let i = -2; i <= 2; i++) {
+      const year = currentYear + i;
+      years.push({
+        value: year.toString().slice(-2),
+        label: year.toString()
+      });
+    }
+    return years;
+  };
 
   const detectSearchType = (query: string): 'barcode' | 'reel_no' => {
     // If it starts with standard barcode prefixes, it's a barcode
@@ -67,7 +82,9 @@ export default function BarcodeLookupPage() {
         setWastageData(data);
       } else {
         // Search by barcode for hierarchy
-        const data = await trackRollHierarchy(query);
+        // Append year suffix if not already present
+        const barcodeWithYear = query.includes('-') ? query : `${query}-${selectedYear}`;
+        const data = await trackRollHierarchy(barcodeWithYear);
         setHierarchyData(data);
         // Expand all sets by default
         if (data.roll_type === 'jumbo') {
@@ -699,27 +716,45 @@ export default function BarcodeLookupPage() {
           <CardDescription>Search for barcodes (JR_, SET_, CR_) or reel numbers</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-3">
-            <div className="relative flex-1">
-              <Barcode className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Enter barcode (JR_00001, SET_00040, CR_12345) or reel number..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                className="pl-10"
-              />
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Barcode className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Enter barcode (JR_00001, SET_00040, CR_12345) or reel number..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  className="pl-10"
+                />
+              </div>
+              <div className="relative">
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                  className="appearance-none px-4 py-2 pr-10 border border-gray-300 rounded-md bg-white font-semibold text-blue-600 cursor-pointer hover:bg-blue-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[100px] h-10"
+                >
+                  {getYearOptions().map(year => (
+                    <option key={year.value} value={year.value}>{year.label}</option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                  <svg className="h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+              <Button onClick={handleSearch} disabled={isSearching || !searchQuery.trim()}>
+                {isSearching ? (
+                  <>Searching...</>
+                ) : (
+                  <>
+                    <Search className="h-4 w-4 mr-2" />
+                    Search
+                  </>
+                )}
+              </Button>
             </div>
-            <Button onClick={handleSearch} disabled={isSearching || !searchQuery.trim()}>
-              {isSearching ? (
-                <>Searching...</>
-              ) : (
-                <>
-                  <Search className="h-4 w-4 mr-2" />
-                  Search
-                </>
-              )}
-            </Button>
           </div>
 
           {error && (

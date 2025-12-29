@@ -232,7 +232,7 @@ export default function ChallanPage() {
   const [generatePaymentType, setGeneratePaymentType] = useState<"bill" | "cash" | string | undefined>(undefined);
   const [generatePreviewId, setGeneratePreviewId] = useState<string>("");
   const [generateBillNo, setGenerateBillNo] = useState<string>("");
-  const [generateDate, setGenerateDate] = useState<string>("");
+  const [generateDate, setGenerateDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [generateEbayNo, setGenerateEbayNo] = useState<string>("");
   const [generateDispatchItems, setGenerateDispatchItems] = useState<any[]>([]);
   const [generateItemsLoading, setGenerateItemsLoading] = useState(false);

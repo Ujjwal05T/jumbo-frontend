@@ -312,7 +312,7 @@ export function CreateDispatchModal({
       loadWastageItems();
       loadManualCutRolls();
       loadPreviewNumber();
-      loadOrders();
+      // loadOrders(); // Load all orders on mount
     } else {
       // Reset state
       setStep(1);
@@ -326,6 +326,7 @@ export function CreateDispatchModal({
       setPreviewNumber("");
       setClientSearch("");
       setOrderSearch("");
+      setOrders([]); // Clear orders when modal closes
       setDispatchDetails({
         vehicle_number: "",
         driver_name: "",
@@ -359,13 +360,9 @@ export function CreateDispatchModal({
     }
   };
 
-  const loadOrders = async (searchQuery: string = "") => {
+  const loadOrders = async () => {
     try {
-      const url = searchQuery
-        ? `${API_BASE_URL}/orders/list-for-dispatch?search=${encodeURIComponent(searchQuery)}`
-        : `${API_BASE_URL}/orders/list-for-dispatch?limit=1000`;
-
-      const response = await fetch(url, {
+      const response = await fetch(`${API_BASE_URL}/orders/list-for-dispatch?limit=1000`, {
         headers: { "ngrok-skip-browser-warning": "true" },
       });
       if (!response.ok) throw new Error("Failed to load orders");
@@ -528,6 +525,27 @@ export function CreateDispatchModal({
       ? clients.find((c) => c.id === selectedClientId)
       : null;
   }, [selectedClientId, clients]);
+
+  // Filter orders based on selected client and search term
+  const filteredOrders = useMemo(() => {
+    let filtered = orders;
+
+    // Filter by selected client
+    if (selectedClientId && selectedClientId !== "none" && selectedClient) {
+      filtered = filtered.filter(order => order.client_name === selectedClient.company_name);
+    }
+
+    // Filter by search term
+    if (orderSearch && orderSearch.trim()) {
+      const searchLower = orderSearch.toLowerCase();
+      filtered = filtered.filter(order =>
+        order.frontend_id?.toLowerCase().includes(searchLower) ||
+        order.client_name?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    return filtered;
+  }, [orders, selectedClientId, selectedClient, orderSearch]);
 
   // Memoize filtered items - only recompute when search term changes
   const filteredData = useMemo(() => {
@@ -1108,10 +1126,11 @@ export function CreateDispatchModal({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
-          className="w-[95vw] max-w-[1200px] lg:max-w-[1680px] max-h-[95vh] flex flex-col p-4 md:p-6"
+          className="w-[95vw]  max-w-[1200px] lg:max-w-[1680px] max-h-[95vh] flex flex-col p-4 md:p-6"
           style={{
             display: "flex",
             flexDirection: "column",
+            width: step === 1 ? "75vw" : "98vw",
           }}>
           <div style={{ flex: 1, overflow: "auto" }}>
             {step === 1 ? (
@@ -1142,6 +1161,8 @@ export function CreateDispatchModal({
                     onValueChange={(value) => {
                     setSelectedClientId(value);
                     setSelectedItems(new Set());
+                    setSelectedOrderId(""); // Reset order when client changes
+                    setOrderSearch(""); // Clear order search
                     }}>
                     <SelectTrigger>
                     <SelectValue placeholder="Select a client" />
@@ -1176,7 +1197,7 @@ export function CreateDispatchModal({
                   </Select>
                   </div>
 
-                  <div className="md:col-span-1 lg:col-span-1">
+                  {/* <div className="md:col-span-1 lg:col-span-1">
                   <label
                     style={{
                     fontSize: "16px",
@@ -1188,36 +1209,45 @@ export function CreateDispatchModal({
                     }}>
                     <Package style={{ width: "18px", height: "18px" }} />
                     Select Order
+                    {selectedClientId === "none" && (
+                      <span style={{ fontSize: "12px", color: "#ef4444", fontWeight: 400 }}>
+                        (Select client first)
+                      </span>
+                    )}
                   </label>
                   <Select
                     value={selectedOrderId}
-                    onValueChange={setSelectedOrderId}>
-                    <SelectTrigger>
-                    <SelectValue placeholder="Select order" />
+                    onValueChange={setSelectedOrderId}
+                    disabled={selectedClientId === "none"}>
+                    <SelectTrigger disabled={selectedClientId === "none"}>
+                    <SelectValue placeholder={selectedClientId === "none" ? "Select client first" : "Select order"} />
                     </SelectTrigger>
                     <SelectContent>
                     {!isMobile && (
                       <SelectSearch
                         placeholder="Search orders..."
                         value={orderSearch}
-                        onChange={(e) => {
-                          setOrderSearch(e.target.value);
-                          loadOrders(e.target.value);
-                        }}
+                        onChange={(e) => setOrderSearch(e.target.value)}
                         onKeyDown={(e) => e.stopPropagation()}
                       />
                     )}
                     <SelectItem value="all">
                       No order selected
                     </SelectItem>
-                    {orders.map((order) => (
-                      <SelectItem key={order.id} value={order.id}>
-                        {order.frontend_id} - {order.client_name}
-                      </SelectItem>
-                    ))}
+                    {filteredOrders.length === 0 && selectedClientId !== "none" ? (
+                      <div className="px-2 py-3 text-sm text-muted-foreground text-center">
+                        No orders found for this client
+                      </div>
+                    ) : (
+                      filteredOrders.map((order) => (
+                        <SelectItem key={order.id} value={order.id}>
+                          {order.frontend_id} - {order.client_name}
+                        </SelectItem>
+                      ))
+                    )}
                     </SelectContent>
                   </Select>
-                  </div>
+                  </div> */}
 
                    <div>
                   <label

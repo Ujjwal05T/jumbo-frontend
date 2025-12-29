@@ -31,6 +31,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import {
   Truck,
   Search,
   User,
@@ -48,37 +54,47 @@ import {
   generateBillInvoicePDF
 } from "@/lib/challan-pdf";
 
-interface DispatchRecord {
+interface PaymentSlipRecord {
   id: string;
-  frontend_id: string;
-  dispatch_number: string;
-  reference_number: string;
-  dispatch_date: string;
-  client: {
-    id: string;
-    company_name: string;
-    contact_person: string;
-  };
-  vehicle_number: string;
-  driver_name: string;
-  driver_mobile: string;
+  payment_slip_id: string; // BI-00001 or CI-00001
+  slip_date: string;
   payment_type: string;
-  status: string;
+  bill_no: string;
+  ebay_no: string;
+  total_amount: number;
+  dispatch: {
+    id: string;
+    dispatch_number: string;
+    reference_number: string;
+    dispatch_date: string;
+    vehicle_number: string;
+    driver_name: string;
+    driver_mobile: string;
+    status: string;
+    client: {
+      id: string;
+      company_name: string;
+      contact_person: string;
+      phone: string;
+      email: string;
+      address: string;
+      gst_number: string;
+    };
+  };
   total_items: number;
   total_weight_kg: number;
+  created_at: string;
   created_by: {
     id: string;
     name: string;
   };
-  created_at: string;
-  has_payment_slip: boolean;
 }
 
 export default function BillsPage() {
-  const [dispatches, setDispatches] = useState<DispatchRecord[]>([]);
+  const [paymentSlips, setPaymentSlips] = useState<PaymentSlipRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [activeTab, setActiveTab] = useState("bill");
   const [clientFilter, setClientFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -89,8 +105,8 @@ export default function BillsPage() {
 
   useEffect(() => {
     loadClients();
-    loadDispatches();
-  }, [currentPage, searchTerm, statusFilter, clientFilter, fromDate, toDate]);
+    loadPaymentSlips();
+  }, [currentPage, searchTerm, activeTab, clientFilter, fromDate, toDate]);
 
   const loadClients = async () => {
     try {
@@ -106,7 +122,7 @@ export default function BillsPage() {
     }
   };
 
-  const loadDispatches = async () => {
+  const loadPaymentSlips = async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -114,32 +130,33 @@ export default function BillsPage() {
       params.append('limit', limit.toString());
 
       if (searchTerm) params.append('search', searchTerm);
-      if (statusFilter !== 'all') params.append('status', statusFilter);
+      // Use activeTab for payment type filtering
+      params.append('payment_type', activeTab);
       if (clientFilter !== 'all') params.append('client_id', clientFilter);
       if (fromDate) params.append('from_date', fromDate);
       if (toDate) params.append('to_date', toDate);
 
-      const response = await fetch(`${API_BASE_URL}/dispatch/history?${params.toString()}`, {
+      const response = await fetch(`${API_BASE_URL}/payment-slip/list?${params.toString()}`, {
         headers: { 'ngrok-skip-browser-warning': 'true' }
       });
 
-      if (!response.ok) throw new Error('Failed to load dispatches');
+      if (!response.ok) throw new Error('Failed to load payment slips');
 
       const data = await response.json();
-      setDispatches(data.dispatches || []);
+      setPaymentSlips(data.payment_slips || []);
       setTotalPages(data.total_pages || 1);
     } catch (error) {
-      console.error("Error loading dispatches:", error);
+      console.error("Error loading payment slips:", error);
       toast.error("Failed to load payment slips");
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePrintChallan = async (dispatch: DispatchRecord) => {
+  const handlePrintChallan = async (paymentSlip: PaymentSlipRecord) => {
     try {
       // Fetch saved payment slip data with items
-      const response = await fetch(`${API_BASE_URL}/payment-slip/by-dispatch/${dispatch.id}`, {
+      const response = await fetch(`${API_BASE_URL}/payment-slip/by-dispatch/${paymentSlip.dispatch.id}`, {
         headers: { 'ngrok-skip-browser-warning': 'true' }
       });
 
@@ -158,7 +175,7 @@ export default function BillsPage() {
         const shade = parts[2] || 'N/A';
 
         return {
-          id: `${dispatch.id}_${item.width_inches}_${item.paper_spec}`,
+          id: `${paymentSlip.dispatch.id}_${item.width_inches}_${item.paper_spec}`,
           paper: {
             name: `${gsm}GSM ${bf}BF ${shade}`,
             gsm: gsm,
@@ -176,7 +193,7 @@ export default function BillsPage() {
       const challanData = {
         type: payment_slip.payment_type,
         orders: [{
-          id: dispatch.id,
+          id: paymentSlip.dispatch.id,
           frontend_id: dispatchInfo.dispatch_number,
           order_items: orderItems,
           client: {
@@ -189,7 +206,7 @@ export default function BillsPage() {
           },
           payment_type: payment_slip.payment_type,
           delivery_date: dispatchInfo.dispatch_date,
-          created_at: dispatch.created_at
+          created_at: paymentSlip.created_at
         }],
         invoice_number: payment_slip.frontend_id,
         invoice_date: payment_slip.slip_date || new Date().toISOString().split('T')[0],
@@ -204,7 +221,7 @@ export default function BillsPage() {
       };
 
       // Generate PDF based on payment type
-      if (dispatch.payment_type === 'cash') {
+      if (paymentSlip.payment_type === 'cash') {
         generateCashChallanPDF(challanData);
         toast.success("Cash challan PDF generated successfully");
       } else {
@@ -254,13 +271,30 @@ export default function BillsPage() {
           </div>
         </div>
 
-        {/* Filters */}
-        <Card>
+        {/* Tabs for Bill and Cash */}
+        <Tabs value={activeTab} onValueChange={(value) => {
+          setActiveTab(value);
+          setCurrentPage(1); // Reset to page 1 when switching tabs
+        }}>
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="bill">
+              <FileText className="w-4 h-4 mr-2" />
+              Bill Payments
+            </TabsTrigger>
+            <TabsTrigger value="cash">
+              <Receipt className="w-4 h-4 mr-2" />
+              Cash Payments
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="bill" className="space-y-6 mt-6">
+            {/* Filters */}
+            <Card>
           <CardHeader>
             <CardTitle>Filters</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               {/* Search */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">Search</label>
@@ -273,22 +307,6 @@ export default function BillsPage() {
                     className="pl-8"
                   />
                 </div>
-              </div>
-
-              {/* Status Filter */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Status</label>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All statuses" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="dispatched">Dispatched</SelectItem>
-                    <SelectItem value="delivered">Delivered</SelectItem>
-                    <SelectItem value="returned">Returned</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
 
               {/* Client Filter */}
@@ -336,7 +354,6 @@ export default function BillsPage() {
                   variant="outline"
                   onClick={() => {
                     setSearchTerm("");
-                    setStatusFilter("all");
                     setClientFilter("all");
                     setFromDate("");
                     setToDate("");
@@ -362,12 +379,13 @@ export default function BillsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Dispatch #</TableHead>
-                    <TableHead>Date</TableHead>
+                    <TableHead>Payment Slip #</TableHead>
+                    <TableHead>Slip Date</TableHead>
                     <TableHead>Client</TableHead>
                     <TableHead>Vehicle & Driver</TableHead>
                     <TableHead>Items</TableHead>
                     <TableHead>Weight</TableHead>
+                    <TableHead>Amount</TableHead>
                     <TableHead>Payment</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Print</TableHead>
@@ -376,22 +394,27 @@ export default function BillsPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="h-24 text-center">
+                      <TableCell colSpan={10} className="h-24 text-center">
                         <div className="flex items-center justify-center">
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Loading bills...
                         </div>
                       </TableCell>
                     </TableRow>
-                  ) : dispatches.filter(d => d.has_payment_slip).length > 0 ? (
-                    dispatches.filter(d => d.has_payment_slip).map((dispatch) => (
-                      <TableRow key={dispatch.id}>
+                  ) : paymentSlips.length > 0 ? (
+                    paymentSlips.map((slip) => (
+                      <TableRow key={slip.id}>
                         <TableCell>
                           <div className="space-y-1">
-                            <div className="font-medium">{dispatch.dispatch_number}</div>
-                            {dispatch.reference_number && (
+                            <div className="font-medium">{slip.payment_slip_id}</div>
+                            {slip.bill_no && (
                               <div className="text-xs text-muted-foreground">
-                                Ref: {dispatch.reference_number}
+                                Bill: {slip.bill_no}
+                              </div>
+                            )}
+                            {slip.dispatch.reference_number && (
+                              <div className="text-xs text-muted-foreground">
+                                Ref: {slip.dispatch.reference_number}
                               </div>
                             )}
                           </div>
@@ -399,18 +422,18 @@ export default function BillsPage() {
                         <TableCell>
                           <div className="space-y-1">
                             <div className="font-medium">
-                              {new Date(dispatch.dispatch_date).toLocaleDateString('en-GB')}
+                              {slip.slip_date ? new Date(slip.slip_date).toLocaleDateString('en-GB') : 'N/A'}
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              {new Date(dispatch.dispatch_date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                              Dispatch: {new Date(slip.dispatch.dispatch_date).toLocaleDateString('en-GB')}
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="space-y-1">
-                            <div className="font-medium">{dispatch.client.company_name}</div>
+                            <div className="font-medium">{slip.dispatch.client.company_name}</div>
                             <div className="text-xs text-muted-foreground">
-                              {dispatch.client.contact_person}
+                              {slip.dispatch.client.contact_person}
                             </div>
                           </div>
                         </TableCell>
@@ -418,41 +441,47 @@ export default function BillsPage() {
                           <div className="space-y-1">
                             <div className="font-medium flex items-center gap-1">
                               <Truck className="w-3 h-3" />
-                              {dispatch.vehicle_number}
+                              {slip.dispatch.vehicle_number}
                             </div>
                             <div className="text-xs text-muted-foreground flex items-center gap-1">
                               <User className="w-3 h-3" />
-                              {dispatch.driver_name}
+                              {slip.dispatch.driver_name}
                             </div>
                             <div className="text-xs text-muted-foreground flex items-center gap-1">
                               <Phone className="w-3 h-3" />
-                              {dispatch.driver_mobile}
+                              {slip.dispatch.driver_mobile}
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="text-center">
-                            <div className="font-medium">{dispatch.total_items}</div>
+                            <div className="font-medium">{slip.total_items}</div>
                             <div className="text-xs text-muted-foreground">items</div>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="text-center">
-                            <div className="font-medium">{dispatch.total_weight_kg.toFixed(1)}kg</div>
+                            <div className="font-medium">{slip.total_weight_kg.toFixed(1)}kg</div>
                             <div className="text-xs text-muted-foreground">total</div>
                           </div>
                         </TableCell>
                         <TableCell>
-                          {getPaymentTypeBadge(dispatch.payment_type)}
+                          <div className="text-center">
+                            <div className="font-medium">₹{slip.total_amount.toFixed(2)}</div>
+                            <div className="text-xs text-muted-foreground">amount</div>
+                          </div>
                         </TableCell>
                         <TableCell>
-                          {getStatusBadge(dispatch.status)}
+                          {getPaymentTypeBadge(slip.payment_type)}
+                        </TableCell>
+                        <TableCell>
+                          {getStatusBadge(slip.dispatch.status)}
                         </TableCell>
                         <TableCell>
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handlePrintChallan(dispatch)}
+                            onClick={() => handlePrintChallan(slip)}
                           >
                             <Printer className="w-4 h-4 mr-1" />
                             Print
@@ -462,7 +491,7 @@ export default function BillsPage() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={9} className="h-24 text-center">
+                      <TableCell colSpan={10} className="h-24 text-center">
                         <div className="text-center py-4">
                           <div className="text-muted-foreground">
                             <p className="font-medium">No generated bills found</p>
@@ -504,6 +533,256 @@ export default function BillsPage() {
             )}
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="cash" className="space-y-6 mt-6">
+            {/* Filters */}
+            <Card>
+          <CardHeader>
+            <CardTitle>Filters</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              {/* Search */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Search</label>
+                <div className="relative">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+              </div>
+
+              {/* Client Filter */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Client</label>
+                <Select value={clientFilter} onValueChange={setClientFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All clients" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Clients</SelectItem>
+                    {clients.sort((a, b) => a.company_name.localeCompare(b.company_name)).map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.company_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* From Date */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">From Date</label>
+                <Input
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                />
+              </div>
+
+              {/* To Date */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">To Date</label>
+                <Input
+                  type="date"
+                  value={toDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                />
+              </div>
+
+              {/* Reset Button */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">&nbsp;</label>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSearchTerm("");
+                    setClientFilter("all");
+                    setFromDate("");
+                    setToDate("");
+                    setCurrentPage(1);
+                  }}
+                  className="w-full"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Reset
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Generated Bills Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Generated Bills</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Payment Slip #</TableHead>
+                    <TableHead>Slip Date</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead>Vehicle & Driver</TableHead>
+                    <TableHead>Items</TableHead>
+                    <TableHead>Weight</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Payment</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Print</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={10} className="h-24 text-center">
+                        <div className="flex items-center justify-center">
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Loading bills...
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : paymentSlips.length > 0 ? (
+                    paymentSlips.map((slip) => (
+                      <TableRow key={slip.id}>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="font-medium">{slip.payment_slip_id}</div>
+                            {slip.bill_no && (
+                              <div className="text-xs text-muted-foreground">
+                                Bill: {slip.bill_no}
+                              </div>
+                            )}
+                            {slip.dispatch.reference_number && (
+                              <div className="text-xs text-muted-foreground">
+                                Ref: {slip.dispatch.reference_number}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="font-medium">
+                              {slip.slip_date ? new Date(slip.slip_date).toLocaleDateString('en-GB') : 'N/A'}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              Dispatch: {new Date(slip.dispatch.dispatch_date).toLocaleDateString('en-GB')}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="font-medium">{slip.dispatch.client.company_name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {slip.dispatch.client.contact_person}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="font-medium flex items-center gap-1">
+                              <Truck className="w-3 h-3" />
+                              {slip.dispatch.vehicle_number}
+                            </div>
+                            <div className="text-xs text-muted-foreground flex items-center gap-1">
+                              <User className="w-3 h-3" />
+                              {slip.dispatch.driver_name}
+                            </div>
+                            <div className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Phone className="w-3 h-3" />
+                              {slip.dispatch.driver_mobile}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-center">
+                            <div className="font-medium">{slip.total_items}</div>
+                            <div className="text-xs text-muted-foreground">items</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-center">
+                            <div className="font-medium">{slip.total_weight_kg.toFixed(1)}kg</div>
+                            <div className="text-xs text-muted-foreground">total</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-center">
+                            <div className="font-medium">₹{slip.total_amount.toFixed(2)}</div>
+                            <div className="text-xs text-muted-foreground">amount</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {getPaymentTypeBadge(slip.payment_type)}
+                        </TableCell>
+                        <TableCell>
+                          {getStatusBadge(slip.dispatch.status)}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handlePrintChallan(slip)}
+                          >
+                            <Printer className="w-4 h-4 mr-1" />
+                            Print
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={10} className="h-24 text-center">
+                        <div className="text-center py-4">
+                          <div className="text-muted-foreground">
+                            <p className="font-medium">No generated bills found</p>
+                            <p className="text-sm">Bills will appear here once they are generated</p>
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4">
+                <div className="text-sm text-muted-foreground">
+                  Page {currentPage} of {totalPages}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </DashboardLayout>
   );
