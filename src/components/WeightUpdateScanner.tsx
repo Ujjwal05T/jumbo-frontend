@@ -544,8 +544,8 @@ export default function WeightUpdateScanner() {
 
     // Append year suffix if not already present
     // temporarily disable for old backend
-    // const barcodeWithYear = qrCode
-    const barcodeWithYear = qrCode.includes('-') ? qrCode : `${qrCode}-${selectedYear}`;
+    const barcodeWithYear = qrCode
+    // const barcodeWithYear = qrCode.includes('-') ? qrCode : `${qrCode}-${selectedYear}`;
 
     try {
       setLoading(true);

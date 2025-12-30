@@ -76,6 +76,7 @@ export interface OutwardChallan {
   gross_weight?: number;
   net_weight?: number;
   bill_no?: string;
+  bill_date?: string;
   created_at: string;
 }
 
@@ -90,6 +91,7 @@ export interface CreateOutwardChallanData {
   gross_weight?: number;
   net_weight?: number;
   bill_no?: string;
+  bill_date?: string;
 }
 
 // ============================================================================

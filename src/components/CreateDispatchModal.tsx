@@ -276,12 +276,14 @@ export function CreateDispatchModal({
   const [dispatchResult, setDispatchResult] = useState<any>(null);
 
   const [dispatchDetails, setDispatchDetails] = useState({
+    rst_no: "",
     vehicle_number: "",
     driver_name: "",
     driver_mobile: "",
     locket_no: "",
     dispatch_number: "",
     reference_number: "",
+    gross_weight: "",
   });
 
   const [previewNumber, setPreviewNumber] = useState<string>("");
@@ -328,12 +330,14 @@ export function CreateDispatchModal({
       setOrderSearch("");
       setOrders([]); // Clear orders when modal closes
       setDispatchDetails({
+        rst_no: "",
         vehicle_number: "",
         driver_name: "",
         driver_mobile: "",
         locket_no: "",
         dispatch_number: "",
         reference_number: "",
+        gross_weight: "",
       });
     }
   }, [open]);
@@ -445,6 +449,40 @@ export function CreateDispatchModal({
       setPreviewNumber("Loading...");
     } finally {
       setPreviewLoading(false);
+    }
+  };
+
+  const fetchOutwardChallanByRst = async (rstNo: string) => {
+    if (!rstNo || !rstNo.trim()) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/outward-challans/by-rst/${encodeURIComponent(rstNo)}`, {
+        headers: { "ngrok-skip-browser-warning": "true" },
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          toast.error(`No outward challan found with RST number: ${rstNo}`);
+        } else {
+          throw new Error("Failed to fetch outward challan");
+        }
+        return;
+      }
+
+      const challan = await response.json();
+
+      // Auto-fill the fields from outward challan
+      setDispatchDetails((prev) => ({
+        ...prev,
+        vehicle_number: challan.vehicle_number || prev.vehicle_number,
+        driver_name: challan.driver_name || prev.driver_name,
+        gross_weight: challan.gross_weight?.toString() || prev.gross_weight,
+      }));
+
+      toast.success("Outward challan data loaded successfully!");
+    } catch (err) {
+      console.error("Error fetching outward challan:", err);
+      toast.error("Failed to fetch outward challan data");
     }
   };
 
@@ -1321,7 +1359,60 @@ export function CreateDispatchModal({
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                 
+                  {/* RST Number Field */}
+                  <div>
+                    <label
+                      style={{
+                        fontSize: "16px",
+                        fontWeight: 500,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        marginBottom: "8px",
+                      }}>
+                      RST No.
+                    </label>
+                    <Input
+                      value={dispatchDetails.rst_no}
+                      onChange={(e) =>
+                        setDispatchDetails((prev) => ({
+                          ...prev,
+                          rst_no: e.target.value,
+                        }))
+                      }
+                      onBlur={(e) => {
+                        if (e.target.value.trim()) {
+                          fetchOutwardChallanByRst(e.target.value.trim());
+                        }
+                      }}
+                      style={{ fontSize: "16px", padding: "12px" }}
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      style={{
+                        fontSize: "16px",
+                        fontWeight: 500,
+                        marginBottom: "8px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}>
+                      Gross Weight (kg)
+                    </label>
+                    <Input
+                      value={dispatchDetails.gross_weight}
+                      onChange={(e) =>
+                        setDispatchDetails((prev) => ({
+                          ...prev,
+                          gross_weight: e.target.value,
+                        }))
+                      }
+                      type="number"
+                      style={{ fontSize: "16px", padding: "12px" }}
+                    />
+                  </div>
 
                   <div>
                     <label
@@ -1408,7 +1499,7 @@ export function CreateDispatchModal({
                         alignItems: "center",
                         gap: "8px",
                       }}>
-                      Dispatch Number (Optional)
+                      Dispatch Number
                     </label>
                     <Input
                       value={dispatchDetails.locket_no}
@@ -1445,6 +1536,8 @@ export function CreateDispatchModal({
                       style={{ fontSize: "16px", padding: "12px" }}
                     />
                   </div>
+
+                  
                 </div>
 
                 <Button
@@ -1696,6 +1789,40 @@ export function CreateDispatchModal({
                           textAlign: "center",
                         }}>
                         {stats.totalWeight.toFixed(1)} kg
+                      </span>
+                    </div>
+
+                    <div
+                      style={{
+                        height: "24px",
+                        width: "2px",
+                        backgroundColor: "#d1d5db",
+                      }}
+                    />
+
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}>
+                      <span
+                        style={{
+                          fontSize: "15px",
+                          color: "#6b7280",
+                          fontWeight: 500,
+                        }}>
+                        Gross Weight:
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "18px",
+                          fontWeight: "bold",
+                          color: "#16a34a",
+                          minWidth: "80px",
+                          textAlign: "center",
+                        }}>
+                        {dispatchDetails.gross_weight} kg
                       </span>
                     </div>
 

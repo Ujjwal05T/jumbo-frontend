@@ -39,7 +39,7 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
 
     doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
-    doc.text('SatGuru Papers Pvt. Ltd.', pageWidth/2, yPosition, { align: 'center' });
+    doc.text('Satguru Papers Pvt. Ltd.', pageWidth/2, yPosition, { align: 'center' });
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.text('Kraft paper Mill', pageWidth/2 + 45, yPosition-2, { align: 'left' });
@@ -369,8 +369,11 @@ const extractShadeFromSpec = (spec: string): string => {
 
 const extractReelNumber = (barcode: string): string => {
   if (!barcode) return '';
-  // Extract just the numeric part from barcode like "CR_25.0_90_ABC123" -> "ABC123"
-  // or from patterns like "3387", "3385" etc.
-  const match = barcode.match(/(\d+)$/);
-  return match ? match[1] : barcode;
+
+  // Remove prefix like "CR_", "JR_", "SET_" etc., but keep the year suffix
+  // Examples:
+  // "CR_08001-25" -> "08001-25"
+  // "CR_08001" -> "08001"
+  // "3387" -> "3387"
+  return barcode.replace(/^[A-Z]+_/, '');
 };

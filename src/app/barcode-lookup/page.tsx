@@ -84,9 +84,9 @@ export default function BarcodeLookupPage() {
       } else {
         // Search by barcode for hierarchy
         // Append year suffix if not already present
-        const barcodeWithYear = query.includes('-') ? query : `${query}-${selectedYear}`;
+        // const barcodeWithYear = query.includes('-') ? query : `${query}-${selectedYear}`;
         //for old backend compatibility
-        // const barcodeWithYear = query
+        const barcodeWithYear = query
         const data = await trackRollHierarchy(barcodeWithYear);
         setHierarchyData(data);
         // Expand all sets by default
@@ -726,11 +726,7 @@ export default function BarcodeLookupPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div>
-                <p className="text-muted-foreground">Frontend ID</p>
-                <p className="font-semibold font-mono">{rollInfo.frontend_id}</p>
-              </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">            
               <div>
                 <p className="text-muted-foreground">Reel Number</p>
                 <p className="font-semibold">{rollInfo.reel_number}</p>

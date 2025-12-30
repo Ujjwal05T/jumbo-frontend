@@ -71,6 +71,20 @@ export default function ManualCutRollEntryPage() {
   const [clientSearch, setClientSearch] = useState("");
   const [paperSearch, setPaperSearch] = useState("");
 
+  // Get current year for validation
+  const currentYear = new Date().getFullYear().toString().slice(-2);
+
+  // Get year-based reel number range
+  const getReelNumberRange = () => {
+    if (currentYear === "25") {
+      return { min: 8000, max: 9000, rangeText: "8000-9000" };
+    } else {
+      return { min: 0, max: 1000, rangeText: "0-1000" };
+    }
+  };
+
+  const reelRange = getReelNumberRange();
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -142,7 +156,7 @@ export default function ManualCutRollEntryPage() {
       return;
     }
 
-    // Validate reel number is numeric and in range 8000-9000
+    // Validate reel number is numeric and in year-based range
     const reelNo = parseInt(reelNumber);
     if (isNaN(reelNo)) {
       setAlert({
@@ -152,13 +166,19 @@ export default function ManualCutRollEntryPage() {
       return;
     }
 
-    if (reelNo < 8000 || reelNo > 9000) {
+    // Year-based validation
+    if (reelNo < reelRange.min || reelNo > reelRange.max) {
       setAlert({
         type: "error",
-        message: "Reel number must be between 8000 and 9000.",
+        message: `Reel number must be between ${reelRange.rangeText} for year 20${currentYear}.`,
       });
       return;
     }
+
+    // Normalize reel number to exactly 4 digits
+    // Strip leading zeros by parsing to int (already done), then pad to 4 digits
+    // Examples: 08990 -> "8990", 1 -> "0001", 01 -> "0001", 001 -> "0001"
+    const normalizedReelNumber = reelNo.toString().padStart(4, '0');
 
     if (!widthInches || parseFloat(widthInches) < 0 && parseFloat(widthInches) > 118) {
       setAlert({
@@ -187,7 +207,7 @@ export default function ManualCutRollEntryPage() {
 
       if (checkResponse.ok) {
         const existingRolls = await checkResponse.json();
-        const barcodeId = `CR_0${reelNumber}`;
+        const barcodeId = `CR_0${normalizedReelNumber}`;
         const duplicate = existingRolls.manual_cut_rolls?.find(
           (roll: any) => roll.barcode_id === barcodeId
         );
@@ -195,7 +215,7 @@ export default function ManualCutRollEntryPage() {
         if (duplicate) {
           setAlert({
             type: "error",
-            message: `Reel number ${reelNumber} already exists. Please use a different number.`,
+            message: `Reel number ${normalizedReelNumber} already exists. Please use a different number.`,
           });
           setLoading(false);
           return;
@@ -212,11 +232,11 @@ export default function ManualCutRollEntryPage() {
         return;
       }
 
-      // Prepare data for backend
+      // Prepare data for backend with normalized 4-digit reel number
       const rollData = {
         client_id: selectedClientId,
         paper_id: selectedPaperId,
-        reel_number: reelNumber,
+        reel_number: normalizedReelNumber,
         width_inches: parseFloat(widthInches),
         weight_kg: parseFloat(weightKg),
         created_by_id: userId,
@@ -300,16 +320,16 @@ export default function ManualCutRollEntryPage() {
 
       {/* Alert Message */}
       {alert.type && (
-        <Alert variant={alert.type === "error" ? "destructive" : "default"}>
+        <Alert variant={alert.type === "error" ? "destructive" : "default"} className="text-xl font-bold ">
           {alert.type === "error" ? (
             <AlertCircle className="h-4 w-4" />
           ) : (
             <CheckCircle2 className="h-4 w-4" />
           )}
-          <AlertTitle>
+          <AlertTitle className="text-xl font-bold ">
             {alert.type === "error" ? "Error" : "Success"}
           </AlertTitle>
-          <AlertDescription>{alert.message}</AlertDescription>
+          <AlertDescription className="text-lg font-bold">{alert.message}</AlertDescription>
         </Alert>
       )}
 
@@ -413,20 +433,22 @@ export default function ManualCutRollEntryPage() {
                     type="number"
                     inputMode="numeric"
                     pattern="[0-9]*"
-                    // min="8000"
-                    max="9000"
+                    min={reelRange.min}
+                    max={reelRange.max}
                     value={reelNumber}
                     onChange={(e) => {
                       // Only allow integers (no decimals)
                       const value = e.target.value.replace(/[^0-9]/g, '');
                       setReelNumber(value);
                     }}
-                    placeholder="Enter reel number (8000-9000)"
+                    placeholder={`Enter reel number (${reelRange.rangeText})`}
                     disabled={loading}
                     className="mt-2 font-medium"
                   />
                   <p className="mt-1 text-sm text-gray-600">
-                    Valid range: 8000 to 9000
+                    Valid range for year 20{currentYear}: {reelRange.rangeText}
+                    {currentYear === "25" && " (Legacy)"}
+                    {currentYear !== "25" && " (New)"}
                   </p>
                 </div>
 
