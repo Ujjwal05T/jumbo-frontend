@@ -386,6 +386,7 @@ export function CreateDispatchModal({
       });
       if (!response.ok) throw new Error("Failed to load warehouse items");
       const data = await response.json();
+      // console.log("Loaded warehouse items:", data.warehouse_items);
       setWarehouseItems(data.warehouse_items || []);
     } catch (err) {
       console.error("Error loading warehouse items:", err);
@@ -1169,6 +1170,9 @@ export function CreateDispatchModal({
             display: "flex",
             flexDirection: "column",
             width: step === 1 ? "75vw" : "98vw",
+            maxHeight: "100vh",
+            padding: "5px",
+            overflow: "hidden",
           }}>
           <div style={{ flex: 1, overflow: "auto" }}>
             {step === 1 ? (
@@ -1561,7 +1565,7 @@ export function CreateDispatchModal({
                   flexDirection: "column",
                   gap: "10px",
                   padding: "8px",
-                  height: "90vh",
+                  height: "93vh",
                 }}>
                 {/* Summary */}
                 {/* Search */}
@@ -1584,7 +1588,7 @@ export function CreateDispatchModal({
                       </Button>
                     )}
                   </div>
-                  <div className="flex gap-2 md:gap-4 w-full md:w-auto">
+                  <div className="flex gap-2 md:gap-4 w-full md:w-auto mr-7">
                    
                     <Button
                       onClick={() => {
@@ -1822,7 +1826,7 @@ export function CreateDispatchModal({
                           minWidth: "80px",
                           textAlign: "center",
                         }}>
-                        {dispatchDetails.gross_weight} kg
+                        {dispatchDetails.gross_weight || 0} kg
                       </span>
                     </div>
 
@@ -1843,8 +1847,9 @@ export function CreateDispatchModal({
                   flexDirection: "column",
                   gap: "16px",
                   padding: "8px",
+                  height: "93vh",
                 }}>
-                {/* Header with Action Buttons */}
+                {/* Header wi5th Action Buttons */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
                   <div>
                     <h2 className="text-xl md:text-2xl font-bold">
@@ -1873,7 +1878,7 @@ export function CreateDispatchModal({
                     <Button
                       onClick={handleDispatchConfirm}
                       disabled={dispatchLoading}
-                      className="flex-1 md:flex-none bg-green-600 text-sm md:text-base"
+                      className="flex-1 md:flex-none bg-green-600 text-sm md:text-base mr-8"
                       size="lg">
                       {dispatchLoading ? (
                         <>
