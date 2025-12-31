@@ -513,11 +513,17 @@ export async function updateDispatchRecord(
   message: string;
   dispatch_id: string;
   dispatch_number: string;
+  is_draft: boolean;
+  client_name: string;
+  vehicle_number: string;
+  driver_name: string;
   total_items: number;
   total_weight_kg: number;
-  updated_fields: {
-    vehicle_details: boolean;
-    items_changed: boolean;
+  completed_orders: string[];
+  summary: {
+    dispatched_items: number;
+    orders_completed: number;
+    total_weight: number;
   };
 }> {
   const userId = localStorage.getItem('user_id');
@@ -530,7 +536,13 @@ export async function updateDispatchRecord(
     updated_by_id: userId,
   };
 
+  console.log('='.repeat(80));
   console.log('Sending dispatch update request:', request);
+  console.log('is_draft field in request:', request.is_draft);
+  console.log('is_draft type:', typeof request.is_draft);
+  console.log('is_draft is undefined:', request.is_draft === undefined);
+  console.log('updateData.is_draft:', updateData.is_draft);
+  console.log('='.repeat(80));
 
   const response = await fetch(
     DISPATCH_ENDPOINTS.UPDATE_DISPATCH(dispatchId),

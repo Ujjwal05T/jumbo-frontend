@@ -736,11 +736,12 @@ export function CreateDispatchModal({
       setCurrentDraftId(null);
       setIsDraftMode(false);
 
-      onOpenChange(false);
-
+      // Call onSuccess first to refresh the list before closing modal
       if (onSuccess) {
         onSuccess();
       }
+
+      onOpenChange(false);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Failed to create dispatch";
@@ -1149,12 +1150,24 @@ export function CreateDispatchModal({
       doc.setFont('helvetica', 'normal');
       doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, 155, yPosition, {align:'left'});
 
-      // Title - "PRE PACKING SLIP" instead of "PACKING SLIP"
+      // Title - "PRE PACKING SLIP" instead of "PACKING SLIP" with underline
       doc.setFontSize(16);
       doc.setFont('helvetica', 'bold');
-      doc.text('PRE PACKING SLIP', pageWidth / 2, yPosition, { align: 'center' });
+      const titleText = 'PRE PACKING SLIP';
+      doc.text(titleText, pageWidth / 2, yPosition, { align: 'center' });
 
-      yPosition += 10;
+      // Add underline to title
+      const titleWidth = doc.getTextWidth(titleText);
+      const underlineY = yPosition + 1;
+      doc.setLineWidth(0.5);
+      doc.line(
+        (pageWidth / 2) - (titleWidth / 2),
+        underlineY,
+        (pageWidth / 2) + (titleWidth / 2),
+        underlineY
+      );
+
+      yPosition += 14;
 
       // Dispatch Information
       doc.setFontSize(12);
@@ -1164,16 +1177,17 @@ export function CreateDispatchModal({
       const rightMargin = 35;
       const usableWidth = pageWidth - leftMargin - rightMargin;
       const bottomMargin = 20;
+      const rightColX = 140; // Fixed position for right column
 
-      doc.text(`Dispatch No: ${previewNumber}`, 155, yPosition-3, {align:'left'});
+      // Row 1: Dispatch No (right) and Party (left)
+      doc.text(`Dispatch No: ${previewNumber}`, rightColX, yPosition);
       doc.text(`Party: ${selectedClient?.company_name || 'N/A'}`, leftMargin, yPosition);
 
-      yPosition += 10;
+      yPosition += 7;
 
-      if (dispatchDetails.reference_number) {
-        doc.text(`Reference No: ${dispatchDetails.reference_number}`, 155, (yPosition-6));
-      }
-      doc.text(`Vehicle No.: ${dispatchDetails.vehicle_number}`, 155, yPosition+1);
+      // Row 2: Vehicle No (right) and Address (left)
+      doc.text(`Vehicle No.: ${dispatchDetails.vehicle_number}`, rightColX, yPosition);
+
 
       let formatAddress = '';
       if (selectedClient?.address && selectedClient.address.length > 0) {
@@ -1181,9 +1195,16 @@ export function CreateDispatchModal({
           ? selectedClient.address.substring(0, 35) + '...'
           : selectedClient.address;
       }
-
       doc.text(`Address: ${formatAddress}`, leftMargin, yPosition);
-      yPosition += 14;
+
+      yPosition += 7;
+
+      // Row 3: Reference No (right, if exists) and Driver Name (left)
+      if (dispatchDetails.reference_number) {
+        doc.text(`Reference No: ${dispatchDetails.reference_number}`, rightColX, yPosition);
+      }
+      
+      yPosition += 10;
 
       // Table setup
       const totalWeight = sortedItems.reduce((sum: number, item: any) => sum + item.weight, 0);

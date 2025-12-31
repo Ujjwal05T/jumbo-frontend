@@ -50,53 +50,68 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
     doc.text('Address - Pithampur Dhar(M.P.)', pageWidth/2 + 45, yPosition+3, { align: 'left' });
 
 
-    yPosition+=12
+    yPosition += 12;
 
     doc.setFontSize(13);
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Date: ${new Date(data.dispatch_date).toLocaleDateString('en-GB')}`, 155, yPosition,{align:'left'});
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Date: ${new Date(data.dispatch_date).toLocaleDateString('en-GB')}`, 155, yPosition, {align:'left'});
 
-    // Title
+    // Title - "PACKING SLIP" with underline
     doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
-    doc.text('PACKING SLIP', pageWidth / 2, yPosition, { align: 'center' });
-    
+    const titleText = 'PACKING SLIP';
+    doc.text(titleText, pageWidth / 2, yPosition, { align: 'center' });
+
+    // Add underline to title
+    const titleWidth = doc.getTextWidth(titleText);
+    const underlineY = yPosition + 1;
+    doc.setLineWidth(0.5);
+    doc.line(
+      (pageWidth / 2) - (titleWidth / 2),
+      underlineY,
+      (pageWidth / 2) + (titleWidth / 2),
+      underlineY
+    );
+
     yPosition += 10;
 
-    // Dispatch Information Section - 3 columns layout
+    // Dispatch Information
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
-    
+
     // Define margins
     const leftMargin = 15;
     const rightMargin = 35;
     const usableWidth = pageWidth - leftMargin - rightMargin;
     const bottomMargin = 20;
+    const rightColX = 140; // Fixed position for right column
 
-    // Three columns
-    const col1X = leftMargin;
-    const col2X = leftMargin + (usableWidth / 3);
-    const col3X = leftMargin + (2 * usableWidth / 3);
-    
-    // Row 1
-   
-    doc.text(`Dispatch No: ${data.dispatch_number}`, 155, yPosition-3,{align:'left'});
-    doc.text(`Party: ${data.client.company_name}`, col1X, yPosition);
-    
-    yPosition += 10;
-    
-    // Row 2
-    if (data.reference_number) {
-      doc.text(`Reference No: ${data.reference_number}`, 155, (yPosition-6));
-    }
-    doc.text(`Vehicle No.: ${data.vehicle_number}`, 155, yPosition+1);
-    let formatAddress = ''
-    if(data.client.address && data.client.address?.length > 0 ){
-        formatAddress = data.client.address?.length > 36 ?data.client.address?.substring(0,35)+'...': data.client.address
-    }
+    // Row 1: Dispatch No (right) and Party (left)
+    doc.text(`Dispatch No: ${data.dispatch_number}`, rightColX, yPosition);
+    doc.text(`Party: ${data.client.company_name}`, leftMargin, yPosition);
 
+    yPosition += 7;
+
+    // Row 2: Vehicle No (right) and Address (left)
+    doc.text(`Vehicle No.: ${data.vehicle_number}`, rightColX, yPosition);
+    
+
+    let formatAddress = '';
+    if (data.client.address && data.client.address.length > 0) {
+      formatAddress = data.client.address.length > 36
+        ? data.client.address.substring(0, 35) + '...'
+        : data.client.address;
+    }
     doc.text(`Address: ${formatAddress}`, leftMargin, yPosition);
-    yPosition += 14;
+
+    yPosition += 7;
+
+    // Row 3: Reference No (right, if exists) 
+    if (data.reference_number) {
+      doc.text(`Reference No: ${data.reference_number}`, rightColX, yPosition);
+    }
+
+    yPosition += 10;
     
 
     // Calculate totals
@@ -159,7 +174,7 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
     const rowHeight = 8;
     const headerHeight = 10;
     const tableWidth = colWidths.reduce((a, b) => a + b, 0);
-    const leftColX = col1X; // Use col1X for table alignment
+    const leftColX = leftMargin; // Use leftMargin for table alignment
 
     // Helper function to draw table headers
     const drawTableHeader = (startY: number) => {
@@ -265,17 +280,18 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
     // Draw final table borders
     drawTableBorders(tableStartY, currentY, rowsInCurrentPage);
 
-    // Footer
-    const finalY = currentY + 20;
+    // Totals just below table - bold and in right corner
+    const totalsY = currentY + 5;
     doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Total Items: ${totalItems}  |  Total Weight: ${totalWeight} kg`, pageWidth - rightMargin, totalsY, { align: 'right' });
+
+    // Footer - signature section
+    const col1X = leftMargin;
+    const col3X = leftMargin + (2 * usableWidth / 3);
+    const signatureY = totalsY + 35;
+
     doc.setFont('helvetica', 'normal');
-    
-    // Summary
-    doc.text(`Total Items: ${totalItems}`, col1X, finalY);
-    doc.text(`Total Weight: ${totalWeight} kg`, col3X, finalY);
-    
-    // Signature lines
-    const signatureY = finalY + 30;
     doc.text('_________________________', col1X, signatureY);
     doc.text('_________________________', col3X, signatureY);
     doc.text('Prepared By', col1X + 25, signatureY + 10);
