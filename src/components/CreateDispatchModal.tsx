@@ -50,14 +50,17 @@ import {
   Printer,
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/api-config";
-import { createDispatchRecord } from "@/lib/dispatch";
+import { createDispatchRecord, updateDispatchRecord, fetchDispatchDetails, DraftDispatch } from "@/lib/dispatch";
 import WastageIndicator from "@/components/WastageIndicator";
 import { DispatchSuccessModal } from "@/components/DispatchSuccessModal";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import jsPDF from 'jspdf';
 
 interface CreateDispatchModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  draftIdToRestore?: string | null;  // Optional draft ID to restore when modal opens
 }
 
 // Pure component for checkbox to prevent unnecessary re-renders
@@ -255,6 +258,7 @@ export function CreateDispatchModal({
   open,
   onOpenChange,
   onSuccess,
+  draftIdToRestore,
 }: CreateDispatchModalProps) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -274,6 +278,11 @@ export function CreateDispatchModal({
   const [dispatchLoading, setDispatchLoading] = useState(false);
   const [successModalOpen, setSuccessModalOpen] = useState(false);
   const [dispatchResult, setDispatchResult] = useState<any>(null);
+
+  // Draft management state
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
+  const [isDraftMode, setIsDraftMode] = useState(false);
+  const [draftItems, setDraftItems] = useState<any[]>([]); // Items from the draft's dispatch_items table
 
   const [dispatchDetails, setDispatchDetails] = useState({
     rst_no: "",
@@ -309,6 +318,7 @@ export function CreateDispatchModal({
   // Load data on mount
   useEffect(() => {
     if (open) {
+      // Don't show draft restore dialog automatically - drafts are accessed via table
       loadClients();
       loadWarehouseItems();
       loadWastageItems();
@@ -316,7 +326,7 @@ export function CreateDispatchModal({
       loadPreviewNumber();
       loadOrders(); // Load all orders on mount
     } else {
-      // Reset state
+      // Reset state (but keep draft info)
       setStep(1);
       setSelectedClientId("none");
       setSelectedOrderId("");
@@ -329,6 +339,10 @@ export function CreateDispatchModal({
       setClientSearch("");
       setOrderSearch("");
       setOrders([]); // Clear orders when modal closes
+      setDraftItems([]); // Clear draft items
+      setCurrentDraftId(null); // Clear draft ID
+      setIsDraftMode(false); // Exit draft mode
+      // Reset dispatch details
       setDispatchDetails({
         rst_no: "",
         vehicle_number: "",
@@ -340,7 +354,7 @@ export function CreateDispatchModal({
         gross_weight: "",
       });
     }
-  }, [open]);
+  }, [open, draftIdToRestore]);
 
   const loadClients = async () => {
     try {
@@ -377,6 +391,128 @@ export function CreateDispatchModal({
       toast.error("Failed to load orders");
     }
   };
+
+  const restoreDraft = async (draft: DraftDispatch) => {
+    try {
+      setLoading(true);
+      toast.info("Restoring draft...");
+
+      // Restore all draft data
+      setCurrentDraftId(draft.id);
+      setIsDraftMode(true);
+      setSelectedClientId(draft.client_id);
+      setSelectedOrderId(draft.primary_order_id || "");
+
+      setDispatchDetails({
+        rst_no: draft.rst_no || "",
+        vehicle_number: draft.vehicle_number,
+        driver_name: draft.driver_name,
+        driver_mobile: draft.driver_mobile,
+        locket_no: draft.locket_no || "",
+        dispatch_number: draft.dispatch_number,
+        reference_number: draft.reference_number || "",
+        gross_weight: draft.gross_weight || "",
+      });
+
+      // Fetch draft items from dispatch_items table (they're marked as "used" so won't appear in warehouse query)
+      const dispatchDetails = await fetchDispatchDetails(draft.id);
+
+      // Enhance draft items with order information
+      // Client name now comes from backend (inventory → order → client relationship)
+      const enhancedDraftItems = (dispatchDetails.items || []).map(item => ({
+        ...item,
+        // Use backend-provided client_name (from inventory allocation), fallback to dispatch-level client
+        client_name: item.client_name || dispatchDetails.client?.company_name || "Unknown",
+        order_id: item.order_frontend_id || "N/A"
+      }));
+
+      setDraftItems(enhancedDraftItems);
+
+      console.log("Draft items loaded:", enhancedDraftItems.length);
+
+      // Wait for all data to load (for adding additional items)
+      await Promise.all([
+        loadWarehouseItems(),
+        loadWastageItems(),
+        loadManualCutRolls(),
+        loadClients(),
+        loadOrders()
+      ]);
+
+      // Mark draft items as selected based on their type
+      // Regular inventory items
+      
+      const draftInventoryIds = enhancedDraftItems
+        .filter(item => item.inventory?.id)
+        .map(item => item.inventory!.id);
+
+      // Wastage items (identified by barcode pattern)
+      const draftWastageIds = enhancedDraftItems
+        .filter(item => !item.inventory?.id && item.barcode_id?.includes("WAS"))
+        .map(item => item.id);
+
+      // Manual cut rolls (identified by barcode pattern)
+      const draftManualIds = enhancedDraftItems
+        .filter(item => !item.inventory?.id && item.barcode_id?.startsWith("CR_"))
+        .map(item => item.id);
+
+      console.log("Selecting draft items:", { draftInventoryIds, draftWastageIds, draftManualIds });
+
+      setSelectedItems(new Set(draftInventoryIds));
+      setSelectedWastageIds(new Set(draftWastageIds));
+      setSelectedManualCutRollIds(new Set(draftManualIds));
+
+      // Jump to step 2 (item selection) so user can see draft items
+      setStep(2);
+      toast.success(`Draft restored: ${draft.dispatch_number} with ${enhancedDraftItems.length} items`);
+    } catch (error) {
+      console.error("Error restoring draft:", error);
+      toast.error("Failed to restore draft");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Restore draft by ID (used when clicking on a draft in the dispatch history table)
+  const restoreDraftById = async (draftId: string) => {
+    try {
+      setLoading(true);
+      toast.info("Loading draft...");
+
+      // Fetch the draft details
+      const dispatchDetails = await fetchDispatchDetails(draftId);
+
+      // Create a DraftDispatch object from the details
+      const draft: DraftDispatch = {
+        id: dispatchDetails.id,
+        dispatch_number: dispatchDetails.dispatch_number,
+        reference_number: dispatchDetails.reference_number || "",
+        client_id: dispatchDetails.client?.id || "",
+        primary_order_id: dispatchDetails.primary_order?.id || null,
+        vehicle_number: dispatchDetails.vehicle_number,
+        driver_name: dispatchDetails.driver_name,
+        driver_mobile: dispatchDetails.driver_mobile,
+        locket_no: "",
+        rst_no: "",
+        gross_weight: "",
+        created_at: dispatchDetails.created_at,
+      };
+
+      // Use the existing restoreDraft function
+      await restoreDraft(draft);
+    } catch (error) {
+      console.error("Error restoring draft by ID:", error);
+      toast.error("Failed to load draft");
+      setLoading(false);
+    }
+  };
+
+  // Effect to handle draftIdToRestore prop
+  useEffect(() => {
+    if (open && draftIdToRestore) {
+      restoreDraftById(draftIdToRestore);
+    }
+  }, [open, draftIdToRestore]);
 
   const loadWarehouseItems = async () => {
     try {
@@ -504,7 +640,7 @@ export function CreateDispatchModal({
     toast.success("Details saved! Now select items to dispatch");
   }, [dispatchDetails, selectedClientId]);
 
-  const handleProceedToConfirmation = useCallback(() => {
+  const handleProceedToConfirmation = useCallback(async () => {
     if (
       selectedItems.size === 0 &&
       selectedWastageIds.size === 0 &&
@@ -513,8 +649,56 @@ export function CreateDispatchModal({
       toast.error("Please select at least one item to dispatch");
       return;
     }
-    setStep(3);
-  }, [selectedItems, selectedWastageIds, selectedManualCutRollIds]);
+
+    try {
+      // Create or update draft dispatch
+      if (!isDraftMode || !currentDraftId) {
+        // Create new draft
+        const draftData = {
+          ...dispatchDetails,
+          dispatch_number: "",
+          client_id: selectedClientId,
+          primary_order_id: selectedOrderId || undefined,
+          inventory_ids: Array.from(selectedItems),
+          wastage_ids: Array.from(selectedWastageIds),
+          manual_cut_roll_ids: Array.from(selectedManualCutRollIds),
+          is_draft: true, // Mark as draft
+          payment_type: "to_pay", // Default value
+        };
+
+        const result = await createDispatchRecord(draftData as any);
+        setCurrentDraftId(result.dispatch_id);
+        setIsDraftMode(true);
+        console.log("Draft created:", result.dispatch_id);
+      } else {
+        // Update existing draft
+        await updateDispatchRecord(currentDraftId, {
+          ...dispatchDetails,
+          client_id: selectedClientId,
+          primary_order_id: selectedOrderId || undefined,
+          inventory_ids: Array.from(selectedItems),
+          wastage_ids: Array.from(selectedWastageIds),
+          manual_cut_roll_ids: Array.from(selectedManualCutRollIds),
+          is_draft: true,
+        });
+        console.log("Draft updated:", currentDraftId);
+      }
+
+      setStep(3);
+    } catch (error) {
+      console.error("Error saving draft:", error);
+      toast.error("Failed to save draft");
+    }
+  }, [
+    selectedItems,
+    selectedWastageIds,
+    selectedManualCutRollIds,
+    isDraftMode,
+    currentDraftId,
+    dispatchDetails,
+    selectedClientId,
+    selectedOrderId,
+  ]);
 
   const handleDispatchConfirm = useCallback(async () => {
     try {
@@ -528,12 +712,30 @@ export function CreateDispatchModal({
         inventory_ids: Array.from(selectedItems),
         wastage_ids: Array.from(selectedWastageIds),
         manual_cut_roll_ids: Array.from(selectedManualCutRollIds),
+        is_draft: false, // Finalize the dispatch
       };
 
-      const result = await createDispatchRecord(dispatchData as any);
+      let result;
+
+      if (isDraftMode && currentDraftId) {
+        // Update existing draft and finalize it
+        result = await updateDispatchRecord(currentDraftId, {
+          ...dispatchData,
+          is_draft: false,
+        });
+        toast.success("Draft finalized successfully!");
+      } else {
+        // Create new dispatch directly (shouldn't normally happen with current flow)
+        result = await createDispatchRecord(dispatchData as any);
+      }
 
       setDispatchResult(result);
       setSuccessModalOpen(true);
+
+      // Clear draft state
+      setCurrentDraftId(null);
+      setIsDraftMode(false);
+
       onOpenChange(false);
 
       if (onSuccess) {
@@ -554,6 +756,8 @@ export function CreateDispatchModal({
     selectedItems,
     selectedWastageIds,
     selectedManualCutRollIds,
+    isDraftMode,
+    currentDraftId,
     onOpenChange,
     onSuccess,
   ]);
@@ -676,13 +880,42 @@ export function CreateDispatchModal({
       (a.client_name || "").localeCompare(b.client_name || "")
     );
 
+    // Filter draft items by search term if in draft mode
+    const filteredDraftItems = isDraftMode ? draftItems.filter((item) => {
+      if (!debouncedSearchTerm) return true;
+      const fields = [
+        item.barcode_id,
+        item.qr_code,
+        item.paper_spec,
+        String(item.width_inches),
+        String(item.weight_kg),
+      ];
+      return fields.some(
+        (field) => field && field.toLowerCase().includes(debouncedSearchTerm)
+      );
+    }) : [];
+
     // Build items array in correct order:
+    // 0. Draft items (if in draft mode) - shown first with highest priority
     // 1. Selected client warehouse items
     // 2. Selected client manual rolls
     // 3. Other warehouse items (alphabetically by client)
     // 4. Other manual rolls (alphabetically by client)
     // 5. Wastage items
     const items = [];
+
+    // Add draft items first if in draft mode
+    if (isDraftMode && filteredDraftItems.length > 0) {
+      items.push(
+        ...filteredDraftItems.map((item) => ({
+          ...item,
+          inventory_id: item.inventory?.id || item.id, // Use inventory ID if available
+          type: "draft",
+          priority: 0,
+        }))
+      );
+    }
+
     items.push(
       ...filteredClient.map((item) => ({
         ...item,
@@ -712,7 +945,7 @@ export function CreateDispatchModal({
     );
 
     return items;
-  }, [filteredData, manualCutRolls, debouncedSearchTerm, selectedClient]);
+  }, [filteredData, manualCutRolls, debouncedSearchTerm, selectedClient, isDraftMode, draftItems]);
 
   // Optimized toggle handler - use Set for O(1) operations
   const handleToggleItem = useCallback((item: any, itemType: string) => {
@@ -766,6 +999,23 @@ export function CreateDispatchModal({
     // Calculate total weight only when needed
     let totalWeight = 0;
     if (totalSelected > 0) {
+      // Include draft items in weight calculation
+      draftItems.forEach((item) => {
+        // Draft items with inventory
+        if (item.inventory?.id && selectedItems.has(item.inventory.id)) {
+          totalWeight += item.weight_kg || 0;
+        }
+        // Draft wastage items (no inventory, barcode contains "WAS")
+        else if (!item.inventory?.id && item.barcode_id?.includes("WAS") && selectedWastageIds.has(item.id)) {
+          totalWeight += item.weight_kg || 0;
+        }
+        // Draft manual cut rolls (no inventory, barcode starts with "CR_")
+        else if (!item.inventory?.id && item.barcode_id?.startsWith("CR_") && selectedManualCutRollIds.has(item.id)) {
+          totalWeight += item.weight_kg || 0;
+        }
+      });
+
+      // Include warehouse items
       warehouseItems.forEach((item) => {
         if (selectedItems.has(item.inventory_id)) {
           totalWeight += item.weight_kg || 0;
@@ -797,144 +1047,312 @@ export function CreateDispatchModal({
     warehouseItems,
     wastageItems,
     manualCutRolls,
+    draftItems,
   ]);
 
-  // Print Preview Handler
+  // Helper functions to extract paper specifications (same as packing slip)
+  const extractGSMFromSpec = (spec: string): string => {
+    if (!spec) return '';
+    const match = spec.match(/(\d+)gsm/i);
+    return match ? match[1] : '';
+  };
+
+  const extractBFFromSpec = (spec: string): string => {
+    if (!spec) return '';
+    const match = spec.match(/(\d+(?:\.\d+)?)bf/i);
+    return match ? match[1] : '';
+  };
+
+  const extractShadeFromSpec = (spec: string): string => {
+    if (!spec) return '';
+    const parts = spec.split(',').map(p => p.trim());
+    const shadePart = parts.find(part =>
+      !part.toLowerCase().includes('gsm') &&
+      !part.toLowerCase().includes('bf') &&
+      !part.match(/^\d/)
+    );
+    return shadePart || '';
+  };
+
+  const extractReelNumber = (barcode: string): string => {
+    if (!barcode) return '';
+    return barcode.replace(/^[A-Z]+_/, '');
+  };
+
+  // Print Preview Handler - uses jsPDF with same format as packing slip
   const handlePrintPreview = useCallback(() => {
-    // Collect selected items data
-    const selectedWarehouseItems = warehouseItems.filter(item =>
-      selectedItems.has(item.inventory_id)
-    );
-    const selectedWastageItemsData = wastageItems.filter(item =>
-      selectedWastageIds.has(item.id)
-    );
-    const selectedManualItems = manualCutRolls.filter(item =>
-      selectedManualCutRollIds.has(item.id)
-    );
+    try {
+      // Collect all selected items (draft + new)
+      const allSelectedItems = [
+        ...draftItems.filter(item =>
+          (item.inventory?.id && selectedItems.has(item.inventory.id)) ||
+          (!item.inventory?.id && item.barcode_id?.includes("WAS") && selectedWastageIds.has(item.id)) ||
+          (!item.inventory?.id && item.barcode_id?.startsWith("CR_") && selectedManualCutRollIds.has(item.id))
+        ),
+        ...warehouseItems.filter(item => selectedItems.has(item.inventory_id)),
+        ...wastageItems.filter(item => selectedWastageIds.has(item.id)),
+        ...manualCutRolls.filter(item => selectedManualCutRollIds.has(item.id))
+      ];
 
-    // Create preview dispatch object
-    const previewDispatch = {
-      dispatch_number: previewNumber,
-      client: selectedClient,
-      vehicle_number: dispatchDetails.vehicle_number,
-      driver_name: dispatchDetails.driver_name,
-      driver_mobile: dispatchDetails.driver_mobile,
-      locket_no: dispatchDetails.locket_no,
-      reference_number: dispatchDetails.reference_number,
-      items: [
-        ...selectedWarehouseItems.map((item: any) => ({
-          ...item,
-          item_type: 'warehouse'
-        })),
-        ...selectedWastageItemsData.map((item: any) => ({
-          ...item,
-          item_type: 'wastage'
-        })),
-        ...selectedManualItems.map((item: any) => ({
-          ...item,
-          item_type: 'manual'
-        }))
-      ],
-      total_items: stats.totalSelected,
-      total_weight: stats.totalWeight,
-      created_at: new Date().toISOString(),
-    };
+      // Convert items to packing slip format
+      const packingSlipItems = allSelectedItems.map((item: any, index: number) => ({
+        sno: index + 1,
+        gsm: extractGSMFromSpec(item.paper_spec) || '',
+        bf: extractBFFromSpec(item.paper_spec) || '',
+        size: parseFloat(item.width_inches) || '',
+        reel: extractReelNumber(item.barcode_id) || item.qr_code || item.barcode_id || '',
+        weight: Math.round(parseFloat(item.weight_kg) || 0),
+        natgold: extractShadeFromSpec(item.paper_spec) || '',
+        order_frontend_id: item.order_id || item.order_frontend_id || ''
+      }));
 
-    // Open print window
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
-    if (printWindow) {
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Packing Slip - ${previewNumber}</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 20px; }
-            .header { text-align: center; margin-bottom: 6px; border-bottom: 2px solid #000; padding-bottom: 10px; }
-            .info-section { display: flex; justify-content: space-between; margin-bottom: 20px; }
-            .info-block { display: grid; grid-template-columns: 2fr 1fr; }
-            .info-block strong { display: inline-block; width: 150px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { border: 1px solid #000; padding: 8px; text-align: left; font-size: 12px; }
-            th { background-color: #f0f0f0; font-weight: bold; }
-            .summary { margin-top: 20px; text-align: right; font-size: 14px; font-weight: bold; }
-            @media print {
-              button { display: none; }
-            }
-            .print-button { margin: 20px 0; padding: 10px 20px; font-size: 16px; cursor: pointer; }
-          </style>
-        </head>
-        <body>
-          <button class="print-button" onclick="window.print()">Print This Document</button>
+      // Sort items (same logic as packing slip)
+      const sortedItems = packingSlipItems.sort((a: any, b: any) => {
+        const sizeA = parseFloat(String(a.size)) || 0;
+        const sizeB = parseFloat(String(b.size)) || 0;
+        if (sizeA !== sizeB) return sizeA - sizeB;
 
-          <div class="header" style="display: flex; justify-content: space-between; align-items: center; ">
-            <h2>Challan No: ${previewNumber}</h2>
-            <p>Date: ${new Date().toLocaleDateString('en-GB')}</p>
-          </div>
+        const gsmA = parseFloat(String(a.gsm)) || 0;
+        const gsmB = parseFloat(String(b.gsm)) || 0;
+        if (gsmA !== gsmB) return gsmA - gsmB;
 
-          <div class="info-section">
-            <div class="info-block">
-              <p><strong>Client:</strong> ${selectedClient?.company_name || 'N/A'}</p>
-              <p><strong>Vehicle No:</strong> ${dispatchDetails.vehicle_number}</p>
-              <p><strong>Driver Name:</strong> ${dispatchDetails.driver_name}</p>
-              ${dispatchDetails.driver_mobile ? `<p><strong>Driver Mobile:</strong> ${dispatchDetails.driver_mobile}</p>` : ''}
-            </div>
-          </div>
+        const bfA = parseFloat(String(a.bf)) || 0;
+        const bfB = parseFloat(String(b.bf)) || 0;
+        if (bfA !== bfB) return bfA - bfB;
 
-          <table>
-            <thead>
-              <tr>
-                <th>S.No</th>
-                <th>Barcode/QR Code</th>
-                <th>Paper Specification</th>
-                <th>Width (inches)</th>
-                <th>Weight (kg)</th>
-                ${selectedWarehouseItems.length > 0 ? '<th>Order ID</th>' : ''}
-              </tr>
-            </thead>
-            <tbody>
-              ${previewDispatch.items.map((item: any, index: number) => `
-                <tr>
-                  <td>${index + 1}</td>
-                  <td>${item.reel_no || item.barcode_id || item.qr_code || item.frontend_id || 'N/A'}</td>
-                  <td>${item.paper_spec || 'N/A'}</td>
-                  <td>${item.width_inches || 'N/A'}</td>
-                  <td>${item.weight_kg || 'N/A'}</td>
-                  ${selectedWarehouseItems.length > 0 ? `<td>${item.order_id || '-'}</td>` : ''}
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
+        const reelA = parseFloat(String(a.reel)) || 0;
+        const reelB = parseFloat(String(b.reel)) || 0;
+        return reelA - reelB;
+      });
 
-          <div class="summary">
-            <p>Total Items: ${stats.totalSelected} | Total Weight: ${stats.totalWeight.toFixed(2)} kg</p>
-          </div>
+      // Generate PDF using jsPDF (same format as packing slip)
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      let yPosition = 13;
 
-          <div style="margin-top: 50px; display: flex; justify-content: space-between;">
-            <div>
-              <p>_______________________</p>
-              <p>Prepared By</p>
-            </div>
-            <div>
-              <p>_______________________</p>
-              <p>Checked By</p>
-            </div>
-            <div>
-              <p>_______________________</p>
-              <p>Received By</p>
-            </div>
-          </div>
-        </body>
-        </html>
-      `);
-      printWindow.document.close();
-    } else {
-      toast.error("Unable to open print preview. Please check your browser's popup settings.");
+      // Header
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Satguru Papers Pvt. Ltd.', pageWidth/2, yPosition, { align: 'center' });
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Kraft paper Mill', pageWidth/2 + 45, yPosition-2, { align: 'left' });
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Address - Pithampur Dhar(M.P.)', pageWidth/2 + 45, yPosition+3, { align: 'left' });
+
+      yPosition += 12;
+
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, 155, yPosition, {align:'left'});
+
+      // Title - "PRE PACKING SLIP" instead of "PACKING SLIP"
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('PRE PACKING SLIP', pageWidth / 2, yPosition, { align: 'center' });
+
+      yPosition += 10;
+
+      // Dispatch Information
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+
+      const leftMargin = 15;
+      const rightMargin = 35;
+      const usableWidth = pageWidth - leftMargin - rightMargin;
+      const bottomMargin = 20;
+
+      doc.text(`Dispatch No: ${previewNumber}`, 155, yPosition-3, {align:'left'});
+      doc.text(`Party: ${selectedClient?.company_name || 'N/A'}`, leftMargin, yPosition);
+
+      yPosition += 10;
+
+      if (dispatchDetails.reference_number) {
+        doc.text(`Reference No: ${dispatchDetails.reference_number}`, 155, (yPosition-6));
+      }
+      doc.text(`Vehicle No.: ${dispatchDetails.vehicle_number}`, 155, yPosition+1);
+
+      let formatAddress = '';
+      if (selectedClient?.address && selectedClient.address.length > 0) {
+        formatAddress = selectedClient.address.length > 36
+          ? selectedClient.address.substring(0, 35) + '...'
+          : selectedClient.address;
+      }
+
+      doc.text(`Address: ${formatAddress}`, leftMargin, yPosition);
+      yPosition += 14;
+
+      // Table setup
+      const totalWeight = sortedItems.reduce((sum: number, item: any) => sum + item.weight, 0);
+      const totalItems = sortedItems.length;
+
+      const tableHeaders = ['S.No', 'GSM', 'BF', 'Size', 'Reel', 'Weight', 'Nat/Gold', 'Order Id'];
+      const totalTableWidth = usableWidth - 10;
+      const colWidths = [
+        totalTableWidth * 0.08,
+        totalTableWidth * 0.12,
+        totalTableWidth * 0.10,
+        totalTableWidth * 0.12,
+        totalTableWidth * 0.20,
+        totalTableWidth * 0.18,
+        totalTableWidth * 0.20,
+        totalTableWidth * 0.20
+      ];
+      const rowHeight = 8;
+      const headerHeight = 10;
+      const tableWidth = colWidths.reduce((a, b) => a + b, 0);
+
+      // Table data with renumbered S.No
+      const tableData = sortedItems.map((item: any, index: number) => [
+        (index + 1).toString(),
+        item.gsm.toString() || '',
+        item.bf.toString() || '',
+        item.size.toString() || '',
+        item.reel.toString() || '',
+        item.weight.toString(),
+        item.natgold || '',
+        item.order_frontend_id || ''
+      ]);
+
+      tableData.push([
+        'Total',
+        '',
+        '',
+        '',
+        totalItems.toString(),
+        totalWeight.toString(),
+        '',
+        ''
+      ]);
+
+      // Helper to draw table headers
+      const drawTableHeader = (startY: number) => {
+        doc.setFillColor(240, 240, 240);
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+
+        let currentX = leftMargin;
+        doc.rect(currentX, startY, tableWidth, headerHeight, 'F');
+
+        tableHeaders.forEach((header, i) => {
+          doc.text(header, currentX + colWidths[i] / 2, startY + headerHeight / 2 + 2, { align: 'center' });
+          currentX += colWidths[i];
+        });
+
+        return startY + headerHeight;
+      };
+
+      // Helper to draw table borders
+      const drawTableBorders = (startY: number, endY: number, rowCount: number) => {
+        doc.setDrawColor(0, 0, 0);
+        doc.setLineWidth(0.5);
+
+        const sectionHeight = endY - startY;
+        doc.rect(leftMargin, startY, tableWidth, sectionHeight, 'S');
+
+        let x = leftMargin;
+        for (let i = 0; i < colWidths.length - 1; i++) {
+          x += colWidths[i];
+          doc.line(x, startY, x, endY);
+        }
+
+        doc.line(leftMargin, startY + headerHeight, leftMargin + tableWidth, startY + headerHeight);
+        for (let i = 1; i < rowCount; i++) {
+          const y = startY + headerHeight + (i * rowHeight);
+          if (y < endY) {
+            doc.line(leftMargin, y, leftMargin + tableWidth, y);
+          }
+        }
+      };
+
+      let currentY = yPosition;
+      let tableStartY = currentY;
+      let rowsInCurrentPage = 0;
+
+      currentY = drawTableHeader(currentY);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(0, 0, 0);
+
+      tableData.forEach((row, rowIndex) => {
+        const isTotalRow = rowIndex === tableData.length - 1;
+        const spaceNeeded = isTotalRow ? rowHeight + 60 : rowHeight;
+
+        if (currentY + spaceNeeded > pageHeight - bottomMargin) {
+          drawTableBorders(tableStartY, currentY, rowsInCurrentPage);
+          doc.addPage();
+          currentY = 20;
+          tableStartY = currentY;
+          currentY = drawTableHeader(currentY);
+          rowsInCurrentPage = 0;
+        }
+
+        let currentX = leftMargin;
+
+        if (isTotalRow) {
+          doc.setFillColor(250, 250, 250);
+          doc.setFont('helvetica', 'bold');
+          doc.rect(currentX, currentY, tableWidth, rowHeight, 'F');
+        }
+
+        row.forEach((cell, colIndex) => {
+          doc.text(cell, currentX + colWidths[colIndex] / 2, currentY + rowHeight / 2 + 1, { align: 'center' });
+          currentX += colWidths[colIndex];
+        });
+
+        if (isTotalRow) {
+          doc.setFont('helvetica', 'normal');
+        }
+
+        currentY += rowHeight;
+        rowsInCurrentPage++;
+      });
+
+      drawTableBorders(tableStartY, currentY, rowsInCurrentPage);
+
+      // Totals just below table - bold and in right corner
+      const totalsY = currentY + 5;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Total Items: ${totalItems}  |  Total Weight: ${totalWeight} kg`, pageWidth - rightMargin, totalsY, { align: 'right' });
+
+      // Footer - signature section
+      const col1X = leftMargin;
+      const col3X = leftMargin + (2 * usableWidth / 3);
+      const signatureY = totalsY + 35;
+
+      doc.setFont('helvetica', 'normal');
+      doc.text('_________________________', col1X, signatureY);
+      doc.text('_________________________', col3X, signatureY);
+      doc.text('Prepared By', col1X + 25, signatureY + 10);
+      doc.text('Received By', col3X + 25, signatureY + 10);
+
+      // Open print dialog in popup window
+      const pdfBlob = doc.output('blob');
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      const printWindow = window.open(pdfUrl, '_blank', 'width=900,height=700,toolbar=no,menubar=no,location=no');
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+          URL.revokeObjectURL(pdfUrl);
+        };
+      } else {
+        toast.error("Unable to open print preview. Please check your browser's popup settings.");
+      }
+    } catch (error) {
+      console.error('Error generating pre-packing slip:', error);
+      toast.error('Failed to generate print preview');
     }
   }, [
     warehouseItems,
     wastageItems,
     manualCutRolls,
+    draftItems,
     selectedItems,
     selectedWastageIds,
     selectedManualCutRollIds,

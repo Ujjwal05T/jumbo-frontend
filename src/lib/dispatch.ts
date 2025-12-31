@@ -67,6 +67,31 @@ export interface DispatchFormData {
   inventory_ids: string[];
   wastage_ids?: string[];  // NEW: Wastage inventory IDs
   manual_cut_roll_ids?: string[];  // NEW: Manual cut roll IDs
+  is_draft?: boolean;  // NEW: Draft status
+}
+
+export interface DraftDispatch {
+  id: string;
+  dispatch_number: string;
+  client_id: string;
+  primary_order_id?: string | null;
+  vehicle_number: string;
+  driver_name: string;
+  driver_mobile: string;
+  locket_no?: string;
+  reference_number?: string;
+  rst_no?: string;
+  gross_weight?: string;
+  inventory_ids?: string[];
+  wastage_ids?: string[];
+  manual_cut_roll_ids?: string[];
+  total_items?: number;
+  total_weight_kg?: number;
+  created_at: string;
+  client?: {
+    id: string;
+    company_name: string;
+  };
 }
 
 export interface CompletePendingItemRequest {
@@ -88,8 +113,53 @@ export async function fetchWarehouseItems(): Promise<WarehouseItem[]> {
 }
 
 /**
+ * Fetch user's draft dispatches
+ */
+// export async function fetchMyDrafts(): Promise<DraftDispatch[]> {
+//   const userId = localStorage.getItem('user_id');
+//   if (!userId) {
+//     throw new Error('User not authenticated');
+//   }
+
+//   const response = await fetch(
+//     DISPATCH_ENDPOINTS.MY_DRAFTS,
+//     createRequestOptions('GET')
+//   );
+
+//   if (!response.ok) {
+//     if (response.status === 404) {
+//       return []; // No drafts found
+//     }
+//     throw new Error('Failed to fetch draft dispatches');
+//   }
+
+//   const data = await response.json();
+//   return data.drafts || [];
+// }
+
+/**
+ * Delete a draft dispatch
+ */
+// export async function deleteDraft(draftId: string): Promise<void> {
+//   const response = await fetch(
+//     DISPATCH_ENDPOINTS.DELETE_DRAFT(draftId),
+//     createRequestOptions('DELETE')
+//   );
+
+//   if (!response.ok) {
+//     const errorData = await response.json().catch(() => ({}));
+//     throw new Error(
+//       errorData.detail ||
+//         errorData.message ||
+//         'Failed to delete draft dispatch'
+//     );
+//   }
+// }
+
+/**
  * Create dispatch record with vehicle/driver details and complete items
  * Supports regular inventory, wastage items, and manual cut rolls
+ * Can create as draft or final dispatch
  */
 export async function createDispatchRecord(dispatchData: {
   vehicle_number: string;
@@ -99,15 +169,19 @@ export async function createDispatchRecord(dispatchData: {
   payment_type: string;
   dispatch_number: string;
   reference_number?: string;
+  rst_no?: string;
+  gross_weight?: string;
   client_id: string;
   primary_order_id?: string;
   inventory_ids: string[];
   wastage_ids?: string[];  // NEW: Wastage inventory IDs
   manual_cut_roll_ids?: string[];  // NEW: Manual cut roll IDs
+  is_draft?: boolean;  // NEW: Draft status
 }): Promise<{
   dispatch_id: string;
   dispatch_number: string;
   message: string;
+  is_draft?: boolean;
   summary: {
     dispatched_items: number;
     regular_items?: number;
@@ -132,12 +206,15 @@ export async function createDispatchRecord(dispatchData: {
     dispatch_date: new Date().toISOString(),
     dispatch_number: dispatchData.dispatch_number.trim(),
     reference_number: dispatchData.reference_number?.trim() || null,
+    rst_no: dispatchData.rst_no?.trim() || null,
+    gross_weight: dispatchData.gross_weight?.trim() || null,
     client_id: dispatchData.client_id,
     primary_order_id: dispatchData.primary_order_id || null,
     order_date: null,
     inventory_ids: dispatchData.inventory_ids || [],
     wastage_ids: dispatchData.wastage_ids || [],  // NEW: Include wastage IDs
     manual_cut_roll_ids: dispatchData.manual_cut_roll_ids || [],  // NEW: Include manual cut roll IDs
+    is_draft: dispatchData.is_draft || false,  // NEW: Include draft status
     created_by_id: userId
   };
 
@@ -160,6 +237,50 @@ export async function createDispatchRecord(dispatchData: {
 }
 
 /**
+ * Fetch user's draft dispatches
+ */
+// export async function fetchMyDrafts(): Promise<DraftDispatch[]> {
+//   const userId = localStorage.getItem('user_id');
+//   if (!userId) {
+//     throw new Error('User not authenticated');
+//   }
+
+//   const response = await fetch(
+//     DISPATCH_ENDPOINTS.MY_DRAFTS,
+//     createRequestOptions('GET')
+//   );
+
+//   if (!response.ok) {
+//     if (response.status === 404) {
+//       return []; // No drafts found
+//     }
+//     throw new Error('Failed to fetch draft dispatches');
+//   }
+
+//   const data = await response.json();
+//   return data.drafts || [];
+// }
+
+/**
+ * Delete a draft dispatch
+ */
+// export async function deleteDraft(draftId: string): Promise<void> {
+//   const response = await fetch(
+//     DISPATCH_ENDPOINTS.DELETE_DRAFT(draftId),
+//     createRequestOptions('DELETE')
+//   );
+
+//   if (!response.ok) {
+//     const errorData = await response.json().catch(() => ({}));
+//     throw new Error(
+//       errorData.detail ||
+//         errorData.message ||
+//         'Failed to delete draft dispatch'
+//     );
+//   }
+// }
+
+/**
  * Fetch pending items ready for dispatch
  */
 export async function fetchPendingItems(): Promise<PendingItem[]> {
@@ -171,6 +292,50 @@ export async function fetchPendingItems(): Promise<PendingItem[]> {
 
   return response.json();
 }
+
+/**
+ * Fetch user's draft dispatches
+ */
+// export async function fetchMyDrafts(): Promise<DraftDispatch[]> {
+//   const userId = localStorage.getItem('user_id');
+//   if (!userId) {
+//     throw new Error('User not authenticated');
+//   }
+
+//   const response = await fetch(
+//     DISPATCH_ENDPOINTS.MY_DRAFTS,
+//     createRequestOptions('GET')
+//   );
+
+//   if (!response.ok) {
+//     if (response.status === 404) {
+//       return []; // No drafts found
+//     }
+//     throw new Error('Failed to fetch draft dispatches');
+//   }
+
+//   const data = await response.json();
+//   return data.drafts || [];
+// }
+
+/**
+ * Delete a draft dispatch
+ */
+// export async function deleteDraft(draftId: string): Promise<void> {
+//   const response = await fetch(
+//     DISPATCH_ENDPOINTS.DELETE_DRAFT(draftId),
+//     createRequestOptions('DELETE')
+//   );
+
+//   if (!response.ok) {
+//     const errorData = await response.json().catch(() => ({}));
+//     throw new Error(
+//       errorData.detail ||
+//         errorData.message ||
+//         'Failed to delete draft dispatch'
+//     );
+//   }
+// }
 
 /**
  * Complete a pending order item
@@ -212,6 +377,7 @@ export interface DispatchDetails {
     email: string;
     address: string;
   };
+  
   primary_order: {
     id: string;
     order_number: string;
@@ -245,6 +411,8 @@ export interface DispatchItemDetails {
   weight_kg: number;
   paper_spec: string;
   status: string;
+  order_frontend_id?: string;
+  client_name?: string;  // Actual client name from inventory → order → client relationship
   dispatched_at: string;
   inventory: {
     id: string;
@@ -271,6 +439,50 @@ export async function fetchDispatchDetails(dispatchId: string): Promise<Dispatch
 }
 
 /**
+ * Fetch user's draft dispatches
+ */
+// export async function fetchMyDrafts(): Promise<DraftDispatch[]> {
+//   const userId = localStorage.getItem('user_id');
+//   if (!userId) {
+//     throw new Error('User not authenticated');
+//   }
+
+//   const response = await fetch(
+//     DISPATCH_ENDPOINTS.MY_DRAFTS,
+//     createRequestOptions('GET')
+//   );
+
+//   if (!response.ok) {
+//     if (response.status === 404) {
+//       return []; // No drafts found
+//     }
+//     throw new Error('Failed to fetch draft dispatches');
+//   }
+
+//   const data = await response.json();
+//   return data.drafts || [];
+// }
+
+/**
+ * Delete a draft dispatch
+ */
+// export async function deleteDraft(draftId: string): Promise<void> {
+//   const response = await fetch(
+//     DISPATCH_ENDPOINTS.DELETE_DRAFT(draftId),
+//     createRequestOptions('DELETE')
+//   );
+
+//   if (!response.ok) {
+//     const errorData = await response.json().catch(() => ({}));
+//     throw new Error(
+//       errorData.detail ||
+//         errorData.message ||
+//         'Failed to delete draft dispatch'
+//     );
+//   }
+// }
+
+/**
  * Update dispatch record interface
  */
 export interface UpdateDispatchData {
@@ -281,9 +493,14 @@ export interface UpdateDispatchData {
   payment_type?: string;
   dispatch_date?: string;
   reference_number?: string;
+  rst_no?: string;
+  gross_weight?: string;
+  client_id?: string;
+  primary_order_id?: string;
   inventory_ids?: string[];
   wastage_ids?: string[];
   manual_cut_roll_ids?: string[];
+  is_draft?: boolean;  // NEW: Draft status
 }
 
 /**
@@ -336,4 +553,48 @@ export async function updateDispatchRecord(
   }
 
   return response.json();
+}
+
+/**
+ * Fetch user's draft dispatches
+ */
+export async function fetchMyDrafts(): Promise<DraftDispatch[]> {
+  const userId = localStorage.getItem('user_id');
+  if (!userId) {
+    throw new Error('User not authenticated');
+  }
+
+  const response = await fetch(
+    DISPATCH_ENDPOINTS.MY_DRAFTS,
+    createRequestOptions('GET')
+  );
+
+  if (!response.ok) {
+    if (response.status === 404) {
+      return []; // No drafts found
+    }
+    throw new Error('Failed to fetch draft dispatches');
+  }
+
+  const data = await response.json();
+  return data.drafts || [];
+}
+
+/**
+ * Delete a draft dispatch
+ */
+export async function deleteDraft(draftId: string): Promise<void> {
+  const response = await fetch(
+    DISPATCH_ENDPOINTS.DELETE_DRAFT(draftId),
+    createRequestOptions('DELETE')
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail ||
+        errorData.message ||
+        'Failed to delete draft dispatch'
+    );
+  }
 }

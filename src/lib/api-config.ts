@@ -85,6 +85,8 @@ export const DISPATCH_ENDPOINTS = {
   CREATE_DISPATCH: `${API_BASE_URL}/dispatch/create-dispatch`,
   GET_DISPATCH_DETAILS: (dispatchId: string) => `${API_BASE_URL}/dispatch/${dispatchId}/details`,  // NEW: Get dispatch details
   UPDATE_DISPATCH: (dispatchId: string) => `${API_BASE_URL}/dispatch/${dispatchId}`,  // NEW: Update dispatch
+  MY_DRAFTS: `${API_BASE_URL}/dispatch/my-drafts`,  // NEW: Get user's draft dispatches
+  DELETE_DRAFT: (draftId: string) => `${API_BASE_URL}/dispatch/drafts/${draftId}`,  // NEW: Delete draft
   CLIENTS: `${API_BASE_URL}/dispatch/clients`,
   PENDING_ITEMS: `${API_BASE_URL}/dispatch/pending-items`,
   COMPLETE_PENDING_ITEM: `${API_BASE_URL}/dispatch/complete-pending-item`,

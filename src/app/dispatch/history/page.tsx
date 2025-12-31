@@ -85,6 +85,7 @@ interface DispatchRecord {
   driver_name: string;
   driver_mobile: string;
   status: string;
+  is_draft: boolean;
   total_items: number;
   total_weight_kg: number;
   created_by: {
@@ -204,6 +205,7 @@ export default function DispatchHistoryPage() {
 
   // Create dispatch modal
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [draftIdToRestore, setDraftIdToRestore] = useState<string | null>(null);
 
   // Edit dispatch modal
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -623,16 +625,34 @@ export default function DispatchHistoryPage() {
                     dispatches.map((dispatch) => (
                       <TableRow
                         key={dispatch.id}
-                        onClick={() => setSelectedRowId(dispatch.id === selectedRowId ? null : dispatch.id)}
+                        onClick={() => {
+                          if (dispatch.is_draft) {
+                            // Open CreateDispatchModal with this draft
+                            setDraftIdToRestore(dispatch.id);
+                            setCreateModalOpen(true);
+                          } else {
+                            // Normal selection for non-draft dispatches
+                            setSelectedRowId(dispatch.id === selectedRowId ? null : dispatch.id);
+                          }
+                        }}
                         className={`cursor-pointer transition-colors ${
-                          selectedRowId === dispatch.id
+                          selectedRowId === dispatch.id && !dispatch.is_draft
                             ? 'bg-orange-300/70 hover:bg-orange-300/70'
+                            : dispatch.is_draft
+                            ? 'bg-yellow-50 hover:bg-yellow-100'
                             : 'hover:bg-gray-50'
                         }`}
                       >
                         <TableCell>
                           <div className="space-y-1">
-                            <div className="font-medium">{dispatch.dispatch_number}</div>
+                            <div className="flex items-center gap-2">
+                              <div className="font-medium">{dispatch.dispatch_number}</div>
+                              {dispatch.is_draft && (
+                                <Badge className="bg-yellow-500 text-white hover:bg-yellow-600">
+                                  DRAFT
+                                </Badge>
+                              )}
+                            </div>
                             {dispatch.reference_number && (
                               <div className="text-xs text-muted-foreground">
                                 Ref: {dispatch.reference_number}
@@ -946,10 +966,17 @@ export default function DispatchHistoryPage() {
       {/* Create Dispatch Modal */}
       <CreateDispatchModal
         open={createModalOpen}
-        onOpenChange={setCreateModalOpen}
+        onOpenChange={(open) => {
+          setCreateModalOpen(open);
+          if (!open) {
+            setDraftIdToRestore(null); // Reset draft ID when modal closes
+          }
+        }}
+        draftIdToRestore={draftIdToRestore}
         onSuccess={() => {
           loadDispatches();
           loadStats();
+          setDraftIdToRestore(null);
         }}
       />
 
