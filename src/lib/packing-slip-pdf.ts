@@ -30,86 +30,58 @@ export interface PackingSlipData {
 /**
  * Generate a packing slip PDF for dispatch
  */
-export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean = false, printMode: boolean = false): jsPDF | void => {
+export const generatePackingSlipPDF = async (data: PackingSlipData, returnDoc: boolean = false, printMode: boolean = false): Promise<jsPDF | void> => {
   try {
-    const doc = new jsPDF();
+    const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    let yPosition = 13;
+    let yPosition = 0;
 
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Satguru Papers Pvt. Ltd.', pageWidth/2, yPosition, { align: 'center' });
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Kraft paper Mill', pageWidth/2 + 45, yPosition-2, { align: 'left' });
+    // Header - Add packing image
+    const headerImg = new Image();
+    headerImg.src = '/packing.png';
+    await new Promise((resolve) => {
+      headerImg.onload = resolve;
+    });
 
-    // Plant address
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Address - Pithampur Dhar(M.P.)', pageWidth/2 + 45, yPosition+3, { align: 'left' });
+    // Calculate image dimensions maintaining aspect ratio
+    const imgWidth = pageWidth; // Full width
+    const aspectRatio = headerImg.naturalHeight / headerImg.naturalWidth;
+    const imgHeight = imgWidth * aspectRatio; // Calculate height based on aspect ratio
+    doc.addImage(headerImg, 'PNG', 0, yPosition, imgWidth, imgHeight);
 
-
-    yPosition += 12;
-
-    doc.setFontSize(13);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Date: ${new Date(data.dispatch_date).toLocaleDateString('en-GB')}`, 155, yPosition, {align:'left'});
-
-    // Title - "PACKING SLIP" with underline
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
-    const titleText = 'PACKING SLIP';
-    doc.text(titleText, pageWidth / 2, yPosition, { align: 'center' });
-
-    // Add underline to title
-    const titleWidth = doc.getTextWidth(titleText);
-    const underlineY = yPosition + 1;
-    doc.setLineWidth(0.5);
-    doc.line(
-      (pageWidth / 2) - (titleWidth / 2),
-      underlineY,
-      (pageWidth / 2) + (titleWidth / 2),
-      underlineY
-    );
-
-    yPosition += 10;
+    yPosition += imgHeight + 5; // Move position down after image
 
     // Dispatch Information
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
 
-    // Define margins
-    const leftMargin = 15;
-    const rightMargin = 35;
+    const leftMargin = 2;
+    const rightMargin = 2;
     const usableWidth = pageWidth - leftMargin - rightMargin;
     const bottomMargin = 20;
-    const rightColX = 140; // Fixed position for right column
+    const midColX = pageWidth / 2 + 10; // Middle-right position
+    const rightColX = pageWidth - 55; // Far right position
 
-    // Row 1: Dispatch No (right) and Party (left)
-    doc.text(`Dispatch No: ${data.dispatch_number}`, rightColX, yPosition);
-    doc.text(`Party: ${data.client.company_name}`, leftMargin, yPosition);
-
-    yPosition += 7;
-
-    // Row 2: Vehicle No (right) and Address (left)
-    doc.text(`Vehicle No.: ${data.vehicle_number}`, rightColX, yPosition);
-    
-
-    let formatAddress = '';
-    if (data.client.address && data.client.address.length > 0) {
-      formatAddress = data.client.address.length > 36
-        ? data.client.address.substring(0, 35) + '...'
-        : data.client.address;
-    }
-    doc.text(`Address: ${formatAddress}`, leftMargin, yPosition);
+    // Row 1: Party (left), Date (middle-right), Dispatch No (far right)
+    doc.text(`Party :- ${data.client.company_name || 'N/A'}`, leftMargin, yPosition + 3);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Date :- ${new Date(data.dispatch_date).toLocaleDateString('en-GB')}`, midColX, yPosition);
+    doc.text(`Dispatch No : ${data.dispatch_number}`, rightColX, yPosition);
 
     yPosition += 7;
 
-    // Row 3: Reference No (right, if exists) 
-    if (data.reference_number) {
-      doc.text(`Reference No: ${data.reference_number}`, rightColX, yPosition);
-    }
+    // Row 2: Address (left), Vehicle (middle-right), Driver (far right)
+    // let formatAddress = '';
+    // if (data.client.address && data.client.address.length > 0) {
+    //   formatAddress = data.client.address.length > 50
+    //     ? data.client.address.substring(0, 48) + '...'
+    //     : data.client.address;
+    // }
+    // doc.text(`Address :- ${formatAddress}`, leftMargin, yPosition);
+    doc.text(`Vehicle :- ${data.vehicle_number || 'N/A'}`, midColX, yPosition);
+    doc.text(`Driver : ${data.driver_name || 'N/A'}`, rightColX, yPosition);
 
     yPosition += 10;
     
@@ -118,33 +90,58 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
     const totalWeight = data.items.reduce((sum, item) => sum + item.weight, 0);
     const totalItems = data.items.length;
 
-    // Prepare table data
-    const tableHeaders = ['S.No', 'GSM', 'BF', 'Size', 'Reel', 'Weight', 'Nat/Gold', 'Order Id'];
+    const tableHeaders = ['S.No', 'GSM', 'BF', 'Size', 'Reel', 'Weight', 'Shade', 'Order Id'];
 
+    // Calculate dimensions for two tables
+    const tableGap = 2; // Gap between two tables
+    const singleTableWidth = (pageWidth - tableGap) / 2;
+
+    const colWidths = [
+        singleTableWidth * 0.08,
+        singleTableWidth * 0.10,
+        singleTableWidth * 0.10,
+        singleTableWidth * 0.10,
+        singleTableWidth * 0.15,
+        singleTableWidth * 0.11,
+        singleTableWidth * 0.15,
+        singleTableWidth * 0.20
+      ];
+    const rowHeight = 8;
+    const headerHeight = 10;
+    const tableWidth = colWidths.reduce((a, b) => a + b, 0);
+
+    // Calculate max rows that can fit on current page
+    const footerSpaceNeeded = 40; // Space for totals + footer
+    const availableHeightFirstPage = pageHeight - yPosition - footerSpaceNeeded;
+    const maxRowsFirstPage = Math.floor((availableHeightFirstPage - headerHeight) / rowHeight);
+
+    // For subsequent pages (if needed)
+    const topMarginNewPage = 10;
+    const availableHeightNewPage = pageHeight - topMarginNewPage - footerSpaceNeeded;
+    const maxRowsPerNewPage = Math.floor((availableHeightNewPage - headerHeight) / rowHeight);
+
+    // Sort items
     const sortedItems = data.items.sort((a:any, b:any) => {
-      // Sort by size first
       const sizeA = parseFloat(String(a.size)) || 0;
       const sizeB = parseFloat(String(b.size)) || 0;
       if (sizeA !== sizeB) return sizeA - sizeB;
-      
-      // Then by GSM
+
       const gsmA = parseFloat(String(a.gsm)) || 0;
       const gsmB = parseFloat(String(b.gsm)) || 0;
       if (gsmA !== gsmB) return gsmA - gsmB;
-      
-      // Then by BF
+
       const bfA = parseFloat(String(a.bf)) || 0;
       const bfB = parseFloat(String(b.bf)) || 0;
       if (bfA !== bfB) return bfA - bfB;
-      
-      // Finally by reel
+
       const reelA = parseFloat(String(a.reel)) || 0;
       const reelB = parseFloat(String(b.reel)) || 0;
       return reelA - reelB;
     });
-    
+
+    // Prepare table data
     const tableData = sortedItems.map((item, index) => [
-      (index + 1).toString(), // Regenerate S.No after sorting
+      (index + 1).toString(),
       item.gsm.toString() || '',
       item.bf.toString() || '',
       item.size.toString() || '',
@@ -154,148 +151,273 @@ export const generatePackingSlipPDF = (data: PackingSlipData, returnDoc: boolean
       item.order_frontend_id || ''
     ]);
 
-    
+    // Calculate total rows needed for both tables combined
+    const totalRowsNeeded = Math.ceil(totalItems / 2);
+    const rows = Math.max(totalRowsNeeded, 23);
 
-    // Add totals row
-    tableData.push([
-      'Total',
-      '',
-      '',
-      '',
-      totalItems.toString(),
-      totalWeight.toString(),
-      '',
-      ''
-    ]);
+    // Determine rows per table on first page
+    const rowsPerTableFirstPage = Math.min(maxRowsFirstPage, totalRowsNeeded);
 
-    // Draw table manually with pagination support
-    const totalTableWidth = usableWidth - 10; // Leave some extra space on right
-    const colWidths = [totalTableWidth * 0.08, totalTableWidth * 0.12, totalTableWidth * 0.10, totalTableWidth * 0.12, totalTableWidth * 0.20, totalTableWidth * 0.18, totalTableWidth * 0.20, totalTableWidth * 0.20]; // Responsive column widths
-    const rowHeight = 8;
-    const headerHeight = 10;
-    const tableWidth = colWidths.reduce((a, b) => a + b, 0);
-    const leftColX = leftMargin; // Use leftMargin for table alignment
+    // Split data into two tables - fill first table first, then second
+    const leftTableData: any[] = [];
+    const rightTableData: any[] = [];
 
-    // Helper function to draw table headers
-    const drawTableHeader = (startY: number) => {
+    for (let i = 0; i < rows; i++) {
+      leftTableData.push(tableData[i] || ['', '', '', '', '', '', '', '']);
+      rightTableData.push(tableData[i + rows] || ['', '', '', '', '', '', '', '']);
+    }
+
+    // Helper to draw table header
+    const drawTableHeader = (startX: number, startY: number) => {
       doc.setFillColor(240, 240, 240);
       doc.setTextColor(0, 0, 0);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9);
 
-      let currentX = leftColX;
-      // Draw header background
-      doc.rect(currentX, startY, tableWidth, headerHeight, 'F');
+      doc.rect(startX, startY, tableWidth, headerHeight, 'F');
 
-      // Draw header text
+      let currentX = startX;
       tableHeaders.forEach((header, i) => {
         doc.text(header, currentX + colWidths[i] / 2, startY + headerHeight / 2 + 2, { align: 'center' });
         currentX += colWidths[i];
       });
-
-      return startY + headerHeight;
     };
 
-    // Helper function to draw table borders for a section
-    const drawTableBorders = (startY: number, endY: number, rowCount: number) => {
-      doc.setDrawColor(0, 0, 0);
-      doc.setLineWidth(0.5);
+    // Helper to draw table rows with alternating colors
+    const drawTableRows = (startX: number, startY: number, data: any[]) => {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(0, 0, 0);
 
-      const sectionHeight = endY - startY;
+      let currentY = startY + headerHeight;
+
+      data.forEach((row, rowIndex) => {
+        // Alternating row colors - white and light gray
+        if (rowIndex % 2 === 1) {
+          doc.setFillColor(230, 230, 230); // Light gray for odd rows
+          doc.rect(startX, currentY, tableWidth, rowHeight, 'F');
+        }
+
+        let currentX = startX;
+        row.forEach((cell: string, colIndex: number) => {
+          doc.text(cell, currentX + colWidths[colIndex] / 2, currentY + rowHeight / 2 + 1, { align: 'center' });
+          currentX += colWidths[colIndex];
+        });
+        currentY += rowHeight;
+      });
+    };
+
+    // Helper to draw table borders
+    const drawTableBorders = (startX: number, startY: number, numRows: number) => {
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.3);
+
+      const tableHeight = headerHeight + (numRows * rowHeight);
 
       // Outer border
-      doc.rect(leftColX, startY, tableWidth, sectionHeight, 'S');
+      doc.rect(startX, startY, tableWidth, tableHeight, 'S');
 
-      // Vertical lines
-      let x = leftColX;
+      // Vertical lines between columns
+      let x = startX;
       for (let i = 0; i < colWidths.length - 1; i++) {
         x += colWidths[i];
-        doc.line(x, startY, x, endY);
+        doc.line(x, startY, x, startY + tableHeight);
       }
 
-      // Horizontal lines (header line + row lines)
-      doc.line(leftColX, startY + headerHeight, leftColX + tableWidth, startY + headerHeight);
-      for (let i = 1; i < rowCount; i++) {
-        const y = startY + headerHeight + (i * rowHeight);
-        if (y < endY) {
-          doc.line(leftColX, y, leftColX + tableWidth, y);
-        }
-      }
+      // Only horizontal line after header (no lines between rows)
+      doc.line(startX, startY + headerHeight, startX + tableWidth, startY + headerHeight);
     };
 
-    let currentY = yPosition;
-    let tableStartY = currentY;
-    let rowsInCurrentPage = 0;
+    // Pagination logic - draw tables with page breaks
+    const leftTableX = 0;
+    const rightTableX = tableWidth + tableGap;
 
-    // Draw initial header
-    currentY = drawTableHeader(currentY);
+    let currentRowIndex = 0;
+    let currentPage = 1;
+    let currentYPosition = yPosition;
 
-    // Draw data rows with pagination
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(0, 0, 0);
+    while (currentRowIndex < rows) {
+      // Calculate available space on current page
+      const availableSpace = currentPage === 1
+        ? availableHeightFirstPage
+        : availableHeightNewPage;
 
-    tableData.forEach((row, rowIndex) => {
-      // Check if this is the total row (last row)
-      const isTotalRow = rowIndex === tableData.length - 1;
+      const maxRowsThisPage = Math.floor((availableSpace - headerHeight) / rowHeight);
+      const rowsToDrawThisPage = Math.min(maxRowsThisPage, rows - currentRowIndex);
 
-      // Check if we need a new page (leave space for footer if it's the last row)
-      const spaceNeeded = isTotalRow ? rowHeight + 60 : rowHeight; // Extra space for footer on last row
-      if (currentY + spaceNeeded > pageHeight - bottomMargin) {
-        // Draw borders for current table section
-        drawTableBorders(tableStartY, currentY, rowsInCurrentPage);
+      // Get data slice for this page
+      const leftDataSlice = leftTableData.slice(currentRowIndex, currentRowIndex + rowsToDrawThisPage);
+      const rightDataSlice = rightTableData.slice(currentRowIndex, currentRowIndex + rowsToDrawThisPage);
 
-        // Add new page
+      const tableStartY = currentYPosition;
+
+      // Draw left table
+      drawTableHeader(leftTableX+1, tableStartY);
+      drawTableRows(leftTableX+1, tableStartY, leftDataSlice);
+      drawTableBorders(leftTableX+1, tableStartY, rowsToDrawThisPage);
+
+      // Draw right table
+      drawTableHeader(rightTableX, tableStartY);
+      drawTableRows(rightTableX, tableStartY, rightDataSlice);
+      drawTableBorders(rightTableX, tableStartY, rowsToDrawThisPage);
+
+      // Update position
+      const tableHeight = headerHeight + (rowsToDrawThisPage * rowHeight);
+      currentYPosition = tableStartY + tableHeight;
+      currentRowIndex += rowsToDrawThisPage;
+
+      // If more rows remain, add a new page
+      if (currentRowIndex < rows) {
         doc.addPage();
-
-        // Reset Y position and redraw header
-        currentY = 20;
-        tableStartY = currentY;
-        currentY = drawTableHeader(currentY);
-        rowsInCurrentPage = 0;
+        currentPage++;
+        currentYPosition = topMarginNewPage;
       }
+    }
 
-      let currentX = leftColX;
+    yPosition = currentYPosition;
 
-      if (isTotalRow) {
-        doc.setFillColor(250, 250, 250);
-        doc.setFont('helvetica', 'bold');
-        doc.rect(currentX, currentY, tableWidth, rowHeight, 'F');
-      }
+    // Helper function to calculate GSM/BF/Shade-wise totals
+    const calculateGsmBfTotals = (tableData: any[]) => {
+      const totalsMap = new Map<string, { gsm: string, bf: string, shade: string, items: number, weight: number }>();
 
-      // Draw cell data
-      row.forEach((cell, colIndex) => {
-        doc.text(cell, currentX + colWidths[colIndex] / 2, currentY + rowHeight / 2 + 1, { align: 'center' });
-        currentX += colWidths[colIndex];
+      tableData.forEach(row => {
+        if (row[0] !== '') { // Skip empty rows
+          const gsm = row[1];
+          const bf = row[2];
+          const shade = row[6]; // Shade column
+          const weight = parseFloat(row[5]) || 0;
+          const key = `${gsm}-${bf}-${shade}`;
+
+          if (totalsMap.has(key)) {
+            const existing = totalsMap.get(key)!;
+            existing.items += 1;
+            existing.weight += weight;
+          } else {
+            totalsMap.set(key, { gsm, bf, shade, items: 1, weight });
+          }
+        }
       });
 
-      if (isTotalRow) {
-        doc.setFont('helvetica', 'normal');
-      }
+      return Array.from(totalsMap.values());
+    };
 
-      currentY += rowHeight;
-      rowsInCurrentPage++;
+    // Calculate GSM/BF-wise totals for both tables
+    const leftTotals = calculateGsmBfTotals(leftTableData);
+    const rightTotals = calculateGsmBfTotals(rightTableData);
+
+    // Add TOTAL rows - 2 GSM/BF combinations per row
+    const totalRowHeight = 7;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(0, 0, 0);
+
+    // Combine totals from both tables
+    const allTotals = [...leftTotals, ...rightTotals];
+
+    // Remove duplicates by creating a new map
+    const uniqueTotalsMap = new Map<string, { gsm: string, bf: string, shade: string, items: number, weight: number }>();
+    allTotals.forEach(total => {
+      const key = `${total.gsm}-${total.bf}-${total.shade}`;
+      if (uniqueTotalsMap.has(key)) {
+        const existing = uniqueTotalsMap.get(key)!;
+        existing.items += total.items;
+        existing.weight += total.weight;
+      } else {
+        uniqueTotalsMap.set(key, { ...total });
+      }
     });
 
-    // Draw final table borders
-    drawTableBorders(tableStartY, currentY, rowsInCurrentPage);
+    const uniqueTotals = Array.from(uniqueTotalsMap.values());
 
-    // Totals just below table - bold and in right corner
-    const totalsY = currentY + 5;
-    doc.setFontSize(10);
+    // Draw total rows - 3 combinations per row
+    const totalRows = Math.ceil(uniqueTotals.length / 3);
+    for (let rowIndex = 0; rowIndex < totalRows; rowIndex++) {
+      const currentY = yPosition + (rowIndex * totalRowHeight);
+      const firstTotal = uniqueTotals[rowIndex * 3];
+      const secondTotal = uniqueTotals[rowIndex * 3 + 1];
+      const thirdTotal = uniqueTotals[rowIndex * 3 + 2];
+
+      // First combination
+      if (firstTotal) {
+        const firstText = `${firstTotal.gsm}gsm, ${firstTotal.bf}bf, ${firstTotal.shade} : ${firstTotal.items} | ${Math.round(firstTotal.weight)} kg`;
+        doc.text(firstText, 2, currentY + totalRowHeight / 2 + 1);
+      }
+
+      // Second combination
+      if (secondTotal) {
+        const secondText = `${secondTotal.gsm}gsm, ${secondTotal.bf}bf, ${secondTotal.shade} : ${secondTotal.items} | ${Math.round(secondTotal.weight)} kg`;
+        doc.text(secondText, pageWidth / 3, currentY + totalRowHeight / 2 + 1);
+      }
+
+      // Third combination
+      if (thirdTotal) {
+        const thirdText = `${thirdTotal.gsm}gsm, ${thirdTotal.bf}bf, ${thirdTotal.shade} : ${thirdTotal.items} | ${Math.round(thirdTotal.weight)} kg`;
+        doc.text(thirdText, (pageWidth / 3) * 2, currentY + totalRowHeight / 2 + 1);
+      }
+    }
+
+    // Update yPosition after TOTAL rows
+    yPosition += totalRows * totalRowHeight;
+
+    // Footer table with 3 columns (half width)
+    const footerStartY = yPosition +1;
+    const footerHeight = 12;
+    const footerTotalWidth = tableWidth; // Half the page width
+    const footerColWidth = footerTotalWidth / 3;
+
+    // Draw footer boxes and labels (no borders)
     doc.setFont('helvetica', 'bold');
-    doc.text(`Total Items: ${totalItems}  |  Total Weight: ${totalWeight} kg`, pageWidth - rightMargin, totalsY, { align: 'right' });
+    doc.setFontSize(10);
 
-    // Footer - signature section
-    const col1X = leftMargin;
-    const col3X = leftMargin + (2 * usableWidth / 3);
-    const signatureY = totalsY + 35;
+    // Column headers and values
+    const footerHeaders = ['Total Items', 'Total Weight', 'Freight'];
+    const footerValues = [totalItems.toString(), `${totalWeight} kg`, ''];
 
-    doc.setFont('helvetica', 'normal');
-    doc.text('_________________________', col1X, signatureY);
-    doc.text('_________________________', col3X, signatureY);
-    doc.text('Prepared By', col1X + 25, signatureY + 10);
-    doc.text('Received By', col3X + 25, signatureY + 10);
+    for (let i = 0; i < 3; i++) {
+      const x = i * footerColWidth;
+
+      // Header box - Total Weight (index 1) is light gray, others are medium gray
+      if (i === 1) {
+        doc.setFillColor(180, 180, 180); // Light gray for Total Weight
+      } else {
+        doc.setFillColor(140, 140, 140); // Medium gray for Total Items and Freight
+      }
+      doc.rect(x+1, footerStartY, footerColWidth, footerHeight, 'F');
+
+      // Header text (white)
+      doc.setTextColor(255, 255, 255);
+      doc.text(footerHeaders[i], x + footerColWidth / 2, footerStartY + footerHeight / 2 + 1, { align: 'center' });
+
+      // Value box - Total Weight (index 1) is medium gray, others are light gray
+      if (i === 1) {
+        doc.setFillColor(140, 140, 140); // Medium gray for Total Weight
+      } else {
+        doc.setFillColor(220, 220, 220); // Light gray for Total Items and Freight
+      }
+      doc.rect(x+1, footerStartY + footerHeight, footerColWidth, footerHeight, 'F');
+
+      // Value text (black)
+      doc.setTextColor(0, 0, 0);
+      doc.setFont('helvetica', 'normal');
+      doc.text(footerValues[i], x + footerColWidth / 2, footerStartY + footerHeight + footerHeight / 2 + 1, { align: 'center' });
+      doc.setFont('helvetica', 'bold');
+    }
+
+    // Add Manager and In-charge labels in the right half
+    const rightHalfStartX = footerTotalWidth + 10; // Start after the boxes with some gap
+    const rightHalfWidth = pageWidth - footerTotalWidth;
+    const labelSpacing = rightHalfWidth / 2;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(0, 0, 0);
+
+    // Manager label
+    doc.text('Manager', rightHalfStartX + labelSpacing / 2-20, footerStartY + footerHeight, { align: 'center' });
+
+    // In-charge label
+    doc.text('In-charge', rightHalfStartX + labelSpacing - 10 + labelSpacing / 2, footerStartY + footerHeight, { align: 'center' });
 
     // Save or return the PDF
     if (returnDoc) {

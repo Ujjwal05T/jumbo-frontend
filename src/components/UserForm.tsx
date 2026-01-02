@@ -52,6 +52,23 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true, editingUs
     if (error) setError(null);
   };
 
+  // Get badge color classes (Tailwind requires complete class names)
+  const getBadgeClasses = (color: string) => {
+    const colorMap: Record<string, string> = {
+      purple: "bg-purple-100 text-purple-800",
+      indigo: "bg-indigo-100 text-indigo-800",
+      violet: "bg-violet-100 text-violet-800",
+      teal: "bg-teal-100 text-teal-800",
+      orange: "bg-orange-100 text-orange-800",
+      blue: "bg-blue-100 text-blue-800",
+      yellow: "bg-yellow-100 text-yellow-800",
+      pink: "bg-pink-100 text-pink-800",
+      red: "bg-red-100 text-red-800",
+      green: "bg-green-100 text-green-800",
+    };
+    return colorMap[color] || "bg-gray-100 text-gray-800";
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -194,6 +211,7 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true, editingUs
                   {[
                     { value: "admin", label: "Admin", color: "purple" },
                     { value: "accountant", label: "Accountant", color: "indigo" },
+                    { value: "accountant2", label: "Accountant 2", color: "violet" },
                     { value: "co_admin", label: "Co Admin", color: "purple" },
                     { value: "dispatch", label: "Dispatch", color: "teal" },
                     { value: "mou", label: "MOU", color: "orange" },
@@ -210,7 +228,7 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true, editingUs
                     .map((role) => (
                       <SelectItem key={role.value} value={role.value}>
                         <div className="flex items-center gap-2">
-                          <Badge className={`bg-${role.color}-100 text-${role.color}-800`}>{role.label}</Badge>
+                          <Badge className={getBadgeClasses(role.color)}>{role.label}</Badge>
                         </div>
                       </SelectItem>
                     ))}

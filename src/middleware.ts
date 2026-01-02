@@ -80,6 +80,18 @@ const roleBasedRoutes = {
     '/masters/',
     '/wastage/materials',
     '/in-out',
+    '/bills'
+  ],
+  accountant2: [
+    '/masters',
+    '/weight-update',
+    '/dispatch',
+    '/reports',
+    '/challan',
+    '/past-dispatch',
+    '/masters/',
+    '/wastage/materials',
+    '/in-out',
   ],
   dispatch: [
     '/dispatch',

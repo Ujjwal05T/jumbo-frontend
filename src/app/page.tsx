@@ -27,9 +27,30 @@ export default function LandingPage() {
   useEffect(() => {
     const checkAuth = async () => {
       const authenticated = await isAuthenticated();
-      if (authenticated) {
-        router.push("/dashboard");
-      }
+      const data = localStorage.getItem('user_role') || '';
+      console.log("User Role from localStorage:", data);
+      if (data.toLowerCase() === 'weight_update') {
+      router.push('/weight-update');
+    } else if (data.toLowerCase() === 'order_puncher'){
+      router.push('/masters/orders');
+    } else if (data.toLowerCase() === 'security'){
+      router.push('/in-out');
+    } else if (data.toLowerCase() === 'accountant'){
+      router.push('/masters/orders');
+    } else if (data.toLowerCase() === 'accountant2'){
+      router.push('/masters/orders');
+    } else if (data.toLowerCase() === 'mou'){
+      router.push('/mou');
+    } else if (data.toLowerCase() === 'dispatch'){
+      router.push('/dispatch/history');
+    } else if (data.toLowerCase() === 'sales_person'){
+      router.push('/masters/orders');
+    }else {
+      router.push('/dashboard');
+    }
+    // if (authenticated) {
+    //     router.push("/dashboard");
+    //   }
     };
     checkAuth();
   }, [router]);

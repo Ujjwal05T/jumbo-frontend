@@ -60,6 +60,8 @@ export default function LoginPage() {
       router.push('/in-out');
     } else if (data.role?.toLowerCase() === 'accountant'){
       router.push('/masters/orders');
+    } else if (data.role?.toLowerCase() === 'accountant2'){
+      router.push('/masters/orders');
     } else if (data.role?.toLowerCase() === 'mou'){
       router.push('/mou');
     } else if (data.role?.toLowerCase() === 'dispatch'){

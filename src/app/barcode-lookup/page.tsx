@@ -84,9 +84,9 @@ export default function BarcodeLookupPage() {
       } else {
         // Search by barcode for hierarchy
         // Append year suffix if not already present
-        // const barcodeWithYear = query.includes('-') ? query : `${query}-${selectedYear}`;
+        const barcodeWithYear = query.includes('-') ? query : `${query}-${selectedYear}`;
         //for old backend compatibility
-        const barcodeWithYear = query
+        // const barcodeWithYear = query
         const data = await trackRollHierarchy(barcodeWithYear);
         setHierarchyData(data);
         // Expand all sets by default

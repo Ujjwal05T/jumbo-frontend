@@ -441,7 +441,7 @@ export function CreateDispatchModal({
 
       // Mark draft items as selected based on their type
       // Regular inventory items
-      
+
       const draftInventoryIds = enhancedDraftItems
         .filter(item => item.inventory?.id)
         .map(item => item.inventory!.id);
@@ -453,8 +453,8 @@ export function CreateDispatchModal({
 
       // Manual cut rolls (identified by barcode pattern)
       const draftManualIds = enhancedDraftItems
-        .filter(item => !item.inventory?.id && item.barcode_id?.startsWith("CR_"))
-        .map(item => item.id);
+        .filter(item => !item.inventory?.id && item.barcode_id?.startsWith("CR_") && (item as any).manual_cut_roll_id)
+        .map(item => (item as any).manual_cut_roll_id);
 
       console.log("Selecting draft items:", { draftInventoryIds, draftWastageIds, draftManualIds });
 
@@ -522,7 +522,7 @@ export function CreateDispatchModal({
       });
       if (!response.ok) throw new Error("Failed to load warehouse items");
       const data = await response.json();
-      // console.log("Loaded warehouse items:", data.warehouse_items);
+      console.log("Loaded warehouse items:", data.warehouse_items);
       setWarehouseItems(data.warehouse_items || []);
     } catch (err) {
       console.error("Error loading warehouse items:", err);
@@ -563,6 +563,7 @@ export function CreateDispatchModal({
       );
       if (!response.ok) throw new Error("Failed to load manual cut rolls");
       const data = await response.json();
+      console.log("Loaded manual cut rolls:", data.manual_cut_rolls);
       setManualCutRolls(data.manual_cut_rolls || []);
     } catch (err) {
       console.error("Error loading manual cut rolls:", err);
@@ -908,12 +909,28 @@ export function CreateDispatchModal({
     // Add draft items first if in draft mode
     if (isDraftMode && filteredDraftItems.length > 0) {
       items.push(
-        ...filteredDraftItems.map((item) => ({
-          ...item,
-          inventory_id: item.inventory?.id || item.id, // Use inventory ID if available
-          type: "draft",
-          priority: 0,
-        }))
+        ...filteredDraftItems.map((item) => {
+          // Determine the correct ID based on item type
+          let itemId;
+          if (item.inventory?.id) {
+            // Regular inventory item
+            itemId = item.inventory.id;
+          } else if ((item as any).manual_cut_roll_id) {
+            // Manual cut roll - use manual_cut_roll_id
+            itemId = (item as any).manual_cut_roll_id;
+          } else {
+            // Wastage or other - use dispatch_item id
+            itemId = item.id;
+          }
+
+          return {
+            ...item,
+            inventory_id: itemId,
+            id: itemId, // Override id to be the correct ID for matching
+            type: "draft",
+            priority: 0,
+          };
+        })
       );
     }
 
@@ -950,14 +967,38 @@ export function CreateDispatchModal({
 
   // Optimized toggle handler - use Set for O(1) operations
   const handleToggleItem = useCallback((item: any, itemType: string) => {
-    const itemId =
-      itemType === "wastage"
-        ? item.id
-        : itemType === "manual"
-        ? item.id
-        : item.inventory_id;
+    // For draft items, determine the correct Set and ID based on the item's characteristics
+    let itemId;
+    let targetSet: "wastage" | "manual" | "inventory";
 
-    if (itemType === "wastage") {
+    if (itemType === "draft") {
+      if (item.inventory?.id) {
+        // Draft inventory item
+        itemId = item.inventory.id;
+        targetSet = "inventory";
+      } else if (item.barcode_id?.startsWith("CR_") && (item as any).manual_cut_roll_id) {
+        // Draft manual cut roll
+        itemId = (item as any).manual_cut_roll_id;
+        targetSet = "manual";
+      } else if (item.barcode_id?.includes("WAS")) {
+        // Draft wastage item
+        itemId = item.id;
+        targetSet = "wastage";
+      } else {
+        console.warn("Unknown draft item type:", item);
+        return;
+      }
+    } else {
+      itemId =
+        itemType === "wastage"
+          ? item.id
+          : itemType === "manual"
+          ? item.id
+          : item.inventory_id;
+      targetSet = itemType === "wastage" ? "wastage" : itemType === "manual" ? "manual" : "inventory";
+    }
+
+    if (targetSet === "wastage") {
       setSelectedWastageIds((prev) => {
         const newSet = new Set(prev);
         if (newSet.has(itemId)) {
@@ -967,7 +1008,7 @@ export function CreateDispatchModal({
         }
         return newSet;
       });
-    } else if (itemType === "manual") {
+    } else if (targetSet === "manual") {
       setSelectedManualCutRollIds((prev) => {
         const newSet = new Set(prev);
         if (newSet.has(itemId)) {
@@ -1011,7 +1052,7 @@ export function CreateDispatchModal({
           totalWeight += item.weight_kg || 0;
         }
         // Draft manual cut rolls (no inventory, barcode starts with "CR_")
-        else if (!item.inventory?.id && item.barcode_id?.startsWith("CR_") && selectedManualCutRollIds.has(item.id)) {
+        else if (!item.inventory?.id && item.barcode_id?.startsWith("CR_") && (item as any).manual_cut_roll_id && selectedManualCutRollIds.has((item as any).manual_cut_roll_id)) {
           totalWeight += item.weight_kg || 0;
         }
       });
@@ -1081,14 +1122,14 @@ export function CreateDispatchModal({
   };
 
   // Print Preview Handler - uses jsPDF with same format as packing slip
-  const handlePrintPreview = useCallback(() => {
+  const handlePrintPreview = useCallback(async () => {
     try {
       // Collect all selected items (draft + new)
       const allSelectedItems = [
         ...draftItems.filter(item =>
           (item.inventory?.id && selectedItems.has(item.inventory.id)) ||
           (!item.inventory?.id && item.barcode_id?.includes("WAS") && selectedWastageIds.has(item.id)) ||
-          (!item.inventory?.id && item.barcode_id?.startsWith("CR_") && selectedManualCutRollIds.has(item.id))
+          (!item.inventory?.id && item.barcode_id?.startsWith("CR_") && (item as any).manual_cut_roll_id && selectedManualCutRollIds.has((item as any).manual_cut_roll_id))
         ),
         ...warehouseItems.filter(item => selectedItems.has(item.inventory_id)),
         ...wastageItems.filter(item => selectedWastageIds.has(item.id)),
@@ -1126,107 +1167,95 @@ export function CreateDispatchModal({
         return reelA - reelB;
       });
 
-      // Generate PDF using jsPDF (same format as packing slip)
-      const doc = new jsPDF();
+      // Generate PDF using jsPDF with A4 size
+      const doc = new jsPDF('p', 'mm', 'a4');
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
-      let yPosition = 13;
+      let yPosition = 0;
 
-      // Header
-      doc.setFontSize(18);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Satguru Papers Pvt. Ltd.', pageWidth/2, yPosition, { align: 'center' });
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text('Kraft paper Mill', pageWidth/2 + 45, yPosition-2, { align: 'left' });
+      // Header - Add pre-packing image
+      const headerImg = new Image();
+      headerImg.src = '/pre_packing.png';
+      await new Promise((resolve) => {
+        headerImg.onload = resolve;
+      });
 
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Address - Pithampur Dhar(M.P.)', pageWidth/2 + 45, yPosition+3, { align: 'left' });
+      // Calculate image dimensions maintaining aspect ratio
+      const imgWidth = pageWidth; // Full width
+      const aspectRatio = headerImg.naturalHeight / headerImg.naturalWidth;
+      const imgHeight = imgWidth * aspectRatio; // Calculate height based on aspect ratio
+      doc.addImage(headerImg, 'PNG', 0, yPosition, imgWidth, imgHeight);
 
-      yPosition += 12;
-
-      doc.setFontSize(13);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, 155, yPosition, {align:'left'});
-
-      // Title - "PRE PACKING SLIP" instead of "PACKING SLIP" with underline
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      const titleText = 'PRE PACKING SLIP';
-      doc.text(titleText, pageWidth / 2, yPosition, { align: 'center' });
-
-      // Add underline to title
-      const titleWidth = doc.getTextWidth(titleText);
-      const underlineY = yPosition + 1;
-      doc.setLineWidth(0.5);
-      doc.line(
-        (pageWidth / 2) - (titleWidth / 2),
-        underlineY,
-        (pageWidth / 2) + (titleWidth / 2),
-        underlineY
-      );
-
-      yPosition += 14;
+      yPosition += imgHeight + 5; // Move position down after image
 
       // Dispatch Information
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
 
-      const leftMargin = 15;
-      const rightMargin = 35;
+      const leftMargin = 2;
+      const rightMargin = 2;
       const usableWidth = pageWidth - leftMargin - rightMargin;
       const bottomMargin = 20;
-      const rightColX = 140; // Fixed position for right column
+      const midColX = pageWidth / 2 + 10; // Middle-right position
+      const rightColX = pageWidth - 55; // Far right position
 
-      // Row 1: Dispatch No (right) and Party (left)
-      doc.text(`Dispatch No: ${previewNumber}`, rightColX, yPosition);
-      doc.text(`Party: ${selectedClient?.company_name || 'N/A'}`, leftMargin, yPosition);
-
-      yPosition += 7;
-
-      // Row 2: Vehicle No (right) and Address (left)
-      doc.text(`Vehicle No.: ${dispatchDetails.vehicle_number}`, rightColX, yPosition);
-
-
-      let formatAddress = '';
-      if (selectedClient?.address && selectedClient.address.length > 0) {
-        formatAddress = selectedClient.address.length > 36
-          ? selectedClient.address.substring(0, 35) + '...'
-          : selectedClient.address;
-      }
-      doc.text(`Address: ${formatAddress}`, leftMargin, yPosition);
+      // Row 1: Party (left), Date (middle-right), Dispatch No (far right)
+      doc.text(`Party :- ${selectedClient?.company_name || 'N/A'}`, leftMargin, yPosition);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Date :- ${new Date().toLocaleDateString('en-GB')}`, midColX, yPosition);
+      doc.text(`Dispatch No : ${previewNumber}`, rightColX, yPosition);
 
       yPosition += 7;
 
-      // Row 3: Reference No (right, if exists) and Driver Name (left)
-      if (dispatchDetails.reference_number) {
-        doc.text(`Reference No: ${dispatchDetails.reference_number}`, rightColX, yPosition);
-      }
-      
+      // Row 2: Address (left), Vehicle (middle-right), Driver (far right)
+      // let formatAddress = '';
+      // if (selectedClient?.address && selectedClient.address.length > 0) {
+      //   formatAddress = selectedClient.address.length > 50
+      //     ? selectedClient.address.substring(0, 48) + '...'
+      //     : selectedClient.address;
+      // }
+      // doc.text(`Address :- ${formatAddress}`, leftMargin, yPosition);
+      doc.text(`Vehicle :- ${dispatchDetails.vehicle_number || 'N/A'}`, midColX, yPosition);
+      doc.text(`Driver : ${dispatchDetails.driver_name || 'N/A'}`, rightColX, yPosition);
+
       yPosition += 10;
 
-      // Table setup
+      // Table setup - Two side-by-side tables
       const totalWeight = sortedItems.reduce((sum: number, item: any) => sum + item.weight, 0);
       const totalItems = sortedItems.length;
 
-      const tableHeaders = ['S.No', 'GSM', 'BF', 'Size', 'Reel', 'Weight', 'Nat/Gold', 'Order Id'];
-      const totalTableWidth = usableWidth - 10;
+      const tableHeaders = ['S.No', 'GSM', 'BF', 'Size', 'Reel', 'Weight', 'Shade', 'Order Id'];
+
+      // Calculate dimensions for two tables
+      const tableGap = 2; // Gap between two tables
+      const singleTableWidth = (pageWidth - tableGap) / 2;
+
       const colWidths = [
-        totalTableWidth * 0.08,
-        totalTableWidth * 0.12,
-        totalTableWidth * 0.10,
-        totalTableWidth * 0.12,
-        totalTableWidth * 0.20,
-        totalTableWidth * 0.18,
-        totalTableWidth * 0.20,
-        totalTableWidth * 0.20
+        singleTableWidth * 0.08,
+        singleTableWidth * 0.10,
+        singleTableWidth * 0.10,
+        singleTableWidth * 0.10,
+        singleTableWidth * 0.15,
+        singleTableWidth * 0.11,
+        singleTableWidth * 0.15,
+        singleTableWidth * 0.20
       ];
       const rowHeight = 8;
       const headerHeight = 10;
       const tableWidth = colWidths.reduce((a, b) => a + b, 0);
 
-      // Table data with renumbered S.No
+      // Calculate max rows that can fit on current page
+      const footerSpaceNeeded = 40; // Space for totals + footer
+      const availableHeightFirstPage = pageHeight - yPosition - footerSpaceNeeded;
+      const maxRowsFirstPage = Math.floor((availableHeightFirstPage - headerHeight) / rowHeight);
+
+      // For subsequent pages (if needed)
+      const topMarginNewPage = 10;
+      const availableHeightNewPage = pageHeight - topMarginNewPage - footerSpaceNeeded;
+      const maxRowsPerNewPage = Math.floor((availableHeightNewPage - headerHeight) / rowHeight);
+
+      // Prepare table data
       const tableData = sortedItems.map((item: any, index: number) => [
         (index + 1).toString(),
         item.gsm.toString() || '',
@@ -1238,120 +1267,270 @@ export function CreateDispatchModal({
         item.order_frontend_id || ''
       ]);
 
-      tableData.push([
-        'Total',
-        '',
-        '',
-        '',
-        totalItems.toString(),
-        totalWeight.toString(),
-        '',
-        ''
-      ]);
+      // Calculate total rows needed for both tables combined
+      const totalRowsNeeded = Math.ceil(totalItems / 2);
+      const rows = Math.max(totalRowsNeeded, 23);
 
-      // Helper to draw table headers
-      const drawTableHeader = (startY: number) => {
+      // Split data into two tables - fill first table first, then second
+      const leftTableData: any[] = [];
+      const rightTableData: any[] = [];
+
+      for (let i = 0; i < rows; i++) {
+        leftTableData.push(tableData[i] || ['', '', '', '', '', '', '', '']);
+        rightTableData.push(tableData[i + rows] || ['', '', '', '', '', '', '', '']);
+      }
+
+      // Helper function to calculate GSM/BF/Shade-wise totals
+      const calculateGsmBfTotals = (tableData: any[]) => {
+        const totalsMap = new Map<string, { gsm: string, bf: string, shade: string, items: number, weight: number }>();
+
+        tableData.forEach(row => {
+          if (row[0] !== '') { // Skip empty rows
+            const gsm = row[1];
+            const bf = row[2];
+            const shade = row[6]; // Shade column
+            const weight = parseFloat(row[5]) || 0;
+            const key = `${gsm}-${bf}-${shade}`;
+
+            if (totalsMap.has(key)) {
+              const existing = totalsMap.get(key)!;
+              existing.items += 1;
+              existing.weight += weight;
+            } else {
+              totalsMap.set(key, { gsm, bf, shade, items: 1, weight });
+            }
+          }
+        });
+
+        return Array.from(totalsMap.values());
+      };
+
+      // Helper to draw table header
+      const drawTableHeader = (startX: number, startY: number) => {
         doc.setFillColor(240, 240, 240);
         doc.setTextColor(0, 0, 0);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
 
-        let currentX = leftMargin;
-        doc.rect(currentX, startY, tableWidth, headerHeight, 'F');
+        doc.rect(startX, startY, tableWidth, headerHeight, 'F');
 
+        let currentX = startX;
         tableHeaders.forEach((header, i) => {
           doc.text(header, currentX + colWidths[i] / 2, startY + headerHeight / 2 + 2, { align: 'center' });
           currentX += colWidths[i];
         });
+      };
 
-        return startY + headerHeight;
+      // Helper to draw table rows with alternating colors
+      const drawTableRows = (startX: number, startY: number, data: any[]) => {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(0, 0, 0);
+
+        let currentY = startY + headerHeight;
+
+        data.forEach((row, rowIndex) => {
+          // Alternating row colors - white and light gray
+          if (rowIndex % 2 === 1) {
+            doc.setFillColor(230, 230, 230); // Light gray for odd rows
+            doc.rect(startX, currentY, tableWidth, rowHeight, 'F');
+          }
+
+          let currentX = startX;
+          row.forEach((cell: string, colIndex: number) => {
+            doc.text(cell, currentX + colWidths[colIndex] / 2, currentY + rowHeight / 2 + 1, { align: 'center' });
+            currentX += colWidths[colIndex];
+          });
+          currentY += rowHeight;
+        });
       };
 
       // Helper to draw table borders
-      const drawTableBorders = (startY: number, endY: number, rowCount: number) => {
+      const drawTableBorders = (startX: number, startY: number, numRows: number) => {
         doc.setDrawColor(0, 0, 0);
-        doc.setLineWidth(0.5);
+        doc.setLineWidth(0.3);
 
-        const sectionHeight = endY - startY;
-        doc.rect(leftMargin, startY, tableWidth, sectionHeight, 'S');
+        const tableHeight = headerHeight + (numRows * rowHeight);
 
-        let x = leftMargin;
+        // Outer border
+        doc.rect(startX, startY, tableWidth, tableHeight, 'S');
+
+        // Vertical lines between columns
+        let x = startX;
         for (let i = 0; i < colWidths.length - 1; i++) {
           x += colWidths[i];
-          doc.line(x, startY, x, endY);
+          doc.line(x, startY, x, startY + tableHeight);
         }
 
-        doc.line(leftMargin, startY + headerHeight, leftMargin + tableWidth, startY + headerHeight);
-        for (let i = 1; i < rowCount; i++) {
-          const y = startY + headerHeight + (i * rowHeight);
-          if (y < endY) {
-            doc.line(leftMargin, y, leftMargin + tableWidth, y);
-          }
-        }
+        // Only horizontal line after header (no lines between rows)
+        doc.line(startX, startY + headerHeight, startX + tableWidth, startY + headerHeight);
       };
 
-      let currentY = yPosition;
-      let tableStartY = currentY;
-      let rowsInCurrentPage = 0;
+      // Pagination logic - draw tables with page breaks
+      const leftTableX = 0;
+      const rightTableX = tableWidth + tableGap;
 
-      currentY = drawTableHeader(currentY);
+      let currentRowIndex = 0;
+      let currentPage = 1;
+      let currentYPosition = yPosition;
 
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
+      while (currentRowIndex < rows) {
+        // Calculate available space on current page
+        const availableSpace = currentPage === 1
+          ? availableHeightFirstPage
+          : availableHeightNewPage;
+
+        const maxRowsThisPage = Math.floor((availableSpace - headerHeight) / rowHeight);
+        const rowsToDrawThisPage = Math.min(maxRowsThisPage, rows - currentRowIndex);
+
+        // Get data slice for this page
+        const leftDataSlice = leftTableData.slice(currentRowIndex, currentRowIndex + rowsToDrawThisPage);
+        const rightDataSlice = rightTableData.slice(currentRowIndex, currentRowIndex + rowsToDrawThisPage);
+
+        const tableStartY = currentYPosition;
+
+        // Draw left table
+        drawTableHeader(leftTableX+1, tableStartY);
+        drawTableRows(leftTableX+1, tableStartY, leftDataSlice);
+        drawTableBorders(leftTableX+1, tableStartY, rowsToDrawThisPage);
+
+        // Draw right table
+        drawTableHeader(rightTableX, tableStartY);
+        drawTableRows(rightTableX, tableStartY, rightDataSlice);
+        drawTableBorders(rightTableX, tableStartY, rowsToDrawThisPage);
+
+        // Update position
+        const tableHeight = headerHeight + (rowsToDrawThisPage * rowHeight);
+        currentYPosition = tableStartY + tableHeight;
+        currentRowIndex += rowsToDrawThisPage;
+
+        // If more rows remain, add a new page
+        if (currentRowIndex < rows) {
+          doc.addPage();
+          currentPage++;
+          currentYPosition = topMarginNewPage;
+        }
+      }
+
+      yPosition = currentYPosition;
+
+      // Calculate GSM/BF-wise totals for both tables
+      const leftTotals = calculateGsmBfTotals(leftTableData);
+      const rightTotals = calculateGsmBfTotals(rightTableData);
+
+      // Add TOTAL rows - 2 GSM/BF combinations per row
+      const totalRowHeight = 7;
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
       doc.setTextColor(0, 0, 0);
 
-      tableData.forEach((row, rowIndex) => {
-        const isTotalRow = rowIndex === tableData.length - 1;
-        const spaceNeeded = isTotalRow ? rowHeight + 60 : rowHeight;
+      // Combine totals from both tables
+      const allTotals = [...leftTotals, ...rightTotals];
 
-        if (currentY + spaceNeeded > pageHeight - bottomMargin) {
-          drawTableBorders(tableStartY, currentY, rowsInCurrentPage);
-          doc.addPage();
-          currentY = 20;
-          tableStartY = currentY;
-          currentY = drawTableHeader(currentY);
-          rowsInCurrentPage = 0;
+      // Remove duplicates by creating a new map
+      const uniqueTotalsMap = new Map<string, { gsm: string, bf: string, shade: string, items: number, weight: number }>();
+      allTotals.forEach(total => {
+        const key = `${total.gsm}-${total.bf}-${total.shade}`;
+        if (uniqueTotalsMap.has(key)) {
+          const existing = uniqueTotalsMap.get(key)!;
+          existing.items += total.items;
+          existing.weight += total.weight;
+        } else {
+          uniqueTotalsMap.set(key, { ...total });
         }
-
-        let currentX = leftMargin;
-
-        if (isTotalRow) {
-          doc.setFillColor(250, 250, 250);
-          doc.setFont('helvetica', 'bold');
-          doc.rect(currentX, currentY, tableWidth, rowHeight, 'F');
-        }
-
-        row.forEach((cell, colIndex) => {
-          doc.text(cell, currentX + colWidths[colIndex] / 2, currentY + rowHeight / 2 + 1, { align: 'center' });
-          currentX += colWidths[colIndex];
-        });
-
-        if (isTotalRow) {
-          doc.setFont('helvetica', 'normal');
-        }
-
-        currentY += rowHeight;
-        rowsInCurrentPage++;
       });
 
-      drawTableBorders(tableStartY, currentY, rowsInCurrentPage);
+      const uniqueTotals = Array.from(uniqueTotalsMap.values());
 
-      // Totals just below table - bold and in right corner
-      const totalsY = currentY + 5;
-      doc.setFontSize(10);
+      // Draw total rows - 3 combinations per row
+      const totalRows = Math.ceil(uniqueTotals.length / 3);
+      for (let rowIndex = 0; rowIndex < totalRows; rowIndex++) {
+        const currentY = yPosition + (rowIndex * totalRowHeight);
+        const firstTotal = uniqueTotals[rowIndex * 3];
+        const secondTotal = uniqueTotals[rowIndex * 3 + 1];
+        const thirdTotal = uniqueTotals[rowIndex * 3 + 2];
+
+        // First combination
+        if (firstTotal) {
+          const firstText = `${firstTotal.gsm}gsm, ${firstTotal.bf}bf, ${firstTotal.shade} : ${firstTotal.items} | ${Math.round(firstTotal.weight)} kg`;
+          doc.text(firstText, 2, currentY + totalRowHeight / 2 + 1);
+        }
+
+        // Second combination
+        if (secondTotal) {
+          const secondText = `${secondTotal.gsm}gsm, ${secondTotal.bf}bf, ${secondTotal.shade} : ${secondTotal.items} | ${Math.round(secondTotal.weight)} kg`;
+          doc.text(secondText, pageWidth / 3, currentY + totalRowHeight / 2 + 1);
+        }
+
+        // Third combination
+        if (thirdTotal) {
+          const thirdText = `${thirdTotal.gsm}gsm, ${thirdTotal.bf}bf, ${thirdTotal.shade} : ${thirdTotal.items} | ${Math.round(thirdTotal.weight)} kg`;
+          doc.text(thirdText, (pageWidth / 3) * 2, currentY + totalRowHeight / 2 + 1);
+        }
+      }
+
+      // Update yPosition after TOTAL rows
+      yPosition += totalRows * totalRowHeight;
+
+      // Footer table with 3 columns (half width)
+      const footerStartY = yPosition + 1;
+      const footerHeight = 12;
+      const footerTotalWidth = tableWidth; // Half the page width
+      const footerColWidth = footerTotalWidth / 3;
+
+      // Draw footer boxes and labels (no borders)
       doc.setFont('helvetica', 'bold');
-      doc.text(`Total Items: ${totalItems}  |  Total Weight: ${totalWeight} kg`, pageWidth - rightMargin, totalsY, { align: 'right' });
+      doc.setFontSize(10);
 
-      // Footer - signature section
-      const col1X = leftMargin;
-      const col3X = leftMargin + (2 * usableWidth / 3);
-      const signatureY = totalsY + 35;
+      // Column headers and values
+      const footerHeaders = ['Total Items', 'Total Weight', 'Freight'];
+      const footerValues = [totalItems.toString(), `${totalWeight} kg`, ''];
 
-      doc.setFont('helvetica', 'normal');
-      doc.text('_________________________', col1X, signatureY);
-      doc.text('_________________________', col3X, signatureY);
-      doc.text('Prepared By', col1X + 25, signatureY + 10);
-      doc.text('Received By', col3X + 25, signatureY + 10);
+      for (let i = 0; i < 3; i++) {
+        const x = i * footerColWidth + 1;
+
+        // Header box - Total Weight (index 1) is light gray, others are medium gray
+        if (i === 1) {
+          doc.setFillColor(180, 180, 180); // Light gray for Total Weight
+        } else {
+          doc.setFillColor(140, 140, 140); // Medium gray for Total Items and Freight
+        }
+        doc.rect(x, footerStartY, footerColWidth, footerHeight, 'F');
+
+        // Header text (white)
+        doc.setTextColor(255, 255, 255);
+        doc.text(footerHeaders[i], x + footerColWidth / 2, footerStartY + footerHeight / 2 + 1, { align: 'center' });
+
+        // Value box - Total Weight (index 1) is medium gray, others are light gray
+        if (i === 1) {
+          doc.setFillColor(140, 140, 140); // Medium gray for Total Weight
+        } else {
+          doc.setFillColor(220, 220, 220); // Light gray for Total Items and Freight
+        }
+        doc.rect(x, footerStartY + footerHeight, footerColWidth, footerHeight, 'F');
+
+        // Value text (black)
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'normal');
+        doc.text(footerValues[i], x + footerColWidth / 2, footerStartY + footerHeight + footerHeight / 2 + 1, { align: 'center' });
+        doc.setFont('helvetica', 'bold');
+      }
+
+      // Add Manager and In-charge labels in the right half
+      const rightHalfStartX = footerTotalWidth + 10; // Start after the boxes with some gap
+      const rightHalfWidth = pageWidth - footerTotalWidth;
+      const labelSpacing = rightHalfWidth / 2;
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.setTextColor(0, 0, 0);
+
+      // Manager label
+      doc.text('Manager', rightHalfStartX + labelSpacing / 2 - 20, footerStartY + 10, { align: 'center' });
+
+      // In-charge label
+      doc.text('In-charge', rightHalfStartX + labelSpacing - 10 + labelSpacing / 2, footerStartY + 10, { align: 'center' });
 
       // Open print dialog in popup window
       const pdfBlob = doc.output('blob');
@@ -1430,23 +1609,56 @@ export function CreateDispatchModal({
     // Filter unselected items for left column
     const unselectedDisplayItems = displayItems.filter((item: any) => {
       const itemType = item.type;
-      const itemId =
-        itemType === "wastage"
-          ? item.id
+
+      // For draft items, determine the correct selection Set based on the item's characteristics
+      let isSelected = false;
+      if (itemType === "draft") {
+        if (item.inventory?.id) {
+          // Draft inventory item
+          isSelected = selectedItems.has(item.inventory.id);
+        } else if (item.barcode_id?.startsWith("CR_") && (item as any).manual_cut_roll_id) {
+          // Draft manual cut roll
+          isSelected = selectedManualCutRollIds.has((item as any).manual_cut_roll_id);
+        } else if (item.barcode_id?.includes("WAS")) {
+          // Draft wastage item
+          isSelected = selectedWastageIds.has(item.id);
+        }
+      } else {
+        const itemId =
+          itemType === "wastage"
+            ? item.id
+            : itemType === "manual"
+            ? item.id
+            : item.inventory_id;
+        isSelected = itemType === "wastage"
+          ? selectedWastageIds.has(itemId)
           : itemType === "manual"
-          ? item.id
-          : item.inventory_id;
-      const isSelected = itemType === "wastage"
-        ? selectedWastageIds.has(itemId)
-        : itemType === "manual"
-        ? selectedManualCutRollIds.has(itemId)
-        : selectedItems.has(itemId);
+          ? selectedManualCutRollIds.has(itemId)
+          : selectedItems.has(itemId);
+      }
+
       return !isSelected; // Only return unselected items
     });
 
     // Filter selected items for right column
     const selectedDisplayItems = displayItems.filter((item: any) => {
       const itemType = item.type;
+
+      // For draft items, determine the correct selection Set based on the item's characteristics
+      if (itemType === "draft") {
+        if (item.inventory?.id) {
+          // Draft inventory item
+          return selectedItems.has(item.inventory.id);
+        } else if (item.barcode_id?.startsWith("CR_") && (item as any).manual_cut_roll_id) {
+          // Draft manual cut roll
+          return selectedManualCutRollIds.has((item as any).manual_cut_roll_id);
+        } else if (item.barcode_id?.includes("WAS")) {
+          // Draft wastage item
+          return selectedWastageIds.has(item.id);
+        }
+        return false;
+      }
+
       const itemId =
         itemType === "wastage"
           ? item.id
@@ -2378,6 +2590,19 @@ export function CreateDispatchModal({
                         {displayItems
                           .filter((item: any) => {
                             const itemType = item.type;
+
+                            // Handle draft items specially
+                            if (itemType === "draft") {
+                              if (item.inventory?.id) {
+                                return selectedItems.has(item.inventory.id);
+                              } else if (item.barcode_id?.startsWith("CR_") && (item as any).manual_cut_roll_id) {
+                                return selectedManualCutRollIds.has((item as any).manual_cut_roll_id);
+                              } else if (item.barcode_id?.includes("WAS")) {
+                                return selectedWastageIds.has(item.id);
+                              }
+                              return false;
+                            }
+
                             const itemId = itemType === "wastage" ? item.id : (itemType === "manual" ? item.id : item.inventory_id);
                             return itemType === "wastage" ? selectedWastageIds.has(itemId) : (itemType === "manual" ? selectedManualCutRollIds.has(itemId) : selectedItems.has(itemId));
                           })
@@ -2427,6 +2652,19 @@ export function CreateDispatchModal({
                         {displayItems
                           .filter((item: any) => {
                             const itemType = item.type;
+
+                            // Handle draft items specially
+                            if (itemType === "draft") {
+                              if (item.inventory?.id) {
+                                return selectedItems.has(item.inventory.id);
+                              } else if (item.barcode_id?.startsWith("CR_") && (item as any).manual_cut_roll_id) {
+                                return selectedManualCutRollIds.has((item as any).manual_cut_roll_id);
+                              } else if (item.barcode_id?.includes("WAS")) {
+                                return selectedWastageIds.has(item.id);
+                              }
+                              return false;
+                            }
+
                             const itemId = itemType === "wastage" ? item.id : (itemType === "manual" ? item.id : item.inventory_id);
                             return itemType === "wastage" ? selectedWastageIds.has(itemId) : (itemType === "manual" ? selectedManualCutRollIds.has(itemId) : selectedItems.has(itemId));
                           })
