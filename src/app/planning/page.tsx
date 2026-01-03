@@ -349,7 +349,7 @@ export default function PlanningPage() {
 
   // Calculate planning width from wastage
   const planningWidth = useMemo(() => {
-    const calculated = 119 - wastage;
+    const calculated = 124 - wastage;
     return Math.max(calculated, 50); // Ensure minimum width of 50 inches
   }, [wastage]);
 
@@ -2288,7 +2288,7 @@ export default function PlanningPage() {
               <div className="flex flex-col space-y-2">
                 <label className="text-sm font-medium">Calculation</label>
                 <div className="text-lg font-mono bg-muted p-2 rounded-md">
-                  119 - {wastage} = {planningWidth}"
+                  124 - {wastage} = {planningWidth}"
                 </div>
                 <div className="text-xs text-muted-foreground">
                   Default Roll Width - Wastage

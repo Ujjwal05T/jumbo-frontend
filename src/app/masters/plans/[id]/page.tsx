@@ -1860,9 +1860,9 @@ export default function PlanDetailsPage() {
   return aNum - bNum;
 });
 
-            // Always check if width exceeds 118" and apply automatic segmentation
-            const maxAllowedWidth = 118; // Maximum width constraint in inches
-            
+            // Always check if width exceeds 123" and apply automatic segmentation
+            const maxAllowedWidth = 123; // Maximum width constraint in inches
+
             // Create segments automatically based on width constraint
             const segments: any[][] = [];
             let currentSegment: any[] = [];
@@ -1931,9 +1931,9 @@ export default function PlanDetailsPage() {
               
               // Draw each cut section in this segment
               segment.forEach((roll:any) => {
-                              
- const rollRatio = roll.width_inches / 118;
-           const availableWidth = rectWidth * 0.85; 
+
+ const rollRatio = roll.width_inches / 123;
+           const availableWidth = rectWidth * 0.85;
              const calculatedWidth = availableWidth *         
             rollRatio;
                     const sectionWidth = Math.max(35, 
@@ -2007,10 +2007,10 @@ export default function PlanDetailsPage() {
 
               yPosition += rectHeight + 3;
 
-              // Add 118" total indicator
+              // Add 123" total indicator
               doc.setTextColor(100, 100, 100);
               doc.setFontSize(7);
-              doc.text("118\" Total Width", rectStartX + rectWidth/2, yPosition, { align: 'center' });
+              doc.text("123\" Total Width", rectStartX + rectWidth/2, yPosition, { align: 'center' });
               yPosition += 8;
 
               // Statistics for this segment

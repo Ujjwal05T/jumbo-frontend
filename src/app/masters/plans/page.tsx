@@ -1061,7 +1061,7 @@ export default function PlansPage() {
           sortedRolls.forEach((roll:any) => {
 
             // Calculate section width based on roll width ratio with min/max constraints
-            const rollRatio = roll.width_inches / 118; // Ratio of this roll to total width
+            const rollRatio = roll.width_inches / 123; // Ratio of this roll to total width
             const availableWidth = rectWidth * 0.85; // Use 85% of available space for rolls
             const calculatedWidth = availableWidth * rollRatio;
             const sectionWidth = Math.max(30, Math.min(55, calculatedWidth))
@@ -1134,7 +1134,7 @@ export default function PlansPage() {
 
           // Draw waste section
           if (waste > 0) {
-            const wasteRatio = waste / 118;
+            const wasteRatio = waste / 123;
             const wasteWidth = rectWidth * wasteRatio;
             
             doc.setFillColor(239, 68, 68);
@@ -1153,10 +1153,10 @@ export default function PlansPage() {
 
           doc.setTextColor(100, 100, 100);
           doc.setFontSize(7);
-          doc.text("118\" Total Width", rectStartX + rectWidth/2, localY, { align: 'center' });
+          doc.text("123\" Total Width", rectStartX + rectWidth/2, localY, { align: 'center' });
           localY += 8;
 
-          const efficiency = ((totalUsedWidth / 119) * 100);
+          const efficiency = ((totalUsedWidth / 124) * 100);
           doc.setFontSize(8);
           doc.setTextColor(60, 60, 60);
           
@@ -1210,8 +1210,8 @@ export default function PlansPage() {
           doc.text(rollTitle, 30, yPosition);
           yPosition += 12;
 
-          // Always check if width exceeds 118" and apply automatic segmentation regardless of order type
-          const maxAllowedWidth = 120; // Maximum width constraint in inches
+          // Always check if width exceeds 123" and apply automatic segmentation regardless of order type
+          const maxAllowedWidth = 125; // Maximum width constraint in inches
 
           // Create segments automatically based on width constraint
           const segments: CutRollItem[][] = [];

@@ -85,13 +85,14 @@ export default function InOutPage() {
   // Role-based field visibility helper functions
   const isAdmin = userRole === "admin";
   const isSecurity = userRole === "security";
-  const isAccountant = userRole === "accountant";
+  const isAccountant = userRole === "accountant" || userRole === "accountant2";
 
   // Check if field should be visible for current role
   const canViewField = (fieldType: "security" | "accountant" | "all") => {
     if (isAdmin) return true; // Admin can see everything
     if (fieldType === "security") return isSecurity;
     if (fieldType === "accountant") return isAccountant;
+    if (fieldType === "all") return isSecurity || isAccountant;
     return false;
   };
 
@@ -1600,8 +1601,8 @@ export default function InOutPage() {
                       </div>
                     )}
 
-                    {/* Slip No - Accountant & Admin can see */}
-                    {canViewField("accountant") && (
+                    {/* Slip No - Security & Accountant & Admin can see */}
+                    {(canViewField("security") || canViewField("accountant")) && (
                       <div className="flex flex-col space-y-2">
                         <Label htmlFor="slip">Slip No.</Label>
                         <Input
@@ -2462,7 +2463,7 @@ export default function InOutPage() {
               </div>
 
               {/* Party Name - Security & Admin can see */}
-              {canViewField("security")||canViewField("accountant") && (
+              {(canViewField("security") || canViewField("accountant")) && (
                 <div className="flex flex-col space-y-2">
                   <Label htmlFor="updateParty">Party Name *</Label>
                   <Select
@@ -2506,7 +2507,7 @@ export default function InOutPage() {
               )}
 
               {/* Material - Security & Admin can see */}
-              {canViewField("security")||canViewField("accountant") && (
+              {(canViewField("security") || canViewField("accountant")) && (
                 <div className="flex flex-col space-y-2">
                   <Label htmlFor="updateMaterial">Material *</Label>
                   <Select
@@ -2544,7 +2545,7 @@ export default function InOutPage() {
               )}
 
               {/* Vehicle Number - Security & Admin can see */}
-              {canViewField("security")||canViewField("accountant") && (
+              {(canViewField("security") || canViewField("accountant")) && (
                 <div className="flex flex-col space-y-2">
                   <Label htmlFor="updateVehicle">Vehicle Number</Label>
                   <Input
@@ -2760,13 +2761,14 @@ export default function InOutPage() {
                 </div>
               )}
 
-              {/* Slip No - Accountant & Admin can see */}
-              {canViewField("accountant") && (
+              {/* Slip No - Security & Accountant & Admin can see */}
+              {(canViewField("security") || canViewField("accountant")) && (
                 <div className="flex flex-col space-y-2">
                   <Label htmlFor="updateSlip">Slip No.</Label>
                   <Input
                     id="updateSlip"
                     placeholder="Enter slip number"
+                    disabled={isAccountant}
                     value={inwardForm.slip_no || ""}
                     onChange={(e) =>
                       setInwardForm({ ...inwardForm, slip_no: e.target.value })
