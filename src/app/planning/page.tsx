@@ -946,7 +946,7 @@ export default function PlanningPage() {
     if (!isValid118RollSelection(selected118Rolls.length)) {
       const totalAvailable = getTotalAvailable118Rolls();
       const availableJumbos = getAllAvailableJumboRolls();
-      const errorMessage = `Please select valid 118" rolls. Available: ${totalAvailable} individual rolls from ${availableJumbos} jumbo${availableJumbos !== 1 ? 's' : ''}`;
+      const errorMessage = `Please select valid sets. Available: ${totalAvailable} individual rolls from ${availableJumbos} jumbo${availableJumbos !== 1 ? 's' : ''}`;
       setError(errorMessage);
       toast.error(errorMessage);
       return;
@@ -1059,7 +1059,7 @@ export default function PlanningPage() {
         const totalAvailable = getTotalAvailable118Rolls();
         const availableJumbos = getAllAvailableJumboRolls();
         toast.error(
-          `Please select valid 118" rolls. ` +
+          `Please select valid sets. ` +
           `Available: ${totalAvailable} individual rolls from ${availableJumbos} jumbo${availableJumbos !== 1 ? 's' : ''}`
         );
         return;
@@ -1345,7 +1345,7 @@ export default function PlanningPage() {
       yPosition += 8;
 
       const legendItems = [
-        { color: [34, 197, 94], text: "✓ Selected for Production" },
+        { color: [34, 197, 94], text: "Selected for Production" },
         { color: [59, 130, 246], text: "Available but Not Selected" },
         { color: [239, 68, 68], text: "Waste Material" }
       ];
@@ -1491,7 +1491,7 @@ export default function PlanningPage() {
             
             pdf.setFontSize(12);
             pdf.setTextColor(60, 60, 60);
-            pdf.text(`118" Roll #${rollNum} (Position ${rollSeq})`, 30, yPosition);
+            pdf.text(`Set #${rollNum} (Position ${rollSeq})`, 30, yPosition);
             yPosition += 8;
 
             // Visual cutting representation
@@ -2558,8 +2558,8 @@ export default function PlanningPage() {
                   <div className="flex flex-col gap-3">
                       <div className="text-sm text-muted-foreground">
                         {selected118Rolls.length > 0 
-                          ? `${selected118Rolls.length} of ${getTotalAvailable118Rolls()} available 118" rolls selected from ${getSelectedJumboCount()}/${getAllAvailableJumboRolls()} jumbos (${getCompleteJumboRolls()} complete, ${getAllAvailableJumboRolls() - getCompleteJumboRolls()} partial)`
-                          : `${selectedCutRolls.length} cut rolls selected from ${selected118Rolls.length} x 118" rolls`
+                          ? `${selected118Rolls.length} of ${getTotalAvailable118Rolls()} available sets selected from ${getSelectedJumboCount()}/${getAllAvailableJumboRolls()} jumbos (${getCompleteJumboRolls()} complete, ${getAllAvailableJumboRolls() - getCompleteJumboRolls()} partial)`
+                          : `${selectedCutRolls.length} cut rolls selected from ${selected118Rolls.length} x sets`
                         }
                         {selected118Rolls.length > 0 && (
                           <span className={`ml-2 px-2 py-1 rounded text-xs ${
@@ -2568,8 +2568,8 @@ export default function PlanningPage() {
                               : 'bg-yellow-100 text-yellow-700'
                           }`}>
                             {isValid118RollSelection(selected118Rolls.length) 
-                              ? `✓ ${selected118Rolls.length} individual 118" roll${selected118Rolls.length > 1 ? 's' : ''} selected (${selectedCutRolls.length} cut pieces)` 
-                              : `⚠ Invalid selection: ${selected118Rolls.length} x 118" rolls (exceeds ${getTotalAvailable118Rolls()} available)`
+                              ? `✓ ${selected118Rolls.length} individual Set${selected118Rolls.length > 1 ? 's' : ''} selected (${selectedCutRolls.length} cut pieces)` 
+                              : `⚠ Invalid selection: ${selected118Rolls.length} x sets (exceeds ${getTotalAvailable118Rolls()} available)`
                             }
                           </span>
                         )}
@@ -2577,7 +2577,7 @@ export default function PlanningPage() {
                       {/* Show warning message when selection is invalid */}
                       {selected118Rolls.length > 0 && !isValid118RollSelection(selected118Rolls.length) && (
                         <div className="text-xs text-yellow-600">
-                           Production disabled: Invalid selection - exceeds available 118" rolls
+                           Production disabled: Invalid selection - exceeds available sets
                         </div>
                       )}
                       <div className="flex flex-wrap gap-2">
@@ -3157,7 +3157,7 @@ export default function PlanningPage() {
                                           {cutsInRoll[0]?.roll_sequence || '?'}
                                         </div>
                                         <h4 className="text-lg font-semibold">
-                                          118" Roll #{cutsInRoll[0]?.individual_roll_number || 'Unknown'}
+                                          Set #{cutsInRoll[0]?.individual_roll_number || 'Unknown'}
                                         </h4>
                                       </div>
                                       <div className="flex items-center gap-2">
