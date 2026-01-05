@@ -301,6 +301,8 @@ export function CreateDispatchModal({
   const [orders, setOrders] = useState<any[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string>("");
   const [orderSearch, setOrderSearch] = useState("");
+  const [todaysVehicles, setTodaysVehicles] = useState<any[]>([]);
+  const [vehicleSearch, setVehicleSearch] = useState("");
 
   // Detect mobile device to prevent keyboard auto-focus issues with Select dropdowns
   const isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || 'ontouchstart' in window);
@@ -325,6 +327,7 @@ export function CreateDispatchModal({
       loadManualCutRolls();
       loadPreviewNumber();
       loadOrders(); // Load all orders on mount
+      loadTodaysVehicles(); // Load today's vehicles for dropdown
     } else {
       // Reset state (but keep draft info)
       setStep(1);
@@ -389,6 +392,63 @@ export function CreateDispatchModal({
     } catch (err) {
       console.error("Error loading orders:", err);
       toast.error("Failed to load orders");
+    }
+  };
+
+  const loadTodaysVehicles = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+      const response = await fetch(`${API_BASE_URL}/dispatch/today-vehicles?date=${today}`, {
+        headers: { "ngrok-skip-browser-warning": "true" },
+      });
+      if (!response.ok) throw new Error("Failed to load today's vehicles");
+      const data = await response.json();
+      setTodaysVehicles(data.vehicles || []);
+    } catch (err) {
+      console.error("Error loading today's vehicles:", err);
+      // Don't show error toast, just log it - vehicles dropdown will be empty
+    }
+  };
+
+  const handleVehicleSelect = (vehicleNumber: string) => {
+    // Find the vehicle data from today's vehicles
+    const vehicleData = todaysVehicles.find(v => v.vehicle_number === vehicleNumber);
+
+    if (vehicleData) {
+      // Auto-fill dispatch details from the most recent dispatch with this vehicle
+      setDispatchDetails({
+        vehicle_number: vehicleNumber,
+        rst_no: vehicleData.rst_no || "",
+        driver_name: vehicleData.driver_name || "",
+        driver_mobile: vehicleData.driver_mobile || "",
+        gross_weight: vehicleData.gross_weight || "",
+        locket_no: vehicleData.locket_no || "",
+        dispatch_number: vehicleData.dispatch_number || "",
+        reference_number: vehicleData.reference_number || "",
+      });
+
+      // Auto-select client based on party_name from outward challan
+      if (vehicleData.party_name && vehicleData.party_name.trim()) {
+        const matchingClient = clients.find(
+          client => client.company_name.toLowerCase().trim() === vehicleData.party_name.toLowerCase().trim()
+        );
+
+        if (matchingClient) {
+          setSelectedClientId(matchingClient.id);
+          toast.success(`Vehicle details and client (${matchingClient.company_name}) auto-filled from outward challan`);
+        } else {
+          toast.success("Vehicle details auto-filled from outward challan");
+          toast.info(`Party name "${vehicleData.party_name}" from challan doesn't match any client. Please select manually.`);
+        }
+      } else {
+        toast.success("Vehicle details auto-filled from outward challan");
+      }
+    } else {
+      // New vehicle - just set the vehicle number
+      setDispatchDetails(prev => ({
+        ...prev,
+        vehicle_number: vehicleNumber,
+      }));
     }
   };
 
@@ -587,40 +647,6 @@ export function CreateDispatchModal({
       setPreviewNumber("Loading...");
     } finally {
       setPreviewLoading(false);
-    }
-  };
-
-  const fetchOutwardChallanByRst = async (rstNo: string) => {
-    if (!rstNo || !rstNo.trim()) return;
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/outward-challans/by-rst/${encodeURIComponent(rstNo)}`, {
-        headers: { "ngrok-skip-browser-warning": "true" },
-      });
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          toast.error(`No outward challan found with RST number: ${rstNo}`);
-        } else {
-          throw new Error("Failed to fetch outward challan");
-        }
-        return;
-      }
-
-      const challan = await response.json();
-
-      // Auto-fill the fields from outward challan
-      setDispatchDetails((prev) => ({
-        ...prev,
-        vehicle_number: challan.vehicle_number || prev.vehicle_number,
-        driver_name: challan.driver_name || prev.driver_name,
-        gross_weight: challan.gross_weight?.toString() || prev.gross_weight,
-      }));
-
-      toast.success("Outward challan data loaded successfully!");
-    } catch (err) {
-      console.error("Error fetching outward challan:", err);
-      toast.error("Failed to fetch outward challan data");
     }
   };
 
@@ -2029,18 +2055,15 @@ export function CreateDispatchModal({
                     </label>
                     <Input
                       value={dispatchDetails.rst_no}
-                      onChange={(e) =>
-                        setDispatchDetails((prev) => ({
-                          ...prev,
-                          rst_no: e.target.value,
-                        }))
-                      }
-                      onBlur={(e) => {
-                        if (e.target.value.trim()) {
-                          fetchOutwardChallanByRst(e.target.value.trim());
-                        }
+                      readOnly
+                      style={{
+                        fontSize: "16px",
+                        padding: "12px",
+                        backgroundColor: "#f9fafb",
+                        cursor: "not-allowed",
+                        color: "#374151",
                       }}
-                      style={{ fontSize: "16px", padding: "12px" }}
+                      placeholder="Auto-filled from vehicle"
                     />
                   </div>
 
@@ -2082,16 +2105,54 @@ export function CreateDispatchModal({
                       <Truck style={{ width: "18px", height: "18px" }} />
                       Vehicle Number *
                     </label>
-                    <Input
-                      value={dispatchDetails.vehicle_number}
-                      onChange={(e) =>
-                        setDispatchDetails((prev) => ({
-                          ...prev,
-                          vehicle_number: e.target.value,
-                        }))
-                      }
-                      style={{ fontSize: "16px", padding: "12px" }}
-                    />
+                    <Select
+                      value={dispatchDetails.vehicle_number || "none"}
+                      onValueChange={(value) => {
+                        if (value !== "none") {
+                          handleVehicleSelect(value);
+                        }
+                      }}>
+                      <SelectTrigger style={{ fontSize: "16px", padding: "12px", height: "48px" }}>
+                        <SelectValue placeholder="Select or type vehicle number" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {!isMobile && (
+                          <SelectSearch
+                            placeholder="Search or type new vehicle..."
+                            value={vehicleSearch}
+                            onChange={(e) => setVehicleSearch(e.target.value)}
+                            onKeyDown={(e) => {
+                              e.stopPropagation();
+                              // Allow manual entry - when user types and presses Enter
+                              if (e.key === 'Enter' && vehicleSearch.trim()) {
+                                handleVehicleSelect(vehicleSearch.trim().toUpperCase());
+                                setVehicleSearch("");
+                              }
+                            }}
+                          />
+                        )}
+                        <SelectItem value="none" disabled>
+                          Select vehicle from today or type new
+                        </SelectItem>
+                        {todaysVehicles
+                          .filter((vehicle) =>
+                            vehicle.vehicle_number
+                              .toLowerCase()
+                              .includes(vehicleSearch.toLowerCase())
+                          )
+                          .map((vehicle) => (
+                            <SelectItem key={vehicle.vehicle_number} value={vehicle.vehicle_number}>
+                              {vehicle.vehicle_number} - {vehicle.party_name || "No driver"}
+                            </SelectItem>
+                          ))}
+                        {vehicleSearch.trim() &&
+                         !todaysVehicles.some(v => v.vehicle_number.toLowerCase() === vehicleSearch.toLowerCase()) && (
+                          <SelectItem value={vehicleSearch.trim().toUpperCase()}>
+                            ➕ Add new: {vehicleSearch.trim().toUpperCase()}
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div>

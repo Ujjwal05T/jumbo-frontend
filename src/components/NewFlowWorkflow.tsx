@@ -158,8 +158,8 @@ function CutRollsVisualization({ cutRolls, onRollSelect, selectedRolls = [] }: C
             <div className="space-y-4">
               {Object.entries(rollsByNumber).map(([rollNumber, rollGroup]) => {
                 const totalWidth = rollGroup.reduce((sum, roll) => sum + roll.width, 0);
-                const waste = 118 - totalWidth;
-                const efficiency = (totalWidth / 118) * 100;
+                const waste = 123 - totalWidth;
+                const efficiency = (totalWidth / 123) * 100;
                 
                 return (
                   <div key={rollNumber} className="border rounded-lg p-3">
@@ -178,8 +178,8 @@ function CutRollsVisualization({ cutRolls, onRollSelect, selectedRolls = [] }: C
                       {(() => {
                         let currentPos = 0;
                         return rollGroup.map((roll, idx) => {
-                          const widthPercent = (roll.width / 118) * 100;
-                          const leftPercent = (currentPos / 118) * 100;
+                          const widthPercent = (roll.width / 123) * 100;
+                          const leftPercent = (currentPos / 123) * 100;
                           currentPos += roll.width;
                           
                           const isSelected = selectedRolls.includes(roll.originalIndex);
@@ -211,7 +211,7 @@ function CutRollsVisualization({ cutRolls, onRollSelect, selectedRolls = [] }: C
                           className="absolute h-full bg-red-400"
                           style={{
                             right: '0%',
-                            width: `${(waste / 118) * 100}%`
+                            width: `${(waste / 123) * 100}%`
                           }}
                         >
                           <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">

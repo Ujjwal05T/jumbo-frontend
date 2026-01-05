@@ -180,7 +180,7 @@ export default function ManualCutRollEntryPage() {
     // Examples: 08990 -> "8990", 1 -> "0001", 01 -> "0001", 001 -> "0001"
     const normalizedReelNumber = reelNo.toString().padStart(4, '0');
 
-    if (!widthInches || parseFloat(widthInches) < 0 && parseFloat(widthInches) > 118) {
+    if (!widthInches || parseFloat(widthInches) < 0 && parseFloat(widthInches) > 123) {
       setAlert({
         type: "error",
         message: "Please enter a valid width.",

@@ -338,13 +338,14 @@ function WeightUpdateForm({ scanResult, onUpdate, loading, onReset, onScanResult
   const [weight, setWeight] = useState<string>('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const weightInputRef = useRef<HTMLInputElement>(null);
+  const isBilled = scanResult.roll_details.status === 'billed';
 
   useEffect(() => {
     // Focus on weight input when component mounts
-    if (weightInputRef.current) {
+    if (weightInputRef.current && !isBilled) {
       weightInputRef.current.focus();
     }
-  }, []);
+  }, [isBilled]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -398,11 +399,32 @@ function WeightUpdateForm({ scanResult, onUpdate, loading, onReset, onScanResult
           Update Weight
         </CardTitle>
         <CardDescription className="text-sm sm:text-base">
-          Enter the new weight for this roll
+          {isBilled ? 'Roll status information' : 'Enter the new weight for this roll'}
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+        {isBilled ? (
+          <div className="space-y-4 sm:space-y-6">
+            <Alert className="border-orange-200 bg-orange-50">
+              <AlertCircle className="h-5 w-5 text-orange-600" />
+              <AlertTitle className="text-orange-900 font-semibold">Roll Already Billed</AlertTitle>
+              <AlertDescription className="text-orange-800">
+                This roll has been billed and cannot be modified. Weight updates are not allowed for billed items.
+              </AlertDescription>
+            </Alert>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onReset}
+              className="w-full min-h-[48px] sm:min-h-[56px] px-4 sm:px-6"
+              size="lg"
+            >
+              Scan Another Barcode
+            </Button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
           <div>
             <Label htmlFor="weight" className="text-base sm:text-lg font-medium mb-2 sm:mb-3 block">
               New Weight (kg) *
@@ -473,10 +495,12 @@ function WeightUpdateForm({ scanResult, onUpdate, loading, onReset, onScanResult
             </Button>
           </div>
         </form>
+        )}
       </CardContent>
     </Card>
   );
 }
+     
 
 export default function WeightUpdateScanner() {
   const [loading, setLoading] = useState(false);

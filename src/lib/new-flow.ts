@@ -86,7 +86,7 @@ export interface JumboRollDetail {
 export interface OptimizationSummary {
   total_cut_rolls: number;
   total_individual_118_rolls: number;
-  total_jumbo_rolls_needed: number; // FLEXIBLE: 1 jumbo = 1-3×118" rolls (variable)
+  total_jumbo_rolls_needed: number; // FLEXIBLE: 1 jumbo = 1-3×123" rolls (variable)
   total_pending_orders: number;
   total_pending_quantity: number;
   specification_groups_processed: number;
@@ -409,14 +409,14 @@ export const calculateEfficiencyMetrics = (cutRolls: CutRoll[]): {
 
     Object.values(rollsByNumber).forEach(rollGroup => {
       const usedWidth = rollGroup.reduce((sum, roll) => sum + roll.width, 0);
-      const waste = 118 - usedWidth;
+      const waste = 123 - usedWidth;
       totalWaste += waste;
       totalRolls += 1;
       totalUsedWidth += usedWidth;
     });
   });
 
-  const averageEfficiency = totalRolls > 0 ? (totalUsedWidth / (totalRolls * 118)) * 100 : 0;
+  const averageEfficiency = totalRolls > 0 ? (totalUsedWidth / (totalRolls * 123)) * 100 : 0;
   const jumboRollsNeeded = totalRolls; // FLEXIBLE: 1 jumbo = 1-3×118" rolls (each roll can be separate)
 
   return {
