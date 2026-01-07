@@ -410,6 +410,25 @@ export function CreateDispatchModal({
     }
   };
 
+  // Helper function to normalize company/party names for fuzzy matching
+  const normalizeForMatch = (name: string): string => {
+    return name
+      .toLowerCase()
+      .replace(/private\s+limited/gi, '')   // Remove "Private Limited"
+      .replace(/pvt\.?\s*ltd\.?/gi, '')     // Remove "Pvt Ltd", "Pvt. Ltd.", etc.
+      .replace(/\blimited\b/gi, '')         // Remove "Limited"
+      .replace(/\bltd\.?\b/gi, '')          // Remove "Ltd", "Ltd."
+      .replace(/\binc\.?\b/gi, '')          // Remove "Inc", "Inc."
+      .replace(/\bcorp\.?\b/gi, '')         // Remove "Corp", "Corp."
+      .replace(/\bcorporation\b/gi, '')     // Remove "Corporation"
+      .replace(/\bllc\.?\b/gi, '')          // Remove "LLC", "LLC."
+      .replace(/\bco\.?\b/gi, '')           // Remove "Co", "Co."
+      .replace(/&/g, 'and')                 // Replace & with "and"
+      .replace(/[^\w\s]/g, '')              // Remove all punctuation
+      .replace(/\s+/g, ' ')                 // Normalize whitespace
+      .trim();
+  };
+
   const handleVehicleSelect = (vehicleNumber: string) => {
     // Find the vehicle data from today's vehicles
     const vehicleData = todaysVehicles.find(v => v.vehicle_number === vehicleNumber);
@@ -427,11 +446,16 @@ export function CreateDispatchModal({
         reference_number: vehicleData.reference_number || "",
       });
 
-      // Auto-select client based on party_name from outward challan
+      // Auto-select client based on party_name from outward challan (using fuzzy matching)
       if (vehicleData.party_name && vehicleData.party_name.trim()) {
-        const matchingClient = clients.find(
-          client => client.company_name.toLowerCase().trim() === vehicleData.party_name.toLowerCase().trim()
-        );
+        const normalizedParty = normalizeForMatch(vehicleData.party_name);
+
+        const matchingClient = clients.find(client => {
+          const normalizedClient = normalizeForMatch(client.company_name);
+          // Check if either name contains the other (bidirectional partial match)
+          return normalizedClient.includes(normalizedParty) ||
+                 normalizedParty.includes(normalizedClient);
+        });
 
         if (matchingClient) {
           setSelectedClientId(matchingClient.id);
@@ -2142,7 +2166,7 @@ export function CreateDispatchModal({
                           )
                           .map((vehicle) => (
                             <SelectItem key={vehicle.vehicle_number} value={vehicle.vehicle_number}>
-                              {vehicle.vehicle_number} - {vehicle.party_name || "No driver"}
+                              {vehicle.vehicle_number} - {vehicle.party_name || "No Party Name"}
                             </SelectItem>
                           ))}
                         {vehicleSearch.trim() &&

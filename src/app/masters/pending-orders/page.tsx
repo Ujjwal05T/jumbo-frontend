@@ -20,6 +20,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSearch,
 } from "@/components/ui/select";
 import { 
   Table, 
@@ -664,7 +665,7 @@ const handlePrintPDF = () => {
   
   yPosition += 10;
   pdf.setFontSize(12);
-  pdf.text(`Target Width: ${suggestionResult.target_width}" (119" - ${suggestionResult.wastage}" wastage)`, margin, yPosition);
+  pdf.text(`Target Width: ${suggestionResult.target_width}" (124"- ${suggestionResult.wastage}" wastage)`, margin, yPosition);
   
   yPosition += 10;
   pdf.text(`Generated on: ${new Date().toLocaleDateString('en-GB')}`, margin, yPosition);
@@ -2093,7 +2094,7 @@ const handlePrintPDF = () => {
         wastage_data: plainWastageData, // Use the plain objects
         added_rolls_data: {}, // No added rolls for pending flow
         created_by_id: userId,
-        jumbo_roll_width: 118
+        jumbo_roll_width: 123
       };
       
       // Final verification of request data
@@ -2406,7 +2407,7 @@ const handlePrintPDF = () => {
             <DialogHeader>
               <DialogTitle>Enter Wastage for Jumbo Roll Suggestions</DialogTitle>
               <DialogDescription>
-                Enter the wastage amount to subtract from 119 inches. The system will create suggestions using unlimited pieces per roll to minimize waste.
+                Enter the wastage amount to subtract from 124 inches. The system will create suggestions using unlimited pieces per roll to minimize waste.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -2426,7 +2427,7 @@ const handlePrintPDF = () => {
               </div>
               {wastageInput && !isNaN(parseFloat(wastageInput)) && (
                 <div className="text-sm text-muted-foreground text-center">
-                  Target width: {119 - parseFloat(wastageInput)}" (119 - {wastageInput})
+                  Target width: {124 - parseFloat(wastageInput)}" (124 - {wastageInput})
                 </div>
               )}
             </div>
@@ -2752,7 +2753,7 @@ const handlePrintPDF = () => {
                   Roll Suggestions
                 </CardTitle>
                 <CardDescription>
-                  Suggestions for completing {suggestionResult.target_width}" rolls (119" - {suggestionResult.wastage}" wastage)
+                  Suggestions for completing {suggestionResult.target_width}" rolls (124" - {suggestionResult.wastage}" wastage)
                 </CardDescription>
               </CardHeader>
               <CardContent>

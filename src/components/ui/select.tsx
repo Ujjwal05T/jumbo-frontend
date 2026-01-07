@@ -87,6 +87,7 @@ const SelectSearch = React.forwardRef<
     <div className="flex items-center border-b px-3 py-3">
       <Search className="mr-2 h-5 w-5 shrink-0 opacity-50" />
       <input
+        type="text"
         ref={(node) => {
           inputRef.current = node;
           if (typeof ref === 'function') {
@@ -96,9 +97,10 @@ const SelectSearch = React.forwardRef<
           }
         }}
         className={cn(
-          "flex h-11 w-full rounded-md bg-transparent py-2 text-base outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
+          "flex h-11 w-full rounded-md bg-transparent py-2 text-base outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 caret-black",
           className
         )}
+        style={{ caretColor: '#000000' }}
         autoFocus
         {...props}
       />
@@ -110,10 +112,58 @@ SelectSearch.displayName = "SelectSearch"
 const SelectContent = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
->(({ className, children, position = "popper", ...props }, ref) => (
+>(({ className, children, position = "popper", ...props }, ref) => {
+  const contentRef = React.useRef<HTMLDivElement>(null);
+
+  // Simplified: Only block when NOT typing in search input
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    const target = event.target as HTMLElement;
+
+    // Navigation keys work normally
+    const navigationKeys = ['ArrowDown', 'ArrowUp', 'Enter', 'Escape', 'Tab', 'Home', 'End', 'PageUp', 'PageDown'];
+    if (navigationKeys.includes(event.key)) {
+      return;
+    }
+
+    // For character keys
+    if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      // If already typing in search input, allow it naturally
+      if (target.tagName === 'INPUT' && target.getAttribute('type') === 'text') {
+        event.stopPropagation();
+        return;
+      }
+
+      // If typing outside search input, find and focus the search input
+      const searchInput = contentRef.current?.querySelector('input[type="text"]') as HTMLInputElement;
+      if (searchInput) {
+        event.preventDefault();
+        event.stopPropagation();
+        searchInput.focus();
+        // Append the typed character to the search input
+        const currentValue = searchInput.value;
+        searchInput.value = currentValue + event.key;
+        // Trigger change event so React state updates
+        const changeEvent = new Event('input', { bubbles: true });
+        searchInput.dispatchEvent(changeEvent);
+      } else {
+        // No search input found, just block typeahead
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    }
+  };
+
+  return (
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
-      ref={ref}
+      ref={(node) => {
+        contentRef.current = node;
+        if (typeof ref === 'function') {
+          ref(node);
+        } else if (ref) {
+          ref.current = node;
+        }
+      }}
       className={cn(
         "relative z-[9999] max-h-96 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
         position === "popper" &&
@@ -121,6 +171,8 @@ const SelectContent = React.forwardRef<
         className
       )}
       position={position}
+      onKeyDownCapture={handleKeyDown}
+      onKeyDown={handleKeyDown}
       {...props}
     >
       <SelectScrollUpButton />
@@ -130,13 +182,16 @@ const SelectContent = React.forwardRef<
           position === "popper" &&
             "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]"
         )}
+        onKeyDownCapture={handleKeyDown}
+        onKeyDown={handleKeyDown}
       >
         {children}
       </SelectPrimitive.Viewport>
       <SelectScrollDownButton />
     </SelectPrimitive.Content>
   </SelectPrimitive.Portal>
-))
+  );
+})
 SelectContent.displayName = SelectPrimitive.Content.displayName
 
 const SelectLabel = React.forwardRef<

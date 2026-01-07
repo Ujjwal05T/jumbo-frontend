@@ -12,6 +12,7 @@ import {
   SelectContent,
   SelectItem,
   SelectValue,
+  SelectSearch,
 } from "@/components/ui/select";
 import {
   Dialog,
@@ -96,6 +97,9 @@ export default function InOutPage() {
     return false;
   };
 
+  // Detect mobile device to prevent keyboard auto-focus issues with Select dropdowns
+  const isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || 'ontouchstart' in window);
+
   // State for data
   const [inwardChallans, setInwardChallans] = useState<InwardChallan[]>([]);
   const [outwardChallans, setOutwardChallans] = useState<OutwardChallan[]>([]);
@@ -133,6 +137,13 @@ export default function InOutPage() {
   const [inwardMaterialFilter, setInwardMaterialFilter] = useState<string>("all");
   const [outwardMaterialFilter, setOutwardMaterialFilter] = useState<string>("all");
   const [outwardSearchTerm, setOutwardSearchTerm] = useState<string>("");
+
+  // Client search states for dropdowns
+  const [inwardClientSearch, setInwardClientSearch] = useState<string>("");
+  const [outwardClientSearch, setOutwardClientSearch] = useState<string>("");
+
+  // Client search state for filter dropdown
+  const [clientFilterSearch, setClientFilterSearch] = useState<string>("");
 
   // Fetch next serial numbers from database
   const loadNextSerialNumbers = async () => {
@@ -1307,8 +1318,21 @@ export default function InOutPage() {
                             <SelectValue placeholder="Select party" />
                           </SelectTrigger>
                           <SelectContent>
+                            {!isMobile && (
+                              <SelectSearch
+                                placeholder="Search clients..."
+                                value={inwardClientSearch}
+                                onChange={(e) => setInwardClientSearch(e.target.value)}
+                                onKeyDown={(e) => e.stopPropagation()}
+                              />
+                            )}
                             {clients.length > 0 ? (
                               [...clients]
+                                .filter(client =>
+                                  client.company_name
+                                    .toLowerCase()
+                                    .includes(inwardClientSearch.toLowerCase())
+                                )
                                 .sort((a, b) =>
                                   a.company_name.localeCompare(
                                     b.company_name,
@@ -1708,8 +1732,21 @@ export default function InOutPage() {
                         <SelectValue placeholder="All Clients" />
                       </SelectTrigger>
                       <SelectContent>
+                        {!isMobile && (
+                          <SelectSearch
+                            placeholder="Search clients..."
+                            value={clientFilterSearch}
+                            onChange={(e) => setClientFilterSearch(e.target.value)}
+                            onKeyDown={(e) => e.stopPropagation()}
+                          />
+                        )}
                         <SelectItem value="all">All Clients</SelectItem>
                         {[...clients]
+                          .filter(client =>
+                            client.company_name
+                              .toLowerCase()
+                              .includes(clientFilterSearch.toLowerCase())
+                          )
                           .sort((a, b) => a.company_name.localeCompare(b.company_name, "en", { sensitivity: "base" }))
                           .map((client) => (
                             <SelectItem key={client.id} value={client.id}>
@@ -2116,17 +2153,44 @@ export default function InOutPage() {
                           {/* Party Name */}
                           <div className="flex flex-col space-y-2">
                             <Label htmlFor="outParty">Party Name</Label>
-                            <Input
-                              id="outParty"
-                              placeholder="Enter party name"
+                            <Select
                               value={outwardForm.party_name || ""}
-                              onChange={(e) =>
+                              onValueChange={(value) =>
                                 setOutwardForm({
                                   ...outwardForm,
-                                  party_name: e.target.value,
+                                  party_name: value,
                                 })
-                              }
-                            />
+                              }>
+                              <SelectTrigger id="outParty">
+                                <SelectValue placeholder="Select client" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {!isMobile && (
+                                  <SelectSearch
+                                    placeholder="Search clients..."
+                                    value={outwardClientSearch}
+                                    onChange={(e) => setOutwardClientSearch(e.target.value)}
+                                    onKeyDown={(e) => e.stopPropagation()}
+                                  />
+                                )}
+                                {clients
+                                  .filter(client =>
+                                    client.status === "active" &&
+                                    client.company_name
+                                      .toLowerCase()
+                                      .includes(outwardClientSearch.toLowerCase())
+                                  )
+                                  .sort((a, b) => a.company_name.localeCompare(b.company_name))
+                                  .map((client) => (
+                                    <SelectItem
+                                      key={client.id}
+                                      value={client.company_name}
+                                      className="focus:bg-orange-300">
+                                      {client.company_name}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
                           </div>
 
                           {/* Bill No */}
@@ -2476,8 +2540,21 @@ export default function InOutPage() {
                       <SelectValue placeholder="Select party" />
                     </SelectTrigger>
                     <SelectContent>
+                      {!isMobile && (
+                        <SelectSearch
+                          placeholder="Search clients..."
+                          value={inwardClientSearch}
+                          onChange={(e) => setInwardClientSearch(e.target.value)}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        />
+                      )}
                       {clients.length > 0 ? (
                         [...clients]
+                          .filter(client =>
+                            client.company_name
+                              .toLowerCase()
+                              .includes(inwardClientSearch.toLowerCase())
+                          )
                           .sort((a, b) =>
                             a.company_name.localeCompare(b.company_name, "en", {
                               sensitivity: "base",
@@ -3012,17 +3089,44 @@ export default function InOutPage() {
                     {/* Party Name */}
                     <div className="flex flex-col space-y-2">
                       <Label htmlFor="updateOutParty">Party Name</Label>
-                      <Input
-                        id="updateOutParty"
-                        placeholder="Enter party name"
+                      <Select
                         value={outwardForm.party_name || ""}
-                        onChange={(e) =>
+                        onValueChange={(value) =>
                           setOutwardForm({
                             ...outwardForm,
-                            party_name: e.target.value,
+                            party_name: value,
                           })
-                        }
-                      />
+                        }>
+                        <SelectTrigger id="updateOutParty">
+                          <SelectValue placeholder="Select client" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {!isMobile && (
+                            <SelectSearch
+                              placeholder="Search clients..."
+                              value={outwardClientSearch}
+                              onChange={(e) => setOutwardClientSearch(e.target.value)}
+                              onKeyDown={(e) => e.stopPropagation()}
+                            />
+                          )}
+                          {clients
+                            .filter(client =>
+                              client.status === "active" &&
+                              client.company_name
+                                .toLowerCase()
+                                .includes(outwardClientSearch.toLowerCase())
+                            )
+                            .sort((a, b) => a.company_name.localeCompare(b.company_name))
+                            .map((client) => (
+                              <SelectItem
+                                key={client.id}
+                                value={client.company_name}
+                                className="focus:bg-orange-300">
+                                {client.company_name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     {/* Bill No */}
