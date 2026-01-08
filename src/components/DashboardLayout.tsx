@@ -85,6 +85,12 @@ const getNavigationForRole = (role: string | null) => {
       roles: ["admin"],
     },
     {
+      name: "Manual Plan",
+      href: "/planning/manual",
+      icon: Database,
+      roles: ["admin" ],
+    },
+    {
       name: "Stock",
       href: "/wastage",
       icon: Recycle,
@@ -108,6 +114,7 @@ const getNavigationForRole = (role: string | null) => {
       icon: Database,
       roles: ["dispatch" ],
     },
+    
     {
       name: "MOU",
       icon: Clock,
