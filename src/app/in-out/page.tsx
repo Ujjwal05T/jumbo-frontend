@@ -135,8 +135,10 @@ export default function InOutPage() {
   // Filter states
   const [inwardClientFilter, setInwardClientFilter] = useState<string>("all");
   const [inwardMaterialFilter, setInwardMaterialFilter] = useState<string>("all");
+  const [inwardStatusFilter, setInwardStatusFilter] = useState<string>("all"); // all or still_inside
   const [outwardMaterialFilter, setOutwardMaterialFilter] = useState<string>("all");
   const [outwardSearchTerm, setOutwardSearchTerm] = useState<string>("");
+  const [outwardStatusFilter, setOutwardStatusFilter] = useState<string>("all"); // all or still_inside
 
   // Client search states for dropdowns
   const [inwardClientSearch, setInwardClientSearch] = useState<string>("");
@@ -172,6 +174,10 @@ export default function InOutPage() {
       const matchesClient = inwardClientFilter === "all" || challan.party_id === inwardClientFilter;
       const matchesMaterial = inwardMaterialFilter === "all" || challan.material_id === inwardMaterialFilter;
 
+      // Status filter (still inside = no time_out)
+      const matchesStatus = inwardStatusFilter === "all" ||
+        (inwardStatusFilter === "still_inside" && (!challan.time_out || challan.time_out === ""));
+
       // Date range filter
       if (!challan.date) return false;
       const challanDate = new Date(challan.date);
@@ -195,7 +201,7 @@ export default function InOutPage() {
 
       const matchesDate = challanDateOnly >= fromDateOnly && challanDateOnly <= toDateOnly;
 
-      return matchesClient && matchesMaterial && matchesDate;
+      return matchesClient && matchesMaterial && matchesStatus && matchesDate;
     });
   };
 
@@ -209,6 +215,10 @@ export default function InOutPage() {
         (challan.rst_no || "").toLowerCase().includes(searchLower) ||
         (challan.vehicle_number || "").toLowerCase().includes(searchLower);
 
+      // Status filter (still inside = no time_out)
+      const matchesStatus = outwardStatusFilter === "all" ||
+        (outwardStatusFilter === "still_inside" && (!challan.time_out || challan.time_out === ""));
+
       // Date range filter
       if (!challan.date) return false;
       const challanDate = new Date(challan.date);
@@ -232,7 +242,7 @@ export default function InOutPage() {
 
       const matchesDate = challanDateOnly >= fromDateOnly && challanDateOnly <= toDateOnly;
 
-      return matchesSearch && matchesDate;
+      return matchesSearch && matchesStatus && matchesDate;
     });
   };
 
@@ -1719,9 +1729,7 @@ export default function InOutPage() {
             </div>
 
             {/* Filters */}
-            <Card className="mb-4">
-              <CardContent className="p-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <Label htmlFor="inwardClientFilter" className="mb-2 block">Filter by Client</Label>
                     <Select
@@ -1775,22 +1783,36 @@ export default function InOutPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div>
+                    <Label htmlFor="inwardStatusFilter" className="mb-2 block">Filter by Status</Label>
+                    <Select
+                      value={inwardStatusFilter}
+                      onValueChange={setInwardStatusFilter}
+                    >
+                      <SelectTrigger id="inwardStatusFilter">
+                        <SelectValue placeholder="All Challans" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Challans</SelectItem>
+                        <SelectItem value="still_inside">Still Inside (No Time Out)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                {(inwardClientFilter !== "all" || inwardMaterialFilter !== "all") && (
+                {(inwardClientFilter !== "all" || inwardMaterialFilter !== "all" || inwardStatusFilter !== "all") && (
                   <div className="mt-4">
                     <Button
                       variant="outline"
                       onClick={() => {
                         setInwardClientFilter("all");
                         setInwardMaterialFilter("all");
+                        setInwardStatusFilter("all");
                       }}
                     >
                       Clear Filters
                     </Button>
                   </div>
                 )}
-              </CardContent>
-            </Card>
 
             {/* Desktop Table */}
             <Card className="hidden md:block">
@@ -2302,10 +2324,8 @@ export default function InOutPage() {
             </div>
 
             {/* Filters */}
-            
                 <div className="flex flex-col md:flex-row gap-4">
                   <div className="flex-1">
-                   
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -2332,6 +2352,20 @@ export default function InOutPage() {
                         Found {getFilteredOutwardChallans().length} result(s)
                       </p>
                     )}
+                  </div>
+                  <div className="w-full md:w-64">
+                    <Select
+                      value={outwardStatusFilter}
+                      onValueChange={setOutwardStatusFilter}
+                    >
+                      <SelectTrigger id="outwardStatusFilter" className="sm:h-14">
+                        <SelectValue placeholder="All Challans" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Challans</SelectItem>
+                        <SelectItem value="still_inside">Still Inside (No Time Out)</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 

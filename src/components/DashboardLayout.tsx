@@ -103,6 +103,12 @@ const getNavigationForRole = (role: string | null) => {
       roles: ["admin", "security", "accountant","accountant2"],
     },
     {
+      name: "Outward Challan",
+      href: "/outward-challan",
+      icon: Database,
+      roles: ["dispatch" ],
+    },
+    {
       name: "MOU",
       icon: Clock,
       roles: ["admin", "accountant","accountant2", "mou"],

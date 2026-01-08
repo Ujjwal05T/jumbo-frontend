@@ -29,6 +29,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSearch,
 } from "@/components/ui/select";
 import {
   Tabs,
@@ -99,6 +100,8 @@ export default function BillsPage() {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [clients, setClients] = useState<any[]>([]);
+  const [billClientSearch, setBillClientSearch] = useState<string>("");
+  const [cashClientSearch, setCashClientSearch] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const limit = 50;
@@ -317,12 +320,23 @@ export default function BillsPage() {
                     <SelectValue placeholder="All clients" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectSearch
+                      placeholder="Search clients..."
+                      value={billClientSearch}
+                      onChange={(e) => setBillClientSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
                     <SelectItem value="all">All Clients</SelectItem>
-                    {clients.sort((a, b) => a.company_name.localeCompare(b.company_name)).map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.company_name}
-                      </SelectItem>
-                    ))}
+                    {clients
+                      .filter(client =>
+                        client.company_name.toLowerCase().includes(billClientSearch.toLowerCase())
+                      )
+                      .sort((a, b) => a.company_name.localeCompare(b.company_name))
+                      .map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.company_name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -565,12 +579,23 @@ export default function BillsPage() {
                     <SelectValue placeholder="All clients" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectSearch
+                      placeholder="Search clients..."
+                      value={cashClientSearch}
+                      onChange={(e) => setCashClientSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
                     <SelectItem value="all">All Clients</SelectItem>
-                    {clients.sort((a, b) => a.company_name.localeCompare(b.company_name)).map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.company_name}
-                      </SelectItem>
-                    ))}
+                    {clients
+                      .filter(client =>
+                        client.company_name.toLowerCase().includes(cashClientSearch.toLowerCase())
+                      )
+                      .sort((a, b) => a.company_name.localeCompare(b.company_name))
+                      .map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.company_name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>

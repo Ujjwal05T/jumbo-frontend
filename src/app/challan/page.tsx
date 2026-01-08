@@ -37,6 +37,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSearch,
 } from "@/components/ui/select";
 import {
   Dialog,
@@ -210,6 +211,7 @@ export default function ChallanPage() {
 
   // Clients for filter
   const [clients, setClients] = useState<any[]>([]);
+  const [clientFilterSearch, setClientFilterSearch] = useState<string>("");
 
   // Cash tab state
   const [cashSelectedClient, setCashSelectedClient] = useState("all");
@@ -887,12 +889,23 @@ export default function ChallanPage() {
                   <SelectValue placeholder="All clients" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectSearch
+                    placeholder="Search clients..."
+                    value={clientFilterSearch}
+                    onChange={(e) => setClientFilterSearch(e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  />
                   <SelectItem value="all">All Clients</SelectItem>
-                  {clients.sort((a, b) => a.company_name.localeCompare(b.company_name)).map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.company_name}
-                    </SelectItem>
-                  ))}
+                  {clients
+                    .filter(client =>
+                      client.company_name.toLowerCase().includes(clientFilterSearch.toLowerCase())
+                    )
+                    .sort((a, b) => a.company_name.localeCompare(b.company_name))
+                    .map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.company_name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>

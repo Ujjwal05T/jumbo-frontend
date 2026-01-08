@@ -8,6 +8,7 @@ import type { NextRequest } from 'next/server';
 const roleBasedRoutes = {
   admin: [
     '/',
+    '/outward-challan',
     '/bills',
     '/all-cut-rolls',
     '/all-cut-rolls-filtered',
@@ -100,6 +101,7 @@ const roleBasedRoutes = {
     '/reports/all-cut-rolls',
     '/barcode-lookup',
     '/weight-update',
+    '/outward-challan',
   ],
   sales_person: [
     '/masters/orders',

@@ -92,6 +92,7 @@ export interface CreateOutwardChallanData {
   net_weight?: number;
   bill_no?: string;
   bill_date?: string;
+  serial_no?: string;
 }
 
 // ============================================================================
