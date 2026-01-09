@@ -115,6 +115,7 @@ export default function ManualPlanningPage() {
   const [creatingPlan, setCreatingPlan] = useState(false);
   const [planCreated, setPlanCreated] = useState(false);
   const [createdPlanSummary, setCreatedPlanSummary] = useState<any>(null);
+  const [showCreatePlanConfirmation, setShowCreatePlanConfirmation] = useState(false);
 
   // Calculate planning width from applied wastage
   const planningWidth = useMemo(() => {
@@ -229,6 +230,11 @@ export default function ManualPlanningPage() {
 
   // Add Paper Spec
   const handleAddPaperSpec = () => {
+    if (isEditingWastage) {
+      toast.error("Please apply wastage configuration first");
+      return;
+    }
+
     if (!selectedPaperId) {
       toast.error("Please select a paper specification");
       return;
@@ -556,7 +562,7 @@ export default function ManualPlanningPage() {
           </Button>
           {!planCreated && (
             <Button
-              onClick={handleCreatePlan}
+              onClick={() => setShowCreatePlanConfirmation(true)}
               disabled={creatingPlan || paperSpecs.length === 0 || cutRolls.length === 0}
               >
               {creatingPlan ? "Creating..." : "Create Plan"}
@@ -699,9 +705,9 @@ export default function ManualPlanningPage() {
                 </div>
                 <div className="flex gap-2">
                   <Button
-                    onClick={() => router.push('/planning')}
+                    onClick={() => router.push('/masters/plans')}
                     variant={'outline'}>
-                    Go to Planning Dashboard
+                    Go to Plan Master
                   </Button>
                   <Button
                     variant="outline"
@@ -835,7 +841,14 @@ export default function ManualPlanningPage() {
               </CardDescription>
             </div>
             <Button
-              onClick={() => setShowAddPaperDialog(true)}>
+              onClick={() => {
+                if (isEditingWastage) {
+                  toast.error("Please apply wastage configuration first");
+                  return;
+                }
+                setShowAddPaperDialog(true);
+              }}
+              disabled={isEditingWastage}>
               <Plus className="mr-2 h-4 w-4" />
               Add Paper Spec
             </Button>
@@ -846,7 +859,11 @@ export default function ManualPlanningPage() {
             <div className="text-center py-12 text-muted-foreground">
               <FileText className="mx-auto h-12 w-12 mb-4 opacity-50" />
               <p>No paper specifications added yet.</p>
-              <p className="text-sm">Click "Add Paper Spec" to get started.</p>
+              <p className="text-sm">
+                {isEditingWastage
+                  ? "Please apply wastage configuration before adding paper specs."
+                  : "Click \"Add Paper Spec\" to get started."}
+              </p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -1249,6 +1266,44 @@ export default function ManualPlanningPage() {
             </Button>
             <Button onClick={handleSaveCutRoll} className="bg-green-600 hover:bg-green-700">
               {editingCutRoll ? "Update Cut Roll" : "Add Cut Roll"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Plan Confirmation Dialog */}
+      <Dialog open={showCreatePlanConfirmation} onOpenChange={setShowCreatePlanConfirmation}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Confirm Plan Creation</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to create this manual plan? This will create inventory records and cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3 text-sm">
+
+
+              <div className="font-medium text-muted-foreground">Planning Width:</div>
+              <div className="font-semibold">{planningWidth} inches</div>
+
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowCreatePlanConfirmation(false)}
+              disabled={creatingPlan}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setShowCreatePlanConfirmation(false);
+                handleCreatePlan();
+              }}
+              disabled={creatingPlan}
+              className="bg-green-600 hover:bg-green-700">
+              {creatingPlan ? "Creating..." : "Confirm & Create"}
             </Button>
           </DialogFooter>
         </DialogContent>
