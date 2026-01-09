@@ -418,7 +418,7 @@ export default function ManualPlanningPage() {
         return;
       }
 
-      // Build request payload
+      // Build request payload - filter out empty roll sets
       const requestData = {
         wastage: appliedWastage,
         planning_width: planningWidth,
@@ -430,21 +430,31 @@ export default function ManualPlanningPage() {
             shade: paperSpec.shade,
             jumbo_rolls: getJumbosForPaper(paperSpec.id).map(jumbo => ({
               jumbo_number: jumbo.jumboNumber,
-              roll_sets: getRollSetsForJumbo(jumbo.id).map(rollSet => ({
-                set_number: rollSet.setNumber,
-                cut_rolls: getCutRollsForSet(rollSet.id).map((cut: CutRoll) => {
-                  const client = availableClients.find(c => c.id === cut.clientId);
+              roll_sets: getRollSetsForJumbo(jumbo.id)
+                .map(rollSet => {
+                  const cutRollsForSet = getCutRollsForSet(rollSet.id);
+                  // Only include roll sets that have cut rolls
+                  if (cutRollsForSet.length === 0) {
+                    return null;
+                  }
                   return {
-                    width_inches: cut.widthInches,
-                    quantity: cut.quantity,
-                    client_name: client?.company_name || "Unknown",
-                    // order_source: cut.orderSource || "Manual"
+                    set_number: rollSet.setNumber,
+                    cut_rolls: cutRollsForSet.map((cut: CutRoll) => {
+                      const client = availableClients.find(c => c.id === cut.clientId);
+                      return {
+                        width_inches: cut.widthInches,
+                        quantity: cut.quantity,
+                        client_name: client?.company_name || "Unknown",
+                        // order_source: cut.orderSource || "Manual"
+                      };
+                    })
                   };
                 })
-              }))
+                .filter(rollSet => rollSet !== null) // Remove null roll sets
             }))
+            .filter(jumbo => jumbo.roll_sets.length > 0) // Remove jumbos with no valid roll sets
           };
-        })
+        }).filter(paperSpec => paperSpec.jumbo_rolls.length > 0) // Remove paper specs with no valid jumbos
       };
 
       console.log('Creating manual plan with data:', requestData);
@@ -523,13 +533,24 @@ export default function ManualPlanningPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Manual Planning</h1>
-        <Button variant="outline" onClick={() => router.push("/planning")}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Planning
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => router.push("/planning")}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Planning
+          </Button>
+          {!planCreated && (
+            <Button
+              onClick={handleCreatePlan}
+              disabled={creatingPlan || paperSpecs.length === 0 || cutRolls.length === 0}
+              >
+              {creatingPlan ? "Creating..." : "Create Plan"}
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Wastage Configuration */}
+      {/* Wastage Configuration - Only show if plan not created */}
+      {!planCreated && (
       <Card>
         <CardHeader>
           <CardTitle>Roll Width Configuration</CardTitle>
@@ -609,88 +630,185 @@ export default function ManualPlanningPage() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Plan Created Summary */}
       {planCreated && createdPlanSummary && (
-        <Card className="border-green-200 bg-green-50/30">
-          <CardHeader>
-            <CardTitle className="text-green-700">✅ Plan Created Successfully!</CardTitle>
-            <CardDescription>
-              Plan ID: {createdPlanSummary.plan_frontend_id}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {/* Summary Stats */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-white p-3 rounded-lg border">
-                  <div className="text-sm text-muted-foreground">Jumbo Rolls</div>
-                  <div className="text-2xl font-bold text-blue-600">
-                    {createdPlanSummary.summary.jumbo_rolls_created}
-                  </div>
+        <>
+          {/* Summary Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardDescription>Jumbo Rolls</CardDescription>
+                <CardTitle className="text-2xl text-blue-600">
+                  {createdPlanSummary.summary.jumbo_rolls_created}
+                </CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardDescription>118" Rolls</CardDescription>
+                <CardTitle className="text-2xl text-cyan-600">
+                  {createdPlanSummary.summary.intermediate_118_rolls_created}
+                </CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardDescription>Cut Rolls</CardDescription>
+                <CardTitle className="text-2xl text-green-600">
+                  {createdPlanSummary.summary.cut_rolls_created}
+                </CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardDescription>Planning Width</CardDescription>
+                <CardTitle className="text-2xl text-purple-600">
+                  {createdPlanSummary.summary.planning_width}"
+                </CardTitle>
+              </CardHeader>
+            </Card>
+          </div>
+
+          {/* Production Hierarchy */}
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle className="text-green-700">Plan Created Successfully!</CardTitle>
+                  <CardDescription>
+                    Plan ID: {createdPlanSummary.plan_frontend_id} • Jumbo rolls with their associated cut rolls
+                  </CardDescription>
                 </div>
-                <div className="bg-white p-3 rounded-lg border">
-                  <div className="text-sm text-muted-foreground">118" Rolls</div>
-                  <div className="text-2xl font-bold text-cyan-600">
-                    {createdPlanSummary.summary.intermediate_118_rolls_created}
-                  </div>
-                </div>
-                <div className="bg-white p-3 rounded-lg border">
-                  <div className="text-sm text-muted-foreground">Cut Rolls</div>
-                  <div className="text-2xl font-bold text-green-600">
-                    {createdPlanSummary.summary.cut_rolls_created}
-                  </div>
-                </div>
-                <div className="bg-white p-3 rounded-lg border">
-                  <div className="text-sm text-muted-foreground">Planning Width</div>
-                  <div className="text-2xl font-bold text-purple-600">
-                    {createdPlanSummary.summary.planning_width}"
-                  </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => router.push('/planning')}
+                    variant={'outline'}>
+                    Go to Planning Dashboard
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setPlanCreated(false);
+                      setCreatedPlanSummary(null);
+                      setPaperSpecs([]);
+                      setJumboRolls([]);
+                      setRollSets([]);
+                      setCutRolls([]);
+                    }}>
+                    Create Another Plan
+                  </Button>
                 </div>
               </div>
-
-              {/* Production Hierarchy */}
-              <div className="bg-white p-4 rounded-lg border">
-                <h3 className="font-semibold mb-3">Production Hierarchy</h3>
-                <div className="space-y-3">
-                  {createdPlanSummary.production_hierarchy.map((item: any, idx: number) => (
-                    <div key={idx} className="border-l-4 border-blue-500 pl-4">
-                      <div className="font-medium text-blue-700">
-                        Jumbo: {item.jumbo_roll.frontend_id} ({item.jumbo_roll.barcode_id})
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {createdPlanSummary.production_hierarchy.map((jumboGroup: any, index: number) => (
+                  <div key={index} className="border rounded-lg p-4 bg-primary/5">
+                    {/* Jumbo Roll Header */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-primary text-primary-foreground rounded-lg flex items-center justify-center text-lg font-bold">
+                          J
+                        </div>
+                        <div>
+                          <div className="text-lg font-bold text-primary">
+                            Jumbo Roll: {jumboGroup.jumbo_roll?.barcode_id || 'Unknown'}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {jumboGroup.jumbo_roll?.paper_spec || 'Unknown Spec'} •
+                            {jumboGroup.jumbo_roll?.width_inches || 0}" •
+                            {jumboGroup.intermediate_rolls?.length || 0} × 118" rolls •
+                            {jumboGroup.cut_rolls.length} cut rolls
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-sm text-muted-foreground ml-4 mt-1">
-                        {item.intermediate_rolls.length} × 118" Rolls → {item.cut_rolls.length} Cut Rolls
+                      {jumboGroup.jumbo_roll?.barcode_id && (
+                        <code className="text-sm bg-muted px-3 py-1 rounded">
+                          {jumboGroup.jumbo_roll.barcode_id}
+                        </code>
+                      )}
+                    </div>
+
+                    {/* Intermediate 118" Rolls */}
+                    {/* {jumboGroup.intermediate_rolls && jumboGroup.intermediate_rolls.length > 0 && (
+                      <div className="space-y-2 mb-4">
+                        <div className="text-sm font-medium text-gray-700">118" Intermediate Rolls:</div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {jumboGroup.intermediate_rolls.map((roll118: any, idx: number) => (
+                            <div key={idx} className="border rounded-lg p-3 bg-cyan-50/50 border-cyan-200">
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className="w-8 h-8 bg-cyan-600 text-white rounded flex items-center justify-center text-xs font-bold">
+                                  118"
+                                </div>
+                                <div className="flex-1">
+                                  <div className="font-medium text-sm">{roll118.barcode_id}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    Set #{roll118.roll_sequence}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-xs text-muted-foreground space-y-1">
+                                <div>Width: {roll118.width_inches}"</div>
+                                <div className="truncate">{roll118.paper_spec}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )} */}
+
+                    {/* Cut Rolls */}
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium text-gray-700">Cut Rolls:</div>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Barcode</TableHead>
+                              <TableHead>Width (in)</TableHead>
+                              <TableHead>Client</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead>Parent 118" Roll</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {jumboGroup.cut_rolls.map((cutRoll: any, idx: number) => (
+                              <TableRow key={idx} className="border-l-4 border-green-200">
+                                <TableCell>
+                                  <code className="text-sm">{cutRoll.barcode_id}</code>
+                                </TableCell>
+                                <TableCell>{cutRoll.width_inches}&quot;</TableCell>
+                                <TableCell className="text-sm">
+                                  {cutRoll.client_name || 'N/A'}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant={cutRoll.status === 'cutting' ? 'default' : 'secondary'}>
+                                    {cutRoll.status}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground">
+                                  {cutRoll.parent_118_barcode || 'N/A'}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
-
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => router.push('/planning')}
-                  className="bg-blue-600 hover:bg-blue-700">
-                  Go to Planning Dashboard
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setPlanCreated(false);
-                    setCreatedPlanSummary(null);
-                    setPaperSpecs([]);
-                    setJumboRolls([]);
-                    setRollSets([]);
-                    setCutRolls([]);
-                  }}>
-                  Create Another Plan
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </>
       )}
 
-      {/* Main Content */}
+      {/* Main Content - Only show if plan not created */}
+      {!planCreated && (
+        <>
+      {/* Wastage Configuration */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -700,20 +818,11 @@ export default function ManualPlanningPage() {
                 Paper Spec → Jumbo Rolls →  Sets → Cut Rolls
               </CardDescription>
             </div>
-            <div className="flex gap-2">
-              <Button
-                onClick={() => setShowAddPaperDialog(true)}
-                className="bg-blue-600 hover:bg-blue-700">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Paper Spec
-              </Button>
-              <Button
-                onClick={handleCreatePlan}
-                disabled={creatingPlan || paperSpecs.length === 0 || cutRolls.length === 0}
-                className="bg-green-600 hover:bg-green-700">
-                {creatingPlan ? "Creating..." : "Create Plan"}
-              </Button>
-            </div>
+            <Button
+              onClick={() => setShowAddPaperDialog(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Paper Spec
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -911,15 +1020,17 @@ export default function ManualPlanningPage() {
                                               </div>
 
                                               {/* Add Manual Cut Button */}
-                                              <div className="flex justify-center">
-                                                <Button
-                                                  variant="outline"
-                                                  onClick={() => handleAddCutToRollSet(rollSet.id)}
-                                                  className="border-orange-300 text-orange-600 hover:bg-orange-50">
-                                                  <Plus className="h-3 w-3 mr-1" />
-                                                  Add Manual Cut ({remainingWidth.toFixed(1)}" available)
-                                                </Button>
-                                              </div>
+                                              {remainingWidth > 0 && (
+                                                <div className="flex justify-center">
+                                                  <Button
+                                                    variant="outline"
+                                                    onClick={() => handleAddCutToRollSet(rollSet.id)}
+                                                    className="border-orange-300 text-orange-600 hover:bg-orange-50">
+                                                    <Plus className="h-3 w-3 mr-1" />
+                                                    Add Manual Cut ({remainingWidth.toFixed(1)}" available)
+                                                  </Button>
+                                                </div>
+                                              )}
                                             </div>
                                         </div>
                                       );
@@ -938,6 +1049,8 @@ export default function ManualPlanningPage() {
           )}
         </CardContent>
       </Card>
+      </>
+      )}
 
       {/* Add Paper Spec Dialog */}
       <Dialog open={showAddPaperDialog} onOpenChange={(open) => {
