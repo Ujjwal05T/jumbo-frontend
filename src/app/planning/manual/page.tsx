@@ -39,6 +39,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSearch,
 } from "@/components/ui/select";
 import {
   Plus,
@@ -108,6 +109,7 @@ export default function ManualPlanningPage() {
   // Client Master dropdown
   const [availableClients, setAvailableClients] = useState<Client[]>([]);
   const [loadingClients, setLoadingClients] = useState(false);
+  const [clientSearchTerm, setClientSearchTerm] = useState("");
 
   // Plan creation
   const [creatingPlan, setCreatingPlan] = useState(false);
@@ -154,7 +156,11 @@ export default function ManualPlanningPage() {
       try {
         setLoadingClients(true);
         const clients = await fetchClients(0, 'active');
-        setAvailableClients(clients);
+        // Sort clients alphabetically by company name
+        const sortedClients = clients.sort((a, b) =>
+          a.company_name.localeCompare(b.company_name)
+        );
+        setAvailableClients(sortedClients);
       } catch (error) {
         console.error('Failed to load clients:', error);
         toast.error('Failed to load clients');
@@ -164,6 +170,16 @@ export default function ManualPlanningPage() {
     };
     loadClients();
   }, []);
+
+  // Filter clients based on search term
+  const filteredClients = useMemo(() => {
+    if (!clientSearchTerm) return availableClients;
+    const searchLower = clientSearchTerm.toLowerCase();
+    return availableClients.filter(client =>
+      client.company_name.toLowerCase().includes(searchLower) ||
+      (client.contact_person && client.contact_person.toLowerCase().includes(searchLower))
+    );
+  }, [availableClients, clientSearchTerm]);
 
   // Apply wastage changes
   const handleApplyWastage = () => {
@@ -581,7 +597,7 @@ export default function ManualPlanningPage() {
                       }
                     }}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="1.0"
+                   
                   />
                   <Button
                     onClick={handleApplyWastage}
@@ -1158,7 +1174,6 @@ export default function ManualPlanningPage() {
                 <Input
                   id="cutWidth"
                   type="number"
-                  placeholder="e.g., 72"
                   max={planningWidth}
                   value={cutRollForm.widthInches}
                   onChange={(e) => setCutRollForm({ ...cutRollForm, widthInches: e.target.value })}
@@ -1170,7 +1185,6 @@ export default function ManualPlanningPage() {
                   id="cutQuantity"
                   type="number"
                   min="1"
-                  placeholder="e.g., 1"
                   value={cutRollForm.quantity}
                   onChange={(e) => setCutRollForm({ ...cutRollForm, quantity: e.target.value })}
                 />
@@ -1185,18 +1199,22 @@ export default function ManualPlanningPage() {
               ) : (
                 <Select
                   value={cutRollForm.clientId}
-                  onValueChange={(value) => setCutRollForm({ ...cutRollForm, clientId: value })}>
+                  onValueChange={(value) => setCutRollForm({ ...cutRollForm, clientId: value })}
+                  onOpenChange={(open) => !open && setClientSearchTerm("")}>
                   <SelectTrigger id="clientSelect">
                     <SelectValue placeholder="Select a client" />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableClients.map((client) => (
+                    <SelectSearch
+                      placeholder="Search clients..."
+                      value={clientSearchTerm}
+                      onChange={(e) => setClientSearchTerm(e.target.value)}
+                    />
+                    {filteredClients.map((client) => (
                       <SelectItem key={client.id} value={client.id}>
                         <div className="flex flex-col">
                           <span className="font-medium">{client.company_name}</span>
-                          {client.contact_person && (
-                            <span className="text-xs text-muted-foreground">{client.contact_person}</span>
-                          )}
+                          
                         </div>
                       </SelectItem>
                     ))}
@@ -1205,13 +1223,13 @@ export default function ManualPlanningPage() {
               )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="orderSource">Order Source (Optional)</Label>
+              {/* <Label htmlFor="orderSource">Order Source (Optional)</Label>
               <Input
                 id="orderSource"
                 placeholder="e.g., ORD-00010-26"
                 // value={cutRollForm.orderSource}
                 // onChange={(e) => setCutRollForm({ ...cutRollForm, orderSource: e.target.value })}
-              />
+              /> */}
             </div>
             {cutRollForm.widthInches && cutRollForm.quantity && (
               <div className="bg-muted p-3 rounded-md text-sm">
