@@ -1,9 +1,12 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { fetchPapers, Paper } from "@/lib/papers";
+import { fetchClients, Client } from "@/lib/clients";
+import { MASTER_ENDPOINTS } from "@/lib/api-config";
 import {
   Card,
   CardContent,
@@ -47,7 +50,6 @@ import {
   ChevronRight,
   Pencil,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 
 // Types
 interface PaperSpec {
@@ -77,8 +79,8 @@ interface CutRoll {
   rollSetId: string;
   widthInches: number;
   quantity: number;
-  clientName: string;
-  orderSource: string; // e.g., "ORD-00010-26"
+  clientId: string;
+  // orderSource: string; // e.g., "ORD-00010-26"
   createdAt: Date;
 }
 
@@ -103,6 +105,15 @@ export default function ManualPlanningPage() {
   const [availablePapers, setAvailablePapers] = useState<Paper[]>([]);
   const [loadingPapers, setLoadingPapers] = useState(false);
 
+  // Client Master dropdown
+  const [availableClients, setAvailableClients] = useState<Client[]>([]);
+  const [loadingClients, setLoadingClients] = useState(false);
+
+  // Plan creation
+  const [creatingPlan, setCreatingPlan] = useState(false);
+  const [planCreated, setPlanCreated] = useState(false);
+  const [createdPlanSummary, setCreatedPlanSummary] = useState<any>(null);
+
   // Calculate planning width from applied wastage
   const planningWidth = useMemo(() => {
     const calculated = 124 - appliedWastage;
@@ -115,8 +126,8 @@ export default function ManualPlanningPage() {
   const [cutRollForm, setCutRollForm] = useState({
     widthInches: "",
     quantity: "1",
-    clientName: "",
-    orderSource: "",
+    clientId: "",
+    // orderSource: "",
   });
 
   // Load available papers from Paper Master
@@ -135,6 +146,23 @@ export default function ManualPlanningPage() {
       }
     };
     loadPapers();
+  }, []);
+
+  // Load available clients from Client Master
+  useEffect(() => {
+    const loadClients = async () => {
+      try {
+        setLoadingClients(true);
+        const clients = await fetchClients(0, 'active');
+        setAvailableClients(clients);
+      } catch (error) {
+        console.error('Failed to load clients:', error);
+        toast.error('Failed to load clients');
+      } finally {
+        setLoadingClients(false);
+      }
+    };
+    loadClients();
   }, []);
 
   // Apply wastage changes
@@ -280,8 +308,8 @@ export default function ManualPlanningPage() {
     setCutRollForm({
       widthInches: "",
       quantity: "1",
-      clientName: "",
-      orderSource: "",
+      clientId: "",
+      // orderSource: "",
     });
     setShowAddCutRollDialog(true);
   };
@@ -293,15 +321,15 @@ export default function ManualPlanningPage() {
     setCutRollForm({
       widthInches: cutRoll.widthInches.toString(),
       quantity: cutRoll.quantity.toString(),
-      clientName: cutRoll.clientName,
-      orderSource: cutRoll.orderSource,
+      clientId: cutRoll.clientId,
+      // orderSource: cutRoll.orderSource,
     });
     setShowAddCutRollDialog(true);
   };
 
   // Save Cut Roll
   const handleSaveCutRoll = () => {
-    if (!cutRollForm.widthInches || !cutRollForm.quantity || !cutRollForm.clientName) {
+    if (!cutRollForm.widthInches || !cutRollForm.quantity || !cutRollForm.clientId) {
       toast.error("Please fill in all required fields");
       return;
     }
@@ -331,8 +359,8 @@ export default function ManualPlanningPage() {
               ...roll,
               widthInches: width,
               quantity: quantity,
-              clientName: cutRollForm.clientName,
-              orderSource: cutRollForm.orderSource,
+              clientId: cutRollForm.clientId,
+              // orderSource: cutRollForm.orderSource,
             }
           : roll
       ));
@@ -343,8 +371,8 @@ export default function ManualPlanningPage() {
         rollSetId: selectedRollSetForCut,
         widthInches: width,
         quantity: quantity,
-        clientName: cutRollForm.clientName,
-        orderSource: cutRollForm.orderSource,
+        clientId: cutRollForm.clientId,
+        // orderSource: cutRollForm.orderSource,
         createdAt: new Date(),
       };
       setCutRolls([...cutRolls, newCutRoll]);
@@ -360,6 +388,94 @@ export default function ManualPlanningPage() {
   const handleDeleteCutRoll = (id: string) => {
     setCutRolls(cutRolls.filter(c => c.id !== id));
     toast.success("Cut roll deleted");
+  };
+
+  // Create Plan
+  const handleCreatePlan = async () => {
+    // Validation
+    if (isEditingWastage) {
+      toast.error("Please apply wastage configuration first");
+      return;
+    }
+
+    if (paperSpecs.length === 0) {
+      toast.error("Please add at least one paper specification");
+      return;
+    }
+
+    if (cutRolls.length === 0) {
+      toast.error("Please add at least one cut roll");
+      return;
+    }
+
+    try {
+      setCreatingPlan(true);
+
+      // Get user ID from localStorage
+      const userId = localStorage.getItem('user_id');
+      if (!userId) {
+        toast.error('User not authenticated');
+        return;
+      }
+
+      // Build request payload
+      const requestData = {
+        wastage: appliedWastage,
+        planning_width: planningWidth,
+        created_by_id: userId,
+        paper_specs: paperSpecs.map(paperSpec => {
+          return {
+            gsm: paperSpec.gsm,
+            bf: paperSpec.bf,
+            shade: paperSpec.shade,
+            jumbo_rolls: getJumbosForPaper(paperSpec.id).map(jumbo => ({
+              jumbo_number: jumbo.jumboNumber,
+              roll_sets: getRollSetsForJumbo(jumbo.id).map(rollSet => ({
+                set_number: rollSet.setNumber,
+                cut_rolls: getCutRollsForSet(rollSet.id).map((cut: CutRoll) => {
+                  const client = availableClients.find(c => c.id === cut.clientId);
+                  return {
+                    width_inches: cut.widthInches,
+                    quantity: cut.quantity,
+                    client_name: client?.company_name || "Unknown",
+                    // order_source: cut.orderSource || "Manual"
+                  };
+                })
+              }))
+            }))
+          };
+        })
+      };
+
+      console.log('Creating manual plan with data:', requestData);
+
+      // Call API
+      const response = await fetch(`${MASTER_ENDPOINTS.PLANS}/manual/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to create plan');
+      }
+
+      const result = await response.json();
+      console.log('Manual plan created:', result);
+
+      setCreatedPlanSummary(result);
+      setPlanCreated(true);
+      toast.success(`Plan created successfully! ${result.plan_frontend_id}`);
+
+    } catch (error: any) {
+      console.error('Error creating manual plan:', error);
+      toast.error(error.message || 'Failed to create manual plan');
+    } finally {
+      setCreatingPlan(false);
+    }
   };
 
   // Helper functions
@@ -494,6 +610,86 @@ export default function ManualPlanningPage() {
         </CardContent>
       </Card>
 
+      {/* Plan Created Summary */}
+      {planCreated && createdPlanSummary && (
+        <Card className="border-green-200 bg-green-50/30">
+          <CardHeader>
+            <CardTitle className="text-green-700">✅ Plan Created Successfully!</CardTitle>
+            <CardDescription>
+              Plan ID: {createdPlanSummary.plan_frontend_id}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Summary Stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white p-3 rounded-lg border">
+                  <div className="text-sm text-muted-foreground">Jumbo Rolls</div>
+                  <div className="text-2xl font-bold text-blue-600">
+                    {createdPlanSummary.summary.jumbo_rolls_created}
+                  </div>
+                </div>
+                <div className="bg-white p-3 rounded-lg border">
+                  <div className="text-sm text-muted-foreground">118" Rolls</div>
+                  <div className="text-2xl font-bold text-cyan-600">
+                    {createdPlanSummary.summary.intermediate_118_rolls_created}
+                  </div>
+                </div>
+                <div className="bg-white p-3 rounded-lg border">
+                  <div className="text-sm text-muted-foreground">Cut Rolls</div>
+                  <div className="text-2xl font-bold text-green-600">
+                    {createdPlanSummary.summary.cut_rolls_created}
+                  </div>
+                </div>
+                <div className="bg-white p-3 rounded-lg border">
+                  <div className="text-sm text-muted-foreground">Planning Width</div>
+                  <div className="text-2xl font-bold text-purple-600">
+                    {createdPlanSummary.summary.planning_width}"
+                  </div>
+                </div>
+              </div>
+
+              {/* Production Hierarchy */}
+              <div className="bg-white p-4 rounded-lg border">
+                <h3 className="font-semibold mb-3">Production Hierarchy</h3>
+                <div className="space-y-3">
+                  {createdPlanSummary.production_hierarchy.map((item: any, idx: number) => (
+                    <div key={idx} className="border-l-4 border-blue-500 pl-4">
+                      <div className="font-medium text-blue-700">
+                        Jumbo: {item.jumbo_roll.frontend_id} ({item.jumbo_roll.barcode_id})
+                      </div>
+                      <div className="text-sm text-muted-foreground ml-4 mt-1">
+                        {item.intermediate_rolls.length} × 118" Rolls → {item.cut_rolls.length} Cut Rolls
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => router.push('/planning')}
+                  className="bg-blue-600 hover:bg-blue-700">
+                  Go to Planning Dashboard
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setPlanCreated(false);
+                    setCreatedPlanSummary(null);
+                    setPaperSpecs([]);
+                    setJumboRolls([]);
+                    setRollSets([]);
+                    setCutRolls([]);
+                  }}>
+                  Create Another Plan
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Main Content */}
       <Card>
         <CardHeader>
@@ -504,12 +700,20 @@ export default function ManualPlanningPage() {
                 Paper Spec → Jumbo Rolls →  Sets → Cut Rolls
               </CardDescription>
             </div>
-            <Button
-              onClick={() => setShowAddPaperDialog(true)}
-              className="bg-blue-600 hover:bg-blue-700">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Paper Spec
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => setShowAddPaperDialog(true)}
+                className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Paper Spec
+              </Button>
+              <Button
+                onClick={handleCreatePlan}
+                disabled={creatingPlan || paperSpecs.length === 0 || cutRolls.length === 0}
+                className="bg-green-600 hover:bg-green-700">
+                {creatingPlan ? "Creating..." : "Create Plan"}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -676,12 +880,14 @@ export default function ManualPlanningPage() {
 
                                               {/* Cut Rolls List */}
                                               <div className="space-y-2">
-                                                {cutsForSet.map((cut) => (
+                                                {cutsForSet.map((cut) => {
+                                                  const client = availableClients.find(c => c.id === cut.clientId);
+                                                  return (
                                                   <div key={cut.id} className="flex items-center justify-between bg-green-50 p-2 rounded">
                                                     <div className="flex items-center gap-2">
                                                       <Badge className="bg-green-600">{cut.widthInches}" × {cut.quantity}</Badge>
-                                                      <span className="text-sm font-medium">{cut.widthInches * cut.quantity}.0" from {cut.orderSource || "Manual"}</span>
-                                                      <span className="text-xs text-muted-foreground">- {cut.clientName}</span>
+                                                      {/* <span className="text-sm font-medium">{cut.widthInches * cut.quantity}.0" from {cut.orderSource || "Manual"}</span> */}
+                                                      <span className="text-xs text-muted-foreground">- {client?.company_name || "Unknown Client"}</span>
                                                     </div>
                                                     <div className="flex gap-1">
                                                       <Button
@@ -700,7 +906,8 @@ export default function ManualPlanningPage() {
                                                       </Button>
                                                     </div>
                                                   </div>
-                                                ))}
+                                                  );
+                                                })}
                                               </div>
 
                                               {/* Add Manual Cut Button */}
@@ -857,21 +1064,40 @@ export default function ManualPlanningPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="clientName">Client Name</Label>
-              <Input
-                id="clientName"
-                placeholder="e.g., AM TRADE LINK PRIVATE LIMITED"
-                value={cutRollForm.clientName}
-                onChange={(e) => setCutRollForm({ ...cutRollForm, clientName: e.target.value })}
-              />
+              <Label htmlFor="clientSelect">Client</Label>
+              {loadingClients ? (
+                <div className="text-sm text-muted-foreground">Loading clients...</div>
+              ) : availableClients.length === 0 ? (
+                <div className="text-sm text-orange-600">No active clients found. Please add clients first.</div>
+              ) : (
+                <Select
+                  value={cutRollForm.clientId}
+                  onValueChange={(value) => setCutRollForm({ ...cutRollForm, clientId: value })}>
+                  <SelectTrigger id="clientSelect">
+                    <SelectValue placeholder="Select a client" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableClients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{client.company_name}</span>
+                          {client.contact_person && (
+                            <span className="text-xs text-muted-foreground">{client.contact_person}</span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="orderSource">Order Source (Optional)</Label>
               <Input
                 id="orderSource"
                 placeholder="e.g., ORD-00010-26"
-                value={cutRollForm.orderSource}
-                onChange={(e) => setCutRollForm({ ...cutRollForm, orderSource: e.target.value })}
+                // value={cutRollForm.orderSource}
+                // onChange={(e) => setCutRollForm({ ...cutRollForm, orderSource: e.target.value })}
               />
             </div>
             {cutRollForm.widthInches && cutRollForm.quantity && (
