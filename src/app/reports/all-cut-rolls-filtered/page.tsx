@@ -663,6 +663,7 @@ export default function AllCutRollsFilteredReportPage() {
           roll.status === 'available' ? 'Stock' :
           roll.status === 'cutting' ? 'Planned' :
           roll.status === 'used' ? 'Dispatched' :
+          roll.status === 'billed' ? 'Billed' :
           'Removed',
           productionDateIST,
           roll.parent_118_roll?.barcode_id || 'N/A',

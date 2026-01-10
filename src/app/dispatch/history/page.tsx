@@ -174,6 +174,18 @@ export default function DispatchHistoryPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [limit] = useState(20);
 
+  // Convert UTC datetime string to IST Date object
+  const convertUTCtoIST = (utcDateString: string): Date => {
+    // If the string doesn't have 'Z' or timezone info, treat it as UTC
+    if (!utcDateString.endsWith('Z') && !utcDateString.includes('+') && !utcDateString.includes('T')) {
+      // Replace space with 'T' and add 'Z' to indicate UTC
+      utcDateString = utcDateString.replace(' ', 'T') + 'Z';
+    } else if (!utcDateString.endsWith('Z') && utcDateString.includes('T')) {
+      utcDateString = utcDateString + 'Z';
+    }
+    return new Date(utcDateString);
+  };
+
   // Convert DD/MM/YYYY to YYYY-MM-DD for API
   const convertToAPIDate = (ddmmyyyy: string): string => {
     if (!ddmmyyyy || ddmmyyyy.length !== 10) return "";
@@ -663,10 +675,10 @@ export default function DispatchHistoryPage() {
                         <TableCell>
                           <div className="space-y-1">
                             <div className="font-medium">
-                              {new Date(dispatch.dispatch_date).toLocaleDateString('en-GB')}
+                              {convertUTCtoIST(dispatch.dispatch_date).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              {new Date(dispatch.dispatch_date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                              {convertUTCtoIST(dispatch.dispatch_date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })}
                             </div>
                           </div>
                         </TableCell>
@@ -800,7 +812,7 @@ export default function DispatchHistoryPage() {
                     </div>
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">Dispatch Date</label>
-                      <div className="font-medium">{new Date(selectedDispatch.dispatch_date).toLocaleString()}</div>
+                      <div className="font-medium">{convertUTCtoIST(selectedDispatch.dispatch_date).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</div>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">Status</label>
@@ -970,6 +982,8 @@ export default function DispatchHistoryPage() {
           setCreateModalOpen(open);
           if (!open) {
             setDraftIdToRestore(null); // Reset draft ID when modal closes
+            loadDispatches(); // Refresh dispatch data when modal closes
+            loadStats(); // Refresh stats when modal closes
           }
         }}
         draftIdToRestore={draftIdToRestore}
@@ -983,7 +997,14 @@ export default function DispatchHistoryPage() {
       {/* Edit Dispatch Modal */}
       <EditDispatchModal
         open={editModalOpen}
-        onOpenChange={setEditModalOpen}
+        onOpenChange={(open) => {
+          setEditModalOpen(open);
+          if (!open) {
+            loadDispatches(); // Refresh dispatch data when modal closes
+            loadStats(); // Refresh stats when modal closes
+            setEditDispatchId(null); // Reset edit dispatch ID when modal closes
+          }
+        }}
         dispatchId={editDispatchId}
         onSuccess={() => {
           loadDispatches();

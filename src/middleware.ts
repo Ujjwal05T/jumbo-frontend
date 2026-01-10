@@ -98,7 +98,7 @@ const roleBasedRoutes = {
     '/dispatch',
     '/plan-weights',
     '/hour-calculator',
-    '/reports/all-cut-rolls',
+    '/reports/all-cut-rolls-filtered',
     '/barcode-lookup',
     '/weight-update',
     '/outward-challan',

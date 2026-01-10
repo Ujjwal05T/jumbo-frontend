@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, memo } from "react";
+import { useState, useEffect, useMemo, useCallback, memo, useRef } from "react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -278,6 +278,9 @@ export function CreateDispatchModal({
   const [dispatchLoading, setDispatchLoading] = useState(false);
   const [successModalOpen, setSuccessModalOpen] = useState(false);
   const [dispatchResult, setDispatchResult] = useState<any>(null);
+
+  // Ref to prevent duplicate submissions (protects against double-clicks and network retries)
+  const isSubmittingRef = useRef(false);
 
   // Draft management state
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
@@ -752,7 +755,14 @@ export function CreateDispatchModal({
   ]);
 
   const handleDispatchConfirm = useCallback(async () => {
+    // Guard: Prevent duplicate submissions from double-clicks or network retries
+    if (isSubmittingRef.current) {
+      console.warn("Dispatch submission already in progress, ignoring duplicate request");
+      return;
+    }
+
     try {
+      isSubmittingRef.current = true;
       setDispatchLoading(true);
 
       const dispatchData = {
@@ -799,6 +809,7 @@ export function CreateDispatchModal({
       toast.error(errorMessage);
       console.error("Dispatch error:", error);
     } finally {
+      isSubmittingRef.current = false;
       setDispatchLoading(false);
     }
   }, [

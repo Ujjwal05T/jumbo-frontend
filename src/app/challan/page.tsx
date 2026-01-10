@@ -199,6 +199,7 @@ export default function ChallanPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [limit] = useState(20);
+  const [generatedFilter, setGeneratedFilter] = useState("not_generated");
 
   // Details modal
   const [selectedDispatch, setSelectedDispatch] = useState<DispatchDetails | null>(null);
@@ -849,7 +850,7 @@ export default function ChallanPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
             {/* Search */}
             <div className="space-y-2">
               <label className="text-sm font-medium">Search</label>
@@ -910,6 +911,21 @@ export default function ChallanPage() {
               </Select>
             </div>
 
+            {/* Generated Status Filter */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Bill Status</label>
+              <Select value={generatedFilter} onValueChange={setGeneratedFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="generated">Generated</SelectItem>
+                  <SelectItem value="not_generated">Not Generated</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* From Date */}
             <div className="space-y-2">
               <label className="text-sm font-medium">From Date</label>
@@ -939,6 +955,7 @@ export default function ChallanPage() {
                   setSearchTerm("");
                   setStatusFilter("all");
                   setClientFilter("all");
+                  setGeneratedFilter("not_generated");
                   setFromDate("");
                   setToDate("");
                   setCurrentPage(1);
@@ -985,7 +1002,14 @@ export default function ChallanPage() {
                     </TableCell>
                   </TableRow>
                 ) : dispatches.length > 0 ? (
-                  dispatches.filter(d => !d.has_payment_slip).map((dispatch) => (
+                  dispatches
+                    .filter(dispatch => {
+                      if (generatedFilter === "all") return true;
+                      if (generatedFilter === "generated") return dispatch.has_payment_slip;
+                      if (generatedFilter === "not_generated") return !dispatch.has_payment_slip;
+                      return true;
+                    })
+                    .map((dispatch) => (
                     <TableRow key={dispatch.id}>
                       <TableCell>
                         <div className="space-y-1">
@@ -1050,25 +1074,28 @@ export default function ChallanPage() {
                         {getStatusBadge(dispatch.status)}
                       </TableCell>
                       <TableCell>
-                        {dispatch.has_payment_slip ? (
-                          <div className="flex items-center gap-1 text-green-600 text-sm font-medium">
-                            <CheckCircle2 className="w-4 h-4" />
-                            Generated
-                          </div>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={() => {
-                              setSelectedDispatchForGenerate(dispatch);
-                              setGenerateModalOpen(true);
-                              loadDispatchItemsForGenerate(dispatch.id);
-                            }}
-                          >
-                            <FileText className="w-4 h-4 mr-1" />
-                            Generate
-                          </Button>
-                        )}
+                        <Button
+                          size="sm"
+                          variant={dispatch.has_payment_slip ? "outline" : "default"}
+                          disabled={dispatch.has_payment_slip}
+                          onClick={() => {
+                            setSelectedDispatchForGenerate(dispatch);
+                            setGenerateModalOpen(true);
+                            loadDispatchItemsForGenerate(dispatch.id);
+                          }}
+                        >
+                          {dispatch.has_payment_slip ? (
+                            <>
+                              <CheckCircle2 className="w-4 h-4 mr-1" />
+                              Generated
+                            </>
+                          ) : (
+                            <>
+                              <FileText className="w-4 h-4 mr-1" />
+                              Generate
+                            </>
+                          )}
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))
