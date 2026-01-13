@@ -323,13 +323,14 @@ export async function fetchOutwardChallan(challanId: string): Promise<OutwardCha
  */
 export async function createOutwardChallan(challanData: CreateOutwardChallanData): Promise<OutwardChallan> {
   const response = await fetch(
-    MATERIAL_ENDPOINTS.OUTWARD_CHALLANS, 
+    MATERIAL_ENDPOINTS.OUTWARD_CHALLANS,
     createRequestOptions('POST', challanData)
   );
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.detail || 'Failed to create outward challan');
+    const errorMessage = errorData.detail || 'Failed to create outward challan';
+    throw new Error(errorMessage);
   }
 
   return response.json();
@@ -340,13 +341,14 @@ export async function createOutwardChallan(challanData: CreateOutwardChallanData
  */
 export async function updateOutwardChallan(challanId: string, challanData: Partial<CreateOutwardChallanData>): Promise<OutwardChallan> {
   const response = await fetch(
-    MATERIAL_ENDPOINTS.OUTWARD_CHALLAN_BY_ID(challanId), 
+    MATERIAL_ENDPOINTS.OUTWARD_CHALLAN_BY_ID(challanId),
     createRequestOptions('PUT', challanData)
   );
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.detail || 'Failed to update outward challan');
+    const errorMessage = errorData.detail || 'Failed to update outward challan';
+    throw new Error(errorMessage);
   }
 
   return response.json();

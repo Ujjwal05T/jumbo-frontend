@@ -13,12 +13,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DASHBOARD_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
 import { trackRollHierarchy, type JumboHierarchy } from "@/lib/roll-tracking";
-import { 
-  Users, 
-  ShoppingCart, 
-  Clock, 
-  ChevronDown, 
-  TrendingUp, 
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import {
+  Users,
+  ShoppingCart,
+  Clock,
+  ChevronDown,
+  TrendingUp,
   TrendingDown,
   Package,
   AlertCircle,
@@ -28,7 +30,12 @@ import {
   Scissors,
   Activity,
   BarChart3,
-  Zap
+  Zap,
+  Calendar,
+  FileText,
+  Weight,
+  Download,
+  Printer
 } from "lucide-react";
 
 interface DashboardSummary {
@@ -85,6 +92,63 @@ interface RecentActivity {
   icon: string;
 }
 
+interface CutRollsStats {
+  total_rolls: number;
+  total_weight_kg: number;
+  status_breakdown: Record<string, number>;
+}
+
+interface CutRoll {
+  id: string;
+  frontend_id: string;
+  barcode_id: string;
+  width_inches: number;
+  weight_kg: number;
+  location: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  production_date: string;
+  roll_sequence: number | null;
+  individual_roll_number: number | null;
+  paper_specs: {
+    paper_name: string;
+    gsm: number;
+    bf: number;
+    shade: string;
+    type: string;
+  };
+  parent_118_roll: {
+    id: string;
+    frontend_id: string;
+    barcode_id: string;
+    width_inches: number;
+    weight_kg: number;
+    roll_sequence: number | null;
+  } | null;
+  parent_jumbo_roll: {
+    id: string;
+    frontend_id: string;
+    barcode_id: string;
+    width_inches: number;
+    weight_kg: number;
+  } | null;
+  plan_info: {
+    id: string;
+    frontend_id: string;
+    name: string;
+    status: string;
+    created_at: string;
+  } | null;
+  allocated_order: {
+    id: string;
+    frontend_id: string | null;
+    client_company_name: string | null;
+  } | null;
+  source_type: string | null;
+  is_wastage_roll: boolean;
+}
+
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -94,7 +158,286 @@ export default function DashboardPage() {
   const [currentJumbo, setCurrentJumbo] = useState<any>(null);
   const [jumboHierarchy, setJumboHierarchy] = useState<JumboHierarchy | null>(null);
   const [showJumboDetails, setShowJumboDetails] = useState(false);
+
+  // Cut Rolls Report states
+  const [cutRollsStats, setCutRollsStats] = useState<CutRollsStats | null>(null);
+  const [cutRollsData, setCutRollsData] = useState<CutRoll[]>([]);
+  const [fromDate, setFromDate] = useState<string>("");
+  const [toDate, setToDate] = useState<string>("");
+  const [loadingStats, setLoadingStats] = useState(false);
+
   const router = useRouter();
+
+  // Helper function to get status display info
+  const getStatusDisplayInfo = (status: string) => {
+    const statusLower = status.toLowerCase();
+    switch (statusLower) {
+      case 'available':
+        return {
+          label: 'Stock',
+          icon: <CheckCircle className="w-8 h-8 text-green-600 mb-2" />,
+          colorClass: 'border-green-200 bg-green-50',
+          textClass: 'text-green-700'
+        };
+      case 'cutting':
+        return {
+          label: 'Planned',
+          icon: <Scissors className="w-8 h-8 text-blue-600 mb-2" />,
+          colorClass: 'border-blue-200 bg-blue-50',
+          textClass: 'text-blue-700'
+        };
+      case 'used':
+        return {
+          label: 'Dispatched',
+          icon: <AlertCircle className="w-8 h-8 text-gray-600 mb-2" />,
+          colorClass: 'border-gray-200 bg-gray-50',
+          textClass: 'text-gray-700'
+        };
+      case 'billed':
+        return {
+          label: 'Billed',
+          icon: <CheckCircle className="w-8 h-8 text-purple-600 mb-2" />,
+          colorClass: 'border-purple-200 bg-purple-50',
+          textClass: 'text-purple-700'
+        };
+      case 'removed':
+        return {
+          label: 'Removed',
+          icon: <AlertCircle className="w-8 h-8 text-red-600 mb-2" />,
+          colorClass: 'border-red-200 bg-red-50',
+          textClass: 'text-red-700'
+        };
+      default:
+        return {
+          label: status.charAt(0).toUpperCase() + status.slice(1),
+          icon: <Package className="w-8 h-8 text-gray-600 mb-2" />,
+          colorClass: 'border-gray-200 bg-gray-50',
+          textClass: 'text-gray-700'
+        };
+    }
+  };
+
+  // Fetch cut rolls stats
+  const fetchCutRollsStats = async () => {
+    if (!fromDate && !toDate) {
+      toast.error('Please select at least one date');
+      return;
+    }
+
+    try {
+      setLoadingStats(true);
+
+      const params = new URLSearchParams();
+
+      // Convert IST dates to UTC with 8 AM IST time
+      // IST is UTC+5:30, so 8 AM IST = 2:30 AM UTC
+      if (fromDate) {
+        // From date: 8 AM IST = 2:30 AM UTC on the same day
+        params.append('from_production_date', `${fromDate}T02:30:00Z`);
+      }
+
+      if (toDate) {
+        // To date: 8 AM IST = 2:30 AM UTC on the selected day
+        params.append('to_production_date', `${toDate}T02:30:00Z`);
+      }
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/reports/cut-rolls-with-stats?${params.toString()}`,
+        createRequestOptions('GET')
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setCutRollsStats(data.data.stats);
+        setCutRollsData(data.data.cut_rolls || []);
+        toast.success('Stats loaded successfully');
+      } else {
+        toast.error('Failed to load stats');
+      }
+    } catch (error) {
+      console.error('Error fetching cut rolls stats:', error);
+      toast.error('Failed to load cut rolls stats');
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
+  // Generate PDF document (shared function)
+  const generatePDFDocument = () => {
+    const doc = new jsPDF('landscape');
+
+    // Title
+    const reportTitle = 'Cut Rolls Production Report';
+    doc.setFontSize(18);
+    doc.text(reportTitle, 148, 20, { align: 'center' });
+
+    // Calculate date range
+    let dateRangeY = 30;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+
+    let minProductionDate: Date | null = null;
+    let maxProductionDate: Date | null = null;
+
+    cutRollsData.forEach(roll => {
+      if (roll.updated_at) {
+        const date = new Date(roll.updated_at);
+        if (!minProductionDate || date < minProductionDate) minProductionDate = date;
+        if (!maxProductionDate || date > maxProductionDate) maxProductionDate = date;
+      }
+    });
+
+    if (minProductionDate !== null && maxProductionDate !== null) {
+      dateRangeY += 4;
+      const minDateIST = new Date((minProductionDate as Date).getTime() + (5.5 * 60 * 60 * 1000));
+      const maxDateIST = new Date((maxProductionDate as Date).getTime() + (5.5 * 60 * 60 * 1000));
+      const minDateStr = `${minDateIST.toLocaleDateString('en-GB')} ${minDateIST.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}`;
+      const maxDateStr = `${maxDateIST.toLocaleDateString('en-GB')} ${maxDateIST.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}`;
+      doc.text(`Production Date: ${minDateStr} to ${maxDateStr}`, 190, dateRangeY - 10);
+    }
+
+    dateRangeY += 5;
+
+    // Summary statistics
+    const summaryStartY = dateRangeY + 2;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+
+    const totalRolls = cutRollsData.length;
+    const totalWeight = cutRollsData.reduce((sum, roll) => sum + roll.weight_kg, 0);
+    const stockRolls = cutRollsData.filter(r => r.status.toLowerCase() === 'available').length;
+    const dispatchedRolls = cutRollsData.filter(r => r.status.toLowerCase() === 'used').length;
+    const weightUpdatedRolls = stockRolls + dispatchedRolls;
+    const plannedRolls = cutRollsData.filter(r => r.status.toLowerCase() === 'cutting').length;
+
+    let summaryText = `Total Rolls: ${totalRolls}  |  Total Weight: ${totalWeight.toFixed(2)} kg`;
+
+    if (weightUpdatedRolls > 0) {
+      summaryText += `  |  Weight Updated: ${weightUpdatedRolls}`;
+    }
+    if (stockRolls > 0) {
+      summaryText += `  |  Stock: ${stockRolls}`;
+    }
+    if (plannedRolls > 0) {
+      summaryText += `  |  Planned: ${plannedRolls}`;
+    }
+    if (dispatchedRolls > 0) {
+      summaryText += `  |  Dispatched: ${dispatchedRolls}`;
+    }
+
+    doc.text(summaryText, 14, summaryStartY);
+
+    const finalY = summaryStartY + 5;
+
+    // Sort by production date and then by width
+    const sortedRolls = [...cutRollsData].sort((a, b) => {
+      const dateA = a.updated_at ? new Date(a.updated_at).getTime() : -Infinity;
+      const dateB = b.updated_at ? new Date(b.updated_at).getTime() : -Infinity;
+      if (dateB !== dateA) {
+        return dateA - dateB;
+      }
+      return a.width_inches - b.width_inches;
+    });
+
+    // Prepare table data
+    const tableData = sortedRolls.map(roll => {
+      let productionDateIST = 'N/A';
+      if (roll.updated_at) {
+        const utcDate = new Date(roll.updated_at);
+        const istDate = new Date(utcDate.getTime() + (5.5 * 60 * 60 * 1000));
+        const dateStr = istDate.toLocaleDateString('en-GB');
+        const timeStr = istDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+        productionDateIST = `${dateStr} ${timeStr}`;
+      }
+
+      return [
+        roll.barcode_id || 'N/A',
+        `${roll.paper_specs.gsm}GSM, ${roll.paper_specs.bf}BF, ${roll.paper_specs.shade}`,
+        `${roll.width_inches}"`,
+        roll.weight_kg.toFixed(2),
+        roll.status === 'available' ? 'Stock' :
+        roll.status === 'cutting' ? 'Planned' :
+        roll.status === 'used' ? 'Dispatched' :
+        roll.status === 'billed' ? 'Billed' :
+        'Removed',
+        productionDateIST,
+        roll.parent_118_roll?.barcode_id || 'N/A',
+        roll.parent_jumbo_roll?.barcode_id || 'N/A',
+        roll.plan_info?.frontend_id || 'N/A',
+        roll.allocated_order?.frontend_id || 'N/A',
+        roll.allocated_order?.client_company_name || 'N/A',
+        roll.created_at ? new Date(roll.created_at).toLocaleDateString('en-GB') : 'N/A'
+      ];
+    });
+
+    // Create table
+    autoTable(doc, {
+      head: [['Cut Roll ID', 'Paper', 'Width', 'Weight', 'Status', 'Production (IST)', '118" Roll', 'JR Roll', 'Plan ID', 'Order ID', 'Client', 'Created']],
+      body: tableData,
+      startY: finalY + 5,
+      styles: { fontSize: 7, cellPadding: 2.0 },
+      headStyles: { fillColor: [66, 66, 66], fontStyle: 'bold' },
+      columnStyles: {
+        0: { cellWidth: 20 },
+        1: { cellWidth: 35 },
+        2: { cellWidth: 12 },
+        3: { cellWidth: 14 },
+        4: { cellWidth: 19 },
+        5: { cellWidth: 28 },
+        6: { cellWidth: 19 },
+        7: { cellWidth: 19 },
+        8: { cellWidth: 19 },
+        9: { cellWidth: 19 },
+        10: { cellWidth: 55 },
+        11: { cellWidth: 19 },
+      },
+      margin: { left: 10, right: 10 },
+    });
+
+    // Add footer
+    const footerY = (doc as any).lastAutoTable.finalY + 10;
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Generated on: ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString('en-GB')}`, 14, footerY);
+
+    return doc;
+  };
+
+  // Download PDF function
+  const downloadPDF = () => {
+    if (cutRollsData.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+
+    const doc = generatePDFDocument();
+    const filename = `cut-rolls-production-report-${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(filename);
+    toast.success('PDF downloaded successfully');
+  };
+
+  // Print PDF function
+  const printPDF = () => {
+    if (cutRollsData.length === 0) {
+      toast.error('No data to print');
+      return;
+    }
+
+    const doc = generatePDFDocument();
+
+    // Open PDF in new window for printing
+    const pdfBlob = doc.output('blob');
+    const pdfUrl = URL.createObjectURL(pdfBlob);
+    const printWindow = window.open(pdfUrl, '_blank');
+
+    if (printWindow) {
+      printWindow.onload = () => {
+        printWindow.print();
+      };
+    } else {
+      toast.error('Please allow popups to print the PDF');
+    }
+  };
 
   // Fetch dashboard data
   const fetchDashboardData = async () => {
@@ -118,7 +461,7 @@ export default function DashboardPage() {
 
       // Fetch current jumbo roll
       try {
-        const jumboResponse = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/current-jumbo`, createRequestOptions('GET'));
+        const jumboResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/current-jumbo`, createRequestOptions('GET'));
         if (jumboResponse.ok) {
           const jumboData = await jumboResponse.json();
           if (jumboData.current_jumbo) {
@@ -336,7 +679,7 @@ export default function DashboardPage() {
 
         {/* Stats Cards */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {stats.map((stat, index) => (
+          {stats.slice().map((stat, index) => (
             <Card key={index} className={`hover-lift transition-all duration-300 ${getColorClasses(stat.color)}`}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
@@ -545,6 +888,141 @@ export default function DashboardPage() {
           </Card>
         )}
 
+        {/* Cut Rolls Report Card */}
+        <Card className="border-green-200 bg-gradient-to-r from-green-50 to-emerald-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <FileText className="w-6 h-6 text-green-600" />
+              Cut Rolls Production Report
+            </CardTitle>
+            <CardDescription>View statistics for cut rolls by production date</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Date Filters */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <Calendar className="w-4 h-4" />
+                    From Date
+                  </label>
+                  <input
+                    type="date"
+                    value={fromDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <Calendar className="w-4 h-4" />
+                    To Date
+                  </label>
+                  <input
+                    type="date"
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    onClick={fetchCutRollsStats}
+                    disabled={loadingStats}
+                    className="w-full bg-green-600 hover:bg-green-700"
+                  >
+                    {loadingStats ? (
+                      <>
+                        <Activity className="w-4 h-4 mr-2 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        <BarChart3 className="w-4 h-4 mr-2" />
+                        Apply
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Stats Display */}
+              {cutRollsStats && (
+                <div className="space-y-4">
+                  {/* Export and Print Buttons */}
+                  <div className="flex justify-end gap-3">
+                    <Button
+                      onClick={downloadPDF}
+                      variant="outline"
+                      className="bg-white hover:bg-gray-50"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Download PDF
+                    </Button>
+                    <Button
+                      onClick={printPDF}
+                      variant="outline"
+                      className="bg-white hover:bg-gray-50"
+                    >
+                      <Printer className="w-4 h-4 mr-2" />
+                      Print PDF
+                    </Button>
+                  </div>
+
+                  {/* Stats Cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                    {/* Total Rolls */}
+                    <Card className="border-blue-200 bg-blue-50">
+                      <CardContent className="pt-6">
+                        <div className="flex flex-col items-center text-center">
+                          <Package className="w-8 h-8 text-blue-600 mb-2" />
+                          <p className="text-sm font-medium text-muted-foreground">Total Rolls</p>
+                          <p className="text-3xl font-bold text-blue-700 mt-1">{cutRollsStats.total_rolls.toLocaleString()}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Total Weight */}
+                    <Card className="border-purple-200 bg-purple-50">
+                      <CardContent className="pt-6">
+                        <div className="flex flex-col items-center text-center">
+                          <Weight className="w-8 h-8 text-purple-600 mb-2" />
+                          <p className="text-sm font-medium text-muted-foreground">Total Weight</p>
+                          <p className="text-3xl font-bold text-purple-700 mt-1">{cutRollsStats.total_weight_kg.toLocaleString()} kg</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Dynamic Status Cards */}
+                    {Object.entries(cutRollsStats.status_breakdown).map(([status, count]) => {
+                      const displayInfo = getStatusDisplayInfo(status);
+                      return (
+                        <Card key={status} className={displayInfo.colorClass}>
+                          <CardContent className="pt-6">
+                            <div className="flex flex-col items-center text-center">
+                              {displayInfo.icon}
+                              <p className="text-sm font-medium text-muted-foreground">{displayInfo.label}</p>
+                              <p className={`text-3xl font-bold mt-1 ${displayInfo.textClass}`}>{count}</p>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Empty State */}
+              {!cutRollsStats && (
+                <div className="text-center py-8 border-2 border-dashed border-green-200 rounded-lg bg-white">
+                  <FileText className="w-12 h-12 mx-auto text-green-600 mb-2" />
+                  <p className="text-sm text-muted-foreground">Select dates and click Apply to view statistics</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Main Content Grid */}
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Recent Activity */}
@@ -627,14 +1105,6 @@ export default function DashboardPage() {
               >
                 <Scissors className="w-4 h-4 mr-2" />
                 Production Plans
-              </Button>
-              <Button 
-                className="w-full justify-start" 
-                variant="outline"
-                onClick={() => router.push('/workflow')}
-              >
-                <Factory className="w-4 h-4 mr-2" />
-                Workflow Manager
               </Button>
               <Button 
                 className="w-full justify-start" 

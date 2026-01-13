@@ -934,21 +934,21 @@ export default function PlansPage() {
 
     // Helper function to transform jumbo roll ID
     const transformJumboDisplayId = (barcodeId: string, index: number): string => {
-      // Check if barcode matches JR_##### format
-      if (barcodeId && /^JR_\d+$/i.test(barcodeId)) {
-        return barcodeId; // Return as is
+      // Check if barcode starts with JR_ (handles formats like JR_00045, JR_00223-26, etc.)
+      if (barcodeId && barcodeId.startsWith('JR_')) {
+        return barcodeId; // Return actual barcode as-is
       }
-      // Generate sequential ID
+      // Generate sequential ID for old/invalid formats
       return `JR_0000${index + 1}`;
     };
 
     // Helper function to transform SET roll ID
     const transformSetDisplayId = (barcodeId: string, sequenceNumber: number): string => {
-      // Check if barcode matches SET_##### format
-      if (barcodeId && /^SET_\d+$/i.test(barcodeId)) {
-        return barcodeId; // Return as is
+      // Check if barcode starts with SET_ (handles formats like SET_00045, SET_00223-26, etc.)
+      if (barcodeId && barcodeId.startsWith('SET_')) {
+        return barcodeId; // Return actual barcode as-is
       }
-      // Generate sequential ID
+      // Generate sequential ID for old/invalid formats
       return `SET #${sequenceNumber}`;
     };
 
@@ -1011,17 +1011,14 @@ export default function PlansPage() {
         doc.text(`Production: ${productionInfo.cutCount} cuts, ${productionInfo.totalWeight.toFixed(1)}kg`, pageWidth - 25, yPosition + 6, { align: 'right' });
         yPosition += 25;
 
-        const rollsByNumber = sortedJumboRolls.reduce((rollGroups: any, roll: CutRollItem) => {
-          const rollNum = roll.individual_roll_number || "No Roll #";
-          if (!rollGroups[rollNum]) {
-            rollGroups[rollNum] = {
-              rolls: [],
-              setBarcodeId: roll.parent_118_roll_barcode || null
-            };
+        const rollsBySet = sortedJumboRolls.reduce((rollGroups: any, roll: CutRollItem) => {
+          const setBarcode = roll.parent_118_roll_barcode || "Unknown SET";
+          if (!rollGroups[setBarcode]) {
+            rollGroups[setBarcode] = [];
           }
-          rollGroups[rollNum].rolls.push(roll);
+          rollGroups[setBarcode].push(roll);
           return rollGroups;
-        }, {} as Record<string, { rolls: CutRollItem[]; setBarcodeId: string | null }>);
+        }, {} as Record<string, any[]>);
 
         // Helper function to visualize a group of rolls
         const visualizeRollGroup = (doc: any, rolls: any[], pageWidth: number, startY: number) => {
@@ -1082,50 +1079,25 @@ export default function PlansPage() {
               doc.setTextColor(0, 0, 0);
               doc.setFontSize(6);
               const textX = currentX + sectionWidth/2;
-              
-              // Get client name from plan's cut_pattern by matching production data
-              let clientName = '';
-              if (plan?.cut_pattern && Array.isArray(plan.cut_pattern)) {
-                const matchingCutPattern = plan.cut_pattern.find((cutItem: any) => 
-                  cutItem.width === roll.width_inches &&
-                  cutItem.individual_roll_number === roll.individual_roll_number &&
-                  cutItem.gsm === (roll.paper_specs?.gsm || roll.gsm) &&
-                  cutItem.bf === (roll.paper_specs?.bf || roll.bf) &&
-                  cutItem.shade === (roll.paper_specs?.shade || roll.shade)
-                );
-                
-                clientName = matchingCutPattern?.company_name ? matchingCutPattern.company_name.substring(0, 8) : '';
-              } else if (typeof plan?.cut_pattern === 'string') {
-                try {
-                  const cutPatternArray = JSON.parse(plan.cut_pattern);
-                  const matchingCutPattern = cutPatternArray.find((cutItem: any) => 
-                    cutItem.width === roll.width_inches &&
-                    cutItem.individual_roll_number === roll.individual_roll_number &&
-                    cutItem.gsm === (roll.paper_specs?.gsm || roll.gsm) &&
-                    cutItem.bf === (roll.paper_specs?.bf || roll.bf) &&
-                    cutItem.shade === (roll.paper_specs?.shade || roll.shade)
-                  );
-                  
-                  clientName = matchingCutPattern?.company_name ? matchingCutPattern.company_name.substring(0, 8) : '';
-                } catch (e) {
-                  console.error('Error parsing cut_pattern:', e);
-                }
-              }
-              
-              // Display client name and width
-              if (clientName && sectionWidth > 25) {
+
+              // Get client name directly from roll data (already available in production hierarchy)
+              const clientName = roll.client_name ? roll.client_name.substring(0, 8) : '';
+
+              // Always display barcode if section is wide enough
+              if (sectionWidth > 25) {
+                // Three-line layout: client name, width, and barcode
                 const topTextY = localY + rectHeight/2 - 2;
                 const bottomTextY = localY + rectHeight/2 + 4;
-                doc.text(clientName, textX, topTextY, { align: 'center' });
+
+                if (clientName) {
+                  doc.text(clientName, textX, topTextY, { align: 'center' });
+                }
                 doc.text(`${roll.width_inches}"`, textX, bottomTextY, { align: 'center' });
                 doc.text(`${roll.barcode_id}`, textX, localY + rectHeight - 2, { align: 'center' });
               } else {
+                // Narrow section: show width only
                 const textY = localY + rectHeight/2 + 1;
-                if (clientName) {
-                  doc.text(clientName, textX, textY, { align: 'center' });
-                } else {
-                  doc.text(`${roll.width_inches}"`, textX, textY, { align: 'center' });
-                }
+                doc.text(`${roll.width_inches}"`, textX, textY, { align: 'center' });
               }
             }
 
@@ -1169,13 +1141,9 @@ export default function PlansPage() {
         };
 
         // Process roll groups in order of SET barcode ID
-        const sortedRollEntries = Object.entries(rollsByNumber).sort(([aKey, aData], [bKey, bData]) => {
-          if (aKey === "No Roll #") return 1;
-          if (bKey === "No Roll #") return -1;
-
-          // Get SET barcode IDs from the group data
-          const aSetBarcode = (aData as any).setBarcodeId || '';
-          const bSetBarcode = (bData as any).setBarcodeId || '';
+        const sortedRollEntries = Object.entries(rollsBySet).sort(([aKey], [bKey]) => {
+          if (aKey === "Unknown SET") return 1;
+          if (bKey === "Unknown SET") return -1;
 
           // Extract numeric part from SET barcode (SET_00045 -> 45)
           const getSetNumber = (barcode: string): number => {
@@ -1184,28 +1152,22 @@ export default function PlansPage() {
             return match ? parseInt(match[1], 10) : 999999;
           };
 
-          const aSetNum = getSetNumber(aSetBarcode);
-          const bSetNum = getSetNumber(bSetBarcode);
+          const aSetNum = getSetNumber(aKey);
+          const bSetNum = getSetNumber(bKey);
 
-          if (aSetNum !== bSetNum) return aSetNum - bSetNum;
-
-          // Fallback to comparing roll numbers if SET numbers are equal
-          return parseInt(aKey) - parseInt(bKey);
+          return aSetNum - bSetNum;
         });
         let index_set = 1;
-        sortedRollEntries.forEach(([rollNumber, groupData]:[any, any]) => {
+        sortedRollEntries.forEach(([setBarcode, rollsInSet]:[any, any]) => {
           checkPageBreak(80);
-
-          const rollsInNumber = groupData.rolls;
-          const setBarcodeId = groupData.setBarcodeId;
 
           doc.setFontSize(14);
           doc.setFont('helvetica', 'bold');
           doc.setTextColor(60, 60, 60);
           // Show SET barcode ID - use original format if matches SET_##### pattern, else generate sequential ID
-          const rollTitle = rollNumber === "No Roll #"
+          const rollTitle = setBarcode === "Unknown SET"
             ? "Unassigned Roll"
-            : transformSetDisplayId(setBarcodeId || '', index_set);
+            : transformSetDisplayId(setBarcode || '', index_set);
           index_set = index_set + 1;
           doc.text(rollTitle, 30, yPosition);
           yPosition += 12;
@@ -1219,7 +1181,7 @@ export default function PlansPage() {
           let currentWidth = 0;
 
           // Process each roll and create new segments when width exceeds 118"
-          rollsInNumber.forEach((roll: CutRollItem) => {
+          rollsInSet.forEach((roll: CutRollItem) => {
             const rollWidth = roll.width_inches || 0;
             
             // If this single roll exceeds max width, place it in its own segment

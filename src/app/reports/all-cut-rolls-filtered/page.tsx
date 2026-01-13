@@ -943,7 +943,13 @@ export default function AllCutRollsFilteredReportPage() {
     enableColumnDragging: true,
     initialState: {
       pagination: { pageSize: 100, pageIndex: 0 },
-      density: 'compact'
+      density: 'compact',
+      sorting: [
+        {
+          id: 'updated_at',
+          desc: false // ascending order
+        }
+      ]
     },
     renderTopToolbarCustomActions: () => (
       <div className="flex gap-2">
@@ -1021,9 +1027,6 @@ export default function AllCutRollsFilteredReportPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Filtered Cut Rolls Report</h1>
-            <p className="text-muted-foreground">
-              Apply filters to load data. Client/Order/Plan dropdowns cascade - selecting a client shows only that client's orders, selecting an order shows only that order's plans
-            </p>
           </div>
           <div className="flex items-center gap-2">
             <Package className="h-8 w-8 text-primary" />
@@ -1107,11 +1110,8 @@ export default function AllCutRollsFilteredReportPage() {
               <div>
                 <CardTitle className="flex items-center gap-2">
                   <Filter className="h-5 w-5" />
-                  Apply Filters to Search
+                  Search
                 </CardTitle>
-                <CardDescription>
-                  Apply filters to fetch data. Client/Order/Plan dropdowns cascade automatically - each selection narrows down the next dropdown's options based on available data.
-                </CardDescription>
               </div>
               <div className="flex gap-2">
                 <Button onClick={clearFilters} variant="outline" size="sm">
@@ -1203,7 +1203,8 @@ export default function AllCutRollsFilteredReportPage() {
                       { value: 'available', label: 'Stock' },
                       { value: 'cutting', label: 'Planned' },
                       { value: 'used', label: 'Dispatched' },
-                      { value: 'pending', label: 'Pending' }
+                      { value: 'pending', label: 'Pending' },
+                      {value: 'billed', label: 'Billed'}
                     ]
                       .filter((item) => item.label.toLowerCase().includes(statusSearch.toLowerCase()))
                       .sort((a, b) => a.label.localeCompare(b.label))
