@@ -679,7 +679,7 @@ export default function DashboardPage() {
 
         {/* Stats Cards */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {stats.slice().map((stat, index) => (
+          {stats.slice(0,3).map((stat, index) => (
             <Card key={index} className={`hover-lift transition-all duration-300 ${getColorClasses(stat.color)}`}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>

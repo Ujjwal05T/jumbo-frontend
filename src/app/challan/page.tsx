@@ -75,6 +75,8 @@ import {
   Receipt,
   Banknote,
   ScrollText,
+  Edit,
+  Trash2,
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/api-config";
 import { generatePackingSlipPDF, convertDispatchToPackingSlip } from "@/lib/packing-slip-pdf";
@@ -224,11 +226,6 @@ export default function ChallanPage() {
   const [billDispatches, setBillDispatches] = useState<DispatchRecord[]>([]);
   const [billDispatchesLoading, setBillDispatchesLoading] = useState(false);
   
-  // Bill amount modal state
-  const [billAmountModalOpen, setBillAmountModalOpen] = useState(false);
-  const [selectedDispatchForBill, setSelectedDispatchForBill] = useState<DispatchRecord | null>(null);
-  const [billInvoiceAmount, setBillInvoiceAmount] = useState<string>("");
-
   // Generate modal state
   const [generateModalOpen, setGenerateModalOpen] = useState(false);
   const [selectedDispatchForGenerate, setSelectedDispatchForGenerate] = useState<DispatchRecord | null>(null);
@@ -239,6 +236,22 @@ export default function ChallanPage() {
   const [generateEbayNo, setGenerateEbayNo] = useState<string>("");
   const [generateDispatchItems, setGenerateDispatchItems] = useState<any[]>([]);
   const [generateItemsLoading, setGenerateItemsLoading] = useState(false);
+
+  // Edit modal state
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editPaymentSlipId, setEditPaymentSlipId] = useState<string>("");
+  const [editBillNo, setEditBillNo] = useState<string>("");
+  const [editDate, setEditDate] = useState<string>("");
+  const [editEbayNo, setEditEbayNo] = useState<string>("");
+  const [editTotalAmount, setEditTotalAmount] = useState<number>(0);
+  const [editItems, setEditItems] = useState<any[]>([]);
+  const [editItemsLoading, setEditItemsLoading] = useState(false);
+
+  // Delete confirmation state
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletePaymentSlipId, setDeletePaymentSlipId] = useState<string>("");
+  const [deleteDispatchNumber, setDeleteDispatchNumber] = useState<string>("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const loadDispatches = async () => {
     try {
@@ -309,24 +322,6 @@ export default function ChallanPage() {
     }
   };
 
-  const loadDispatchDetails = async (dispatchId: string) => {
-    try {
-      setDetailsLoading(true);
-      const response = await fetch(`${API_BASE_URL}/dispatch/${dispatchId}/details`, {
-        headers: { 'ngrok-skip-browser-warning': 'true' }
-      });
-
-      if (!response.ok) throw new Error('Failed to load dispatch details');
-      const data = await response.json();
-      setSelectedDispatch(data);
-      setDetailsModalOpen(true);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load dispatch details';
-      toast.error(errorMessage);
-    } finally {
-      setDetailsLoading(false);
-    }
-  };
 
   const loadDispatchItemsForGenerate = async (dispatchId: string) => {
     try {
@@ -369,27 +364,6 @@ export default function ChallanPage() {
     }
   };
 
-  const updateDispatchStatus = async (dispatchId: string, newStatus: string) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/dispatch/${dispatchId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true'
-        },
-        body: JSON.stringify({ status: newStatus })
-      });
-
-      if (!response.ok) throw new Error('Failed to update status');
-      const data = await response.json();
-      
-      toast.success(data.message);
-      await loadDispatches();
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update status';
-      toast.error(errorMessage);
-    }
-  };
 
   const printPDF = async (dispatchId: string, dispatchNumber: string) => {
     try {
@@ -541,26 +515,131 @@ export default function ChallanPage() {
     }
   };
 
-  // Helper functions for order item calculations (similar to Order Master page)
-  const getTotalQuantity = (order: any) => {
-    return order.order_items?.reduce((sum: number, item: any) => sum + item.quantity_rolls, 0) || 0;
+  // Load payment slip details for editing
+  const loadPaymentSlipForEdit = async (paymentSlipId: string) => {
+    try {
+      setEditItemsLoading(true);
+      const response = await fetch(`${API_BASE_URL}/payment-slip/${paymentSlipId}`, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      });
+
+      if (!response.ok) throw new Error('Failed to load payment slip details');
+      const data = await response.json();
+
+      setEditPaymentSlipId(paymentSlipId);
+      setEditBillNo(data.bill_no || "");
+      setEditDate(data.slip_date || "");
+      setEditEbayNo(data.ebay_no || "");
+      setEditTotalAmount(data.total_amount || 0);
+      setEditItems(data.items || []);
+      setEditModalOpen(true);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load payment slip';
+      toast.error(errorMessage);
+    } finally {
+      setEditItemsLoading(false);
+    }
   };
 
-  const getFulfilledQuantity = (order: any) => {
-    return order.order_items?.reduce((sum: number, item: any) => sum + item.quantity_fulfilled, 0) || 0;
+  // Handle edit payment slip
+  const handleEditPaymentSlip = async () => {
+    try {
+      if (!editPaymentSlipId) {
+        toast.error("No payment slip selected");
+        return;
+      }
+
+      // Calculate total amount from items
+      const totalAmount = editItems.reduce((sum, item) => {
+        return sum + (item.rate * item.total_weight_kg);
+      }, 0);
+
+      // Prepare items data
+      const itemsData = editItems.map(item => ({
+        width_inches: item.width_inches,
+        paper_spec: item.paper_spec,
+        quantity: item.quantity,
+        total_weight_kg: item.total_weight_kg,
+        rate: item.rate,
+        amount: item.rate * item.total_weight_kg
+      }));
+
+      const response = await fetch(`${API_BASE_URL}/payment-slip/edit/${editPaymentSlipId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
+        body: JSON.stringify({
+          slip_date: editDate || null,
+          bill_no: editBillNo || null,
+          ebay_no: editEbayNo || null,
+          total_amount: totalAmount,
+          items: itemsData
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to update payment slip');
+      }
+
+      toast.success('Payment slip updated successfully');
+
+      // Close modal and reset state
+      setEditModalOpen(false);
+      setEditPaymentSlipId("");
+      setEditBillNo("");
+      setEditDate("");
+      setEditEbayNo("");
+      setEditTotalAmount(0);
+      setEditItems([]);
+
+      // Reload dispatches
+      loadDispatches();
+    } catch (error) {
+      console.error("Error editing payment slip:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to update payment slip");
+    }
   };
 
-  const getOrderWidths = (order: any) => {
-    return order.order_items?.map((item: any) => `${item.width_inches}"`).join(", ") || "N/A";
-  };
+  // Handle delete payment slip
+  const handleDeletePaymentSlip = async () => {
+    try {
+      if (!deletePaymentSlipId) {
+        toast.error("No payment slip selected");
+        return;
+      }
 
-  const getOrderPapers = (order: any) => {
-    const papers = order.order_items?.map((item: any) => item.paper?.name).filter(Boolean) || [];
-    return papers.length > 0 ? papers.join(", ") : "N/A";
-  };
+      setDeleteLoading(true);
 
-  const getTotalAmount = (order: any) => {
-    return order.order_items?.reduce((sum: number, item: any) => sum + (item.amount || 0), 0) || 0;
+      const response = await fetch(`${API_BASE_URL}/payment-slip/delete/${deletePaymentSlipId}`, {
+        method: 'DELETE',
+        headers: {
+          'ngrok-skip-browser-warning': 'true'
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to delete payment slip');
+      }
+
+      toast.success('Payment slip deleted successfully');
+
+      // Close modal and reset state
+      setDeleteConfirmOpen(false);
+      setDeletePaymentSlipId("");
+      setDeleteDispatchNumber("");
+
+      // Reload dispatches
+      loadDispatches();
+    } catch (error) {
+      console.error("Error deleting payment slip:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to delete payment slip");
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   // PDF generation handlers
@@ -713,76 +792,6 @@ export default function ChallanPage() {
       console.error("Error generating payment slip:", error);
       toast.error(error instanceof Error ? error.message : "Failed to generate payment slip");
     }
-  };
-
-  const handleGenerateCashChallan = async (dispatch: DispatchRecord) => {
-    try {
-      // Fetch full dispatch details with items
-      const response = await fetch(`${API_BASE_URL}/dispatch/${dispatch.id}/details`, {
-        headers: { 'ngrok-skip-browser-warning': 'true' }
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch dispatch details');
-      
-      const dispatchDetails = await response.json();
-      
-      // Convert dispatch to challan data format
-      const challanData = convertDispatchToChallanData(dispatchDetails, 'cash');
-      
-      // Generate PDF
-      generateCashChallanPDF(challanData);
-      
-      toast.success("Cash challan PDF generated successfully");
-    } catch (error) {
-      console.error("Error generating cash challan PDF:", error);
-      toast.error("Failed to generate cash challan PDF");
-    }
-  };
-
-  const handleGenerateBillInvoice = async () => {
-    try {
-      if (!selectedDispatchForBill) {
-        toast.error("No dispatch selected");
-        return;
-      }
-
-      if (!billInvoiceAmount || parseFloat(billInvoiceAmount) <= 0) {
-        toast.error("Please enter a valid invoice amount");
-        return;
-      }
-
-      // Fetch full dispatch details with items
-      const response = await fetch(`${API_BASE_URL}/dispatch/${selectedDispatchForBill.id}/details`, {
-        headers: { 'ngrok-skip-browser-warning': 'true' }
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch dispatch details');
-      
-      const dispatchDetails = await response.json();
-      const targetFinalAmount = parseFloat(billInvoiceAmount);
-      
-      // Convert dispatch to challan data format with custom amount
-      const challanData = convertDispatchToChallanData(dispatchDetails, 'bill', targetFinalAmount);
-      
-      // Generate PDF
-      generateBillInvoicePDF(challanData);
-      
-      toast.success("GST Tax Invoice PDF generated successfully");
-      
-      // Close modal and reset state
-      setBillAmountModalOpen(false);
-      setSelectedDispatchForBill(null);
-      setBillInvoiceAmount("");
-    } catch (error) {
-      console.error("Error generating tax invoice PDF:", error);
-      toast.error("Failed to generate tax invoice PDF");
-    }
-  };
-
-  const handleOpenBillAmountModal = (dispatch: DispatchRecord) => {
-    setSelectedDispatchForBill(dispatch);
-    setBillInvoiceAmount("");
-    setBillAmountModalOpen(true);
   };
 
   const renderPackingSlipTab = () => (
@@ -1074,28 +1083,75 @@ export default function ChallanPage() {
                         {getStatusBadge(dispatch.status)}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          size="sm"
-                          variant={dispatch.has_payment_slip ? "outline" : "default"}
-                          disabled={dispatch.has_payment_slip}
-                          onClick={() => {
-                            setSelectedDispatchForGenerate(dispatch);
-                            setGenerateModalOpen(true);
-                            loadDispatchItemsForGenerate(dispatch.id);
-                          }}
-                        >
-                          {dispatch.has_payment_slip ? (
-                            <>
-                              <CheckCircle2 className="w-4 h-4 mr-1" />
+                        {dispatch.has_payment_slip ? (
+                          <div className="flex items-center gap-2">
+                            <Badge className="bg-green-100 text-green-800">
+                              <CheckCircle2 className="w-3 h-3 mr-1" />
                               Generated
-                            </>
-                          ) : (
-                            <>
-                              <FileText className="w-4 h-4 mr-1" />
-                              Generate
-                            </>
-                          )}
-                        </Button>
+                            </Badge>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={async () => {
+                                    // Fetch payment slip ID from dispatch
+                                    try {
+                                      const response = await fetch(`${API_BASE_URL}/dispatch/${dispatch.id}/payment-slip-id`, {
+                                        headers: { 'ngrok-skip-browser-warning': 'true' }
+                                      });
+                                      if (!response.ok) throw new Error('Failed to fetch payment slip ID');
+                                      const data = await response.json();
+                                      loadPaymentSlipForEdit(data.payment_slip_id);
+                                    } catch (err) {
+                                      toast.error('Failed to load payment slip');
+                                    }
+                                  }}
+                                >
+                                  <Edit className="w-4 h-4 mr-2" />
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="text-red-600"
+                                  onClick={async () => {
+                                    // Fetch payment slip ID from dispatch
+                                    try {
+                                      const response = await fetch(`${API_BASE_URL}/dispatch/${dispatch.id}/payment-slip-id`, {
+                                        headers: { 'ngrok-skip-browser-warning': 'true' }
+                                      });
+                                      if (!response.ok) throw new Error('Failed to fetch payment slip ID');
+                                      const data = await response.json();
+                                      setDeletePaymentSlipId(data.payment_slip_id);
+                                      setDeleteDispatchNumber(dispatch.dispatch_number);
+                                      setDeleteConfirmOpen(true);
+                                    } catch (err) {
+                                      toast.error('Failed to load payment slip');
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={() => {
+                              setSelectedDispatchForGenerate(dispatch);
+                              setGenerateModalOpen(true);
+                              loadDispatchItemsForGenerate(dispatch.id);
+                            }}
+                          >
+                            <FileText className="w-4 h-4 mr-1" />
+                            Generate
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
@@ -1146,404 +1202,6 @@ export default function ChallanPage() {
           )}
         </CardContent>
       </Card>
-    </div>
-  );
-
-  const renderCashTab = () => (
-    <div className="space-y-6">
-      {/* Client Selection */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Banknote className="w-5 h-5" />
-            Cash Challan Generation
-          </CardTitle>
-          <CardDescription>
-            Select client to view their orders for cash challan generation
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {/* Client Selection */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Select Client</label>
-              <Select value={cashSelectedClient} onValueChange={setCashSelectedClient}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a client" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Select Client</SelectItem>
-                  {clients.sort((a, b) => a.company_name.localeCompare(b.company_name)).map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.company_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Dispatches Table */}
-      {cashSelectedClient !== 'all' && (
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <div>
-                <CardTitle>Cash Dispatches for Selected Client</CardTitle>
-                <CardDescription>
-                  Generate cash challan PDF for individual dispatches
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {cashDispatchesLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="mr-2 h-6 w-6 animate-spin" />
-                Loading dispatches...
-              </div>
-            ) : cashDispatches.length > 0 ? (
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Dispatch #</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Client</TableHead>
-                      <TableHead>Vehicle & Driver</TableHead>
-                      <TableHead>Items</TableHead>
-                      <TableHead>Weight</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {cashDispatches.map((dispatch) => (
-                      <TableRow key={dispatch.id}>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <div className="font-medium">{dispatch.dispatch_number}</div>
-                            {dispatch.reference_number && (
-                              <div className="text-xs text-muted-foreground">
-                                Ref: {dispatch.reference_number}
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <div className="font-medium">
-                              {new Date(dispatch.dispatch_date).toLocaleDateString('en-GB')}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {new Date(dispatch.dispatch_date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true })}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <div className="font-medium">{dispatch.client.company_name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {dispatch.client.contact_person}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <div className="font-medium flex items-center gap-1">
-                              <Truck className="w-3 h-3" />
-                              {dispatch.vehicle_number}
-                            </div>
-                            <div className="text-xs text-muted-foreground flex items-center gap-1">
-                              <User className="w-3 h-3" />
-                              {dispatch.driver_name}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-center">
-                            <div className="font-medium">{dispatch.total_items}</div>
-                            <div className="text-xs text-muted-foreground">items</div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-center">
-                            <div className="font-medium">{dispatch.total_weight_kg.toFixed(1)}kg</div>
-                            <div className="text-xs text-muted-foreground">total</div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {getStatusBadge(dispatch.status)}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            size="sm"
-                            className="bg-green-600 hover:bg-green-700"
-                            onClick={() => handleGenerateCashChallan(dispatch)}
-                          >
-                            <FileText className="w-4 h-4 mr-1" />
-                            Generate
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <Package className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium text-muted-foreground mb-2">
-                  No Cash Dispatches Found
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  This client doesn't have any cash dispatches yet.
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-
-      {/* Instructions */}
-      {cashSelectedClient === 'all' && (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center py-8">
-              <Banknote className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium text-muted-foreground mb-2">
-                Select Client
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Choose a client to view their cash dispatches and generate cash challans
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  );
-
-  const renderBillTab = () => (
-    <div className="space-y-6">
-      {/* Client Selection */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ScrollText className="w-5 h-5" />
-            Bill/Invoice Generation
-          </CardTitle>
-          <CardDescription>
-            Select client to view their orders for bill/invoice generation
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {/* Client Selection */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Select Client</label>
-              <Select value={billSelectedClient} onValueChange={setBillSelectedClient}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a client" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Select Client</SelectItem>
-                  {clients.sort((a, b) => a.company_name.localeCompare(b.company_name)).map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.company_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Dispatches Table */}
-      {billSelectedClient !== 'all' && (
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <div>
-                <CardTitle>Bill Dispatches for Selected Client</CardTitle>
-                <CardDescription>
-                  Generate bill/invoice PDF for individual dispatches
-                </CardDescription>
-              </div>
-              
-            </div>
-          </CardHeader>
-          <CardContent>
-            {billDispatchesLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="mr-2 h-6 w-6 animate-spin" />
-                Loading dispatches...
-              </div>
-            ) : billDispatches.length > 0 ? (
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Dispatch #</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Client</TableHead>
-                      <TableHead>Vehicle & Driver</TableHead>
-                      <TableHead>Items</TableHead>
-                      <TableHead>Weight</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {billDispatches.map((dispatch) => (
-                      <TableRow key={dispatch.id}>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <div className="font-medium">{dispatch.dispatch_number}</div>
-                            {dispatch.reference_number && (
-                              <div className="text-xs text-muted-foreground">
-                                Ref: {dispatch.reference_number}
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <div className="font-medium">
-                              {new Date(dispatch.dispatch_date).toLocaleDateString('en-GB')}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {new Date(dispatch.dispatch_date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true })}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <div className="font-medium">{dispatch.client.company_name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {dispatch.client.contact_person}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <div className="font-medium flex items-center gap-1">
-                              <Truck className="w-3 h-3" />
-                              {dispatch.vehicle_number}
-                            </div>
-                            <div className="text-xs text-muted-foreground flex items-center gap-1">
-                              <User className="w-3 h-3" />
-                              {dispatch.driver_name}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-center">
-                            <div className="font-medium">{dispatch.total_items}</div>
-                            <div className="text-xs text-muted-foreground">items</div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-center">
-                            <div className="font-medium">{dispatch.total_weight_kg.toFixed(1)}kg</div>
-                            <div className="text-xs text-muted-foreground">total</div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {getStatusBadge(dispatch.status)}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            size="sm"
-                            className="bg-blue-600 hover:bg-blue-700"
-                            onClick={() => handleOpenBillAmountModal(dispatch)}
-                          >
-                            <FileText className="w-4 h-4 mr-1" />
-                            Generate
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <Package className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium text-muted-foreground mb-2">
-                  No Bill Dispatches Found
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  This client doesn't have any bill dispatches yet.
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-
-      {/* Instructions */}
-      {billSelectedClient === 'all' && (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center py-8">
-              <ScrollText className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium text-muted-foreground mb-2">
-                Select Client
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Choose a client to view their bill dispatches and generate bills/invoices
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Amount Input Modal */}
-      <Dialog open={billAmountModalOpen} onOpenChange={setBillAmountModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Enter Invoice Amount</DialogTitle>
-            <DialogDescription>
-              Enter the total amount for the invoice (including GST)
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Enter amount to generate Invoice</label>
-              <Input
-                type="number"
-                placeholder="Enter invoice amount (e.g., 50000)"
-                value={billInvoiceAmount}
-                onChange={(e) => setBillInvoiceAmount(e.target.value)}
-                className="mt-2"
-                min="0"
-                step="0.01"
-              />
-            </div>
-            {selectedDispatchForBill && (
-              <div className="text-sm text-muted-foreground">
-                <div>Dispatch: {selectedDispatchForBill.dispatch_number}</div>
-                <div>Client: {selectedDispatchForBill.client.company_name}</div>
-                <div>Items: {selectedDispatchForBill.total_items} | Weight: {selectedDispatchForBill.total_weight_kg.toFixed(1)}kg</div>
-              </div>
-            )}
-            <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setBillAmountModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleGenerateBillInvoice}>
-                Generate Invoice
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 
@@ -1948,6 +1606,224 @@ export default function ChallanPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Payment Slip Modal */}
+      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="w-5 h-5" />
+              Edit Payment Slip
+            </DialogTitle>
+            <DialogDescription>
+              Update payment slip details and item rates
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            {/* Form Fields */}
+            <div className="space-y-4">
+              {/* Date, Bill No, eBay No */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Date</label>
+                  <Input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Bill No.</label>
+                  <Input
+                    type="text"
+                    placeholder="Enter bill number"
+                    value={editBillNo}
+                    onChange={(e) => setEditBillNo(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">eBay No.</label>
+                  <Input
+                    type="text"
+                    placeholder="Enter eBay number"
+                    value={editEbayNo}
+                    onChange={(e) => setEditEbayNo(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Items Table */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Items</label>
+              {editItemsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Loading items...
+                </div>
+              ) : (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>S.No</TableHead>
+                        <TableHead>Width</TableHead>
+                        <TableHead>Paper Spec</TableHead>
+                        <TableHead className="text-right">Quantity</TableHead>
+                        <TableHead className="text-right">Total Weight</TableHead>
+                        <TableHead className="text-right">Rate</TableHead>
+                        <TableHead className="text-right">Amount</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {editItems.length > 0 ? (
+                        editItems.map((item, index) => {
+                          const amount = (item.rate * item.total_weight_kg).toFixed(2);
+                          return (
+                            <TableRow key={index}>
+                              <TableCell>{index + 1}</TableCell>
+                              <TableCell>{item.width_inches}"</TableCell>
+                              <TableCell>{item.paper_spec}</TableCell>
+                              <TableCell className="text-right font-medium">{item.quantity}</TableCell>
+                              <TableCell className="text-right">{item.total_weight_kg.toFixed(2)}kg</TableCell>
+                              <TableCell className="text-right">
+                                <Input
+                                  type="number"
+                                  value={item.rate}
+                                  onChange={(e) => {
+                                    const newRate = parseFloat(e.target.value) || 0;
+                                    const updatedItems = [...editItems];
+                                    updatedItems[index].rate = newRate;
+                                    setEditItems(updatedItems);
+                                  }}
+                                  className="w-20 ml-auto text-right"
+                                  min="0"
+                                  step="1"
+                                />
+                              </TableCell>
+                              <TableCell className="text-right font-semibold">₹{amount}</TableCell>
+                            </TableRow>
+                          );
+                        })
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                            No items found
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </div>
+
+            {/* Total Amount Display */}
+            {editItems.length > 0 && (
+              <div className="flex justify-end">
+                <div className="text-right">
+                  <div className="text-sm text-muted-foreground">Total Amount</div>
+                  <div className="text-2xl font-bold">
+                    ₹{editItems.reduce((sum, item) => sum + (item.rate * item.total_weight_kg), 0).toFixed(2)}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex justify-end space-x-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setEditModalOpen(false);
+                  setEditPaymentSlipId("");
+                  setEditBillNo("");
+                  setEditDate("");
+                  setEditEbayNo("");
+                  setEditTotalAmount(0);
+                  setEditItems([]);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleEditPaymentSlip}>
+                <CheckCircle className="w-4 h-4 mr-2" />
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="w-5 h-5" />
+              Delete Payment Slip
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this payment slip?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="rounded-md bg-yellow-50 border border-yellow-200 p-4">
+              <div className="flex items-start gap-2">
+                <div className="text-yellow-600 mt-0.5">⚠️</div>
+                <div className="text-sm text-yellow-800">
+                  <p className="font-medium mb-1">This action will:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>Delete the payment slip permanently</li>
+                    <li>Revert inventory and dispatch items to previous status</li>
+                    <li>Change dispatch status back to "dispatched"</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {deleteDispatchNumber && (
+              <div className="text-sm">
+                <span className="text-muted-foreground">Dispatch Number: </span>
+                <span className="font-medium">{deleteDispatchNumber}</span>
+              </div>
+            )}
+
+            <div className="flex justify-end space-x-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDeleteConfirmOpen(false);
+                  setDeletePaymentSlipId("");
+                  setDeleteDispatchNumber("");
+                }}
+                disabled={deleteLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeletePaymentSlip}
+                disabled={deleteLoading}
+              >
+                {deleteLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </DashboardLayout>

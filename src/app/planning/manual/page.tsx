@@ -551,12 +551,12 @@ export default function ManualPlanningPage() {
   };
 
   return (
-    <div className="space-y-6 m-8">
+    <div className="space-y-6 m-4 md:m-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Manual Planning</h1>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => router.push("/planning")}>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold">Manual Planning</h1>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button variant="outline" onClick={() => router.push("/planning")} className="w-full sm:w-auto">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Planning
           </Button>
@@ -564,6 +564,7 @@ export default function ManualPlanningPage() {
             <Button
               onClick={() => setShowCreatePlanConfirmation(true)}
               disabled={creatingPlan || paperSpecs.length === 0 || cutRolls.length === 0}
+              className="w-full sm:w-auto"
               >
               {creatingPlan ? "Creating..." : "Create Plan"}
             </Button>
@@ -583,7 +584,7 @@ export default function ManualPlanningPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
             <div className="flex flex-col space-y-2">
               <label htmlFor="wastage-input" className="text-sm font-medium">
                 {isEditingWastage ? "Enter Wastage (inches)" : "Wastage"}
@@ -603,17 +604,17 @@ export default function ManualPlanningPage() {
                       }
                     }}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                   
+
                   />
                   <Button
                     onClick={handleApplyWastage}
-                    className="bg-green-600 hover:bg-green-700">
+                    className="bg-green-600 hover:bg-green-700 shrink-0">
                     Apply
                   </Button>
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
-                  <div className="text-2xl font-bold">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-xl md:text-2xl font-bold">
                     {appliedWastage} inches
                   </div>
                   <Button
@@ -632,7 +633,7 @@ export default function ManualPlanningPage() {
 
             <div className="flex flex-col space-y-2">
               <label className="text-sm font-medium">Calculation</label>
-              <div className="text-lg font-mono bg-muted p-2 rounded-md">
+              <div className="text-base md:text-lg font-mono bg-muted p-2 rounded-md break-all">
                 124 - {isEditingWastage ? wastageInput : appliedWastage} = {isEditingWastage ? (124 - wastageInput) : planningWidth}"
               </div>
               <div className="text-xs text-muted-foreground">
@@ -642,7 +643,7 @@ export default function ManualPlanningPage() {
 
             <div className="flex flex-col space-y-2">
               <label className="text-sm font-medium">Planning Width</label>
-              <div className="text-2xl font-bold text-primary">
+              <div className="text-xl md:text-2xl font-bold text-primary">
                 {planningWidth} inches
               </div>
               <div className="text-sm text-green-600">
@@ -658,35 +659,35 @@ export default function ManualPlanningPage() {
       {planCreated && createdPlanSummary && (
         <>
           {/* Summary Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
             <Card>
               <CardHeader className="pb-3">
-                <CardDescription>Jumbo Rolls</CardDescription>
-                <CardTitle className="text-2xl text-blue-600">
+                <CardDescription className="text-xs md:text-sm">Jumbo Rolls</CardDescription>
+                <CardTitle className="text-xl md:text-2xl text-blue-600">
                   {createdPlanSummary.summary.jumbo_rolls_created}
                 </CardTitle>
               </CardHeader>
             </Card>
             <Card>
               <CardHeader className="pb-3">
-                <CardDescription>118" Rolls</CardDescription>
-                <CardTitle className="text-2xl text-cyan-600">
+                <CardDescription className="text-xs md:text-sm">118" Rolls</CardDescription>
+                <CardTitle className="text-xl md:text-2xl text-cyan-600">
                   {createdPlanSummary.summary.intermediate_118_rolls_created}
                 </CardTitle>
               </CardHeader>
             </Card>
             <Card>
               <CardHeader className="pb-3">
-                <CardDescription>Cut Rolls</CardDescription>
-                <CardTitle className="text-2xl text-green-600">
+                <CardDescription className="text-xs md:text-sm">Cut Rolls</CardDescription>
+                <CardTitle className="text-xl md:text-2xl text-green-600">
                   {createdPlanSummary.summary.cut_rolls_created}
                 </CardTitle>
               </CardHeader>
             </Card>
             <Card>
               <CardHeader className="pb-3">
-                <CardDescription>Planning Width</CardDescription>
-                <CardTitle className="text-2xl text-purple-600">
+                <CardDescription className="text-xs md:text-sm">Planning Width</CardDescription>
+                <CardTitle className="text-xl md:text-2xl text-purple-600">
                   {createdPlanSummary.summary.planning_width}"
                 </CardTitle>
               </CardHeader>
@@ -696,21 +697,23 @@ export default function ManualPlanningPage() {
           {/* Production Hierarchy */}
           <Card>
             <CardHeader>
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
                 <div>
-                  <CardTitle className="text-green-700">Plan Created Successfully!</CardTitle>
-                  <CardDescription>
+                  <CardTitle className="text-green-700 text-lg md:text-xl">Plan Created Successfully!</CardTitle>
+                  <CardDescription className="text-xs md:text-sm">
                     Plan ID: {createdPlanSummary.plan_frontend_id} • Jumbo rolls with their associated cut rolls
                   </CardDescription>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <Button
                     onClick={() => router.push('/masters/plans')}
-                    variant={'outline'}>
+                    variant={'outline'}
+                    className="w-full sm:w-auto">
                     Go to Plan Master
                   </Button>
                   <Button
                     variant="outline"
+                    className="w-full sm:w-auto"
                     onClick={() => {
                       setPlanCreated(false);
                       setCreatedPlanSummary(null);
@@ -729,16 +732,16 @@ export default function ManualPlanningPage() {
                 {createdPlanSummary.production_hierarchy.map((jumboGroup: any, index: number) => (
                   <div key={index} className="border rounded-lg p-4 bg-primary/5">
                     {/* Jumbo Roll Header */}
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-primary text-primary-foreground rounded-lg flex items-center justify-center text-lg font-bold">
+                        <div className="w-10 h-10 bg-primary text-primary-foreground rounded-lg flex items-center justify-center text-lg font-bold shrink-0">
                           J
                         </div>
                         <div>
-                          <div className="text-lg font-bold text-primary">
+                          <div className="text-base md:text-lg font-bold text-primary break-all">
                             Jumbo Roll: {jumboGroup.jumbo_roll?.barcode_id || 'Unknown'}
                           </div>
-                          <div className="text-sm text-muted-foreground">
+                          <div className="text-xs md:text-sm text-muted-foreground">
                             {jumboGroup.jumbo_roll?.paper_spec || 'Unknown Spec'} •
                             {jumboGroup.jumbo_roll?.width_inches || 0}" •
                             {jumboGroup.intermediate_rolls?.length || 0} × 118" rolls •
@@ -747,7 +750,7 @@ export default function ManualPlanningPage() {
                         </div>
                       </div>
                       {jumboGroup.jumbo_roll?.barcode_id && (
-                        <code className="text-sm bg-muted px-3 py-1 rounded">
+                        <code className="text-xs md:text-sm bg-muted px-3 py-1 rounded break-all">
                           {jumboGroup.jumbo_roll.barcode_id}
                         </code>
                       )}
@@ -783,30 +786,30 @@ export default function ManualPlanningPage() {
 
                     {/* Cut Rolls */}
                     <div className="space-y-2">
-                      <div className="text-sm font-medium text-gray-700">Cut Rolls:</div>
-                      <div className="overflow-x-auto">
+                      <div className="text-xs md:text-sm font-medium text-gray-700">Cut Rolls:</div>
+                      <div className="overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead>Barcode</TableHead>
-                              <TableHead>Width (in)</TableHead>
-                              <TableHead>Client</TableHead>
-                              <TableHead>Status</TableHead>
-                              <TableHead>Parent 118" Roll</TableHead>
+                              <TableHead className="text-xs md:text-sm">Barcode</TableHead>
+                              <TableHead className="text-xs md:text-sm">Width (in)</TableHead>
+                              <TableHead className="text-xs md:text-sm">Client</TableHead>
+                              <TableHead className="text-xs md:text-sm">Status</TableHead>
+                              <TableHead className="text-xs md:text-sm">Parent 118" Roll</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {jumboGroup.cut_rolls.map((cutRoll: any, idx: number) => (
                               <TableRow key={idx} className="border-l-4 border-green-200">
                                 <TableCell>
-                                  <code className="text-sm">{cutRoll.barcode_id}</code>
+                                  <code className="text-xs md:text-sm">{cutRoll.barcode_id}</code>
                                 </TableCell>
-                                <TableCell>{cutRoll.width_inches}&quot;</TableCell>
-                                <TableCell className="text-sm">
+                                <TableCell className="text-xs md:text-sm">{cutRoll.width_inches}&quot;</TableCell>
+                                <TableCell className="text-xs md:text-sm">
                                   {cutRoll.client_name || 'N/A'}
                                 </TableCell>
                                 <TableCell>
-                                  <Badge variant={cutRoll.status === 'cutting' ? 'default' : 'secondary'}>
+                                  <Badge variant={cutRoll.status === 'cutting' ? 'default' : 'secondary'} className="text-xs">
                                     {cutRoll.status}
                                   </Badge>
                                 </TableCell>
@@ -833,10 +836,10 @@ export default function ManualPlanningPage() {
       {/* Wastage Configuration */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <CardTitle>Production Planning Hierarchy</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-lg md:text-xl">Production Planning Hierarchy</CardTitle>
+              <CardDescription className="text-xs md:text-sm">
                 Paper Spec → Jumbo Rolls →  Sets → Cut Rolls
               </CardDescription>
             </div>
@@ -848,7 +851,8 @@ export default function ManualPlanningPage() {
                 }
                 setShowAddPaperDialog(true);
               }}
-              disabled={isEditingWastage}>
+              disabled={isEditingWastage}
+              className="w-full md:w-auto">
               <Plus className="mr-2 h-4 w-4" />
               Add Paper Spec
             </Button>
@@ -876,25 +880,25 @@ export default function ManualPlanningPage() {
                 return (
                   <div key={paper.id} className="border-2 border-orange-200 rounded-lg overflow-hidden bg-orange-50/30">
                     {/* Paper Spec Header */}
-                    <div className="bg-orange-50 border-orange-200 p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3 flex-1">
+                    <div className="bg-orange-50 border-orange-200 p-3 md:p-4">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0">
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => togglePaperExpand(paper.id)}
-                            className="h-8 w-8 p-0">
+                            className="h-8 w-8 p-0 shrink-0">
                             {isPaperExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
                           </Button>
-                          <div className="flex items-center gap-3">
-                            <FileText className="h-6 w-6 text-orange-600" />
-                            <Package className="h-5 w-5 text-orange-600" />
+                          <div className="flex items-center gap-2 md:gap-3 shrink-0">
+                            <FileText className="h-5 w-5 md:h-6 md:w-6 text-orange-600" />
+                            <Package className="h-4 w-4 md:h-5 md:w-5 text-orange-600" />
                           </div>
-                          <div>
-                            <div className="font-bold text-lg">
+                          <div className="min-w-0">
+                            <div className="font-bold text-base md:text-lg break-words">
                               {paper.shade.toUpperCase()} {paper.gsm}GSM (BF: {paper.bf})
                             </div>
-                            <div className="text-sm text-muted-foreground flex gap-4">
+                            <div className="text-xs md:text-sm text-muted-foreground flex flex-wrap gap-2 md:gap-4">
                               <span className="text-orange-600 font-medium">{jumbosForPaper.length} Jumbo Rolls</span>
                               <span>{totalSets} Sets</span>
                               <span>{totalCuts} Cuts</span>
@@ -906,15 +910,16 @@ export default function ManualPlanningPage() {
                             variant="outline"
                             size="sm"
                             onClick={() => handleAddJumboRoll(paper.id)}
-                            className="bg-green-50 hover:bg-green-100 text-green-700 border-green-300">
+                            className="bg-green-50 hover:bg-green-100 text-green-700 border-green-300 text-xs md:text-sm">
                             <Plus className="h-3 w-3 mr-1" />
-                            Add Jumbo Roll
+                            <span className="hidden sm:inline">Add Jumbo Roll</span>
+                            <span className="sm:hidden">Add Jumbo</span>
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDeletePaperSpec(paper.id)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50">
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 shrink-0">
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -936,15 +941,15 @@ export default function ManualPlanningPage() {
                             return (
                               <div key={jumbo.id} className="border rounded-lg overflow-hidden bg-blue-50/30">
                                 {/* Jumbo Roll Header */}
-                                <div className="bg-blue-50 p-3">
+                                <div className="bg-blue-50 p-2 md:p-3">
                                   <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3 flex-1">
-                                      <div>
-                                        <div className="font-semibold text-blue-900">
+                                    <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0">
+                                      <div className="min-w-0">
+                                        <div className="font-semibold text-sm md:text-base text-blue-900">
                                           Jumbo Roll #{jumbo.jumboNumber}
                                         </div>
                                         <div className="text-xs text-muted-foreground">
-                                          {setsForJumbo.length} sets | {totalWaste.toFixed(1)}" total waste
+                                          {setsForJumbo.length} sets | {totalWaste.toFixed(1)}" waste
                                         </div>
                                       </div>
                                     </div>
@@ -952,7 +957,7 @@ export default function ManualPlanningPage() {
                                       variant="ghost"
                                       size="sm"
                                       onClick={() => handleDeleteJumboRoll(jumbo.id)}
-                                      className="text-red-600 hover:text-red-700 hover:bg-red-50">
+                                      className="text-red-600 hover:text-red-700 hover:bg-red-50 shrink-0">
                                       <Trash2 className="h-3 w-3" />
                                     </Button>
                                   </div>
@@ -969,11 +974,11 @@ export default function ManualPlanningPage() {
                                     return (
                                       <div key={rollSet.id} className="border rounded-lg overflow-hidden">
                                         {/* Roll Set Header */}
-                                        <div className="bg-cyan-50 border-b p-3">
+                                        <div className="bg-cyan-50 border-b p-2 md:p-3">
                                           <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2 flex-1">
-                                              <div className="flex-1">
-                                                <div className="font-medium text-sm text-cyan-900">
+                                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                                              <div className="flex-1 min-w-0">
+                                                <div className="font-medium text-xs md:text-sm text-cyan-900">
                                                    Set #{rollSet.setNumber} ({efficiency}% efficient)
                                                 </div>
                                                 <div className="text-xs text-muted-foreground">
@@ -986,7 +991,7 @@ export default function ManualPlanningPage() {
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={() => handleDeleteRollSet(rollSet.id)}
-                                                className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6">
+                                                className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6 shrink-0">
                                                 <Trash2 className="h-3 w-3" />
                                               </Button>
                                             </div>
@@ -994,26 +999,26 @@ export default function ManualPlanningPage() {
                                         </div>
 
                                         {/* Cutting Pattern Visual */}
-                                        <div className="p-3 bg-white space-y-3">
+                                        <div className="p-2 md:p-3 bg-white space-y-3">
                                               <div>
                                                 <div className="text-xs font-medium mb-2">
                                                   Cutting Pattern ({planningWidth}" Roll):
                                                 </div>
-                                                <div className="w-full h-16 rounded flex overflow-hidden">
+                                                <div className="w-full h-12 md:h-16 rounded flex overflow-hidden">
                                                   {cutsForSet.map((cut) =>
                                                     Array.from({ length: cut.quantity }).map((_, idx) => (
                                                       <div
                                                         key={`${cut.id}-${idx}`}
                                                         style={{ width: `${(cut.widthInches / planningWidth) * 100}%` }}
                                                         className="bg-green-500 border-r-2 border-white flex flex-col items-center justify-center text-white text-xs font-bold">
-                                                        <div>{cut.widthInches}"</div>
+                                                        <div className="text-[10px] md:text-xs">{cut.widthInches}"</div>
                                                       </div>
                                                     ))
                                                   )}
                                                   {remainingWidth > 0 && (
                                                     <div
                                                       style={{ width: `${(remainingWidth / planningWidth) * 100}%` }}
-                                                      className="bg-pink-300 flex items-center justify-center text-gray-700 text-xs">
+                                                      className="bg-pink-300 flex items-center justify-center text-gray-700 text-[10px] md:text-xs px-1">
                                                       {remainingWidth.toFixed(1)}" waste
                                                     </div>
                                                   )}
@@ -1025,13 +1030,13 @@ export default function ManualPlanningPage() {
                                                 {cutsForSet.map((cut) => {
                                                   const client = availableClients.find(c => c.id === cut.clientId);
                                                   return (
-                                                  <div key={cut.id} className="flex items-center justify-between bg-green-50 p-2 rounded">
-                                                    <div className="flex items-center gap-2">
-                                                      <Badge className="bg-green-600">{cut.widthInches}" × {cut.quantity}</Badge>
+                                                  <div key={cut.id} className="flex items-center justify-between bg-green-50 p-2 rounded gap-2">
+                                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                      <Badge className="bg-green-600 text-xs shrink-0">{cut.widthInches}" × {cut.quantity}</Badge>
                                                       {/* <span className="text-sm font-medium">{cut.widthInches * cut.quantity}.0" from {cut.orderSource || "Manual"}</span> */}
-                                                      <span className="text-xs text-muted-foreground">- {client?.company_name || "Unknown Client"}</span>
+                                                      <span className="text-xs text-muted-foreground truncate">- {client?.company_name || "Unknown Client"}</span>
                                                     </div>
-                                                    <div className="flex gap-1">
+                                                    <div className="flex gap-1 shrink-0">
                                                       <Button
                                                         variant="ghost"
                                                         size="sm"
@@ -1058,9 +1063,10 @@ export default function ManualPlanningPage() {
                                                   <Button
                                                     variant="outline"
                                                     onClick={() => handleAddCutToRollSet(rollSet.id)}
-                                                    className="border-orange-300 text-orange-600 hover:bg-orange-50">
+                                                    className="border-orange-300 text-orange-600 hover:bg-orange-50 text-xs md:text-sm w-full md:w-auto">
                                                     <Plus className="h-3 w-3 mr-1" />
-                                                    Add Manual Cut ({remainingWidth.toFixed(1)}" available)
+                                                    <span className="hidden sm:inline">Add Manual Cut ({remainingWidth.toFixed(1)}" available)</span>
+                                                    <span className="sm:hidden">Add Cut ({remainingWidth.toFixed(1)}")</span>
                                                   </Button>
                                                 </div>
                                               )}
@@ -1152,16 +1158,16 @@ export default function ManualPlanningPage() {
               )}
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => {
               setShowAddPaperDialog(false);
               setSelectedPaperId("");
-            }}>
+            }} className="w-full sm:w-auto">
               Cancel
             </Button>
             <Button
               onClick={handleAddPaperSpec}
-              className="bg-blue-600 hover:bg-blue-700"
+              className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
               disabled={!selectedPaperId || loadingPapers}>
               Add Paper Spec
             </Button>
@@ -1185,7 +1191,7 @@ export default function ManualPlanningPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="cutWidth">Width (inches)</Label>
                 <Input
@@ -1257,14 +1263,14 @@ export default function ManualPlanningPage() {
               </div>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => {
               setShowAddCutRollDialog(false);
               setEditingCutRoll(null);
-            }}>
+            }} className="w-full sm:w-auto">
               Cancel
             </Button>
-            <Button onClick={handleSaveCutRoll} className="bg-green-600 hover:bg-green-700">
+            <Button onClick={handleSaveCutRoll} className="bg-green-600 hover:bg-green-700 w-full sm:w-auto">
               {editingCutRoll ? "Update Cut Roll" : "Add Cut Roll"}
             </Button>
           </DialogFooter>
@@ -1281,7 +1287,7 @@ export default function ManualPlanningPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
 
 
               <div className="font-medium text-muted-foreground">Planning Width:</div>
@@ -1289,11 +1295,12 @@ export default function ManualPlanningPage() {
 
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button
               variant="outline"
               onClick={() => setShowCreatePlanConfirmation(false)}
-              disabled={creatingPlan}>
+              disabled={creatingPlan}
+              className="w-full sm:w-auto">
               Cancel
             </Button>
             <Button
@@ -1302,7 +1309,7 @@ export default function ManualPlanningPage() {
                 handleCreatePlan();
               }}
               disabled={creatingPlan}
-              className="bg-green-600 hover:bg-green-700">
+              className="bg-green-600 hover:bg-green-700 w-full sm:w-auto">
               {creatingPlan ? "Creating..." : "Confirm & Create"}
             </Button>
           </DialogFooter>

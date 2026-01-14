@@ -38,6 +38,19 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Truck,
   Search,
   User,
@@ -48,6 +61,10 @@ import {
   Receipt,
   Printer,
   Calendar,
+  Edit,
+  Trash2,
+  MoreHorizontal,
+  CheckCircle,
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/api-config";
 import {
@@ -105,6 +122,22 @@ export default function BillsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const limit = 50;
+
+  // Edit modal state
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editPaymentSlipId, setEditPaymentSlipId] = useState<string>("");
+  const [editBillNo, setEditBillNo] = useState<string>("");
+  const [editDate, setEditDate] = useState<string>("");
+  const [editEbayNo, setEditEbayNo] = useState<string>("");
+  const [editTotalAmount, setEditTotalAmount] = useState<number>(0);
+  const [editItems, setEditItems] = useState<any[]>([]);
+  const [editItemsLoading, setEditItemsLoading] = useState(false);
+
+  // Delete confirmation state
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletePaymentSlipId, setDeletePaymentSlipId] = useState<string>("");
+  const [deletePaymentSlipNumber, setDeletePaymentSlipNumber] = useState<string>("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     loadClients();
@@ -243,6 +276,133 @@ export default function BillsPage() {
     ) : (
       <Badge variant="secondary" className="bg-green-600 text-white">Cash</Badge>
     );
+  };
+
+  // Load payment slip details for editing
+  const loadPaymentSlipForEdit = async (paymentSlipId: string) => {
+    try {
+      setEditItemsLoading(true);
+      const response = await fetch(`${API_BASE_URL}/payment-slip/${paymentSlipId}`, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      });
+
+      if (!response.ok) throw new Error('Failed to load payment slip details');
+      const data = await response.json();
+
+      setEditPaymentSlipId(paymentSlipId);
+      setEditBillNo(data.bill_no || "");
+      setEditDate(data.slip_date || "");
+      setEditEbayNo(data.ebay_no || "");
+      setEditTotalAmount(data.total_amount || 0);
+      setEditItems(data.items || []);
+      setEditModalOpen(true);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load payment slip';
+      toast.error(errorMessage);
+    } finally {
+      setEditItemsLoading(false);
+    }
+  };
+
+  // Handle edit payment slip
+  const handleEditPaymentSlip = async () => {
+    try {
+      if (!editPaymentSlipId) {
+        toast.error("No payment slip selected");
+        return;
+      }
+
+      // Calculate total amount from items
+      const totalAmount = editItems.reduce((sum, item) => {
+        return sum + (item.rate * item.total_weight_kg);
+      }, 0);
+
+      // Prepare items data
+      const itemsData = editItems.map(item => ({
+        width_inches: item.width_inches,
+        paper_spec: item.paper_spec,
+        quantity: item.quantity,
+        total_weight_kg: item.total_weight_kg,
+        rate: item.rate,
+        amount: item.rate * item.total_weight_kg
+      }));
+
+      const response = await fetch(`${API_BASE_URL}/payment-slip/edit/${editPaymentSlipId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
+        body: JSON.stringify({
+          slip_date: editDate || null,
+          bill_no: editBillNo || null,
+          ebay_no: editEbayNo || null,
+          total_amount: totalAmount,
+          items: itemsData
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to update payment slip');
+      }
+
+      toast.success('Payment slip updated successfully');
+
+      // Close modal and reset state
+      setEditModalOpen(false);
+      setEditPaymentSlipId("");
+      setEditBillNo("");
+      setEditDate("");
+      setEditEbayNo("");
+      setEditTotalAmount(0);
+      setEditItems([]);
+
+      // Reload payment slips
+      loadPaymentSlips();
+    } catch (error) {
+      console.error("Error editing payment slip:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to update payment slip");
+    }
+  };
+
+  // Handle delete payment slip
+  const handleDeletePaymentSlip = async () => {
+    try {
+      if (!deletePaymentSlipId) {
+        toast.error("No payment slip selected");
+        return;
+      }
+
+      setDeleteLoading(true);
+
+      const response = await fetch(`${API_BASE_URL}/payment-slip/delete/${deletePaymentSlipId}`, {
+        method: 'DELETE',
+        headers: {
+          'ngrok-skip-browser-warning': 'true'
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to delete payment slip');
+      }
+
+      toast.success('Payment slip deleted successfully');
+
+      // Close modal and reset state
+      setDeleteConfirmOpen(false);
+      setDeletePaymentSlipId("");
+      setDeletePaymentSlipNumber("");
+
+      // Reload payment slips
+      loadPaymentSlips();
+    } catch (error) {
+      console.error("Error deleting payment slip:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to delete payment slip");
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   const getStatusBadge = (status: string) => {
