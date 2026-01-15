@@ -26,12 +26,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -55,7 +49,6 @@ import {
 import {
   Truck,
   Search,
-  MoreHorizontal,
   Eye,
   Download,
   Calendar,
@@ -75,8 +68,6 @@ import {
   Receipt,
   Banknote,
   ScrollText,
-  Edit,
-  Trash2,
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/api-config";
 import { generatePackingSlipPDF, convertDispatchToPackingSlip } from "@/lib/packing-slip-pdf";
@@ -237,21 +228,6 @@ export default function ChallanPage() {
   const [generateDispatchItems, setGenerateDispatchItems] = useState<any[]>([]);
   const [generateItemsLoading, setGenerateItemsLoading] = useState(false);
 
-  // Edit modal state
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [editPaymentSlipId, setEditPaymentSlipId] = useState<string>("");
-  const [editBillNo, setEditBillNo] = useState<string>("");
-  const [editDate, setEditDate] = useState<string>("");
-  const [editEbayNo, setEditEbayNo] = useState<string>("");
-  const [editTotalAmount, setEditTotalAmount] = useState<number>(0);
-  const [editItems, setEditItems] = useState<any[]>([]);
-  const [editItemsLoading, setEditItemsLoading] = useState(false);
-
-  // Delete confirmation state
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [deletePaymentSlipId, setDeletePaymentSlipId] = useState<string>("");
-  const [deleteDispatchNumber, setDeleteDispatchNumber] = useState<string>("");
-  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const loadDispatches = async () => {
     try {
@@ -515,132 +491,6 @@ export default function ChallanPage() {
     }
   };
 
-  // Load payment slip details for editing
-  const loadPaymentSlipForEdit = async (paymentSlipId: string) => {
-    try {
-      setEditItemsLoading(true);
-      const response = await fetch(`${API_BASE_URL}/payment-slip/${paymentSlipId}`, {
-        headers: { 'ngrok-skip-browser-warning': 'true' }
-      });
-
-      if (!response.ok) throw new Error('Failed to load payment slip details');
-      const data = await response.json();
-
-      setEditPaymentSlipId(paymentSlipId);
-      setEditBillNo(data.bill_no || "");
-      setEditDate(data.slip_date || "");
-      setEditEbayNo(data.ebay_no || "");
-      setEditTotalAmount(data.total_amount || 0);
-      setEditItems(data.items || []);
-      setEditModalOpen(true);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load payment slip';
-      toast.error(errorMessage);
-    } finally {
-      setEditItemsLoading(false);
-    }
-  };
-
-  // Handle edit payment slip
-  const handleEditPaymentSlip = async () => {
-    try {
-      if (!editPaymentSlipId) {
-        toast.error("No payment slip selected");
-        return;
-      }
-
-      // Calculate total amount from items
-      const totalAmount = editItems.reduce((sum, item) => {
-        return sum + (item.rate * item.total_weight_kg);
-      }, 0);
-
-      // Prepare items data
-      const itemsData = editItems.map(item => ({
-        width_inches: item.width_inches,
-        paper_spec: item.paper_spec,
-        quantity: item.quantity,
-        total_weight_kg: item.total_weight_kg,
-        rate: item.rate,
-        amount: item.rate * item.total_weight_kg
-      }));
-
-      const response = await fetch(`${API_BASE_URL}/payment-slip/edit/${editPaymentSlipId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true'
-        },
-        body: JSON.stringify({
-          slip_date: editDate || null,
-          bill_no: editBillNo || null,
-          ebay_no: editEbayNo || null,
-          total_amount: totalAmount,
-          items: itemsData
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to update payment slip');
-      }
-
-      toast.success('Payment slip updated successfully');
-
-      // Close modal and reset state
-      setEditModalOpen(false);
-      setEditPaymentSlipId("");
-      setEditBillNo("");
-      setEditDate("");
-      setEditEbayNo("");
-      setEditTotalAmount(0);
-      setEditItems([]);
-
-      // Reload dispatches
-      loadDispatches();
-    } catch (error) {
-      console.error("Error editing payment slip:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to update payment slip");
-    }
-  };
-
-  // Handle delete payment slip
-  const handleDeletePaymentSlip = async () => {
-    try {
-      if (!deletePaymentSlipId) {
-        toast.error("No payment slip selected");
-        return;
-      }
-
-      setDeleteLoading(true);
-
-      const response = await fetch(`${API_BASE_URL}/payment-slip/delete/${deletePaymentSlipId}`, {
-        method: 'DELETE',
-        headers: {
-          'ngrok-skip-browser-warning': 'true'
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to delete payment slip');
-      }
-
-      toast.success('Payment slip deleted successfully');
-
-      // Close modal and reset state
-      setDeleteConfirmOpen(false);
-      setDeletePaymentSlipId("");
-      setDeleteDispatchNumber("");
-
-      // Reload dispatches
-      loadDispatches();
-    } catch (error) {
-      console.error("Error deleting payment slip:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to delete payment slip");
-    } finally {
-      setDeleteLoading(false);
-    }
-  };
 
   // PDF generation handlers
   const handleGeneratePaymentSlip = async () => {
@@ -995,7 +845,6 @@ export default function ChallanPage() {
                   <TableHead>Vehicle & Driver</TableHead>
                   <TableHead>Items</TableHead>
                   <TableHead>Weight</TableHead>
-                  <TableHead>Payment</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Generate</TableHead>
                 </TableRow>
@@ -1077,67 +926,14 @@ export default function ChallanPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {getPaymentTypeBadge(dispatch.payment_type)}
-                      </TableCell>
-                      <TableCell>
                         {getStatusBadge(dispatch.status)}
                       </TableCell>
                       <TableCell>
                         {dispatch.has_payment_slip ? (
-                          <div className="flex items-center gap-2">
-                            <Badge className="bg-green-100 text-green-800">
-                              <CheckCircle2 className="w-3 h-3 mr-1" />
-                              Generated
-                            </Badge>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                  <MoreHorizontal className="w-4 h-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                  onClick={async () => {
-                                    // Fetch payment slip ID from dispatch
-                                    try {
-                                      const response = await fetch(`${API_BASE_URL}/dispatch/${dispatch.id}/payment-slip-id`, {
-                                        headers: { 'ngrok-skip-browser-warning': 'true' }
-                                      });
-                                      if (!response.ok) throw new Error('Failed to fetch payment slip ID');
-                                      const data = await response.json();
-                                      loadPaymentSlipForEdit(data.payment_slip_id);
-                                    } catch (err) {
-                                      toast.error('Failed to load payment slip');
-                                    }
-                                  }}
-                                >
-                                  <Edit className="w-4 h-4 mr-2" />
-                                  Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  className="text-red-600"
-                                  onClick={async () => {
-                                    // Fetch payment slip ID from dispatch
-                                    try {
-                                      const response = await fetch(`${API_BASE_URL}/dispatch/${dispatch.id}/payment-slip-id`, {
-                                        headers: { 'ngrok-skip-browser-warning': 'true' }
-                                      });
-                                      if (!response.ok) throw new Error('Failed to fetch payment slip ID');
-                                      const data = await response.json();
-                                      setDeletePaymentSlipId(data.payment_slip_id);
-                                      setDeleteDispatchNumber(dispatch.dispatch_number);
-                                      setDeleteConfirmOpen(true);
-                                    } catch (err) {
-                                      toast.error('Failed to load payment slip');
-                                    }
-                                  }}
-                                >
-                                  <Trash2 className="w-4 h-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
+                          <Badge className="bg-green-100 text-green-800">
+                            <CheckCircle2 className="w-3 h-3 mr-1" />
+                            Generated
+                          </Badge>
                         ) : (
                           <Button
                             size="sm"
@@ -1609,223 +1405,6 @@ export default function ChallanPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Payment Slip Modal */}
-      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Edit className="w-5 h-5" />
-              Edit Payment Slip
-            </DialogTitle>
-            <DialogDescription>
-              Update payment slip details and item rates
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-6">
-            {/* Form Fields */}
-            <div className="space-y-4">
-              {/* Date, Bill No, eBay No */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Date</label>
-                  <Input
-                    type="date"
-                    value={editDate}
-                    onChange={(e) => setEditDate(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Bill No.</label>
-                  <Input
-                    type="text"
-                    placeholder="Enter bill number"
-                    value={editBillNo}
-                    onChange={(e) => setEditBillNo(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">eBay No.</label>
-                  <Input
-                    type="text"
-                    placeholder="Enter eBay number"
-                    value={editEbayNo}
-                    onChange={(e) => setEditEbayNo(e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Items Table */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Items</label>
-              {editItemsLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Loading items...
-                </div>
-              ) : (
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>S.No</TableHead>
-                        <TableHead>Width</TableHead>
-                        <TableHead>Paper Spec</TableHead>
-                        <TableHead className="text-right">Quantity</TableHead>
-                        <TableHead className="text-right">Total Weight</TableHead>
-                        <TableHead className="text-right">Rate</TableHead>
-                        <TableHead className="text-right">Amount</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {editItems.length > 0 ? (
-                        editItems.map((item, index) => {
-                          const amount = (item.rate * item.total_weight_kg).toFixed(2);
-                          return (
-                            <TableRow key={index}>
-                              <TableCell>{index + 1}</TableCell>
-                              <TableCell>{item.width_inches}"</TableCell>
-                              <TableCell>{item.paper_spec}</TableCell>
-                              <TableCell className="text-right font-medium">{item.quantity}</TableCell>
-                              <TableCell className="text-right">{item.total_weight_kg.toFixed(2)}kg</TableCell>
-                              <TableCell className="text-right">
-                                <Input
-                                  type="number"
-                                  value={item.rate}
-                                  onChange={(e) => {
-                                    const newRate = parseFloat(e.target.value) || 0;
-                                    const updatedItems = [...editItems];
-                                    updatedItems[index].rate = newRate;
-                                    setEditItems(updatedItems);
-                                  }}
-                                  className="w-20 ml-auto text-right"
-                                  min="0"
-                                  step="1"
-                                />
-                              </TableCell>
-                              <TableCell className="text-right font-semibold">₹{amount}</TableCell>
-                            </TableRow>
-                          );
-                        })
-                      ) : (
-                        <TableRow>
-                          <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                            No items found
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </div>
-
-            {/* Total Amount Display */}
-            {editItems.length > 0 && (
-              <div className="flex justify-end">
-                <div className="text-right">
-                  <div className="text-sm text-muted-foreground">Total Amount</div>
-                  <div className="text-2xl font-bold">
-                    ₹{editItems.reduce((sum, item) => sum + (item.rate * item.total_weight_kg), 0).toFixed(2)}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex justify-end space-x-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setEditModalOpen(false);
-                  setEditPaymentSlipId("");
-                  setEditBillNo("");
-                  setEditDate("");
-                  setEditEbayNo("");
-                  setEditTotalAmount(0);
-                  setEditItems([]);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleEditPaymentSlip}>
-                <CheckCircle className="w-4 h-4 mr-2" />
-                Save Changes
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <Trash2 className="w-5 h-5" />
-              Delete Payment Slip
-            </DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this payment slip?
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="rounded-md bg-yellow-50 border border-yellow-200 p-4">
-              <div className="flex items-start gap-2">
-                <div className="text-yellow-600 mt-0.5">⚠️</div>
-                <div className="text-sm text-yellow-800">
-                  <p className="font-medium mb-1">This action will:</p>
-                  <ul className="list-disc list-inside space-y-1">
-                    <li>Delete the payment slip permanently</li>
-                    <li>Revert inventory and dispatch items to previous status</li>
-                    <li>Change dispatch status back to "dispatched"</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            {deleteDispatchNumber && (
-              <div className="text-sm">
-                <span className="text-muted-foreground">Dispatch Number: </span>
-                <span className="font-medium">{deleteDispatchNumber}</span>
-              </div>
-            )}
-
-            <div className="flex justify-end space-x-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setDeleteConfirmOpen(false);
-                  setDeletePaymentSlipId("");
-                  setDeleteDispatchNumber("");
-                }}
-                disabled={deleteLoading}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={handleDeletePaymentSlip}
-                disabled={deleteLoading}
-              >
-                {deleteLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Deleting...
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </DashboardLayout>
   );
 }

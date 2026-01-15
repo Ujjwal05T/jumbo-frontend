@@ -126,6 +126,8 @@ export default function BillsPage() {
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editPaymentSlipId, setEditPaymentSlipId] = useState<string>("");
+  const [editPaymentSlipNumber, setEditPaymentSlipNumber] = useState<string>("");
+  const [editPaymentType, setEditPaymentType] = useState<string>("");
   const [editBillNo, setEditBillNo] = useState<string>("");
   const [editDate, setEditDate] = useState<string>("");
   const [editEbayNo, setEditEbayNo] = useState<string>("");
@@ -290,6 +292,8 @@ export default function BillsPage() {
       const data = await response.json();
 
       setEditPaymentSlipId(paymentSlipId);
+      setEditPaymentSlipNumber(data.frontend_id || "");
+      setEditPaymentType(data.payment_type || "");
       setEditBillNo(data.bill_no || "");
       setEditDate(data.slip_date || "");
       setEditEbayNo(data.ebay_no || "");
@@ -327,19 +331,25 @@ export default function BillsPage() {
         amount: item.rate * item.total_weight_kg
       }));
 
+      // Prepare request data - only include bill_no and ebay_no for bill type
+      const requestData: any = {
+        slip_date: editDate || null,
+        total_amount: totalAmount,
+        items: itemsData
+      };
+
+      if (editPaymentType === 'bill') {
+        requestData.bill_no = editBillNo || null;
+        requestData.ebay_no = editEbayNo || null;
+      }
+
       const response = await fetch(`${API_BASE_URL}/payment-slip/edit/${editPaymentSlipId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'ngrok-skip-browser-warning': 'true'
         },
-        body: JSON.stringify({
-          slip_date: editDate || null,
-          bill_no: editBillNo || null,
-          ebay_no: editEbayNo || null,
-          total_amount: totalAmount,
-          items: itemsData
-        })
+        body: JSON.stringify(requestData)
       });
 
       if (!response.ok) {
@@ -442,11 +452,11 @@ export default function BillsPage() {
           <TabsList className="grid w-full max-w-md grid-cols-2">
             <TabsTrigger value="bill">
               <FileText className="w-4 h-4 mr-2" />
-              Bill Payments
+              Bill
             </TabsTrigger>
             <TabsTrigger value="cash">
               <Receipt className="w-4 h-4 mr-2" />
-              Cash Payments
+              Cash
             </TabsTrigger>
           </TabsList>
 
@@ -560,15 +570,15 @@ export default function BillsPage() {
                     <TableHead>Items</TableHead>
                     <TableHead>Weight</TableHead>
                     <TableHead>Amount</TableHead>
-                    <TableHead>Payment</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Print</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="h-24 text-center">
+                      <TableCell colSpan={11} className="h-24 text-center">
                         <div className="flex items-center justify-center">
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Loading bills...
@@ -646,26 +656,44 @@ export default function BillsPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {getPaymentTypeBadge(slip.payment_type)}
-                        </TableCell>
-                        <TableCell>
                           {getStatusBadge(slip.dispatch.status)}
                         </TableCell>
                         <TableCell>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handlePrintChallan(slip)}
-                          >
-                            <Printer className="w-4 h-4 mr-1" />
+                          <Button variant="outline" size="sm" onClick={() => handlePrintChallan(slip)}>
                             Print
                           </Button>
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <MoreHorizontal className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => loadPaymentSlipForEdit(slip.id)}>
+                                <Edit className="w-4 h-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-red-600"
+                                onClick={() => {
+                                  setDeletePaymentSlipId(slip.id);
+                                  setDeletePaymentSlipNumber(slip.payment_slip_id);
+                                  setDeleteConfirmOpen(true);
+                                }}
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={10} className="h-24 text-center">
+                      <TableCell colSpan={11} className="h-24 text-center">
                         <div className="text-center py-4">
                           <div className="text-muted-foreground">
                             <p className="font-medium">No generated bills found</p>
@@ -819,15 +847,15 @@ export default function BillsPage() {
                     <TableHead>Items</TableHead>
                     <TableHead>Weight</TableHead>
                     <TableHead>Amount</TableHead>
-                    <TableHead>Payment</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Print</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="h-24 text-center">
+                      <TableCell colSpan={11} className="h-24 text-center">
                         <div className="flex items-center justify-center">
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Loading bills...
@@ -905,26 +933,44 @@ export default function BillsPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {getPaymentTypeBadge(slip.payment_type)}
-                        </TableCell>
-                        <TableCell>
                           {getStatusBadge(slip.dispatch.status)}
                         </TableCell>
                         <TableCell>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handlePrintChallan(slip)}
-                          >
-                            <Printer className="w-4 h-4 mr-1" />
+                          <Button variant="outline" size="sm" onClick={() => handlePrintChallan(slip)}>
                             Print
                           </Button>
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <MoreHorizontal className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => loadPaymentSlipForEdit(slip.id)}>
+                                <Edit className="w-4 h-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-red-600"
+                                onClick={() => {
+                                  setDeletePaymentSlipId(slip.payment_slip_id);
+                                  setDeletePaymentSlipNumber(slip.payment_slip_id);
+                                  setDeleteConfirmOpen(true);
+                                }}
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={10} className="h-24 text-center">
+                      <TableCell colSpan={11} className="h-24 text-center">
                         <div className="text-center py-4">
                           <div className="text-muted-foreground">
                             <p className="font-medium">No generated bills found</p>
@@ -969,6 +1015,207 @@ export default function BillsPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Edit Payment Slip Modal */}
+      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Payment Slip</DialogTitle>
+            <DialogDescription>
+              Update payment slip details and item rates
+            </DialogDescription>
+          </DialogHeader>
+
+          {editItemsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-8 h-8 animate-spin mr-2" />
+              Loading payment slip details...
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Payment Slip Number (read-only) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Payment Slip #</label>
+                  <Input
+                    value={editPaymentSlipNumber}
+                    disabled
+                    className="bg-muted"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Slip Date</label>
+                  <Input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Bill No. and eBay No. - only show for bill type */}
+              {editPaymentType === 'bill' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Bill No.</label>
+                    <Input
+                      placeholder="Enter bill number"
+                      value={editBillNo}
+                      onChange={(e) => setEditBillNo(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">eBay No.</label>
+                    <Input
+                      placeholder="Enter eBay number"
+                      value={editEbayNo}
+                      onChange={(e) => setEditEbayNo(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+              {editPaymentType === 'cash' && (
+                <div className="text-sm text-muted-foreground">
+                  Bill No. and eBay No. are not applicable for Cash payment slips
+                </div>
+              )}
+
+              {/* Items Table */}
+              <div className="border rounded-lg">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Width</TableHead>
+                      <TableHead>Paper Spec</TableHead>
+                      <TableHead>Qty</TableHead>
+                      <TableHead>Weight (kg)</TableHead>
+                      <TableHead>Rate (₹/kg)</TableHead>
+                      <TableHead>Amount (₹)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {editItems.map((item, index) => (
+                      <TableRow key={index}>
+                        <TableCell>{item.width_inches}"</TableCell>
+                        <TableCell className="text-xs">{item.paper_spec}</TableCell>
+                        <TableCell>{item.quantity}</TableCell>
+                        <TableCell>{item.total_weight_kg.toFixed(2)}</TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={item.rate}
+                            onChange={(e) => {
+                              const newItems = [...editItems];
+                              newItems[index].rate = parseFloat(e.target.value) || 0;
+                              setEditItems(newItems);
+                            }}
+                            className="w-24"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          ₹{(item.rate * item.total_weight_kg).toFixed(2)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Total Amount */}
+              <div className="flex justify-end">
+                <div className="text-right">
+                  <div className="text-sm text-muted-foreground">Total Amount</div>
+                  <div className="text-2xl font-bold">
+                    ₹{editItems.reduce((sum, item) => sum + (item.rate * item.total_weight_kg), 0).toFixed(2)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setEditModalOpen(false);
+                    setEditPaymentSlipId("");
+                    setEditPaymentSlipNumber("");
+                    setEditPaymentType("");
+                    setEditBillNo("");
+                    setEditDate("");
+                    setEditEbayNo("");
+                    setEditItems([]);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleEditPaymentSlip}>
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Payment Slip</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this payment slip? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <div className="flex items-start gap-2">
+                <div className="text-amber-600 mt-0.5">⚠️</div>
+                <div className="text-sm text-amber-800">
+                  <div className="font-medium mb-1">Warning:</div>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>Payment slip <strong>{deletePaymentSlipNumber}</strong> will be permanently deleted</li>
+                    <li>The associated dispatch record status will be reverted to allow re-generation</li>
+                    <li>Inventory items will be marked as "dispatched" again</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteConfirmOpen(false);
+                setDeletePaymentSlipId("");
+                setDeletePaymentSlipNumber("");
+              }}
+              disabled={deleteLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeletePaymentSlip}
+              disabled={deleteLoading}
+            >
+              {deleteLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Payment Slip
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

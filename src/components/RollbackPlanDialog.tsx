@@ -27,7 +27,6 @@ import {
   Refresh,
 } from '@mui/icons-material';
 import { RollbackApiService, RollbackStatus, RollbackResponse } from '../lib/rollback-api';
-import OTPVerificationModal from './OTPVerificationModal';
 
 interface RollbackPlanDialogProps {
   open: boolean;
@@ -51,8 +50,6 @@ export const RollbackPlanDialog: React.FC<RollbackPlanDialogProps> = ({
   const [rollingBack, setRollingBack] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
-  const [forceMode, setForceMode] = useState(false);
-  const [showOTPModal, setShowOTPModal] = useState(false);
 
   // Fetch rollback status when dialog opens
   useEffect(() => {
@@ -94,11 +91,6 @@ export const RollbackPlanDialog: React.FC<RollbackPlanDialogProps> = ({
   };
 
   const handleRollback = async () => {
-    // Show OTP verification modal instead of directly rolling back
-    setShowOTPModal(true);
-  };
-
-  const handleOTPVerified = async () => {
     try {
       setRollingBack(true);
       setError(null);
@@ -115,12 +107,7 @@ export const RollbackPlanDialog: React.FC<RollbackPlanDialogProps> = ({
       setError(err instanceof Error ? err.message : 'Rollback failed');
     } finally {
       setRollingBack(false);
-      setShowOTPModal(false);
     }
-  };
-
-  const handleOTPCancel = () => {
-    setShowOTPModal(false);
   };
 
   const formatTimeRemaining = (minutes: number): string => {
@@ -339,16 +326,6 @@ export const RollbackPlanDialog: React.FC<RollbackPlanDialogProps> = ({
           )}
         </DialogActions>
       </Dialog>
-
-      {/* OTP Verification Modal */}
-      <OTPVerificationModal
-        open={showOTPModal}
-        onOpenChange={setShowOTPModal}
-        title="Admin Verification Required for Plan Rollback"
-        description="This rollback operation requires admin verification. Please ask an administrator to provide their OTP code."
-        onVerified={handleOTPVerified}
-        onCancel={handleOTPCancel}
-      />
     </>
   );
 };
