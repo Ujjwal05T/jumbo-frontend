@@ -242,7 +242,7 @@ export default function DashboardPage() {
       }
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/reports/cut-rolls-with-stats?${params.toString()}`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/reports/cut-rolls-with-stats?${params.toString()}`,
         createRequestOptions('GET')
       );
 

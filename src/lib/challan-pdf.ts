@@ -183,8 +183,8 @@ export const generateCashChallanPDF = (data: ChallanData, printInsteadOfSave: bo
 
         // Calculate GST amounts
         const taxableValue = item.amount;
-        const cgstRate = 6;
-        const sgstRate = 6;
+        const cgstRate = 9;
+        const sgstRate = 9;
         const cgstAmount = (taxableValue * cgstRate) / 100;
         const sgstAmount = (taxableValue * sgstRate) / 100;
         const totalTaxAmount = cgstAmount + sgstAmount;
@@ -222,32 +222,32 @@ export const generateCashChallanPDF = (data: ChallanData, printInsteadOfSave: bo
 
         // Rate
         const rate = item.rate || (item.amount / qty);
-        doc.text(rate.toFixed(1), currentX + colWidths[4] / 2, yPosition + 6, { align: 'center' });
+        doc.text(rate.toFixed(2), currentX + colWidths[4] / 2, yPosition + 6, { align: 'center' });
         currentX += colWidths[4];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
         // Taxable Value (previously Amount)
-        doc.text(taxableValue.toFixed(0), currentX + colWidths[5] / 2, yPosition + 6, { align: 'center' });
+        doc.text(taxableValue.toFixed(2), currentX + colWidths[5] / 2, yPosition + 6, { align: 'center' });
         currentX += colWidths[5];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
-        // CGST (6%)
-        doc.text('6%', currentX + colWidths[6] / 2, yPosition + 6, { align: 'center' });
+        // CGST (9%)
+        doc.text('9%', currentX + colWidths[6] / 2, yPosition + 6, { align: 'center' });
         currentX += colWidths[6];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
-        // SGST (6%)
-        doc.text('6%', currentX + colWidths[7] / 2, yPosition + 6, { align: 'center' });
+        // SGST (9%)
+        doc.text('9%', currentX + colWidths[7] / 2, yPosition + 6, { align: 'center' });
         currentX += colWidths[7];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
         // Tax Amount (CGST + SGST)
-        doc.text(totalTaxAmount.toFixed(0), currentX + colWidths[8] / 2, yPosition + 6, { align: 'center' });
+        doc.text(totalTaxAmount.toFixed(2), currentX + colWidths[8] / 2, yPosition + 6, { align: 'center' });
         currentX += colWidths[8];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
         // Total (Taxable + CGST + SGST)
-        doc.text(totalItemAmount.toFixed(0), currentX + colWidths[9] / 2, yPosition + 6, { align: 'center' });
+        doc.text(totalItemAmount.toFixed(2), currentX + colWidths[9] / 2, yPosition + 6, { align: 'center' });
 
         // Update totals
         totalTaxableAmount += taxableValue;
@@ -278,10 +278,10 @@ export const generateCashChallanPDF = (data: ChallanData, printInsteadOfSave: bo
     doc.text('Total Before Tax:', summaryX + 2, yPosition + 8);
     doc.text('Rs. ' + totalTaxableAmount.toFixed(2), summaryX + 30, yPosition + 8);
     
-    doc.text('CGST (6%):', summaryX + 2, yPosition + 16);
+    doc.text('CGST (9%):', summaryX + 2, yPosition + 16);
     doc.text('Rs. ' + totalCGST.toFixed(2), summaryX + 30, yPosition + 16);
     
-    doc.text('SGST (6%):', summaryX + 2, yPosition + 24);
+    doc.text('SGST (9%):', summaryX + 2, yPosition + 24);
     doc.text('Rs. ' + totalSGST.toFixed(2), summaryX + 30, yPosition + 24);
     
     doc.text('Round Off:', summaryX + 2, yPosition + 32);
@@ -468,8 +468,8 @@ export const generateBillInvoicePDF = (data: ChallanData, printInsteadOfSave: bo
 
         // Calculate GST amounts
         const taxableValue = item.amount;
-        const cgstRate = 6;
-        const sgstRate = 6;
+        const cgstRate = 9;
+        const sgstRate = 9;
         const cgstAmount = (taxableValue * cgstRate) / 100;
         const sgstAmount = (taxableValue * sgstRate) / 100;
         const totalTaxAmount = cgstAmount + sgstAmount;
@@ -488,11 +488,9 @@ export const generateBillInvoicePDF = (data: ChallanData, printInsteadOfSave: bo
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
         // Description - Compact
-        const paperName = item.paper.name.substring(0, 10);
+        const paperName = item.paper.name;
         doc.setFont('helvetica', 'bold');
-        doc.text(paperName, currentX + 1, yPosition + 3);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`G${item.paper.gsm}`, currentX + 1, yPosition + 7);
+        doc.text(paperName, currentX + colWidths[1] / 2, yPosition + 6, { align: 'center' });
         currentX += colWidths[1];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
@@ -509,32 +507,32 @@ export const generateBillInvoicePDF = (data: ChallanData, printInsteadOfSave: bo
 
         // Rate
         const rate = item.rate || (item.amount / qty);
-        doc.text(rate.toFixed(1), currentX + colWidths[4] / 2, yPosition + 6, { align: 'center' });
+        doc.text(rate.toFixed(2), currentX + colWidths[4] / 2, yPosition + 6, { align: 'center' });
         currentX += colWidths[4];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
         // Taxable Value (previously Amount)
-        doc.text(taxableValue.toFixed(0), currentX + colWidths[5] / 2, yPosition + 6, { align: 'center' });
+        doc.text(taxableValue.toFixed(2), currentX + colWidths[5] / 2, yPosition + 6, { align: 'center' });
         currentX += colWidths[5];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
-        // CGST (6%)
-        doc.text('6%', currentX + colWidths[6] / 2, yPosition + 6, { align: 'center' });
+        // CGST (9%)
+        doc.text('9%', currentX + colWidths[6] / 2, yPosition + 6, { align: 'center' });
         currentX += colWidths[6];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
-        // SGST (6%)
-        doc.text('6%', currentX + colWidths[7] / 2, yPosition + 6, { align: 'center' });
+        // SGST (9%)
+        doc.text('9%', currentX + colWidths[7] / 2, yPosition + 6, { align: 'center' });
         currentX += colWidths[7];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
         // Tax Amount (CGST + SGST)
-        doc.text(totalTaxAmount.toFixed(0), currentX + colWidths[8] / 2, yPosition + 6, { align: 'center' });
+        doc.text(totalTaxAmount.toFixed(2), currentX + colWidths[8] / 2, yPosition + 6, { align: 'center' });
         currentX += colWidths[8];
         doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
         // Total (Taxable + CGST + SGST)
-        doc.text(totalItemAmount.toFixed(0), currentX + colWidths[9] / 2, yPosition + 6, { align: 'center' });
+        doc.text(totalItemAmount.toFixed(2), currentX + colWidths[9] / 2, yPosition + 6, { align: 'center' });
 
         // Update totals
         totalTaxableAmount += taxableValue;
@@ -565,10 +563,10 @@ export const generateBillInvoicePDF = (data: ChallanData, printInsteadOfSave: bo
     doc.text('Total Before Tax:', summaryX + 2, yPosition + 8);
     doc.text('Rs. ' + totalTaxableAmount.toFixed(2), summaryX + 30, yPosition + 8);
     
-    doc.text('CGST (6%):', summaryX + 2, yPosition + 16);
+    doc.text('CGST (9%):', summaryX + 2, yPosition + 16);
     doc.text('Rs. ' + totalCGST.toFixed(2), summaryX + 30, yPosition + 16);
     
-    doc.text('SGST (6%):', summaryX + 2, yPosition + 24);
+    doc.text('SGST (9%):', summaryX + 2, yPosition + 24);
     doc.text('Rs. ' + totalSGST.toFixed(2), summaryX + 30, yPosition + 24);
     
     doc.text('Round Off:', summaryX + 2, yPosition + 32);

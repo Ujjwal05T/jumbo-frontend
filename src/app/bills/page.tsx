@@ -955,7 +955,7 @@ export default function BillsPage() {
                               <DropdownMenuItem
                                 className="text-red-600"
                                 onClick={() => {
-                                  setDeletePaymentSlipId(slip.payment_slip_id);
+                                  setDeletePaymentSlipId(slip.id);
                                   setDeletePaymentSlipNumber(slip.payment_slip_id);
                                   setDeleteConfirmOpen(true);
                                 }}
