@@ -1012,10 +1012,6 @@ export default function ChallanPage() {
               Bill Management
             </h1>
           </div>
-          <Button onClick={() => window.location.href = '/dispatch'} variant="outline">
-            <Package className="w-4 h-4 mr-2" />
-            Create New Dispatch
-          </Button>
         </div>
         
         {/* Payment Slip Content */}

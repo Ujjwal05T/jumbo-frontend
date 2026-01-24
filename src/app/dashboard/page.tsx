@@ -166,6 +166,12 @@ export default function DashboardPage() {
   const [toDate, setToDate] = useState<string>("");
   const [loadingStats, setLoadingStats] = useState(false);
 
+  // Today Stats states (automatic)
+  const [todayStats, setTodayStats] = useState<CutRollsStats | null>(null);
+  const [todayData, setTodayData] = useState<CutRoll[]>([]);
+  const [loadingTodayStats, setLoadingTodayStats] = useState(false);
+  const [todayStatsLastUpdated, setTodayStatsLastUpdated] = useState<string>("");
+
   const router = useRouter();
 
   // Helper function to get status display info
@@ -214,6 +220,46 @@ export default function DashboardPage() {
           colorClass: 'border-gray-200 bg-gray-50',
           textClass: 'text-gray-700'
         };
+    }
+  };
+
+  // Fetch today's stats automatically
+  const fetchTodayStats = async () => {
+    try {
+      setLoadingTodayStats(true);
+
+      // Get today's date in YYYY-MM-DD format
+      const today = new Date();
+      const todayDateStr = today.toISOString().split('T')[0];
+
+      // Get tomorrow's date for production day end (8 AM IST next day)
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowDateStr = tomorrow.toISOString().split('T')[0];
+
+      const params = new URLSearchParams();
+      // From date: 8 AM IST = 2:30 AM UTC on the same day
+      params.append('from_production_date', `${todayDateStr}T02:30:00Z`);
+      // To date: 8 AM IST next day (covers full production day)
+      params.append('to_production_date', `${tomorrowDateStr}T02:30:00Z`);
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/reports/cut-rolls-with-stats?${params.toString()}`,
+        createRequestOptions('GET')
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setTodayStats(data.data.stats);
+        setTodayData(data.data.cut_rolls || []);
+        setTodayStatsLastUpdated(new Date().toLocaleString());
+      } else {
+        console.error('Failed to load today stats');
+      }
+    } catch (error) {
+      console.error('Error fetching today stats:', error);
+    } finally {
+      setLoadingTodayStats(false);
     }
   };
 
@@ -517,6 +563,25 @@ export default function DashboardPage() {
 
     return () => clearInterval(interval);
   }, [loading]);
+
+  // Fetch today's stats on mount and auto-refresh every 30 minutes
+  useEffect(() => {
+    const checkAuth = async () => {
+      const authenticated = await isAuthenticated();
+      if (authenticated) {
+        fetchTodayStats();
+      }
+    };
+
+    checkAuth();
+
+    // Auto-refresh every 30 minutes (1800000 ms)
+    const interval = setInterval(() => {
+      fetchTodayStats();
+    }, 1800000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   if (loading || !summary) {
     return (
@@ -887,6 +952,102 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Today Stats Card - Automatic */}
+        <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-cyan-50">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <Activity className="w-6 h-6 text-blue-600" />
+                  Today's Production Stats (Live)
+                </CardTitle>
+                <CardDescription>Automatic statistics for today starting from 8:00 AM IST • Updates every 30 minutes</CardDescription>
+              </div>
+              <div className="text-right">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Clock className="w-4 h-4" />
+                  {todayStatsLastUpdated && `Updated: ${todayStatsLastUpdated}`}
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={fetchTodayStats}
+                  disabled={loadingTodayStats}
+                  className="mt-2"
+                >
+                  {loadingTodayStats ? (
+                    <>
+                      <Activity className="w-4 h-4 mr-2 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-4 h-4 mr-2" />
+                      Refresh Now
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingTodayStats && !todayStats ? (
+              <div className="text-center py-8">
+                <Activity className="w-12 h-12 mx-auto text-blue-600 mb-2 animate-spin" />
+                <p className="text-sm text-muted-foreground">Loading today's statistics...</p>
+              </div>
+            ) : todayStats ? (
+              <div className="space-y-4">
+                {/* Stats Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                  {/* Total Rolls */}
+                  <Card className="border-blue-200 bg-blue-50">
+                    <CardContent className="pt-6">
+                      <div className="flex flex-col items-center text-center">
+                        <Package className="w-8 h-8 text-blue-600 mb-2" />
+                        <p className="text-sm font-medium text-muted-foreground">Total Rolls</p>
+                        <p className="text-3xl font-bold text-blue-700 mt-1">{todayStats.total_rolls.toLocaleString()}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Total Weight */}
+                  <Card className="border-purple-200 bg-purple-50">
+                    <CardContent className="pt-6">
+                      <div className="flex flex-col items-center text-center">
+                        <Weight className="w-8 h-8 text-purple-600 mb-2" />
+                        <p className="text-sm font-medium text-muted-foreground">Total Weight</p>
+                        <p className="text-3xl font-bold text-purple-700 mt-1">{todayStats.total_weight_kg.toLocaleString()} kg</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Dynamic Status Cards */}
+                  {Object.entries(todayStats.status_breakdown).map(([status, count]) => {
+                    const displayInfo = getStatusDisplayInfo(status);
+                    return (
+                      <Card key={status} className={displayInfo.colorClass}>
+                        <CardContent className="pt-6">
+                          <div className="flex flex-col items-center text-center">
+                            {displayInfo.icon}
+                            <p className="text-sm font-medium text-muted-foreground">{displayInfo.label}</p>
+                            <p className={`text-3xl font-bold mt-1 ${displayInfo.textClass}`}>{count}</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 border-2 border-dashed border-blue-200 rounded-lg bg-white">
+                <FileText className="w-12 h-12 mx-auto text-blue-600 mb-2" />
+                <p className="text-sm text-muted-foreground">No production data available for today yet</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Cut Rolls Report Card */}
         <Card className="border-green-200 bg-gradient-to-r from-green-50 to-emerald-50">

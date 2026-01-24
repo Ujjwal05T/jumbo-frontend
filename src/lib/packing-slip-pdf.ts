@@ -1,5 +1,12 @@
 import jsPDF from 'jspdf';
 
+export interface QualityCheckData {
+  barcode_id: string;
+  gsm: string | null;
+  bf: string | null;
+  cobb_value: string | null;
+}
+
 export interface PackingSlipItem {
   sno: number;
   gsm: string | number;
@@ -9,6 +16,7 @@ export interface PackingSlipItem {
   weight: number;
   natgold: string;
   order_frontend_id?:string;
+  barcode_id?: string; // Original barcode for QC lookup
 }
 
 export interface PackingSlipData {
@@ -25,6 +33,7 @@ export interface PackingSlipData {
   driver_name: string;
   driver_mobile: string;
   items: PackingSlipItem[];
+  qualityCheckData?: QualityCheckData[]; // Added QC data
 }
 
 /**
@@ -419,6 +428,178 @@ export const generatePackingSlipPDF = async (data: PackingSlipData, returnDoc: b
     // In-charge label
     doc.text('In-charge', rightHalfStartX + labelSpacing - 10 + labelSpacing / 2, footerStartY + footerHeight, { align: 'center' });
 
+    // Add Quality Check Data section if available
+    if (data.qualityCheckData && data.qualityCheckData.length > 0) {
+      yPosition = footerStartY + footerHeight * 2 + 10;
+      
+      // Check if we need a new page
+      if (yPosition + 40 > pageHeight - bottomMargin) {
+        doc.addPage();
+        yPosition = 20;
+      }
+
+      // Quality Check Title
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('QC Parameters', pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 8;
+
+      // QC Table configuration - Two tables side by side
+      const qcHeaders = ['Reel No', 'GSM', 'BF', 'Cobb'];
+      const qcTableGap = 2;
+      const qcSingleTableWidth = (pageWidth - qcTableGap) / 2;
+      
+      const qcColWidths = [
+        qcSingleTableWidth * 0.40, // Barcode ID
+        qcSingleTableWidth * 0.20, // GSM
+        qcSingleTableWidth * 0.20, // BF
+        qcSingleTableWidth * 0.20  // Cobb
+      ];
+      
+      const qcTableWidth = qcColWidths.reduce((a, b) => a + b, 0);
+      const qcHeaderHeight = 8;
+      const qcRowHeight = 7;
+
+      // Split QC data into two halves
+      const qcMidpoint = Math.ceil(data.qualityCheckData.length / 2);
+      const leftQCData = data.qualityCheckData.slice(0, qcMidpoint);
+      const rightQCData = data.qualityCheckData.slice(qcMidpoint);
+
+      // Prepare table data
+      const leftQCTableData = leftQCData.map(qc => [
+        extractReelNumber(qc.barcode_id),
+        qc.gsm || '-',
+        qc.bf || '-',
+        qc.cobb_value || '-'
+      ]);
+
+      const rightQCTableData = rightQCData.map(qc => [
+        extractReelNumber(qc.barcode_id),
+        qc.gsm || '-',
+        qc.bf || '-',
+        qc.cobb_value || '-'
+      ]);
+
+      // Helper to draw QC table headers
+      const drawQCHeaders = (startX: number, startY: number) => {
+        doc.setFillColor(140, 140, 140);
+        doc.setDrawColor(0, 0, 0);
+        doc.setLineWidth(0.3);
+
+        // Draw all header rectangles first
+        let currentX = startX;
+        qcHeaders.forEach((header, i) => {
+          doc.rect(currentX, startY, qcColWidths[i], qcHeaderHeight, 'F');
+          currentX += qcColWidths[i];
+        });
+
+        // Then draw all header text
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        currentX = startX;
+        qcHeaders.forEach((header, i) => {
+          doc.text(header, currentX + qcColWidths[i] / 2, startY + qcHeaderHeight / 2 + 1, { align: 'center' });
+          currentX += qcColWidths[i];
+        });
+      };
+
+      // Helper to draw QC table rows
+      const drawQCRows = (startX: number, startY: number, tableData: string[][]) => {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(0, 0, 0);
+
+        let currentY = startY + qcHeaderHeight;
+        tableData.forEach((row, rowIndex) => {
+          // Alternating row colors - white and light gray
+          if (rowIndex % 2 === 1) {
+            doc.setFillColor(230, 230, 230); // Light gray for odd rows
+            doc.rect(startX, currentY, qcTableWidth, qcRowHeight, 'F');
+          }
+
+          let currentX = startX;
+          row.forEach((cell, colIndex) => {
+            doc.text(cell, currentX + qcColWidths[colIndex] / 2, currentY + qcRowHeight / 2 + 1, { align: 'center' });
+            currentX += qcColWidths[colIndex];
+          });
+          currentY += qcRowHeight;
+        });
+      };
+
+      // Helper to draw QC table borders
+      const drawQCTableBorders = (startX: number, startY: number, numRows: number) => {
+        doc.setDrawColor(0, 0, 0);
+        doc.setLineWidth(0.3);
+
+        const tableHeight = qcHeaderHeight + (numRows * qcRowHeight);
+
+        // Outer border
+        doc.rect(startX, startY, qcTableWidth, tableHeight, 'S');
+
+        // Vertical lines between columns
+        let x = startX;
+        for (let i = 0; i < qcColWidths.length - 1; i++) {
+          x += qcColWidths[i];
+          doc.line(x, startY, x, startY + tableHeight);
+        }
+
+        // Horizontal line after header
+        doc.line(startX, startY + qcHeaderHeight, startX + qcTableWidth, startY + qcHeaderHeight);
+      };
+
+      // Calculate positions for both tables
+      const leftQCTableX = 0;
+      const rightQCTableX = qcTableWidth + qcTableGap;
+
+      // Calculate available space
+      const qcAvailableHeightFirstPage = pageHeight - bottomMargin - yPosition;
+      const qcAvailableHeightNewPage = pageHeight - 20 - bottomMargin;
+
+      let currentQCRowIndex = 0;
+      let currentQCPage = 1;
+      let currentQCYPosition = yPosition;
+      const qcTotalRows = Math.max(leftQCTableData.length, rightQCTableData.length);
+
+      while (currentQCRowIndex < qcTotalRows) {
+        // Calculate available space
+        const qcAvailableSpace = currentQCPage === 1
+          ? qcAvailableHeightFirstPage
+          : qcAvailableHeightNewPage;
+
+        const maxQCRowsThisPage = Math.floor((qcAvailableSpace - qcHeaderHeight) / qcRowHeight);
+        const qcRowsToDrawThisPage = Math.min(maxQCRowsThisPage, qcTotalRows - currentQCRowIndex);
+
+        // Get data slices
+        const leftQCSlice = leftQCTableData.slice(currentQCRowIndex, currentQCRowIndex + qcRowsToDrawThisPage);
+        const rightQCSlice = rightQCTableData.slice(currentQCRowIndex, currentQCRowIndex + qcRowsToDrawThisPage);
+
+        // Draw left table
+        if (leftQCSlice.length > 0) {
+          drawQCHeaders(leftQCTableX, currentQCYPosition);
+          drawQCRows(leftQCTableX, currentQCYPosition, leftQCSlice);
+          drawQCTableBorders(leftQCTableX, currentQCYPosition, leftQCSlice.length);
+        }
+
+        // Draw right table
+        if (rightQCSlice.length > 0) {
+          drawQCHeaders(rightQCTableX, currentQCYPosition);
+          drawQCRows(rightQCTableX, currentQCYPosition, rightQCSlice);
+          drawQCTableBorders(rightQCTableX, currentQCYPosition, rightQCSlice.length);
+        }
+
+        currentQCRowIndex += qcRowsToDrawThisPage;
+        currentQCYPosition += qcHeaderHeight + (qcRowsToDrawThisPage * qcRowHeight);
+
+        // Add new page if more rows remain
+        if (currentQCRowIndex < qcTotalRows) {
+          doc.addPage();
+          currentQCPage++;
+          currentQCYPosition = 20;
+        }
+      }
+    }
+
     // Save or return the PDF
     if (returnDoc) {
       return doc;
@@ -460,7 +641,8 @@ export const convertDispatchToPackingSlip = (dispatch: any): PackingSlipData => 
     reel: extractReelNumber(item.barcode_id) || item.qr_code || item.barcode_id || '',
     weight: Math.round(parseFloat(item.weight_kg) || 0),
     natgold: extractShadeFromSpec(item.paper_spec) || '',
-    order_frontend_id:item.order_frontend_id
+    order_frontend_id: item.order_frontend_id,
+    barcode_id: item.barcode_id // Keep original barcode for QC lookup
   }));
 
   return {
@@ -476,7 +658,8 @@ export const convertDispatchToPackingSlip = (dispatch: any): PackingSlipData => 
     vehicle_number: dispatch.vehicle_number || '',
     driver_name: dispatch.driver_name || '',
     driver_mobile: dispatch.driver_mobile || '',
-    items
+    items,
+    qualityCheckData: dispatch.qualityCheckData || [] // Include QC data if available
   };
 };
 

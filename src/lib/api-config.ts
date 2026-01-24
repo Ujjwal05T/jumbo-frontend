@@ -174,6 +174,13 @@ export const WASTAGE_ENDPOINTS = {
   WASTAGE_STATS: `${API_BASE_URL}/wastage/stats/summary`,
 };
 
+export const QUALITY_CHECK_ENDPOINTS = {
+  QUALITY_CHECK: `${API_BASE_URL}/quality-check`,
+  QUALITY_CHECK_BY_ID: (id: string) => `${API_BASE_URL}/quality-check/${id}`,
+  QUALITY_CHECK_BY_BARCODE: (barcodeId: string) => `${API_BASE_URL}/quality-check/barcode/${barcodeId}`,
+  QUALITY_CHECK_BULK: `${API_BASE_URL}/quality-check/bulk`,
+};
+
 /**
  * Helper function to create API request options
  */

@@ -374,6 +374,37 @@ export default function DispatchHistoryPage() {
       if (!response.ok) throw new Error('Failed to fetch dispatch details');
 
       const dispatchData = await response.json();
+      
+      // Extract barcode IDs from dispatch items
+      const barcodeIds = (dispatchData.items || [])
+        .map((item: any) => item.barcode_id)
+        .filter((id: string) => id); // Filter out empty/null values
+
+      // Fetch quality check data for all barcodes
+      let qualityCheckData = [];
+      if (barcodeIds.length > 0) {
+        try {
+          const qcResponse = await fetch(`${API_BASE_URL}/quality-check/bulk`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'ngrok-skip-browser-warning': 'true'
+            },
+            body: JSON.stringify(barcodeIds)
+          });
+
+          if (qcResponse.ok) {
+            qualityCheckData = await qcResponse.json();
+          }
+        } catch (qcError) {
+          console.warn('Failed to fetch quality check data:', qcError);
+          // Continue without QC data
+        }
+      }
+
+      // Add quality check data to dispatch data
+      dispatchData.qualityCheckData = qualityCheckData;
+
       const packingSlipData = convertDispatchToPackingSlip(dispatchData);
       generatePackingSlipPDF(packingSlipData, false, true); // Open print dialog
 
