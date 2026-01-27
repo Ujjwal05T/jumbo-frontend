@@ -43,7 +43,8 @@ import {
   Loader2,
   AlertCircle,
   Truck,
-  Clock
+  Clock,
+  ClipboardCheck
 } from "lucide-react";
 import { User as ApiUser, fetchUsers, deleteUser, updateUserStatus } from "@/lib/users";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -265,6 +266,11 @@ export default function UserMasterPage() {
         return <Badge className="bg-pink-100 text-pink-800 hover:bg-pink-100">
           <User className="w-3 h-3 mr-1" />
           Sales Person
+        </Badge>;
+      case "qc":
+        return <Badge className="bg-cyan-100 text-cyan-800 hover:bg-cyan-100">
+          <ClipboardCheck className="w-3 h-3 mr-1" />
+          QC
         </Badge>;
       default:
         return <Badge variant="secondary">{role}</Badge>;

@@ -36,7 +36,8 @@ import {
   Database,
   Clock,
   Weight,
-  Barcode
+  Barcode,
+  ClipboardCheck
 } from "lucide-react";
 import { getCurrentUser, logout } from "@/lib/auth";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -186,7 +187,13 @@ const getNavigationForRole = (role: string | null) => {
       name: "Hour Calculator",
       href: "/hour-calculator",
       icon: Clock,
-      roles: ["admin"],
+      roles: ["admin", "qc"],
+    },
+    {
+      name: "Quality Check",
+      href: "/quality-check",
+      icon: ClipboardCheck,
+      roles: ["admin", "qc"],
     },
   ];
 

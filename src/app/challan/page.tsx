@@ -227,6 +227,7 @@ export default function ChallanPage() {
   const [generateEbayNo, setGenerateEbayNo] = useState<string>("");
   const [generateDispatchItems, setGenerateDispatchItems] = useState<any[]>([]);
   const [generateItemsLoading, setGenerateItemsLoading] = useState(false);
+  const [generateSaving, setGenerateSaving] = useState(false);
 
 
   const loadDispatches = async () => {
@@ -495,6 +496,11 @@ export default function ChallanPage() {
   // PDF generation handlers
   const handleGeneratePaymentSlip = async () => {
     try {
+      // Prevent duplicate submissions
+      if (generateSaving) {
+        return;
+      }
+
       if (!selectedDispatchForGenerate) {
         toast.error("No dispatch selected");
         return;
@@ -504,6 +510,8 @@ export default function ChallanPage() {
         toast.error("Please select payment type");
         return;
       }
+
+      setGenerateSaving(true);
 
       // Get current user ID
       const userId = localStorage.getItem('user_id');
@@ -635,12 +643,14 @@ export default function ChallanPage() {
       setGenerateDate("");
       setGenerateEbayNo("");
       setGenerateDispatchItems([]);
+      setGenerateSaving(false);
 
       // Reload dispatches to update the list (item will move to Bills page)
       loadDispatches();
     } catch (error) {
       console.error("Error generating payment slip:", error);
       toast.error(error instanceof Error ? error.message : "Failed to generate payment slip");
+      setGenerateSaving(false);
     }
   };
 
@@ -1387,13 +1397,24 @@ export default function ChallanPage() {
                     setGenerateDate("");
                     setGenerateEbayNo("");
                     setGenerateDispatchItems([]);
+                    setGenerateSaving(false);
                   }}
+                  disabled={generateSaving}
                 >
                   Cancel
                 </Button>
-                <Button onClick={handleGeneratePaymentSlip}>
-                  <FileText className="w-4 h-4 mr-2" />
-                  Save
+                <Button onClick={handleGeneratePaymentSlip} disabled={generateSaving}>
+                  {generateSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="w-4 h-4 mr-2" />
+                      Save
+                    </>
+                  )}
                 </Button>
               </div>
             </div>

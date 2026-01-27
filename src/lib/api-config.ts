@@ -181,6 +181,17 @@ export const QUALITY_CHECK_ENDPOINTS = {
   QUALITY_CHECK_BULK: `${API_BASE_URL}/quality-check/bulk`,
 };
 
+// Production Data endpoints
+export const PRODUCTION_DATA_ENDPOINTS = {
+  PRODUCTION_DATA: `${API_BASE_URL}/production-data`,
+  PRODUCTION_DATA_BY_DATE: (date: string) => `${API_BASE_URL}/production-data/by-date?date=${date}`,
+  PRODUCTION_DATA_BY_ID: (id: string) => `${API_BASE_URL}/production-data/${id}`,
+  PRODUCTION_DATA_REPORT: (fromDate: string, toDate: string, columns?: string) => {
+    const baseUrl = `${API_BASE_URL}/production-data/report?from_date=${fromDate}&to_date=${toDate}`;
+    return columns ? `${baseUrl}&columns=${columns}` : baseUrl;
+  },
+};
+
 /**
  * Helper function to create API request options
  */

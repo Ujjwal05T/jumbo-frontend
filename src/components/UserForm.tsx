@@ -65,6 +65,7 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true, editingUs
       pink: "bg-pink-100 text-pink-800",
       red: "bg-red-100 text-red-800",
       green: "bg-green-100 text-green-800",
+      cyan: "bg-cyan-100 text-cyan-800",
     };
     return colorMap[color] || "bg-gray-100 text-gray-800";
   };
@@ -217,6 +218,7 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true, editingUs
                     { value: "mou", label: "MOU", color: "orange" },
                     { value: "order_puncher", label: "Order Puncher", color: "blue" },
                     { value: "poduction", label: "Production", color: "yellow" },
+                    { value: "qc", label: "QC", color: "cyan" },
                     { value: "sales_person", label: "Sales Person", color: "pink" },
                     { value: "security", label: "Security", color: "red" },
                     { value: "weight_update", label: "Weight Update", color: "green" },

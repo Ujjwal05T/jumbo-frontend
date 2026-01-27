@@ -68,7 +68,10 @@ export default function LoginPage() {
       router.push('/dispatch/history');
     } else if (data.role?.toLowerCase() === 'sales_person'){
       router.push('/masters/orders');
-    }else {
+    }else if (data.role?.toLowerCase() === 'qc'){
+      router.push('/quality-check');
+    }
+    else {
       router.push('/dashboard');
     }
     } catch (err) {
