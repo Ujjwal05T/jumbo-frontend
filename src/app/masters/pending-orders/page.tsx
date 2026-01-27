@@ -549,15 +549,29 @@ export default function PendingOrderItemsPage() {
     try {
       setSuggestionsLoading(true);
       setShowWastageDialog(false);
-      
-      const response = await fetch(`${MASTER_ENDPOINTS.PENDING_ORDERS}/roll-suggestions`, 
-        createRequestOptions('POST', { wastage })
+
+      // Generate idempotency key to prevent duplicate suggestions on network retry
+      const userId = localStorage.getItem('user_id') || 'unknown';
+      const idempotencyKey = `suggestions-${userId}-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+      console.log('🔑 Generated idempotency key for suggestions:', idempotencyKey);
+
+      // Get the request options and add idempotency header
+      const requestOptions = createRequestOptions('POST', { wastage });
+      requestOptions.headers = {
+        ...requestOptions.headers,
+        'X-Idempotency-Key': idempotencyKey
+      };
+
+      const response = await fetch(`${MASTER_ENDPOINTS.PENDING_ORDERS}/roll-suggestions`,
+        requestOptions
       );
-      
+
       if (!response.ok) {
-        throw new Error(`Failed to get suggestions: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.detail || `Failed to get suggestions: ${response.status}`;
+        throw new Error(errorMessage);
       }
-      
+
       const result = await response.json();
 
 
@@ -2125,12 +2139,26 @@ const handlePrintPDF = () => {
       const plainRequestData = JSON.parse(JSON.stringify(requestData));
       console.log('🔧 FINAL REQUEST DATA:', requestData);
 
-      const response = await fetch(`${MASTER_ENDPOINTS.PENDING_ORDERS.replace('pending-order-items', 'pending-orders')}/start-production`, 
-        createRequestOptions('POST', requestData)
+      // Generate idempotency key to prevent duplicate production start on network retry
+      const productionUserId = requestData.created_by_id || 'unknown';
+      const idempotencyKey = `production-${productionUserId}-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+      console.log('🔑 Generated idempotency key for production:', idempotencyKey);
+
+      // Get the request options and add idempotency header
+      const requestOptions = createRequestOptions('POST', requestData);
+      requestOptions.headers = {
+        ...requestOptions.headers,
+        'X-Idempotency-Key': idempotencyKey
+      };
+
+      const response = await fetch(`${MASTER_ENDPOINTS.PENDING_ORDERS.replace('pending-order-items', 'pending-orders')}/start-production`,
+        requestOptions
       );
 
       if (!response.ok) {
-        throw new Error(`Failed to start production: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.detail || `Failed to start production: ${response.status}`;
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();

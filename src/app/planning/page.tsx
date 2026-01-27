@@ -1035,18 +1035,25 @@ export default function PlanningPage() {
         
       };
 
+      // Generate idempotency key to prevent duplicate plan creation on network retry
+      const idempotencyKey = `plan-${user_id}-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+      console.log('🔑 Generated idempotency key:', idempotencyKey);
+
       // Create the plan
       const planCreateResponse = await fetch(`${API_BASE_URL}/plans`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-Idempotency-Key': idempotencyKey,
           'ngrok-skip-browser-warning': 'true'
         },
         body: JSON.stringify(planCreateRequest)
       });
 
       if (!planCreateResponse.ok) {
-        throw new Error('Failed to create plan for production');
+        const errorData = await planCreateResponse.json().catch(() => ({}));
+        const errorMessage = errorData.detail || 'Failed to create plan for production';
+        throw new Error(errorMessage);
       }
 
       const createdPlan = await planCreateResponse.json();
