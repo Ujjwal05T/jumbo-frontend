@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FileText, Calendar, Loader2, Printer, ChevronDown, ChevronUp } from "lucide-react";
+import { FileText, Calendar, Loader2, Printer, ChevronDown, ChevronUp, Download } from "lucide-react";
 import { PRODUCTION_DATA_ENDPOINTS } from "@/lib/api-config";
 import {
   Table,
@@ -35,7 +35,8 @@ interface ReportData {
 
 const COLUMN_LABELS: Record<string, string> = {
   date: "Date",
-  production: "Production",
+  production_day: "Production Day",
+  production_night: "Production Night",
   electricity: "Electricity",
   coal: "Coal",
   bhushi: "Bhushi",
@@ -153,6 +154,270 @@ export default function ProductionDataReportsPage() {
     return value;
   };
 
+  // Calculate totals for each column
+  const calculateColumnTotals = (data: Record<string, any>[], columns: string[]) => {
+    const totals: Record<string, string> = {};
+
+    columns.forEach(column => {
+      if (column === "date") {
+        totals[column] = "Total";
+        return;
+      }
+
+      let sum = 0;
+      let hasNumericValue = false;
+
+      data.forEach(row => {
+        const value = row[column];
+        if (value !== null && value !== undefined && value !== "") {
+          const strValue = String(value);
+          let numValue: number;
+
+          // Check if value contains a hyphen (e.g., "4-49990")
+          if (strValue.includes('-')) {
+            // Take the number after the hyphen
+            const parts = strValue.split('-');
+            const afterHyphen = parts[parts.length - 1].trim();
+            numValue = parseFloat(afterHyphen);
+          } else {
+            numValue = parseFloat(strValue);
+          }
+
+          if (!isNaN(numValue)) {
+            sum += numValue;
+            hasNumericValue = true;
+          }
+        }
+      });
+
+      totals[column] = hasNumericValue ? sum.toFixed(2) : "-";
+    });
+
+    return totals;
+  };
+
+  // Helper function to parse numeric value (handles hyphen format like "4-49990")
+  const parseNumericValue = (value: any): number => {
+    if (value === null || value === undefined || value === "") return 0;
+    const strValue = String(value);
+    if (strValue.includes('-')) {
+      const parts = strValue.split('-');
+      const afterHyphen = parts[parts.length - 1].trim();
+      const num = parseFloat(afterHyphen);
+      return isNaN(num) ? 0 : num;
+    }
+    const num = parseFloat(strValue);
+    return isNaN(num) ? 0 : num;
+  };
+
+  // Download Production Summary PDF (Date, Day, Night, Total, Total Production)
+  // Always fetches 1-27 of the month from fromDate, independent of date filters
+  const handleDownloadProductionPDF = async () => {
+    if (!fromDate) {
+      toast.error("Please select a from date to determine the month");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Get month and year from fromDate
+      const startDate = new Date(fromDate);
+      const month = startDate.getMonth();
+      const year = startDate.getFullYear();
+
+      // Calculate API date range: 1st to 27th of the month
+      const apiFromDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+      const apiToDate = `${year}-${String(month + 1).padStart(2, '0')}-27`;
+
+      // Fetch data with only the required columns for 1-27 of the month
+      const columnsParam = "date,production_day,production_night";
+      const response = await fetch(
+        PRODUCTION_DATA_ENDPOINTS.PRODUCTION_DATA_REPORT(
+          apiFromDate,
+          apiToDate,
+          columnsParam
+        ),
+        {
+          headers: { "ngrok-skip-browser-warning": "true" },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch production data");
+      }
+
+      const data: ReportData = await response.json();
+
+      // Create a map of existing data by date (dd/mm/yyyy format)
+      const dataByDate: Record<string, any> = {};
+      data.data.forEach(row => {
+        const dateKey = formatCellValue("date", row.date);
+        dataByDate[dateKey] = row;
+      });
+
+      // Generate all dates from 1 to 27 for the month
+      let cumulativeTotal = 0;
+      const rows = [];
+
+      for (let day = 1; day <= 27; day++) {
+        const dateStr = `${String(day).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`;
+
+        const existingData = dataByDate[dateStr];
+
+        let dayValue = 0;
+        let nightValue = 0;
+        let dayDisplay = "0";
+        let nightDisplay = "0";
+
+        if (existingData) {
+          dayValue = parseNumericValue(existingData.production_day);
+          nightValue = parseNumericValue(existingData.production_night);
+          dayDisplay = existingData.production_day || "0";
+          nightDisplay = existingData.production_night || "0";
+        }
+
+        const total = dayValue + nightValue;
+        cumulativeTotal += total;
+
+        rows.push({
+          date: dateStr,
+          day: dayDisplay,
+          night: nightDisplay,
+          total: total,
+          totalProduction: cumulativeTotal
+        });
+      }
+
+      // Get month name for title
+      const monthNames = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
+                          "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
+      const monthName = monthNames[month];
+      const yearShort = String(year).slice(-2);
+      const reportTitle = `${monthName}-${yearShort} PRODUCTION`;
+
+      // Create PDF window
+      const pdfWindow = window.open('', '_blank');
+      if (!pdfWindow) {
+        toast.error("Unable to open PDF window. Please check popup blocker settings.");
+        return;
+      }
+
+      const pdfContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>${reportTitle}</title>
+            <style>
+              body {
+                font-family: Arial, sans-serif;
+                padding: 20px;
+                margin: 0;
+                font-weight: bold;
+              }
+              .title-container {
+                text-align: center;
+                margin-bottom: 10px;
+              }
+              h1 {
+                font-size: 22px;
+                font-weight: bold;
+                color: #000;
+                margin: 0;
+                padding: 10px;
+                display: inline-block;
+              }
+              table {
+                width: 100%;
+                border-collapse: collapse;
+                border: 2px solid #000;
+              }
+              th, td {
+                border: 2px solid #000;
+                padding: 8px 12px;
+                text-align: center;
+                font-size: 13px;
+                font-weight: bold;
+              }
+              th {
+                background-color: #fff;
+                font-weight: bold;
+                color: #000;
+              }
+              .header-row th {
+                border-bottom: 3px solid #000;
+              }
+              td {
+                font-weight: bold;
+              }
+              .total-production-col {
+                font-weight: bold;
+              }
+              @media print {
+                body {
+                  padding: 10px;
+                }
+                th, td {
+                  padding: 6px 10px;
+                  font-size: 12px;
+                  font-weight: bold;
+                }
+              }
+            </style>
+          </head>
+          <body>
+            <table>
+              <thead>
+                <tr>
+                  <th colspan="4" style="font-size: 20px; padding: 15px; border-bottom: none;">
+                    ${reportTitle}
+                  </th>
+                  <th rowspan="2" style="vertical-align: middle; font-size: 12px;">TOTAL<br>PRODUCTION</th>
+                </tr>
+                <tr class="header-row">
+                  <th>DATE</th>
+                  <th>DAY</th>
+                  <th>NIGHT</th>
+                  <th>TOTAL</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows.map(row => `
+                  <tr>
+                    <td>${row.date}</td>
+                    <td>${row.day}</td>
+                    <td>${row.night}</td>
+                    <td>${row.total}</td>
+                    <td class="total-production-col">${row.totalProduction}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            <script>
+              window.onload = function() {
+                window.print();
+                window.onafterprint = function() {
+                  window.close();
+                };
+              };
+            </script>
+          </body>
+        </html>
+      `;
+
+      pdfWindow.document.write(pdfContent);
+      pdfWindow.document.close();
+
+      toast.success("Production Summary PDF generated");
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to generate PDF";
+      toast.error(errorMessage);
+      console.error("Error generating production PDF:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handlePrint = () => {
     if (!reportData) return;
 
@@ -204,6 +469,14 @@ export default function ProductionDataReportsPage() {
             tr:nth-child(even) {
               background-color: #f9fafb;
             }
+            .total-row {
+              background-color: #e5e7eb !important;
+              font-weight: 700;
+              border-top: 2px solid #374151;
+            }
+            .total-row td {
+              font-weight: 700;
+            }
             .print-date {
               margin-top: 30px;
               font-size: 12px;
@@ -239,6 +512,14 @@ export default function ProductionDataReportsPage() {
                   ${reportData.columns.map(col => `<td>${formatCellValue(col, row[col])}</td>`).join('')}
                 </tr>
               `).join('')}
+              ${(() => {
+                const totals = calculateColumnTotals(reportData.data, reportData.columns);
+                return `
+                  <tr class="total-row">
+                    ${reportData.columns.map(col => `<td>${totals[col]}</td>`).join('')}
+                  </tr>
+                `;
+              })()}
             </tbody>
           </table>
           <div class="print-date">
@@ -301,24 +582,36 @@ export default function ProductionDataReportsPage() {
             </div>
           </div>
 
-          <Button
-            onClick={handleGenerateReport}
-            className="flex items-center mt-5 gap-2"
-            disabled={loading || selectedColumns.length === 0}
-            title={selectedColumns.length === 0 ? "Please select at least one data column" : ""}
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Generating...
-              </>
-            ) : (
-              <>
-                <FileText className="w-4 h-4" />
-                Generate Report
-              </>
-            )}
-          </Button>
+          <div className="flex items-center gap-2 mt-5">
+            <Button
+              onClick={handleDownloadProductionPDF}
+              variant="outline"
+              className="flex items-center gap-2"
+              disabled={loading}
+              title="Download Production Summary PDF (Date, Day, Night, Total, Total Production)"
+            >
+              <Download className="w-4 h-4" />
+              Production PDF
+            </Button>
+            <Button
+              onClick={handleGenerateReport}
+              className="flex items-center gap-2"
+              disabled={loading || selectedColumns.length === 0}
+              title={selectedColumns.length === 0 ? "Please select at least one data column" : ""}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <FileText className="w-4 h-4" />
+                  Generate Report
+                </>
+              )}
+            </Button>
+          </div>
         </div>
 
         {/* Column Selection */}
@@ -460,6 +753,19 @@ export default function ProductionDataReportsPage() {
                           ))}
                         </TableRow>
                       ))}
+                      {/* Total Row */}
+                      {(() => {
+                        const totals = calculateColumnTotals(reportData.data, reportData.columns);
+                        return (
+                          <TableRow className="bg-muted/50 font-semibold border-t-2">
+                            {reportData.columns.map((column) => (
+                              <TableCell key={column} className="font-bold">
+                                {totals[column]}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        );
+                      })()}
                     </TableBody>
                   </Table>
                 </div>

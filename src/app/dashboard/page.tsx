@@ -182,6 +182,7 @@ export default function DashboardPage() {
         return {
           label: 'Stock',
           icon: <CheckCircle className="w-8 h-8 text-green-600 mb-2" />,
+          smallIcon: <CheckCircle className="w-4 h-4 text-green-600" />,
           colorClass: 'border-green-200 bg-green-50',
           textClass: 'text-green-700'
         };
@@ -189,6 +190,7 @@ export default function DashboardPage() {
         return {
           label: 'Planned',
           icon: <Scissors className="w-8 h-8 text-blue-600 mb-2" />,
+          smallIcon: <Scissors className="w-4 h-4 text-blue-600" />,
           colorClass: 'border-blue-200 bg-blue-50',
           textClass: 'text-blue-700'
         };
@@ -196,6 +198,7 @@ export default function DashboardPage() {
         return {
           label: 'Dispatched',
           icon: <AlertCircle className="w-8 h-8 text-gray-600 mb-2" />,
+          smallIcon: <AlertCircle className="w-4 h-4 text-gray-600" />,
           colorClass: 'border-gray-200 bg-gray-50',
           textClass: 'text-gray-700'
         };
@@ -203,6 +206,7 @@ export default function DashboardPage() {
         return {
           label: 'Billed',
           icon: <CheckCircle className="w-8 h-8 text-purple-600 mb-2" />,
+          smallIcon: <CheckCircle className="w-4 h-4 text-purple-600" />,
           colorClass: 'border-purple-200 bg-purple-50',
           textClass: 'text-purple-700'
         };
@@ -210,6 +214,7 @@ export default function DashboardPage() {
         return {
           label: 'Removed',
           icon: <AlertCircle className="w-8 h-8 text-red-600 mb-2" />,
+          smallIcon: <AlertCircle className="w-4 h-4 text-red-600" />,
           colorClass: 'border-red-200 bg-red-50',
           textClass: 'text-red-700'
         };
@@ -217,6 +222,7 @@ export default function DashboardPage() {
         return {
           label: status.charAt(0).toUpperCase() + status.slice(1),
           icon: <Package className="w-8 h-8 text-gray-600 mb-2" />,
+          smallIcon: <Package className="w-4 h-4 text-gray-600" />,
           colorClass: 'border-gray-200 bg-gray-50',
           textClass: 'text-gray-700'
         };
@@ -712,7 +718,7 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-8">
+      <div className="space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="space-y-2">
@@ -720,9 +726,6 @@ export default function DashboardPage() {
               <BarChart3 className="w-8 h-8 text-primary" />
               Live Dashboard
             </h1>
-            <p className="text-muted-foreground">
-              Real-time overview of your paper roll management system
-            </p>
           </div>
           <div className="text-right">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -742,27 +745,19 @@ export default function DashboardPage() {
         </div>
 
 
-        {/* Stats Cards */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {/* Stats Cards - Compact */}
+        <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
           {stats.slice(0,3).map((stat, index) => (
-            <Card key={index} className={`hover-lift transition-all duration-300 ${getColorClasses(stat.color)}`}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-                <stat.icon className="h-5 w-5 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold mb-1">{stat.value}</div>
-                <p className="text-xs text-muted-foreground mb-3">{stat.subValue}</p>
-                <div className="space-y-1">
-                  {stat.details.map((detail, idx) => (
-                    <div key={idx} className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">{detail.label}:</span>
-                      <span className="font-medium">{detail.value}</span>
-                    </div>
-                  ))}
+            <div key={index} className={`hover-lift  p-2 border-2 rounded-lg transition-all duration-300 ${getColorClasses(stat.color)}`}>
+              {/* <CardContent className="p-4"> */}
+                <div className="flex items-center gap-2 mb-2">
+                  <stat.icon className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-xs font-medium truncate">{stat.title}</span>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="text-xl font-bold">{stat.value}</div>
+                <p className="text-xs text-muted-foreground truncate">{stat.subValue}</p>
+              {/* </CardContent> */}
+            </div>
           ))}
         </div>
 
@@ -954,8 +949,8 @@ export default function DashboardPage() {
         )}
 
         {/* Today Stats Card - Automatic */}
-        <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-cyan-50">
-          <CardHeader>
+        <div className="border-blue-200 p-3 space-y-2 shadow-lg rounded-lg border bg-gradient-to-r from-blue-50 to-cyan-50">
+          {/* <CardHeader> */}
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2 text-xl">
@@ -990,7 +985,7 @@ export default function DashboardPage() {
                 </Button>
               </div>
             </div>
-          </CardHeader>
+          {/* </CardHeader> */}
           <CardContent>
             {loadingTodayStats && !todayStats ? (
               <div className="text-center py-8">
@@ -998,47 +993,38 @@ export default function DashboardPage() {
                 <p className="text-sm text-muted-foreground">Loading today's statistics...</p>
               </div>
             ) : todayStats ? (
-              <div className="space-y-4">
-                {/* Stats Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                  {/* Total Rolls */}
-                  <Card className="border-blue-200 bg-blue-50">
-                    <CardContent className="pt-6">
-                      <div className="flex flex-col items-center text-center">
-                        <Package className="w-8 h-8 text-blue-600 mb-2" />
-                        <p className="text-sm font-medium text-muted-foreground">Total Rolls</p>
-                        <p className="text-3xl font-bold text-blue-700 mt-1">{todayStats.total_rolls.toLocaleString()}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Total Weight */}
-                  <Card className="border-purple-200 bg-purple-50">
-                    <CardContent className="pt-6">
-                      <div className="flex flex-col items-center text-center">
-                        <Weight className="w-8 h-8 text-purple-600 mb-2" />
-                        <p className="text-sm font-medium text-muted-foreground">Total Weight</p>
-                        <p className="text-3xl font-bold text-purple-700 mt-1">{todayStats.total_weight_kg.toLocaleString()} kg</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Dynamic Status Cards */}
-                  {Object.entries(todayStats.status_breakdown).map(([status, count]) => {
-                    const displayInfo = getStatusDisplayInfo(status);
-                    return (
-                      <Card key={status} className={displayInfo.colorClass}>
-                        <CardContent className="pt-6">
-                          <div className="flex flex-col items-center text-center">
-                            {displayInfo.icon}
-                            <p className="text-sm font-medium text-muted-foreground">{displayInfo.label}</p>
-                            <p className={`text-3xl font-bold mt-1 ${displayInfo.textClass}`}>{count}</p>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                {/* Total Rolls */}
+                <div className="border-2 rounded-lg p-4 border-blue-200 bg-blue-50">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Package className="w-4 h-4 text-blue-600" />
+                    <span className="text-xs font-medium text-muted-foreground">Total Rolls</span>
+                  </div>
+                  <p className="text-xl font-bold text-blue-700">{todayStats.total_rolls.toLocaleString()}</p>
                 </div>
+
+                {/* Total Weight */}
+                <div className="border-2 rounded-lg p-2 border-purple-200 bg-purple-50">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Weight className="w-4 h-4 text-purple-600" />
+                    <span className="text-xs font-medium text-muted-foreground">Total Weight</span>
+                  </div>
+                  <p className="text-xl font-bold text-purple-700">{todayStats.total_weight_kg.toLocaleString()} kg</p>
+                </div>
+
+                {/* Dynamic Status Cards */}
+                {Object.entries(todayStats.status_breakdown).map(([status, count]) => {
+                  const displayInfo = getStatusDisplayInfo(status);
+                  return (
+                    <div key={status} className={`border-2 rounded-lg p-2 ${displayInfo.colorClass}`}>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        {displayInfo.smallIcon}
+                        <span className="text-xs font-medium text-muted-foreground">{displayInfo.label}</span>
+                      </div>
+                      <p className={`text-xl font-bold ${displayInfo.textClass}`}>{count}</p>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="text-center py-8 border-2 border-dashed border-blue-200 rounded-lg bg-white">
@@ -1047,7 +1033,7 @@ export default function DashboardPage() {
               </div>
             )}
           </CardContent>
-        </Card>
+        </div>
 
         {/* Cut Rolls Report Card */}
         <Card className="border-green-200 bg-gradient-to-r from-green-50 to-emerald-50">

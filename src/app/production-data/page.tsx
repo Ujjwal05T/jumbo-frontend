@@ -19,7 +19,8 @@ import { PRODUCTION_DATA_ENDPOINTS } from "@/lib/api-config";
 export default function ProductionDataPage() {
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
-    production: "",
+    productionDay: "",
+    productionNight: "",
     electricity: "",
     coal: "",
     bhushi: "",
@@ -63,7 +64,8 @@ export default function ProductionDataPage() {
         // No data for this date, reset form fields (except date)
         setFormData(prev => ({
           date: prev.date,
-          production: "",
+          productionDay: "",
+          productionNight: "",
           electricity: "",
           coal: "",
           bhushi: "",
@@ -94,7 +96,8 @@ export default function ProductionDataPage() {
       // Populate form with existing data
       setFormData({
         date: date,
-        production: data.production?.toString() || "",
+        productionDay: data.production_day?.toString() || "",
+        productionNight: data.production_night?.toString() || "",
         electricity: data.electricity?.toString() || "",
         coal: data.coal?.toString() || "",
         bhushi: data.bhushi?.toString() || "",
@@ -148,7 +151,8 @@ export default function ProductionDataPage() {
       // Prepare data for API (convert empty strings to null)
       const apiData = {
         date: new Date(formData.date).toISOString(),
-        production: formData.production || null,
+        production_day: formData.productionDay || null,
+        production_night: formData.productionNight || null,
         electricity: formData.electricity || null,
         coal: formData.coal || null,
         bhushi: formData.bhushi || null,
@@ -195,7 +199,8 @@ export default function ProductionDataPage() {
   const handleReset = () => {
     setFormData({
       date: new Date().toISOString().split('T')[0],
-      production: "",
+      productionDay: "",
+      productionNight: "",
       electricity: "",
       coal: "",
       bhushi: "",
@@ -262,12 +267,23 @@ export default function ProductionDataPage() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="production">Production</Label>
+                  <Label htmlFor="productionDay">Production Day</Label>
                   <Input
-                    id="production"
+                    id="productionDay"
                     type="text"
-                    value={formData.production}
-                    onChange={(e) => handleInputChange('production', e.target.value)}
+                    value={formData.productionDay}
+                    onChange={(e) => handleInputChange('productionDay', e.target.value)}
+                    disabled={loading || saving}
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="productionNight">Production Night</Label>
+                  <Input
+                    id="productionNight"
+                    type="text"
+                    value={formData.productionNight}
+                    onChange={(e) => handleInputChange('productionNight', e.target.value)}
                     disabled={loading || saving}
                   />
                 </div>
