@@ -75,6 +75,8 @@ const roleBasedRoutes = {
     '/hour-calculator',
   ],
   accountant: [
+    '/production-data-reports',
+    '/production-data',
     '/masters',
     '/weight-update',
     '/dispatch',

@@ -11,7 +11,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DASHBOARD_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
+import { DASHBOARD_ENDPOINTS, createRequestOptions, PRODUCTION_DATA_ENDPOINTS } from "@/lib/api-config";
 import { trackRollHierarchy, type JumboHierarchy } from "@/lib/roll-tracking";
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -98,6 +98,32 @@ interface CutRollsStats {
   status_breakdown: Record<string, number>;
 }
 
+interface ProductionSummary {
+  totalDay: number;
+  totalNight: number;
+  grandTotal: number;
+  totalProduction: number;
+  electricity: number;
+  coal: number;
+  bhushi: number;
+  dispatchTon: number;
+  poTon: number;
+  waste: number;
+  starch: number;
+  guarGum: number;
+  pac: number;
+  rct: number;
+  sSeizing: number;
+  dFormer: number;
+  sodiumSilicate: number;
+  enzyme: number;
+  dsr: number;
+  retAid: number;
+  colourDye: number;
+  monthName: string;
+  year: number;
+}
+
 interface CutRoll {
   id: string;
   frontend_id: string;
@@ -171,6 +197,11 @@ export default function DashboardPage() {
   const [todayData, setTodayData] = useState<CutRoll[]>([]);
   const [loadingTodayStats, setLoadingTodayStats] = useState(false);
   const [todayStatsLastUpdated, setTodayStatsLastUpdated] = useState<string>("");
+
+  // Production Summary states (1-27 of current month)
+  const [productionSummary, setProductionSummary] = useState<ProductionSummary | null>(null);
+  const [loadingProductionSummary, setLoadingProductionSummary] = useState(false);
+  const [productionSummaryLastUpdated, setProductionSummaryLastUpdated] = useState<string>("");
 
   const router = useRouter();
 
@@ -266,6 +297,139 @@ export default function DashboardPage() {
       console.error('Error fetching today stats:', error);
     } finally {
       setLoadingTodayStats(false);
+    }
+  };
+
+  // Helper function to parse numeric value (handles hyphen format like "4-49990")
+  const parseNumericValue = (value: any): number => {
+    if (value === null || value === undefined || value === "") return 0;
+    const strValue = String(value);
+    if (strValue.includes('-')) {
+      const parts = strValue.split('-');
+      const afterHyphen = parts[parts.length - 1].trim();
+      const num = parseFloat(afterHyphen);
+      return isNaN(num) ? 0 : num;
+    }
+    const num = parseFloat(strValue);
+    return isNaN(num) ? 0 : num;
+  };
+
+  // Fetch production summary for 1-27 of current month
+  const fetchProductionSummary = async () => {
+    try {
+      setLoadingProductionSummary(true);
+
+      // Get current month and year
+      const now = new Date();
+      const month = now.getMonth();
+      const year = now.getFullYear();
+
+      // Calculate API date range: 1st to 27th of the current month
+      const apiFromDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+      const apiToDate = `${year}-${String(month + 1).padStart(2, '0')}-27`;
+
+      // Fetch all columns
+      const response = await fetch(
+        PRODUCTION_DATA_ENDPOINTS.PRODUCTION_DATA_REPORT(
+          apiFromDate,
+          apiToDate
+        ),
+        {
+          headers: { "ngrok-skip-browser-warning": "true" },
+        }
+      );
+
+      if (!response.ok) {
+        console.error("Failed to fetch production summary");
+        return;
+      }
+
+      const data = await response.json();
+
+      // Initialize totals for all fields
+      let totalDay = 0;
+      let totalNight = 0;
+      let cumulativeTotal = 0;
+      let electricity = 0;
+      let coal = 0;
+      let bhushi = 0;
+      let dispatchTon = 0;
+      let poTon = 0;
+      let waste = 0;
+      let starch = 0;
+      let guarGum = 0;
+      let pac = 0;
+      let rct = 0;
+      let sSeizing = 0;
+      let dFormer = 0;
+      let sodiumSilicate = 0;
+      let enzyme = 0;
+      let dsr = 0;
+      let retAid = 0;
+      let colourDye = 0;
+
+      // Process all data rows
+      data.data?.forEach((row: any) => {
+        const dayValue = parseNumericValue(row.production_day);
+        const nightValue = parseNumericValue(row.production_night);
+        totalDay += dayValue;
+        totalNight += nightValue;
+        cumulativeTotal += dayValue + nightValue;
+
+        // Sum all other fields
+        electricity += parseNumericValue(row.electricity);
+        coal += parseNumericValue(row.coal);
+        bhushi += parseNumericValue(row.bhushi);
+        dispatchTon += parseNumericValue(row.dispatch_ton);
+        poTon += parseNumericValue(row.po_ton);
+        waste += parseNumericValue(row.waste);
+        starch += parseNumericValue(row.starch);
+        guarGum += parseNumericValue(row.guar_gum);
+        pac += parseNumericValue(row.pac);
+        rct += parseNumericValue(row.rct);
+        sSeizing += parseNumericValue(row.s_seizing);
+        dFormer += parseNumericValue(row.d_former);
+        sodiumSilicate += parseNumericValue(row.sodium_silicate);
+        enzyme += parseNumericValue(row.enzyme);
+        dsr += parseNumericValue(row.dsr);
+        retAid += parseNumericValue(row.ret_aid);
+        colourDye += parseNumericValue(row.colour_dye);
+      });
+
+      const monthNames = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
+                          "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
+
+      setProductionSummary({
+        totalDay,
+        totalNight,
+        grandTotal: totalDay + totalNight,
+        totalProduction: cumulativeTotal,
+        electricity,
+        coal,
+        bhushi,
+        dispatchTon,
+        poTon,
+        waste,
+        starch,
+        guarGum,
+        pac,
+        rct,
+        sSeizing,
+        dFormer,
+        sodiumSilicate,
+        enzyme,
+        dsr,
+        retAid,
+        colourDye,
+        monthName: monthNames[month],
+        year
+      });
+
+      setProductionSummaryLastUpdated(new Date().toLocaleString());
+    } catch (error) {
+      console.error("Error fetching production summary:", error);
+    } finally {
+      setLoadingProductionSummary(false);
     }
   };
 
@@ -585,6 +749,25 @@ export default function DashboardPage() {
     const interval = setInterval(() => {
       fetchTodayStats();
     }, 1800000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch production summary on mount and auto-refresh every 15 minutes
+  useEffect(() => {
+    const checkAuth = async () => {
+      const authenticated = await isAuthenticated();
+      if (authenticated) {
+        fetchProductionSummary();
+      }
+    };
+
+    checkAuth();
+
+    // Auto-refresh every 15 minutes (900000 ms)
+    const interval = setInterval(() => {
+      fetchProductionSummary();
+    }, 900000);
 
     return () => clearInterval(interval);
   }, []);
@@ -1030,6 +1213,156 @@ export default function DashboardPage() {
               <div className="text-center py-8 border-2 border-dashed border-blue-200 rounded-lg bg-white">
                 <FileText className="w-12 h-12 mx-auto text-blue-600 mb-2" />
                 <p className="text-sm text-muted-foreground">No production data available for today yet</p>
+              </div>
+            )}
+          </CardContent>
+        </div>
+
+        {/* Monthly Production Summary Card - Auto refresh every 15 minutes */}
+        <div className="border-orange-200 p-3 space-y-2 shadow-lg rounded-lg border bg-gradient-to-r from-orange-50 to-amber-50">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <Factory className="w-6 h-6 text-orange-600" />
+                {productionSummary ? `${productionSummary.monthName}-${String(productionSummary.year).slice(-2)} PRODUCTION` : 'Monthly Production Summary'}
+              </CardTitle>
+              <CardDescription>Production totals for dates 1-27 of current month • Updates every 15 minutes</CardDescription>
+            </div>
+            <div className="text-right">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Clock className="w-4 h-4" />
+                {productionSummaryLastUpdated && `Updated: ${productionSummaryLastUpdated}`}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchProductionSummary}
+                disabled={loadingProductionSummary}
+                className="mt-2"
+              >
+                {loadingProductionSummary ? (
+                  <>
+                    <Activity className="w-4 h-4 mr-2 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4 mr-2" />
+                    Refresh Now
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+          <CardContent>
+            {loadingProductionSummary && !productionSummary ? (
+              <div className="text-center py-8">
+                <Activity className="w-12 h-12 mx-auto text-orange-600 mb-2 animate-spin" />
+                <p className="text-sm text-muted-foreground">Loading production summary...</p>
+              </div>
+            ) : productionSummary ? (
+              <div className="space-y-4">
+                {/* Primary Production Stats - Row 1 */}
+                <div className="grid grid-cols-3 gap-3">
+                  {/* Production Day */}
+                  <div className="border-2 rounded-lg p-3 border-yellow-300 bg-yellow-50">
+                    <span className="text-xs font-bold text-muted-foreground">PRODUCTION DAY</span>
+                    <p className="text-xl font-bold text-yellow-700">{productionSummary.totalDay.toLocaleString()}</p>
+                  </div>
+
+                  {/* Production Night */}
+                  <div className="border-2 rounded-lg p-3 border-indigo-300 bg-indigo-50">
+                    <span className="text-xs font-bold text-muted-foreground">PRODUCTION NIGHT</span>
+                    <p className="text-xl font-bold text-indigo-700">{productionSummary.totalNight.toLocaleString()}</p>
+                  </div>
+
+                  {/* Total Production */}
+                  <div className="border-2 rounded-lg p-3 border-orange-300 bg-orange-100">
+                    <span className="text-xs font-bold text-muted-foreground">TOTAL PRODUCTION</span>
+                    <p className="text-xl font-bold text-orange-700">{productionSummary.totalProduction.toLocaleString()}</p>
+                  </div>
+                </div>
+
+                {/* Other Fields - Row 2 */}
+                <div className="grid grid-cols-3 md:grid-cols-6 lg:grid-cols-9 gap-2">
+                  <div className="border rounded-lg p-2 bg-gray-50">
+                    <span className="text-[10px] font-semibold text-muted-foreground">ELECTRICITY</span>
+                    <p className="text-sm font-bold">{productionSummary.electricity.toLocaleString()}</p>
+                  </div>
+                  <div className="border rounded-lg p-2 bg-gray-50">
+                    <span className="text-[10px] font-semibold text-muted-foreground">COAL</span>
+                    <p className="text-sm font-bold">{productionSummary.coal.toLocaleString()}</p>
+                  </div>
+                  <div className="border rounded-lg p-2 bg-gray-50">
+                    <span className="text-[10px] font-semibold text-muted-foreground">BHUSHI</span>
+                    <p className="text-sm font-bold">{productionSummary.bhushi.toLocaleString()}</p>
+                  </div>
+                  <div className="border rounded-lg p-2 bg-gray-50">
+                    <span className="text-[10px] font-semibold text-muted-foreground">DISPATCH TON</span>
+                    <p className="text-sm font-bold">{productionSummary.dispatchTon.toLocaleString()}</p>
+                  </div>
+                  <div className="border rounded-lg p-2 bg-gray-50">
+                    <span className="text-[10px] font-semibold text-muted-foreground">PO TON</span>
+                    <p className="text-sm font-bold">{productionSummary.poTon.toLocaleString()}</p>
+                  </div>
+                  <div className="border rounded-lg p-2 bg-gray-50">
+                    <span className="text-[10px] font-semibold text-muted-foreground">WASTE</span>
+                    <p className="text-sm font-bold">{productionSummary.waste.toLocaleString()}</p>
+                  </div>
+                  <div className="border rounded-lg p-2 bg-gray-50">
+                    <span className="text-[10px] font-semibold text-muted-foreground">STARCH</span>
+                    <p className="text-sm font-bold">{productionSummary.starch.toLocaleString()}</p>
+                  </div>
+                  <div className="border rounded-lg p-2 bg-gray-50">
+                    <span className="text-[10px] font-semibold text-muted-foreground">GUAR GUM</span>
+                    <p className="text-sm font-bold">{productionSummary.guarGum.toLocaleString()}</p>
+                  </div>
+                  <div className="border rounded-lg p-2 bg-gray-50">
+                    <span className="text-[10px] font-semibold text-muted-foreground">PAC</span>
+                    <p className="text-sm font-bold">{productionSummary.pac.toLocaleString()}</p>
+                  </div>
+                </div>
+
+                {/* Other Fields - Row 3 */}
+                <div className="grid grid-cols-3 md:grid-cols-6 lg:grid-cols-9 gap-2">
+                  <div className="border rounded-lg p-2 bg-gray-50">
+                    <span className="text-[10px] font-semibold text-muted-foreground">RCT</span>
+                    <p className="text-sm font-bold">{productionSummary.rct.toLocaleString()}</p>
+                  </div>
+                  <div className="border rounded-lg p-2 bg-gray-50">
+                    <span className="text-[10px] font-semibold text-muted-foreground">S.SEIZING</span>
+                    <p className="text-sm font-bold">{productionSummary.sSeizing.toLocaleString()}</p>
+                  </div>
+                  <div className="border rounded-lg p-2 bg-gray-50">
+                    <span className="text-[10px] font-semibold text-muted-foreground">D.FORMER</span>
+                    <p className="text-sm font-bold">{productionSummary.dFormer.toLocaleString()}</p>
+                  </div>
+                  <div className="border rounded-lg p-2 bg-gray-50">
+                    <span className="text-[10px] font-semibold text-muted-foreground">SODIUM SILICATE</span>
+                    <p className="text-sm font-bold">{productionSummary.sodiumSilicate.toLocaleString()}</p>
+                  </div>
+                  <div className="border rounded-lg p-2 bg-gray-50">
+                    <span className="text-[10px] font-semibold text-muted-foreground">ENZYME</span>
+                    <p className="text-sm font-bold">{productionSummary.enzyme.toLocaleString()}</p>
+                  </div>
+                  <div className="border rounded-lg p-2 bg-gray-50">
+                    <span className="text-[10px] font-semibold text-muted-foreground">D.S.R.</span>
+                    <p className="text-sm font-bold">{productionSummary.dsr.toLocaleString()}</p>
+                  </div>
+                  <div className="border rounded-lg p-2 bg-gray-50">
+                    <span className="text-[10px] font-semibold text-muted-foreground">RET.AID</span>
+                    <p className="text-sm font-bold">{productionSummary.retAid.toLocaleString()}</p>
+                  </div>
+                  <div className="border rounded-lg p-2 bg-gray-50">
+                    <span className="text-[10px] font-semibold text-muted-foreground">COLOUR DYE</span>
+                    <p className="text-sm font-bold">{productionSummary.colourDye.toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 border-2 border-dashed border-orange-200 rounded-lg bg-white">
+                <Factory className="w-12 h-12 mx-auto text-orange-600 mb-2" />
+                <p className="text-sm text-muted-foreground">No production data available for this month</p>
               </div>
             )}
           </CardContent>

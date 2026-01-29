@@ -35,14 +35,18 @@ interface ReportData {
 
 const COLUMN_LABELS: Record<string, string> = {
   date: "Date",
+  is_shutdown: "Is Shutdown",
   production_day: "Production Day",
   production_night: "Production Night",
   electricity: "Electricity",
   coal: "Coal",
   bhushi: "Bhushi",
   dispatch_ton: "Dispatch (Ton)",
+  dispatch_party: "Dispatch Party",
   po_ton: "PO (Ton)",
+  po_party: "PO Party",
   waste: "Waste",
+  wastage_party: "Wastage Party",
   starch: "Starch",
   guar_gum: "Guar Gum",
   pac: "PAC",
@@ -54,6 +58,7 @@ const COLUMN_LABELS: Record<string, string> = {
   dsr: "D.S.R.",
   ret_aid: "Ret.Aid",
   colour_dye: "Colour Dye",
+  shutdown_hours: "Shutdown Hours",
 };
 
 const ALL_COLUMNS = Object.keys(COLUMN_LABELS);

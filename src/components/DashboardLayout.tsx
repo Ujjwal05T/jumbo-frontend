@@ -168,16 +168,16 @@ const getNavigationForRole = (role: string | null) => {
       roles: ["admin","dispatch"],
     },
     {
-      name: "New Data",
+      name: "Production Data",
       href: "/production-data",
       icon: Barcode,
-      roles: ["admin"],
+      roles: ["admin", "accountant"],
     },
     {
-      name: "New Data Report",
+      name: "Data Report",
       href: "/production-data-reports",
       icon: Barcode,
-      roles: ["admin"],
+      roles: ["admin", "accountant"],
     },
     {
       name: "Reports",
