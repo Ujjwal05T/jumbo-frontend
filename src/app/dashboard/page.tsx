@@ -120,6 +120,10 @@ interface ProductionSummary {
   dsr: number;
   retAid: number;
   colourDye: number;
+  poParty: number;
+  wastageParty: number;
+  dispatchParty: number;
+  shutdownHours: number;
   monthName: string;
   year: number;
 }
@@ -367,6 +371,10 @@ export default function DashboardPage() {
       let dsr = 0;
       let retAid = 0;
       let colourDye = 0;
+      let poParty = 0;
+      let wastageParty = 0;
+      let dispatchParty = 0;
+      let shutdownHours = 0;
 
       // Process all data rows
       data.data?.forEach((row: any) => {
@@ -394,6 +402,10 @@ export default function DashboardPage() {
         dsr += parseNumericValue(row.dsr);
         retAid += parseNumericValue(row.ret_aid);
         colourDye += parseNumericValue(row.colour_dye);
+        poParty += parseNumericValue(row.po_party);
+        wastageParty += parseNumericValue(row.wastage_party);
+        dispatchParty += parseNumericValue(row.dispatch_party);
+        shutdownHours += parseNumericValue(row.shutdown_hours);
       });
 
       const monthNames = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
@@ -421,6 +433,10 @@ export default function DashboardPage() {
         dsr,
         retAid,
         colourDye,
+        poParty,
+        wastageParty,
+        dispatchParty,
+        shutdownHours,
         monthName: monthNames[month],
         year
       });
@@ -1219,7 +1235,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Monthly Production Summary Card - Auto refresh every 15 minutes */}
-        <div className="border-orange-200 p-3 space-y-2 shadow-lg rounded-lg border bg-gradient-to-r from-orange-50 to-amber-50">
+        <div className="border-orange-200 p-3 space-y-1 shadow-lg rounded-lg border bg-gradient-to-r from-orange-50 to-amber-50">
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2 text-xl">
@@ -1261,7 +1277,7 @@ export default function DashboardPage() {
                 <p className="text-sm text-muted-foreground">Loading production summary...</p>
               </div>
             ) : productionSummary ? (
-              <div className="space-y-4">
+              <div className="space-y-2">
                 {/* Primary Production Stats - Row 1 */}
                 <div className="grid grid-cols-3 gap-3">
                   {/* Production Day */}
@@ -1298,17 +1314,33 @@ export default function DashboardPage() {
                     <p className="text-sm font-bold">{productionSummary.bhushi.toLocaleString()}</p>
                   </div>
                   <div className="border rounded-lg p-2 bg-gray-50">
+                    <span className="text-[10px] font-semibold text-muted-foreground">DISPATCH PARTY</span>
+                    <p className="text-sm font-bold">{productionSummary.dispatchParty.toLocaleString()}</p>
+                  </div>
+                  <div className="border rounded-lg p-2 bg-gray-50">
                     <span className="text-[10px] font-semibold text-muted-foreground">DISPATCH TON</span>
                     <p className="text-sm font-bold">{productionSummary.dispatchTon.toLocaleString()}</p>
+                  </div>
+                  <div className="border rounded-lg p-2 bg-gray-50">
+                    <span className="text-[10px] font-semibold text-muted-foreground">PO PARTY</span>
+                    <p className="text-sm font-bold">{productionSummary.poParty.toLocaleString()}</p>
                   </div>
                   <div className="border rounded-lg p-2 bg-gray-50">
                     <span className="text-[10px] font-semibold text-muted-foreground">PO TON</span>
                     <p className="text-sm font-bold">{productionSummary.poTon.toLocaleString()}</p>
                   </div>
                   <div className="border rounded-lg p-2 bg-gray-50">
+                    <span className="text-[10px] font-semibold text-muted-foreground">WASTAGE PARTY</span>
+                    <p className="text-sm font-bold">{productionSummary.wastageParty.toLocaleString()}</p>
+                  </div>
+                  <div className="border rounded-lg p-2 bg-gray-50">
                     <span className="text-[10px] font-semibold text-muted-foreground">WASTE</span>
                     <p className="text-sm font-bold">{productionSummary.waste.toLocaleString()}</p>
                   </div>
+                </div>
+
+                {/* Other Fields - Row 3 */}
+                <div className="grid grid-cols-3 md:grid-cols-6 lg:grid-cols-9 gap-2">
                   <div className="border rounded-lg p-2 bg-gray-50">
                     <span className="text-[10px] font-semibold text-muted-foreground">STARCH</span>
                     <p className="text-sm font-bold">{productionSummary.starch.toLocaleString()}</p>
@@ -1321,10 +1353,10 @@ export default function DashboardPage() {
                     <span className="text-[10px] font-semibold text-muted-foreground">PAC</span>
                     <p className="text-sm font-bold">{productionSummary.pac.toLocaleString()}</p>
                   </div>
-                </div>
-
-                {/* Other Fields - Row 3 */}
-                <div className="grid grid-cols-3 md:grid-cols-6 lg:grid-cols-9 gap-2">
+                  <div className="border rounded-lg p-2 bg-gray-50">
+                    <span className="text-[10px] font-semibold text-muted-foreground">SHUTDOWN HOURS</span>
+                    <p className="text-sm font-bold">{productionSummary.shutdownHours.toLocaleString()}</p>
+                  </div>
                   <div className="border rounded-lg p-2 bg-gray-50">
                     <span className="text-[10px] font-semibold text-muted-foreground">RCT</span>
                     <p className="text-sm font-bold">{productionSummary.rct.toLocaleString()}</p>
@@ -1345,6 +1377,10 @@ export default function DashboardPage() {
                     <span className="text-[10px] font-semibold text-muted-foreground">ENZYME</span>
                     <p className="text-sm font-bold">{productionSummary.enzyme.toLocaleString()}</p>
                   </div>
+                </div>
+
+                {/* Other Fields - Row 4 */}
+                <div className="grid grid-cols-3 md:grid-cols-6 lg:grid-cols-9 gap-2">
                   <div className="border rounded-lg p-2 bg-gray-50">
                     <span className="text-[10px] font-semibold text-muted-foreground">D.S.R.</span>
                     <p className="text-sm font-bold">{productionSummary.dsr.toLocaleString()}</p>

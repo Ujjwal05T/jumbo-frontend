@@ -72,16 +72,34 @@ const SelectSearch = React.forwardRef<
   React.InputHTMLAttributes<HTMLInputElement>
 >(({ className, ...props }, ref) => {
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const [isLargeScreen, setIsLargeScreen] = React.useState(false);
 
-  // Auto-focus on mount
+  // Check screen size - only show on desktop (>= 1024px)
   React.useEffect(() => {
-    if (inputRef.current) {
+    const checkScreenSize = () => {
+      setIsLargeScreen(window.innerWidth >= 1024);
+    };
+
+    checkScreenSize();
+    window.addEventListener("resize", checkScreenSize);
+
+    return () => window.removeEventListener("resize", checkScreenSize);
+  }, []);
+
+  // Auto-focus on mount (only on large screens)
+  React.useEffect(() => {
+    if (inputRef.current && isLargeScreen) {
       // Small delay to ensure the dropdown is fully rendered
       setTimeout(() => {
         inputRef.current?.focus();
       }, 0);
     }
-  }, []);
+  }, [isLargeScreen]);
+
+  // Don't render on mobile/tablet
+  if (!isLargeScreen) {
+    return null;
+  }
 
   return (
     <div className="flex items-center border-b px-3 py-3">

@@ -56,6 +56,7 @@ export default function NewOrderPage() {
   const [loading, setLoading] = useState(false);
   const [clientSearch, setClientSearch] = useState("");
   const [paperSearches, setPaperSearches] = useState<Record<number, string>>({});
+  const [isLargeScreen, setIsLargeScreen] = useState(true);
   const [alert, setAlert] = useState<{
     type: "success" | "error" | null;
     message: string;
@@ -104,6 +105,17 @@ export default function NewOrderPage() {
     };
 
     loadData();
+  }, []);
+
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsLargeScreen(window.innerWidth >= 1024);
+    };
+
+    checkScreenSize();
+    window.addEventListener("resize", checkScreenSize);
+
+    return () => window.removeEventListener("resize", checkScreenSize);
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -454,12 +466,12 @@ export default function NewOrderPage() {
   };
 
   return (
-    <div className="space-y-6 m-8">
-      <div className="flex items-center space-x-4">
+    <div className="space-y-4 sm:space-y-6 m-4 sm:m-6 lg:m-8">
+      <div className="flex items-center space-x-2 sm:space-x-4">
         <Button variant="outline" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-3xl font-bold">New Order</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold">New Order</h1>
       </div>
 
       {/* Alert Message */}
@@ -482,10 +494,10 @@ export default function NewOrderPage() {
           <CardTitle>Order Details</CardTitle>
           <CardDescription>Enter the details for the new order</CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
+        <CardContent className="p-4 sm:p-6">
+          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
             {/* Order Header - Single Row */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Client Selection */}
               <div className="space-y-2">
                 <Label htmlFor="client_id">Client *</Label>
@@ -499,17 +511,21 @@ export default function NewOrderPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectSearch
-                      placeholder="Search clients..."
-                      value={clientSearch}
-                      onChange={(e) => setClientSearch(e.target.value)}
-                      onKeyDown={(e) => e.stopPropagation()}
-                    />
+                    {isLargeScreen && (
+                      <SelectSearch
+                        placeholder="Search clients..."
+                        value={clientSearch}
+                        onChange={(e) => setClientSearch(e.target.value)}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      />
+                    )}
                     {clients
                       .filter((client) =>
-                        client.company_name
-                          .toLowerCase()
-                          .includes(clientSearch.toLowerCase())
+                        isLargeScreen
+                          ? client.company_name
+                              .toLowerCase()
+                              .includes(clientSearch.toLowerCase())
+                          : true
                       )
                       .sort((a, b) => a.company_name.localeCompare(b.company_name))
                       .map((client) => (
@@ -581,18 +597,38 @@ export default function NewOrderPage() {
 
               <div className="space-y-4">
                 {orderItems.map((item, index) => (
-                  <div key={index} className="border rounded-lg p-3">
-                    <div className="flex items-end gap-3">
-                      {/* Item Number */}
-                      <div className="flex-shrink-0 w-12">
+                  <div key={index} className="border rounded-lg p-3 sm:p-4">
+                    {/* Mobile: Item number and remove button header */}
+                    <div className="flex items-center justify-between mb-3 lg:hidden">
+                      <span className="text-sm font-medium bg-gray-100 px-3 py-1 rounded">
+                        Item #{index + 1}
+                      </span>
+                      {orderItems.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeOrderItem(index)}
+                          disabled={loading}
+                          className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Responsive Grid Layout */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[auto_1fr_auto_auto_auto_auto_auto_auto] gap-3 lg:gap-3 lg:items-end">
+                      {/* Item Number - Desktop only */}
+                      <div className="hidden lg:block flex-shrink-0 w-12">
                         <Label className="text-sm font-medium">Item</Label>
                         <div className="flex items-center justify-center mt-2">
                           <span className="text-sm font-medium bg-gray-100 px-2 py-1 rounded">#{index + 1}</span>
                         </div>
                       </div>
 
-                      {/* Paper - Wider field */}
-                      <div className="flex-1 min-w-0 max-w-96">
+                      {/* Paper Type - Full width on mobile, spans 2 cols on tablet */}
+                      <div className="sm:col-span-2 lg:col-span-1 lg:min-w-[200px]">
                         <Label htmlFor={`paper_${index}`}>Paper Type *</Label>
                         <Select
                           value={item.paper_id}
@@ -604,19 +640,22 @@ export default function NewOrderPage() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectSearch
-                              placeholder="Search papers..."
-                              value={paperSearches[index] || ""}
-                              onChange={(e) =>
-                                setPaperSearches((prev) => ({
-                                  ...prev,
-                                  [index]: e.target.value,
-                                }))
-                              }
-                              onKeyDown={(e) => e.stopPropagation()}
-                            />
+                            {isLargeScreen && (
+                              <SelectSearch
+                                placeholder="Search papers..."
+                                value={paperSearches[index] || ""}
+                                onChange={(e) =>
+                                  setPaperSearches((prev) => ({
+                                    ...prev,
+                                    [index]: e.target.value,
+                                  }))
+                                }
+                                onKeyDown={(e) => e.stopPropagation()}
+                              />
+                            )}
                             {papers
                               .filter((paper) => {
+                                if (!isLargeScreen) return true;
                                 const search = (paperSearches[index] || "").toLowerCase();
                                 return (
                                   paper.gsm.toString().includes(search) ||
@@ -635,7 +674,7 @@ export default function NewOrderPage() {
                       </div>
 
                       {/* Width */}
-                      <div className="flex-shrink-0 ">
+                      <div className="flex-shrink-0">
                         <Label htmlFor={`width_${index}`}>Width *</Label>
                         <Input
                           id={`width_${index}`}
@@ -652,10 +691,8 @@ export default function NewOrderPage() {
                         />
                       </div>
 
-                      
-
                       {/* Quantity Rolls */}
-                      <div className="flex-shrink-0 ">
+                      <div className="flex-shrink-0">
                         <Label htmlFor={`quantity_rolls_${index}`}>Rolls</Label>
                         <Input
                           id={`quantity_rolls_${index}`}
@@ -673,7 +710,7 @@ export default function NewOrderPage() {
                       </div>
 
                       {/* Quantity Kg */}
-                      <div className="flex-shrink-0 ">
+                      <div className="flex-shrink-0">
                         <Label htmlFor={`quantity_kg_${index}`}>Weight (Kg)</Label>
                         <Input
                           id={`quantity_kg_${index}`}
@@ -718,8 +755,8 @@ export default function NewOrderPage() {
                         />
                       </div>
 
-                      {/* Remove Button at the very end */}
-                      <div className="flex-shrink-0">
+                      {/* Remove Button - Desktop only */}
+                      <div className="hidden lg:block flex-shrink-0">
                         <Label className="text-sm font-medium opacity-0">Remove</Label>
                         <div className="mt-2">
                           {orderItems.length > 1 ? (

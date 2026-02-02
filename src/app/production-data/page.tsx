@@ -21,7 +21,7 @@ type Mode = "create" | "edit";
 export default function ProductionDataPage() {
   const [mode, setMode] = useState<Mode>("create");
   const [formData, setFormData] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: "",
     productionDay: "",
     productionNight: "",
     electricity: "",
@@ -44,7 +44,7 @@ export default function ProductionDataPage() {
     poParty: "",
     wastageParty: "",
     dispatchParty: "",
-    isShutdown: "",
+    isShutdown: "No",
     shutdownHours: "",
   });
 
@@ -136,7 +136,7 @@ export default function ProductionDataPage() {
         poParty: data.po_party?.toString() || "",
         wastageParty: data.wastage_party?.toString() || "",
         dispatchParty: data.dispatch_party?.toString() || "",
-        isShutdown: data.is_shutdown?.toString() || "",
+        isShutdown: data.is_shutdown?.toString() || "No",
         shutdownHours: data.shutdown_hours?.toString() || "",
       });
 
@@ -176,7 +176,7 @@ export default function ProductionDataPage() {
       poParty: "",
       wastageParty: "",
       dispatchParty: "",
-      isShutdown: "",
+      isShutdown: "No",
       shutdownHours: "",
     }));
   };
@@ -206,7 +206,7 @@ export default function ProductionDataPage() {
     resetFormFields();
     setFormData(prev => ({
       ...prev,
-      date: new Date().toISOString().split('T')[0]
+      date: ""
     }));
   };
 
@@ -232,28 +232,28 @@ export default function ProductionDataPage() {
 
       const apiData = {
         date: new Date(formData.date).toISOString(),
-        production_day: isShutdownDay ? "0" : (formData.productionDay || null),
-        production_night: isShutdownDay ? "0" : (formData.productionNight || null),
-        electricity: isShutdownDay ? "0" : (formData.electricity || null),
-        coal: isShutdownDay ? "0" : (formData.coal || null),
-        bhushi: isShutdownDay ? "0" : (formData.bhushi || null),
-        dispatch_ton: isShutdownDay ? "0" : (formData.dispatchTon || null),
-        po_ton: isShutdownDay ? "0" : (formData.poTon || null),
-        waste: isShutdownDay ? "0" : (formData.waste || null),
-        starch: isShutdownDay ? "0" : (formData.starch || null),
-        guar_gum: isShutdownDay ? "0" : (formData.guarGum || null),
-        pac: isShutdownDay ? "0" : (formData.pac || null),
-        rct: isShutdownDay ? "0" : (formData.rct || null),
-        s_seizing: isShutdownDay ? "0" : (formData.sSeizing || null),
-        d_former: isShutdownDay ? "0" : (formData.dFormer || null),
-        sodium_silicate: isShutdownDay ? "0" : (formData.sodiumSilicate || null),
-        enzyme: isShutdownDay ? "0" : (formData.enzyme || null),
-        dsr: isShutdownDay ? "0" : (formData.dsr || null),
-        ret_aid: isShutdownDay ? "0" : (formData.retAid || null),
-        colour_dye: isShutdownDay ? "0" : (formData.colourDye || null),
-        po_party: isShutdownDay ? "0" : (formData.poParty || null),
-        wastage_party: isShutdownDay ? "0" : (formData.wastageParty || null),
-        dispatch_party: isShutdownDay ? "0" : (formData.dispatchParty || null),
+        production_day: isShutdownDay ? "0" : (formData.productionDay || "0"),
+        production_night: isShutdownDay ? "0" : (formData.productionNight || "0"),
+        electricity: formData.electricity || "0",
+        coal: formData.coal || "0",
+        bhushi: formData.bhushi || "0",
+        dispatch_ton: formData.dispatchTon || "0",
+        po_ton: formData.poTon || "0",
+        waste: formData.waste || "0",
+        starch: formData.starch || "0",
+        guar_gum: formData.guarGum || "0",
+        pac: formData.pac || "0",
+        rct: formData.rct || "0",
+        s_seizing: formData.sSeizing || "0",
+        d_former: formData.dFormer || "0",
+        sodium_silicate: formData.sodiumSilicate || "0",
+        enzyme: formData.enzyme || "0",
+        dsr: formData.dsr || "0",
+        ret_aid: formData.retAid || "0",
+        colour_dye: formData.colourDye || "0",
+        po_party: formData.poParty || "0",
+        wastage_party: formData.wastageParty || "0",
+        dispatch_party: formData.dispatchParty || "0",
         is_shutdown: formData.isShutdown || null,
         shutdown_hours: formData.shutdownHours || null,
       };
@@ -288,7 +288,7 @@ export default function ProductionDataPage() {
 
   const handleReset = () => {
     setFormData({
-      date: new Date().toISOString().split('T')[0],
+      date: "",
       productionDay: "",
       productionNight: "",
       electricity: "",
@@ -311,7 +311,7 @@ export default function ProductionDataPage() {
       poParty: "",
       wastageParty: "",
       dispatchParty: "",
-      isShutdown: "",
+      isShutdown: "No",
       shutdownHours: "",
     });
     setDataLoaded(false);
@@ -319,15 +319,16 @@ export default function ProductionDataPage() {
     toast.info("Form reset");
   };
 
-  // Check if fields should be disabled (shutdown mode)
+  // Check if fields should be disabled
   const isShutdownMode = formData.isShutdown === "Yes";
   const isFormDisabled = saving || loading;
-  const isFieldDisabled = isFormDisabled || isShutdownMode;
+  const isProductionFieldDisabled = isFormDisabled || isShutdownMode;
+  const isOtherFieldDisabled = isFormDisabled;
 
   // In edit mode, also check if data is loaded
   const canSubmit = mode === "create"
-    ? !dateHasData && !isFormDisabled
-    : dataLoaded && !isFormDisabled;
+    ? !dateHasData && !isFormDisabled && formData.date !== ""
+    : dataLoaded && !isFormDisabled && formData.date !== "";
 
   return (
     <DashboardLayout>
@@ -374,38 +375,36 @@ export default function ProductionDataPage() {
               </CardTitle>
             </div>
             {/* Action Buttons in Header */}
-            {(mode === "create" || (mode === "edit" && dataLoaded)) && (
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  onClick={handleReset}
-                  disabled={isFormDisabled}
-                >
-                  Reset
-                </Button>
-                <Button
-                  type="submit"
-                  form="production-data-form"
-                  size="lg"
-                  className="flex items-center gap-2"
-                  disabled={!canSubmit}
-                >
-                  {saving ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      {mode === "create" ? "Saving..." : "Updating..."}
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4" />
-                      {mode === "create" ? "Save" : "Update"}
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                onClick={handleReset}
+                disabled={isFormDisabled}
+              >
+                Reset
+              </Button>
+              <Button
+                type="submit"
+                form="production-data-form"
+                size="lg"
+                className="flex items-center gap-2"
+                disabled={!canSubmit}
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {mode === "create" ? "Saving..." : "Updating..."}
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                        {mode === "create" ? "Save" : "Update"}
+                      </>
+                    )}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {/* Edit Mode: Search Section */}
@@ -444,13 +443,6 @@ export default function ProductionDataPage() {
                 {mode === "create" && dateHasData && (
                   <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
                     Data already exists for this date. Please use Edit mode to modify existing data.
-                  </div>
-                )}
-
-                {/* Shutdown mode notice */}
-                {isShutdownMode && (
-                  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-700">
-                    Shutdown mode is enabled. All production fields will be set to 0 on save.
                   </div>
                 )}
 
@@ -496,7 +488,7 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.productionDay}
                       onChange={(e) => handleInputChange('productionDay', e.target.value)}
-                      disabled={isFieldDisabled}
+                      disabled={isProductionFieldDisabled}
                       className={isShutdownMode ? "bg-muted" : ""}
                     />
                   </div>
@@ -508,7 +500,7 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.productionNight}
                       onChange={(e) => handleInputChange('productionNight', e.target.value)}
-                      disabled={isFieldDisabled}
+                      disabled={isProductionFieldDisabled}
                       className={isShutdownMode ? "bg-muted" : ""}
                     />
                   </div>
@@ -520,8 +512,7 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.electricity}
                       onChange={(e) => handleInputChange('electricity', e.target.value)}
-                      disabled={isFieldDisabled}
-                      className={isShutdownMode ? "bg-muted" : ""}
+                      disabled={isOtherFieldDisabled}
                     />
                   </div>
 
@@ -532,8 +523,7 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.coal}
                       onChange={(e) => handleInputChange('coal', e.target.value)}
-                      disabled={isFieldDisabled}
-                      className={isShutdownMode ? "bg-muted" : ""}
+                      disabled={isOtherFieldDisabled}
                     />
                   </div>
 
@@ -544,8 +534,7 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.bhushi}
                       onChange={(e) => handleInputChange('bhushi', e.target.value)}
-                      disabled={isFieldDisabled}
-                      className={isShutdownMode ? "bg-muted" : ""}
+                      disabled={isOtherFieldDisabled}
                     />
                   </div>
 
@@ -556,8 +545,7 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.dispatchTon}
                       onChange={(e) => handleInputChange('dispatchTon', e.target.value)}
-                      disabled={isFieldDisabled}
-                      className={isShutdownMode ? "bg-muted" : ""}
+                      disabled={isOtherFieldDisabled}
                     />
                   </div>
 
@@ -568,8 +556,7 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.dispatchParty}
                       onChange={(e) => handleInputChange('dispatchParty', e.target.value)}
-                      disabled={isFieldDisabled}
-                      className={isShutdownMode ? "bg-muted" : ""}
+                      disabled={isOtherFieldDisabled}
                     />
                   </div>
 
@@ -580,8 +567,7 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.poTon}
                       onChange={(e) => handleInputChange('poTon', e.target.value)}
-                      disabled={isFieldDisabled}
-                      className={isShutdownMode ? "bg-muted" : ""}
+                      disabled={isOtherFieldDisabled}
                     />
                   </div>
 
@@ -592,8 +578,7 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.poParty}
                       onChange={(e) => handleInputChange('poParty', e.target.value)}
-                      disabled={isFieldDisabled}
-                      className={isShutdownMode ? "bg-muted" : ""}
+                      disabled={isOtherFieldDisabled}
                     />
                   </div>
 
@@ -604,8 +589,7 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.waste}
                       onChange={(e) => handleInputChange('waste', e.target.value)}
-                      disabled={isFieldDisabled}
-                      className={isShutdownMode ? "bg-muted" : ""}
+                      disabled={isOtherFieldDisabled}
                     />
                   </div>
 
@@ -616,8 +600,7 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.wastageParty}
                       onChange={(e) => handleInputChange('wastageParty', e.target.value)}
-                      disabled={isFieldDisabled}
-                      className={isShutdownMode ? "bg-muted" : ""}
+                      disabled={isOtherFieldDisabled}
                     />
                   </div>
 
@@ -628,8 +611,7 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.starch}
                       onChange={(e) => handleInputChange('starch', e.target.value)}
-                      disabled={isFieldDisabled}
-                      className={isShutdownMode ? "bg-muted" : ""}
+                      disabled={isOtherFieldDisabled}
                     />
                   </div>
 
@@ -640,8 +622,7 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.guarGum}
                       onChange={(e) => handleInputChange('guarGum', e.target.value)}
-                      disabled={isFieldDisabled}
-                      className={isShutdownMode ? "bg-muted" : ""}
+                      disabled={isOtherFieldDisabled}
                     />
                   </div>
 
@@ -652,8 +633,7 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.pac}
                       onChange={(e) => handleInputChange('pac', e.target.value)}
-                      disabled={isFieldDisabled}
-                      className={isShutdownMode ? "bg-muted" : ""}
+                      disabled={isOtherFieldDisabled}
                     />
                   </div>
 
@@ -664,8 +644,7 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.rct}
                       onChange={(e) => handleInputChange('rct', e.target.value)}
-                      disabled={isFieldDisabled}
-                      className={isShutdownMode ? "bg-muted" : ""}
+                      disabled={isOtherFieldDisabled}
                     />
                   </div>
 
@@ -676,8 +655,7 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.sSeizing}
                       onChange={(e) => handleInputChange('sSeizing', e.target.value)}
-                      disabled={isFieldDisabled}
-                      className={isShutdownMode ? "bg-muted" : ""}
+                      disabled={isOtherFieldDisabled}
                     />
                   </div>
 
@@ -688,8 +666,7 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.dFormer}
                       onChange={(e) => handleInputChange('dFormer', e.target.value)}
-                      disabled={isFieldDisabled}
-                      className={isShutdownMode ? "bg-muted" : ""}
+                      disabled={isOtherFieldDisabled}
                     />
                   </div>
 
@@ -700,8 +677,7 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.sodiumSilicate}
                       onChange={(e) => handleInputChange('sodiumSilicate', e.target.value)}
-                      disabled={isFieldDisabled}
-                      className={isShutdownMode ? "bg-muted" : ""}
+                      disabled={isOtherFieldDisabled}
                     />
                   </div>
 
@@ -712,8 +688,7 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.enzyme}
                       onChange={(e) => handleInputChange('enzyme', e.target.value)}
-                      disabled={isFieldDisabled}
-                      className={isShutdownMode ? "bg-muted" : ""}
+                      disabled={isOtherFieldDisabled}
                     />
                   </div>
 
@@ -724,8 +699,7 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.dsr}
                       onChange={(e) => handleInputChange('dsr', e.target.value)}
-                      disabled={isFieldDisabled}
-                      className={isShutdownMode ? "bg-muted" : ""}
+                      disabled={isOtherFieldDisabled}
                     />
                   </div>
 
@@ -736,8 +710,7 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.retAid}
                       onChange={(e) => handleInputChange('retAid', e.target.value)}
-                      disabled={isFieldDisabled}
-                      className={isShutdownMode ? "bg-muted" : ""}
+                      disabled={isOtherFieldDisabled}
                     />
                   </div>
 
@@ -748,8 +721,7 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.colourDye}
                       onChange={(e) => handleInputChange('colourDye', e.target.value)}
-                      disabled={isFieldDisabled}
-                      className={isShutdownMode ? "bg-muted" : ""}
+                      disabled={isOtherFieldDisabled}
                     />
                   </div>
 

@@ -612,7 +612,8 @@ export default function AllCutRollsFilteredReportPage() {
       const totalWeight = filteredCutRolls.reduce((sum, roll) => sum + roll.weight_kg, 0);
       const stockRolls = filteredCutRolls.filter(r => r.status.toLowerCase() === 'available').length;
       const dispatchedRolls = filteredCutRolls.filter(r => r.status.toLowerCase() === 'used').length;
-      const weightUpdatedRolls = stockRolls + dispatchedRolls;
+      const billedRolls = filteredCutRolls.filter(r => r.status.toLowerCase() === 'billed').length;
+      const weightUpdatedRolls = stockRolls + dispatchedRolls + billedRolls;
       const plannedRolls = filteredCutRolls.filter(r => r.status.toLowerCase() === 'cutting').length;
 
       let summaryText = `Total Rolls: ${totalRolls}  |  Total Weight: ${totalWeight.toFixed(2)} kg`;
@@ -628,6 +629,9 @@ export default function AllCutRollsFilteredReportPage() {
       }
       if (dispatchedRolls > 0) {
         summaryText += `  |  Dispatched: ${dispatchedRolls}`;
+      }
+      if (billedRolls > 0) {
+        summaryText += `  |  Billed: ${billedRolls}`;
       }
 
       doc.text(summaryText, 14, summaryStartY);

@@ -114,7 +114,15 @@ export default function ProductionDataReportsPage() {
 
       // Ensure date is not in selectedColumns, then prepend it
       const filteredColumns = selectedColumns.filter(col => col !== "date");
-      const allSelectedColumns = ["date", ...filteredColumns];
+
+      // Sort columns according to COLUMN_LABELS order to maintain consistent sequence
+      const sortedColumns = filteredColumns.sort((a, b) => {
+        const aIndex = ALL_COLUMNS.indexOf(a);
+        const bIndex = ALL_COLUMNS.indexOf(b);
+        return aIndex - bIndex;
+      });
+
+      const allSelectedColumns = ["date", ...sortedColumns];
       const columnsParam = allSelectedColumns.join(",");
       const response = await fetch(
         PRODUCTION_DATA_ENDPOINTS.PRODUCTION_DATA_REPORT(
@@ -147,7 +155,14 @@ export default function ProductionDataReportsPage() {
 
   const formatCellValue = (column: string, value: any) => {
     if (value === null || value === undefined) {
-      return "-";
+      // Show "0" for numeric fields, "-" only for date and text fields (party names)
+      if (column === "date") {
+        return "-";
+      }
+      if (column === "is_shutdown") {
+        return "No";
+      }
+      return "0";
     }
     if (column === "date") {
       const date = new Date(value);
