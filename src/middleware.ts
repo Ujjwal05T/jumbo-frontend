@@ -75,6 +75,7 @@ const roleBasedRoutes = {
     '/hour-calculator',
   ],
   accountant: [
+    '/planning/hybrid',
     '/production-data-reports',
     '/production-data',
     '/masters',

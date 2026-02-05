@@ -191,7 +191,7 @@ export default function ChallanPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const [limit] = useState(20);
+  const [limit] = useState(500);
   const [generatedFilter, setGeneratedFilter] = useState("not_generated");
 
   // Details modal
