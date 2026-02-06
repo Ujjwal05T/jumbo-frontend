@@ -86,6 +86,12 @@ const getNavigationForRole = (role: string | null) => {
       roles: ["admin"],
     },
     {
+      name: "Hybrid Plan",
+      href: "/planning/hybrid",
+      icon: Scissors,
+      roles: ["admin"],
+    },
+    {
       name: "Manual Plan",
       href: "/planning/manual",
       icon: Database,
