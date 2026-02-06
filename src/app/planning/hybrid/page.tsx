@@ -8,7 +8,6 @@ import { fetchOrders, Order } from "@/lib/orders";
 import { fetchClients, Client } from "@/lib/clients";
 import {
   processMultipleOrders,
-  calculateEfficiencyMetrics,
   OptimizationResult,
   WorkflowProcessRequest,
   PendingOrder,
@@ -52,38 +51,14 @@ import {
 import {
   Plus,
   Trash2,
-  Package,
-  FileText,
   ArrowLeft,
   ChevronDown,
   ChevronRight,
   Pencil,
-  GripVertical,
   AlertTriangle,
   Loader2,
-  X,
-  RotateCcw,
   Clock,
 } from "lucide-react";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-  DragStartEvent,
-  useDroppable,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 
 // ============================================
 // TYPES
@@ -104,6 +79,10 @@ interface EditableCutRoll {
   trimLeft?: number;
   originalWidth?: number;
   originalQuantity?: number;
+  // Paper spec for filtering orphaned rolls
+  gsm?: number;
+  bf?: number;
+  shade?: string;
 }
 
 interface RollSetGroup {
@@ -149,8 +128,7 @@ function generateId(): string {
 
 function transformToNestedStructure(
   result: OptimizationResult,
-  planningWidth: number,
-  orders: Order[]
+  planningWidth: number
 ): HybridPlanState {
   const paperSpecMap = new Map<string, PaperSpecGroup>();
 
@@ -187,19 +165,8 @@ function transformToNestedStructure(
       spec.jumbos.push(jumbo);
     }
 
-    // Get client name
-    let clientName = '';
-    if (roll.source_type === 'pending_order' && roll.source_pending_id) {
-      const pendingOrder = result.pending_orders?.find((p: any) => p.id === roll.source_pending_id);
-      if (pendingOrder?.client_name) {
-        clientName = pendingOrder.client_name;
-      }
-    } else {
-      const sourceOrder = orders.find(o => o.id === roll.order_id);
-      if (sourceOrder?.client?.company_name) {
-        clientName = sourceOrder.client.company_name;
-      }
-    }
+    // Get client name - backend provides it directly on the roll
+    const clientName = (roll as any).client_name || '';
 
     const set = jumbo.sets.find(s => s.setNumber === setNumber)!;
     set.cuts.push({
@@ -217,6 +184,10 @@ function transformToNestedStructure(
       trimLeft: roll.trim_left,
       originalWidth: roll.width,
       originalQuantity: roll.quantity || 1,
+      // Store paper spec on the cut for filtering orphaned rolls
+      gsm: roll.gsm,
+      bf: roll.bf,
+      shade: roll.shade,
     });
   });
 
@@ -252,14 +223,15 @@ function getRemainingWidthForSet(set: RollSetGroup, planningWidth: number): numb
 function CuttingPatternVisual({
   cuts,
   planningWidth,
+  isSetSelected = true,
 }: {
   cuts: EditableCutRoll[];
   planningWidth: number;
+  isSetSelected?: boolean;
 }) {
   const totalUsed = cuts.reduce((sum, cut) => sum + (cut.width * cut.quantity), 0);
   const waste = planningWidth - totalUsed;
   const wastePercentage = (waste / planningWidth) * 100;
-  const efficiency = ((totalUsed / planningWidth) * 100).toFixed(1);
 
   let currentPosition = 0;
 
@@ -269,7 +241,7 @@ function CuttingPatternVisual({
         Cutting Pattern ({planningWidth}" Roll):
       </div>
       <div className="relative h-14 bg-muted rounded-lg border overflow-hidden">
-        {cuts.map((cut, index) => {
+        {cuts.map((cut) => {
           const widthForCut = cut.width * cut.quantity;
           const widthPercentage = (widthForCut / planningWidth) * 100;
           const leftPosition = (currentPosition / planningWidth) * 100;
@@ -281,7 +253,7 @@ function CuttingPatternVisual({
             <div
               key={cut.id}
               className={`absolute h-full border-r-2 border-white ${
-                cut.selected
+                isSetSelected
                   ? isPending
                     ? "bg-gradient-to-r from-orange-400 to-orange-500"
                     : "bg-gradient-to-r from-green-400 to-green-500"
@@ -321,78 +293,27 @@ function CuttingPatternVisual({
           </div>
         )}
       </div>
-
-      <div className="grid grid-cols-4 gap-2 text-sm">
-        <div className="text-center p-2 bg-primary/10 rounded-lg">
-          <div className="font-semibold text-primary">{totalUsed}"</div>
-          <div className="text-xs text-muted-foreground">Used</div>
-        </div>
-        <div className="text-center p-2 bg-destructive/10 rounded-lg">
-          <div className="font-semibold text-destructive">{waste.toFixed(1)}"</div>
-          <div className="text-xs text-muted-foreground">Waste</div>
-        </div>
-        <div className="text-center p-2 bg-green-500/10 rounded-lg">
-          <div className="font-semibold text-green-700">{efficiency}%</div>
-          <div className="text-xs text-muted-foreground">Efficiency</div>
-        </div>
-        <div className="text-center p-2 bg-secondary rounded-lg">
-          <div className="font-semibold">{cuts.length}</div>
-          <div className="text-xs text-muted-foreground">Cuts</div>
-        </div>
-      </div>
     </div>
   );
 }
 
 // ============================================
-// DRAGGABLE CUT ROLL COMPONENT
+// CUT ROLL ITEM COMPONENT
 // ============================================
 
-function DraggableCutRoll({
+function CutRollItem({
   cut,
-  onToggleSelect,
   onEdit,
   onDelete,
 }: {
   cut: EditableCutRoll;
-  onToggleSelect: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: cut.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
   const isPending = cut.source_type === 'pending_order' || !!cut.source_pending_id;
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`flex items-center gap-2 p-2 bg-white border rounded-md ${
-        isDragging ? 'shadow-lg' : ''
-      } ${!cut.selected ? 'opacity-50 bg-gray-50' : ''}`}
-    >
-      <div {...attributes} {...listeners} className="cursor-grab">
-        <GripVertical className="h-4 w-4 text-gray-400" />
-      </div>
-
-      <Checkbox
-        checked={cut.selected}
-        onCheckedChange={onToggleSelect}
-      />
-
+    <div className="flex items-center gap-2 p-2 bg-white border rounded-md">
       <div className="flex-1 flex items-center gap-2 flex-wrap">
         <span className="font-medium">{cut.width}"</span>
         {cut.quantity > 1 && <span className="text-gray-500">×{cut.quantity}</span>}
@@ -415,9 +336,12 @@ function DraggableCutRoll({
         )}
       </div>
 
-      <Button variant="ghost" size="sm" onClick={onEdit}>
-        <Pencil className="h-3 w-3" />
-      </Button>
+      {/* Only show edit button for manual rolls - algorithm rolls should not be edited */}
+      {cut.source === 'manual' && (
+        <Button variant="ghost" size="sm" onClick={onEdit}>
+          <Pencil className="h-3 w-3" />
+        </Button>
+      )}
       <Button variant="ghost" size="sm" onClick={onDelete}>
         <Trash2 className="h-3 w-3 text-red-500" />
       </Button>
@@ -426,42 +350,46 @@ function DraggableCutRoll({
 }
 
 // ============================================
-// DROPPABLE SET COMPONENT
+// ROLL SET COMPONENT
 // ============================================
 
-function DroppableRollSet({
+function RollSet({
   set,
   planningWidth,
-  onToggleSelect,
+  isSelected,
+  onToggleSet,
   onEditCut,
   onDeleteCut,
   onAddCut,
 }: {
   set: RollSetGroup;
   planningWidth: number;
-  onToggleSelect: (cutId: string) => void;
+  isSelected: boolean;
+  onToggleSet: (setId: string) => void;
   onEditCut: (cutId: string) => void;
   onDeleteCut: (cutId: string) => void;
   onAddCut: (setId: string) => void;
 }) {
-  const { setNodeRef, isOver } = useDroppable({
-    id: set.id,
-  });
-
   const totalWidth = getTotalWidthForSet(set);
   const remainingWidth = getRemainingWidthForSet(set, planningWidth);
 
   return (
-    <div
-      ref={setNodeRef}
-      className={`border rounded-lg p-3 ${isOver ? 'border-blue-500 bg-blue-50' : ''}`}
-    >
+    <div className={`border rounded-lg p-4 ${!isSelected ? 'opacity-50 bg-gray-50' : ''}`}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-bold">
+          <Checkbox
+            checked={isSelected}
+            onCheckedChange={() => onToggleSet(set.id)}
+          />
+          <div className={`w-8 h-8 ${isSelected ? 'bg-primary' : 'bg-gray-400'} text-primary-foreground rounded-full flex items-center justify-center text-sm font-bold`}>
             {set.setNumber}
           </div>
           <span className="font-medium">Set #{set.setNumber}</span>
+          {!isSelected && (
+            <Badge variant="secondary" className="text-xs">
+              Excluded
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {remainingWidth < 0 && (
@@ -471,47 +399,43 @@ function DroppableRollSet({
             </Badge>
           )}
           <span className="text-sm text-gray-500">
-            {totalWidth}" / {planningWidth}"
+            {totalWidth}" / {planningWidth}" ({remainingWidth}" free)
           </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onAddCut(set.id)}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Add
+          </Button>
         </div>
       </div>
 
       {/* Visual Cutting Pattern */}
       {set.cuts.length > 0 && (
         <div className="mb-4">
-          <CuttingPatternVisual cuts={set.cuts} planningWidth={planningWidth} />
+          <CuttingPatternVisual cuts={set.cuts} planningWidth={planningWidth} isSetSelected={isSelected} />
         </div>
       )}
 
-      <SortableContext items={set.cuts.map(c => c.id)} strategy={verticalListSortingStrategy}>
-        <div className="space-y-2">
-          {set.cuts.map((cut) => (
-            <DraggableCutRoll
-              key={cut.id}
-              cut={cut}
-              onToggleSelect={() => onToggleSelect(cut.id)}
-              onEdit={() => onEditCut(cut.id)}
-              onDelete={() => onDeleteCut(cut.id)}
-            />
-          ))}
-        </div>
-      </SortableContext>
+      {/* Cut Rolls - Horizontal Row */}
+      <div className="flex flex-wrap gap-2">
+        {set.cuts.map((cut) => (
+          <CutRollItem
+            key={cut.id}
+            cut={cut}
+            onEdit={() => onEditCut(cut.id)}
+            onDelete={() => onDeleteCut(cut.id)}
+          />
+        ))}
+      </div>
 
       {set.cuts.length === 0 && (
         <div className="text-center py-4 text-gray-400 text-sm border-2 border-dashed rounded-lg">
-          Drop rolls here or add new
+          No rolls in this set. Click "Add" to add rolls.
         </div>
       )}
-
-      <Button
-        variant="ghost"
-        size="sm"
-        className="w-full mt-2 text-gray-500"
-        onClick={() => onAddCut(set.id)}
-      >
-        <Plus className="h-4 w-4 mr-1" />
-        Add Cut Roll
-      </Button>
     </div>
   );
 }
@@ -637,10 +561,12 @@ export default function HybridPlanningPage() {
   const [showAddCutDialog, setShowAddCutDialog] = useState(false);
   const [showEditCutDialog, setShowEditCutDialog] = useState(false);
   const [currentSetId, setCurrentSetId] = useState<string | null>(null);
+  const [currentPaperSpec, setCurrentPaperSpec] = useState<{ gsm: number; bf: number; shade: string } | null>(null);
   const [editingCut, setEditingCut] = useState<EditableCutRoll | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [includePendingOrders, setIncludePendingOrders] = useState(true);
   const [includeWastageAllocation, setIncludeWastageAllocation] = useState(true);
+  const [selectedSets, setSelectedSets] = useState<Set<string>>(new Set());
 
   // Cut roll form
   const [cutRollForm, setCutRollForm] = useState({
@@ -649,21 +575,10 @@ export default function HybridPlanningPage() {
     clientId: '',
   });
 
-  // Drag state
-  const [activeDragId, setActiveDragId] = useState<string | null>(null);
-
   // Calculate planning width
   const planningWidth = useMemo(() => {
     return Math.max(124 - appliedWastage, 50);
   }, [appliedWastage]);
-
-  // DnD sensors
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
 
   // Load orders on mount
   useEffect(() => {
@@ -780,7 +695,7 @@ export default function HybridPlanningPage() {
       const result = await processMultipleOrders(request);
 
       // Transform flat result to nested structure
-      const nestedState = transformToNestedStructure(result, planningWidth, orders);
+      const nestedState = transformToNestedStructure(result, planningWidth);
       nestedState.selectedOrderIds = selectedOrders;
 
       setPlanState(nestedState);
@@ -798,6 +713,17 @@ export default function HybridPlanningPage() {
       });
       setExpandedJumbos(allJumboIds);
 
+      // Select all sets by default
+      const allSetIds = new Set<string>();
+      nestedState.paperSpecs.forEach(spec => {
+        spec.jumbos.forEach(jumbo => {
+          jumbo.sets.forEach(set => {
+            allSetIds.add(set.id);
+          });
+        });
+      });
+      setSelectedSets(allSetIds);
+
       setActiveTab("edit-plan");
       toast.success('Plan generated successfully!');
 
@@ -809,26 +735,15 @@ export default function HybridPlanningPage() {
     }
   };
 
-  const handleToggleSelect = (cutId: string) => {
-    if (!planState) return;
-
-    setPlanState(prev => {
-      if (!prev) return prev;
-
-      const newSpecs = prev.paperSpecs.map(spec => ({
-        ...spec,
-        jumbos: spec.jumbos.map(jumbo => ({
-          ...jumbo,
-          sets: jumbo.sets.map(set => ({
-            ...set,
-            cuts: set.cuts.map(cut =>
-              cut.id === cutId ? { ...cut, selected: !cut.selected } : cut
-            ),
-          })),
-        })),
-      }));
-
-      return { ...prev, paperSpecs: newSpecs, isModified: true };
+  const handleToggleSet = (setId: string) => {
+    setSelectedSets(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(setId)) {
+        newSet.delete(setId);
+      } else {
+        newSet.add(setId);
+      }
+      return newSet;
     });
   };
 
@@ -850,6 +765,9 @@ export default function HybridPlanningPage() {
 
     if (!foundCut) return;
 
+    // Different behavior for algorithm vs manual rolls
+    const isAlgorithmRoll = foundCut.source === 'algorithm';
+
     setPlanState(prev => {
       if (!prev) return prev;
 
@@ -867,12 +785,17 @@ export default function HybridPlanningPage() {
       return {
         ...prev,
         paperSpecs: newSpecs,
-        orphanedRolls: [...prev.orphanedRolls, foundCut!],
+        // Only move algorithm rolls to orphaned; manual rolls are deleted completely
+        orphanedRolls: isAlgorithmRoll ? [...prev.orphanedRolls, foundCut!] : prev.orphanedRolls,
         isModified: true,
       };
     });
 
-    toast.info('Roll moved to orphaned panel');
+    if (isAlgorithmRoll) {
+      toast.info('Roll moved to orphaned panel');
+    } else {
+      toast.success('Manual roll deleted');
+    }
   };
 
   const handleReassignOrphan = (cutId: string, targetSetId: string) => {
@@ -931,7 +854,75 @@ export default function HybridPlanningPage() {
   const handleAddCut = (setId: string) => {
     setCurrentSetId(setId);
     setCutRollForm({ width: '', quantity: '1', clientId: '' });
+
+    // Find the paper spec for the set's parent jumbo
+    if (planState) {
+      for (const spec of planState.paperSpecs) {
+        for (const jumbo of spec.jumbos) {
+          const set = jumbo.sets.find(s => s.id === setId);
+          if (set) {
+            setCurrentPaperSpec({ gsm: spec.gsm, bf: spec.bf, shade: spec.shade });
+            break;
+          }
+        }
+      }
+    }
+
     setShowAddCutDialog(true);
+  };
+
+  const handleAssignOrphan = (orphanId: string) => {
+    if (!planState || !currentSetId) return;
+
+    const orphan = planState.orphanedRolls.find(c => c.id === orphanId);
+    if (!orphan) return;
+
+    let targetSet: RollSetGroup | null = null;
+
+    for (const spec of planState.paperSpecs) {
+      for (const jumbo of spec.jumbos) {
+        const set = jumbo.sets.find(s => s.id === currentSetId);
+        if (set) {
+          targetSet = set;
+          break;
+        }
+      }
+    }
+
+    if (!targetSet) return;
+
+    const newTotalWidth = getTotalWidthForSet(targetSet) + (orphan.width * orphan.quantity);
+    if (newTotalWidth > planningWidth) {
+      toast.error(`Cannot add: would exceed ${planningWidth}" limit`);
+      return;
+    }
+
+    setPlanState(prev => {
+      if (!prev) return prev;
+
+      const newSpecs = prev.paperSpecs.map(spec => ({
+        ...spec,
+        jumbos: spec.jumbos.map(jumbo => ({
+          ...jumbo,
+          sets: jumbo.sets.map(set => {
+            if (set.id === currentSetId) {
+              return { ...set, cuts: [...set.cuts, orphan] };
+            }
+            return set;
+          }),
+        })),
+      }));
+
+      return {
+        ...prev,
+        paperSpecs: newSpecs,
+        orphanedRolls: prev.orphanedRolls.filter(c => c.id !== orphanId),
+        isModified: true,
+      };
+    });
+
+    setShowAddCutDialog(false);
+    toast.success('Orphaned roll assigned to set');
   };
 
   const handleSaveNewCut = () => {
@@ -946,14 +937,12 @@ export default function HybridPlanningPage() {
     }
 
     let targetSet: RollSetGroup | null = null;
-    let targetSpec: PaperSpecGroup | null = null;
 
     for (const spec of planState.paperSpecs) {
       for (const jumbo of spec.jumbos) {
         const set = jumbo.sets.find(s => s.id === currentSetId);
         if (set) {
           targetSet = set;
-          targetSpec = spec;
           break;
         }
       }
@@ -980,6 +969,10 @@ export default function HybridPlanningPage() {
       clientId: cutRollForm.clientId || undefined,
       source: 'manual',
       selected: true,
+      // Store paper spec from the target set's parent
+      gsm: currentPaperSpec?.gsm,
+      bf: currentPaperSpec?.bf,
+      shade: currentPaperSpec?.shade,
     };
 
     setPlanState(prev => {
@@ -1022,6 +1015,12 @@ export default function HybridPlanningPage() {
     }
 
     if (foundCut) {
+      // Only allow editing manual rolls - algorithm rolls should not be modified
+      if (foundCut.source === 'algorithm') {
+        toast.error('Algorithm-generated rolls cannot be edited. You can only delete them.');
+        return;
+      }
+
       setEditingCut(foundCut);
       setCutRollForm({
         width: foundCut.width.toString(),
@@ -1130,114 +1129,6 @@ export default function HybridPlanningPage() {
     toast.success('Jumbo roll added');
   };
 
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveDragId(event.active.id as string);
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveDragId(null);
-
-    if (!over || !planState) return;
-
-    const activeId = active.id as string;
-    const overId = over.id as string;
-
-    let sourceCut: EditableCutRoll | null = null;
-    let sourceSetId: string | null = null;
-
-    for (const spec of planState.paperSpecs) {
-      for (const jumbo of spec.jumbos) {
-        for (const set of jumbo.sets) {
-          const cut = set.cuts.find(c => c.id === activeId);
-          if (cut) {
-            sourceCut = cut;
-            sourceSetId = set.id;
-            break;
-          }
-        }
-      }
-    }
-
-    if (!sourceCut || !sourceSetId) return;
-
-    const isDroppedOnSet = planState.paperSpecs.some(spec =>
-      spec.jumbos.some(jumbo =>
-        jumbo.sets.some(set => set.id === overId)
-      )
-    );
-
-    if (isDroppedOnSet && overId !== sourceSetId) {
-      let targetSet: RollSetGroup | null = null;
-
-      for (const spec of planState.paperSpecs) {
-        for (const jumbo of spec.jumbos) {
-          const set = jumbo.sets.find(s => s.id === overId);
-          if (set) {
-            targetSet = set;
-            break;
-          }
-        }
-      }
-
-      if (!targetSet) return;
-
-      const newTotalWidth = getTotalWidthForSet(targetSet) + (sourceCut.width * sourceCut.quantity);
-      if (newTotalWidth > planningWidth) {
-        toast.error(`Cannot move: would exceed ${planningWidth}" limit`);
-        return;
-      }
-
-      setPlanState(prev => {
-        if (!prev) return prev;
-
-        const newSpecs = prev.paperSpecs.map(spec => ({
-          ...spec,
-          jumbos: spec.jumbos.map(jumbo => ({
-            ...jumbo,
-            sets: jumbo.sets.map(set => {
-              if (set.id === sourceSetId) {
-                return { ...set, cuts: set.cuts.filter(c => c.id !== activeId) };
-              }
-              if (set.id === overId) {
-                return { ...set, cuts: [...set.cuts, sourceCut!] };
-              }
-              return set;
-            }),
-          })),
-        }));
-
-        return { ...prev, paperSpecs: newSpecs, isModified: true };
-      });
-
-      toast.success('Roll moved to new set');
-    } else {
-      setPlanState(prev => {
-        if (!prev) return prev;
-
-        const newSpecs = prev.paperSpecs.map(spec => ({
-          ...spec,
-          jumbos: spec.jumbos.map(jumbo => ({
-            ...jumbo,
-            sets: jumbo.sets.map(set => {
-              if (set.id === sourceSetId) {
-                const oldIndex = set.cuts.findIndex(c => c.id === activeId);
-                const newIndex = set.cuts.findIndex(c => c.id === overId);
-
-                if (oldIndex !== -1 && newIndex !== -1) {
-                  return { ...set, cuts: arrayMove(set.cuts, oldIndex, newIndex) };
-                }
-              }
-              return set;
-            }),
-          })),
-        }));
-
-        return { ...prev, paperSpecs: newSpecs, isModified: true };
-      });
-    }
-  };
-
   const handleStartProduction = () => {
     if (!planState) return;
 
@@ -1271,134 +1162,61 @@ export default function HybridPlanningPage() {
         throw new Error('User not authenticated');
       }
 
-      const allCuts: any[] = [];
-      const selectedCuts: any[] = [];
-      let rollIndex = 0;
-
-      planState.paperSpecs.forEach(spec => {
-        spec.jumbos.forEach(jumbo => {
-          jumbo.sets.forEach(set => {
-            set.cuts.forEach(cut => {
-              const cutData = {
-                paper_id: cut.paper_id || '',
-                width_inches: cut.width,
-                qr_code: `CUT_ROLL_${Date.now()}_${Math.random().toString(36).substr(2, 4)}_${rollIndex}`,
-                barcode_id: `CR_${String(rollIndex + 1).padStart(5, '0')}`,
-                gsm: spec.gsm,
-                bf: spec.bf,
-                shade: spec.shade,
-                individual_roll_number: (jumbo.jumboNumber - 1) * 3 + set.setNumber,
-                trim_left: cut.trimLeft || 0,
-                order_id: cut.order_id || null,
-                source_type: cut.source_type || (cut.source === 'manual' ? 'manual' : 'regular_order'),
-                source_pending_id: cut.source_pending_id || null,
-              };
-
-              allCuts.push(cutData);
-
-              if (cut.selected) {
-                selectedCuts.push(cutData);
-              }
-
-              rollIndex++;
-            });
-          });
-        });
-      });
-
-      planState.orphanedRolls.forEach(cut => {
-        const specKey = planState.paperSpecs[0];
-
-        allCuts.push({
-          paper_id: cut.paper_id || '',
-          width_inches: cut.width,
-          qr_code: `CUT_ROLL_${Date.now()}_${Math.random().toString(36).substr(2, 4)}_${rollIndex}`,
-          barcode_id: `CR_${String(rollIndex + 1).padStart(5, '0')}`,
-          gsm: specKey?.gsm || 0,
-          bf: specKey?.bf || 0,
-          shade: specKey?.shade || '',
-          individual_roll_number: 0,
-          trim_left: 0,
-          order_id: cut.order_id || null,
-          source_type: cut.source_type || 'regular_order',
-          source_pending_id: cut.source_pending_id || null,
-        });
-
-        rollIndex++;
-      });
-
-      const cutPattern = allCuts.map((cut) => ({
-        width: cut.width_inches,
-        gsm: cut.gsm,
-        bf: cut.bf,
-        shade: cut.shade,
-        individual_roll_number: cut.individual_roll_number,
-        source: 'cutting',
-        order_id: cut.order_id || '',
-        selected: selectedCuts.some(sc => sc.barcode_id === cut.barcode_id),
-        source_type: cut.source_type,
-        source_pending_id: cut.source_pending_id,
-        company_name: '',
-      }));
-
-      const efficiency = calculateEfficiencyMetrics(
-        selectedCuts.map(c => ({
-          width: c.width_inches,
-          quantity: 1,
-          gsm: c.gsm,
-          bf: c.bf,
-          shade: c.shade,
-          source: 'cutting' as const,
-          individual_roll_number: c.individual_roll_number,
-        }))
-      );
-
-      const idempotencyKey = `plan-${userId}-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
-
-      const planCreateRequest = {
-        name: `Hybrid Plan - ${new Date().toISOString().split('T')[0]}`,
-        cut_pattern: cutPattern,
-        wastage_allocations: planState.wastageAllocations || [],
-        expected_waste_percentage: Math.max(0, 100 - efficiency.averageEfficiency),
+      // Build hybrid request structure
+      const hybridRequest = {
+        wastage: appliedWastage,
+        planning_width: planningWidth,
         created_by_id: userId,
         order_ids: planState.selectedOrderIds,
+        paper_specs: planState.paperSpecs.map(spec => ({
+          gsm: spec.gsm,
+          bf: spec.bf,
+          shade: spec.shade,
+          jumbos: spec.jumbos.map(jumbo => ({
+            jumbo_number: jumbo.jumboNumber,
+            sets: jumbo.sets.map(set => ({
+              set_number: set.setNumber,
+              is_selected: selectedSets.has(set.id),
+              cuts: set.cuts.map(cut => ({
+                width_inches: cut.width,
+                quantity: cut.quantity,
+                client_name: cut.clientName || '',
+                client_id: cut.clientId || null,
+                source: cut.source,
+                order_id: cut.order_id || null,
+                source_pending_id: cut.source_pending_id || null,
+                source_type: cut.source_type || null,
+                paper_id: cut.paper_id || null,
+                trim_left: cut.trimLeft || 0,
+              }))
+            }))
+          }))
+        })),
+        orphaned_rolls: planState.orphanedRolls.map(orphan => ({
+          width_inches: orphan.width,
+          quantity: orphan.quantity,
+          client_name: orphan.clientName || '',
+          client_id: orphan.clientId || null,
+          gsm: orphan.gsm,
+          bf: orphan.bf,
+          shade: orphan.shade,
+          source: orphan.source,
+          order_id: orphan.order_id || null,
+          source_pending_id: orphan.source_pending_id || null,
+          source_type: orphan.source_type || null,
+        })),
         pending_orders: planState.pendingOrders || [],
+        wastage_allocations: planState.wastageAllocations || [],
       };
 
-      const planResponse = await fetch(`${API_BASE_URL}/plans`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Idempotency-Key': idempotencyKey,
-          'ngrok-skip-browser-warning': 'true',
-        },
-        body: JSON.stringify(planCreateRequest),
-      });
-
-      if (!planResponse.ok) {
-        const error = await planResponse.json().catch(() => ({}));
-        throw new Error(error.detail || 'Failed to create plan');
-      }
-
-      const createdPlan = await planResponse.json();
-      const planId = createdPlan.id;
-
-      const productionRequest = {
-        selected_cut_rolls: selectedCuts,
-        all_available_cuts: allCuts,
-        wastage_data: [],
-        added_rolls_data: {},
-        created_by_id: userId,
-        jumbo_roll_width: planningWidth,
-      };
-
-      const productionResponse = await fetch(`${API_BASE_URL}/plans/${planId}/start-production`, {
+      // Call new hybrid endpoint
+      const productionResponse = await fetch(`${API_BASE_URL}/plans/hybrid/start-production`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'ngrok-skip-browser-warning': 'true',
         },
-        body: JSON.stringify(productionRequest),
+        body: JSON.stringify(hybridRequest),
       });
 
       if (!productionResponse.ok) {
@@ -1456,9 +1274,9 @@ export default function HybridPlanningPage() {
 
     let totalJumbos = 0;
     let totalSets = 0;
+    let selectedSetsCount = 0;
     let totalCuts = 0;
     let selectedCuts = 0;
-    let unselectedCuts = 0;
     let pendingCuts = 0;
 
     planState.paperSpecs.forEach(spec => {
@@ -1466,10 +1284,13 @@ export default function HybridPlanningPage() {
       spec.jumbos.forEach(jumbo => {
         totalSets += jumbo.sets.length;
         jumbo.sets.forEach(set => {
+          const isSetSelected = selectedSets.has(set.id);
+          if (isSetSelected) {
+            selectedSetsCount++;
+            selectedCuts += set.cuts.length;
+          }
           totalCuts += set.cuts.length;
           set.cuts.forEach(cut => {
-            if (cut.selected) selectedCuts++;
-            else unselectedCuts++;
             if (cut.source_type === 'pending_order' || cut.source_pending_id) {
               pendingCuts++;
             }
@@ -1481,13 +1302,14 @@ export default function HybridPlanningPage() {
     return {
       totalJumbos,
       totalSets,
+      selectedSetsCount,
       totalCuts,
       selectedCuts,
-      unselectedCuts,
+      excludedCuts: totalCuts - selectedCuts,
       pendingCuts,
       orphanedCount: planState.orphanedRolls.length,
     };
-  }, [planState]);
+  }, [planState, selectedSets]);
 
   // ============================================
   // RENDER
@@ -1565,8 +1387,11 @@ export default function HybridPlanningPage() {
                         )}
                       </div>
                     </div>
-                    <div className="text-sm text-gray-600 mb-2 truncate">
+                    <div className="text-sm text-gray-600 truncate">
                       {cut.clientName || 'No Client'}
+                    </div>
+                    <div className="text-xs text-muted-foreground mb-2">
+                      {cut.gsm}gsm, {cut.bf}bf, {cut.shade}
                     </div>
                     <Select
                       onValueChange={(setId) => handleReassignOrphan(cut.id, setId)}
@@ -1575,16 +1400,23 @@ export default function HybridPlanningPage() {
                         <SelectValue placeholder="Add to set..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {planState.paperSpecs.flatMap((spec) =>
-                          spec.jumbos.flatMap((jumbo) =>
-                            jumbo.sets.map((set) => (
-                              <SelectItem key={set.id} value={set.id}>
-                                {spec.gsm}gsm J#{jumbo.jumboNumber} Set#{set.setNumber} (
-                                {getRemainingWidthForSet(set, planningWidth)}" free)
-                              </SelectItem>
-                            ))
+                        {/* Only show sets from matching paper spec */}
+                        {planState.paperSpecs
+                          .filter((spec) =>
+                            spec.gsm === cut.gsm &&
+                            spec.bf === cut.bf &&
+                            spec.shade === cut.shade
                           )
-                        )}
+                          .flatMap((spec) =>
+                            spec.jumbos.flatMap((jumbo) =>
+                              jumbo.sets.map((set) => (
+                                <SelectItem key={set.id} value={set.id}>
+                                  J#{jumbo.jumboNumber} Set#{set.setNumber} (
+                                  {getRemainingWidthForSet(set, planningWidth)}" free)
+                                </SelectItem>
+                              ))
+                            )
+                          )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1788,18 +1620,20 @@ export default function HybridPlanningPage() {
                     <span className="text-sm text-muted-foreground">Jumbos:</span>
                     <span className="font-medium">{summaryStats.totalJumbos}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Total Cuts:</span>
-                    <span className="font-medium">{summaryStats.totalCuts}</span>
+                  <div className="flex items-center gap-2 text-green-600">
+                    <span className="text-sm">Sets:</span>
+                    <span className="font-medium">{summaryStats.selectedSetsCount}/{summaryStats.totalSets}</span>
                   </div>
                   <div className="flex items-center gap-2 text-green-600">
-                    <span className="text-sm">Selected:</span>
+                    <span className="text-sm">Cuts for Production:</span>
                     <span className="font-medium">{summaryStats.selectedCuts}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-gray-500">
-                    <span className="text-sm">Unselected:</span>
-                    <span className="font-medium">{summaryStats.unselectedCuts}</span>
-                  </div>
+                  {summaryStats.excludedCuts > 0 && (
+                    <div className="flex items-center gap-2 text-gray-500">
+                      <span className="text-sm">Excluded:</span>
+                      <span className="font-medium">{summaryStats.excludedCuts}</span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 text-orange-500">
                     <span className="text-sm">From Pending:</span>
                     <span className="font-medium">{summaryStats.pendingCuts}</span>
@@ -1815,87 +1649,81 @@ export default function HybridPlanningPage() {
               )}
 
               {/* Main Editor - Full Width */}
-              <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragStart={handleDragStart}
-                  onDragEnd={handleDragEnd}
-                >
-                  {planState.paperSpecs.map((spec) => (
-                    <Card key={spec.id}>
-                      <CardHeader
-                        className="cursor-pointer"
-                        onClick={() => toggleSpecExpand(spec.id)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            {expandedSpecs.has(spec.id) ? (
-                              <ChevronDown className="h-5 w-5" />
-                            ) : (
-                              <ChevronRight className="h-5 w-5" />
-                            )}
-                            <CardTitle className="text-lg">
-                              {spec.gsm}gsm, {spec.bf}bf, {spec.shade}
-                            </CardTitle>
-                          </div>
-                          <Badge variant="outline">
-                            {spec.jumbos.length} jumbos
-                          </Badge>
-                        </div>
-                      </CardHeader>
+              {planState.paperSpecs.map((spec) => (
+                <Card key={spec.id}>
+                  <CardHeader
+                    className="cursor-pointer"
+                    onClick={() => toggleSpecExpand(spec.id)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {expandedSpecs.has(spec.id) ? (
+                          <ChevronDown className="h-5 w-5" />
+                        ) : (
+                          <ChevronRight className="h-5 w-5" />
+                        )}
+                        <CardTitle className="text-lg">
+                          {spec.gsm}gsm, {spec.bf}bf, {spec.shade}
+                        </CardTitle>
+                      </div>
+                      <Badge variant="outline">
+                        {spec.jumbos.length} jumbos
+                      </Badge>
+                    </div>
+                  </CardHeader>
 
-                      {expandedSpecs.has(spec.id) && (
-                        <CardContent className="space-y-4">
-                          {spec.jumbos.map((jumbo) => (
-                            <div key={jumbo.id} className="border rounded-lg p-4">
-                              <div
-                                className="flex items-center justify-between mb-3 cursor-pointer"
-                                onClick={() => toggleJumboExpand(jumbo.id)}
-                              >
-                                <div className="flex items-center gap-2">
-                                  {expandedJumbos.has(jumbo.id) ? (
-                                    <ChevronDown className="h-4 w-4" />
-                                  ) : (
-                                    <ChevronRight className="h-4 w-4" />
-                                  )}
-                                  <span className="font-medium">Jumbo #{jumbo.jumboNumber}</span>
-                                  <Badge variant="secondary" className="text-xs">
-                                    {jumbo.sets.reduce((sum, s) => sum + s.cuts.length, 0)} cuts
-                                  </Badge>
-                                </div>
-                              </div>
-
-                              {expandedJumbos.has(jumbo.id) && (
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                  {jumbo.sets.map((set) => (
-                                    <DroppableRollSet
-                                      key={set.id}
-                                      set={set}
-                                      planningWidth={planningWidth}
-                                      onToggleSelect={handleToggleSelect}
-                                      onEditCut={handleEditCut}
-                                      onDeleteCut={handleDeleteCut}
-                                      onAddCut={handleAddCut}
-                                    />
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleAddJumbo(spec.id)}
+                  {expandedSpecs.has(spec.id) && (
+                    <CardContent className="space-y-4">
+                      {spec.jumbos.map((jumbo) => (
+                        <div key={jumbo.id} className="border rounded-lg p-4">
+                          <div
+                            className="flex items-center justify-between mb-3 cursor-pointer"
+                            onClick={() => toggleJumboExpand(jumbo.id)}
                           >
-                            <Plus className="h-4 w-4 mr-1" />
-                            Add Jumbo Roll
-                          </Button>
-                        </CardContent>
-                      )}
-                    </Card>
-                  ))}
-                </DndContext>
+                            <div className="flex items-center gap-2">
+                              {expandedJumbos.has(jumbo.id) ? (
+                                <ChevronDown className="h-4 w-4" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4" />
+                              )}
+                              <span className="font-medium">Jumbo #{jumbo.jumboNumber}</span>
+                              <Badge variant="secondary" className="text-xs">
+                                {jumbo.sets.reduce((sum, s) => sum + s.cuts.length, 0)} cuts
+                              </Badge>
+                            </div>
+                          </div>
+
+                          {expandedJumbos.has(jumbo.id) && (
+                            <div className="space-y-4">
+                              {jumbo.sets.map((set) => (
+                                <RollSet
+                                  key={set.id}
+                                  set={set}
+                                  planningWidth={planningWidth}
+                                  isSelected={selectedSets.has(set.id)}
+                                  onToggleSet={handleToggleSet}
+                                  onEditCut={handleEditCut}
+                                  onDeleteCut={handleDeleteCut}
+                                  onAddCut={handleAddCut}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleAddJumbo(spec.id)}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Jumbo Roll
+                      </Button>
+                    </CardContent>
+                  )}
+                </Card>
+              ))}
             </div>
           )}
         </TabsContent>
@@ -2047,13 +1875,66 @@ export default function HybridPlanningPage() {
 
       {/* Add Cut Roll Dialog */}
       <Dialog open={showAddCutDialog} onOpenChange={setShowAddCutDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Add Cut Roll</DialogTitle>
             <DialogDescription>
-              Add a manual cut roll (no order linkage)
+              Add from orphaned rolls or create a new manual roll
             </DialogDescription>
           </DialogHeader>
+
+          {/* Orphaned Rolls Section - Only show orphans matching the paper spec */}
+          {planState && currentPaperSpec && (() => {
+            // Filter orphaned rolls to only show those matching the target set's paper spec
+            const matchingOrphans = planState.orphanedRolls.filter(orphan =>
+              orphan.gsm === currentPaperSpec.gsm &&
+              orphan.bf === currentPaperSpec.bf &&
+              orphan.shade === currentPaperSpec.shade
+            );
+
+            if (matchingOrphans.length === 0) return null;
+
+            return (
+              <div className="space-y-2">
+                <Label className="text-orange-600 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  Assign Orphaned Roll
+                  <span className="text-xs font-normal text-muted-foreground">
+                    ({currentPaperSpec.gsm}gsm, {currentPaperSpec.bf}bf, {currentPaperSpec.shade})
+                  </span>
+                </Label>
+                <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2 border rounded-lg bg-orange-50">
+                  {matchingOrphans.map((orphan) => {
+                    const isPending = orphan.source_type === 'pending_order' || !!orphan.source_pending_id;
+                    return (
+                      <Button
+                        key={orphan.id}
+                        variant="outline"
+                        size="sm"
+                        className="justify-start h-auto py-2 px-3"
+                        onClick={() => handleAssignOrphan(orphan.id)}
+                      >
+                        <div className="text-left">
+                          <div className="font-medium">
+                            {orphan.width}" {orphan.quantity > 1 && `×${orphan.quantity}`}
+                          </div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {orphan.clientName || 'No Client'}
+                            {isPending && ' (P)'}
+                          </div>
+                        </div>
+                      </Button>
+                    );
+                  })}
+                </div>
+                <div className="text-center text-sm text-muted-foreground py-2">
+                  — or create new —
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Manual Roll Form */}
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Width (inches)</Label>
@@ -2096,7 +1977,7 @@ export default function HybridPlanningPage() {
             <Button variant="outline" onClick={() => setShowAddCutDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveNewCut}>Add</Button>
+            <Button onClick={handleSaveNewCut}>Add New Roll</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
