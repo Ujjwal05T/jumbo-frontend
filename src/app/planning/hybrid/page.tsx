@@ -58,7 +58,10 @@ import {
   AlertTriangle,
   Loader2,
   Clock,
+  RotateCcw,
+  Timer,
 } from "lucide-react";
+import { RollbackApiService, RollbackStatus } from "@/lib/rollback-api";
 
 // ============================================
 // TYPES
@@ -554,6 +557,14 @@ export default function HybridPlanningPage() {
   const [productionCreated, setProductionCreated] = useState(false);
   const [productionResult, setProductionResult] = useState<any>(null);
 
+  // Rollback state
+  const [createdPlanId, setCreatedPlanId] = useState<string | null>(null);
+  const [rollbackInfo, setRollbackInfo] = useState<{ rollback_available: boolean; expires_at?: string; minutes_remaining?: number } | null>(null);
+  const [rollbackTimeRemaining, setRollbackTimeRemaining] = useState(0);
+  const [showRollbackDialog, setShowRollbackDialog] = useState(false);
+  const [rollingBack, setRollingBack] = useState(false);
+  const [rollbackStatus, setRollbackStatus] = useState<RollbackStatus | null>(null);
+
   // UI state
   const [activeTab, setActiveTab] = useState("orders");
   const [expandedSpecs, setExpandedSpecs] = useState<Set<string>>(new Set());
@@ -961,19 +972,23 @@ export default function HybridPlanningPage() {
 
     const client = clients.find(c => c.id === cutRollForm.clientId);
 
-    const newCut: EditableCutRoll = {
-      id: `cut-${generateId()}`,
-      width,
-      quantity,
-      clientName: client?.company_name || '',
-      clientId: cutRollForm.clientId || undefined,
-      source: 'manual',
-      selected: true,
-      // Store paper spec from the target set's parent
-      gsm: currentPaperSpec?.gsm,
-      bf: currentPaperSpec?.bf,
-      shade: currentPaperSpec?.shade,
-    };
+    // Create separate cut objects for each roll (not grouped by quantity)
+    const newCuts: EditableCutRoll[] = [];
+    for (let i = 0; i < quantity; i++) {
+      newCuts.push({
+        id: `cut-${generateId()}-${i}`,
+        width,
+        quantity: 1, // Each roll is tracked individually
+        clientName: client?.company_name || '',
+        clientId: cutRollForm.clientId || undefined,
+        source: 'manual',
+        selected: true,
+        // Store paper spec from the target set's parent
+        gsm: currentPaperSpec?.gsm,
+        bf: currentPaperSpec?.bf,
+        shade: currentPaperSpec?.shade,
+      });
+    }
 
     setPlanState(prev => {
       if (!prev) return prev;
@@ -984,7 +999,7 @@ export default function HybridPlanningPage() {
           ...jumbo,
           sets: jumbo.sets.map(set => {
             if (set.id === currentSetId) {
-              return { ...set, cuts: [...set.cuts, newCut] };
+              return { ...set, cuts: [...set.cuts, ...newCuts] };
             }
             return set;
           }),
@@ -1103,6 +1118,13 @@ export default function HybridPlanningPage() {
   const handleAddJumbo = (specId: string) => {
     if (!planState) return;
 
+    // Generate set IDs for the new jumbo
+    const newSetIds = [
+      `set-${generateId()}-1`,
+      `set-${generateId()}-2`,
+      `set-${generateId()}-3`,
+    ];
+
     setPlanState(prev => {
       if (!prev) return prev;
 
@@ -1113,9 +1135,9 @@ export default function HybridPlanningPage() {
             id: `jumbo-${generateId()}`,
             jumboNumber: maxJumboNum + 1,
             sets: [
-              { id: `set-${generateId()}-1`, setNumber: 1, cuts: [] },
-              { id: `set-${generateId()}-2`, setNumber: 2, cuts: [] },
-              { id: `set-${generateId()}-3`, setNumber: 3, cuts: [] },
+              { id: newSetIds[0], setNumber: 1, cuts: [] },
+              { id: newSetIds[1], setNumber: 2, cuts: [] },
+              { id: newSetIds[2], setNumber: 3, cuts: [] },
             ],
           };
           return { ...spec, jumbos: [...spec.jumbos, newJumbo] };
@@ -1124,6 +1146,13 @@ export default function HybridPlanningPage() {
       });
 
       return { ...prev, paperSpecs: newSpecs, isModified: true };
+    });
+
+    // Automatically select all sets in the new jumbo
+    setSelectedSets(prev => {
+      const newSelected = new Set(prev);
+      newSetIds.forEach(setId => newSelected.add(setId));
+      return newSelected;
     });
 
     toast.success('Jumbo roll added');
@@ -1174,22 +1203,24 @@ export default function HybridPlanningPage() {
           shade: spec.shade,
           jumbos: spec.jumbos.map(jumbo => ({
             jumbo_number: jumbo.jumboNumber,
-            sets: jumbo.sets.map(set => ({
-              set_number: set.setNumber,
-              is_selected: selectedSets.has(set.id),
-              cuts: set.cuts.map(cut => ({
-                width_inches: cut.width,
-                quantity: cut.quantity,
-                client_name: cut.clientName || '',
-                client_id: cut.clientId || null,
-                source: cut.source,
-                order_id: cut.order_id || null,
-                source_pending_id: cut.source_pending_id || null,
-                source_type: cut.source_type || null,
-                paper_id: cut.paper_id || null,
-                trim_left: cut.trimLeft || 0,
+            sets: jumbo.sets
+              .filter(set => set.cuts.length > 0) // Only include sets with rolls
+              .map(set => ({
+                set_number: set.setNumber,
+                is_selected: selectedSets.has(set.id),
+                cuts: set.cuts.map(cut => ({
+                  width_inches: cut.width,
+                  quantity: cut.quantity,
+                  client_name: cut.clientName || '',
+                  client_id: cut.clientId || null,
+                  source: cut.source,
+                  order_id: cut.order_id || null,
+                  source_pending_id: cut.source_pending_id || null,
+                  source_type: cut.source_type || null,
+                  paper_id: cut.paper_id || null,
+                  trim_left: cut.trimLeft || 0,
+                }))
               }))
-            }))
           }))
         })),
         orphaned_rolls: planState.orphanedRolls.map(orphan => ({
@@ -1230,6 +1261,13 @@ export default function HybridPlanningPage() {
       setProductionCreated(true);
       setActiveTab("production");
 
+      // Store rollback info
+      if (result.rollback_info?.rollback_available) {
+        setCreatedPlanId(result.plan_id || null);
+        setRollbackInfo(result.rollback_info);
+        setRollbackTimeRemaining(result.rollback_info.minutes_remaining ?? 10);
+      }
+
       let message = `Production started! Updated ${result.summary.orders_updated} orders`;
       if (result.summary.pending_items_created > 0) {
         message += `, created ${result.summary.pending_items_created} pending items`;
@@ -1268,6 +1306,60 @@ export default function HybridPlanningPage() {
     });
   };
 
+  // Countdown timer for rollback window
+  useEffect(() => {
+    if (!rollbackInfo?.rollback_available || rollbackTimeRemaining <= 0) return;
+    const interval = setInterval(() => {
+      setRollbackTimeRemaining((prev) => {
+        const next = prev - 1 / 60;
+        if (next <= 0) {
+          clearInterval(interval);
+          setRollbackInfo((r) => r ? { ...r, rollback_available: false } : r);
+          return 0;
+        }
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [rollbackInfo?.rollback_available]);
+
+  const handleOpenRollback = async () => {
+    if (!createdPlanId) return;
+    try {
+      const status = await RollbackApiService.getRollbackStatus(createdPlanId);
+      setRollbackStatus(status);
+    } catch {
+      setRollbackStatus(null);
+    }
+    setShowRollbackDialog(true);
+  };
+
+  const handleConfirmRollback = async () => {
+    if (!createdPlanId) return;
+    const userId = localStorage.getItem('user_id');
+    if (!userId) { toast.error('User not authenticated'); return; }
+    try {
+      setRollingBack(true);
+      const result = await RollbackApiService.rollbackPlan(createdPlanId, userId);
+      if (result.success) {
+        toast.success('Plan rolled back successfully. All changes have been undone.');
+        setShowRollbackDialog(false);
+        // Reset page state — plan is deleted
+        setPlanState(null);
+        setProductionCreated(false);
+        setProductionResult(null);
+        setSelectedOrders([]);
+        setCreatedPlanId(null);
+        setRollbackInfo(null);
+        setActiveTab('orders');
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Rollback failed');
+    } finally {
+      setRollingBack(false);
+    }
+  };
+
   // Calculate summary stats
   const summaryStats = useMemo(() => {
     if (!planState) return null;
@@ -1278,6 +1370,8 @@ export default function HybridPlanningPage() {
     let totalCuts = 0;
     let selectedCuts = 0;
     let pendingCuts = 0;
+    let totalWidthUsed = 0;
+    let totalAvailableWidth = 0;
 
     planState.paperSpecs.forEach(spec => {
       totalJumbos += spec.jumbos.length;
@@ -1288,6 +1382,11 @@ export default function HybridPlanningPage() {
           if (isSetSelected) {
             selectedSetsCount++;
             selectedCuts += set.cuts.length;
+
+            // Calculate width usage for selected sets
+            const setWidth = set.cuts.reduce((sum, cut) => sum + (cut.width * cut.quantity), 0);
+            totalWidthUsed += setWidth;
+            totalAvailableWidth += planningWidth;
           }
           totalCuts += set.cuts.length;
           set.cuts.forEach(cut => {
@@ -1299,6 +1398,10 @@ export default function HybridPlanningPage() {
       });
     });
 
+    // Calculate waste percentage: (total waste / total available width) * 100
+    const totalWaste = totalAvailableWidth - totalWidthUsed;
+    const wastePercentage = totalAvailableWidth > 0 ? (totalWaste / totalAvailableWidth) * 100 : 0;
+
     return {
       totalJumbos,
       totalSets,
@@ -1308,8 +1411,9 @@ export default function HybridPlanningPage() {
       excludedCuts: totalCuts - selectedCuts,
       pendingCuts,
       orphanedCount: planState.orphanedRolls.length,
+      estimatedWaste: wastePercentage,
     };
-  }, [planState, selectedSets]);
+  }, [planState, selectedSets, planningWidth]);
 
   // ============================================
   // RENDER
@@ -1321,7 +1425,7 @@ export default function HybridPlanningPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <h1 className="text-2xl md:text-3xl font-bold">Hybrid Planning</h1>
         <div className="flex flex-col sm:flex-row gap-2">
-          <Button variant="outline" onClick={() => router.push("/planning")}>
+          <Button variant="outline" onClick={() => router.push("/masters/plans")}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Planning
           </Button>
@@ -1787,6 +1891,45 @@ export default function HybridPlanningPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
+
+                {/* Rollback Banner */}
+                {rollbackInfo?.rollback_available && createdPlanId && (
+                  <div className="mb-6 p-4 border border-amber-300 bg-amber-50 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <Timer className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="font-medium text-amber-800">Rollback available</p>
+                        <p className="text-sm text-amber-700">
+                          Window closes in{" "}
+                          <span className={`font-bold ${rollbackTimeRemaining <= 3 ? "text-red-600" : "text-amber-800"}`}>
+                            {RollbackApiService.formatTimeRemaining(rollbackTimeRemaining)}
+                          </span>
+                          {" "}— undo all changes made by this plan.
+                        </p>
+                        {/* Progress bar */}
+                        <div className="mt-2 h-1.5 w-full bg-amber-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              rollbackTimeRemaining > 7 ? "bg-green-500" :
+                              rollbackTimeRemaining > 3 ? "bg-amber-500" : "bg-red-500"
+                            }`}
+                            style={{ width: `${RollbackApiService.getProgressValue(rollbackTimeRemaining)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-amber-400 text-amber-800 hover:bg-amber-100 shrink-0"
+                      onClick={handleOpenRollback}
+                    >
+                      <RotateCcw className="h-4 w-4 mr-1" />
+                      Rollback Plan
+                    </Button>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
                     <div className="text-2xl font-bold">{productionResult.production_hierarchy?.length || 0}</div>
@@ -2060,6 +2203,76 @@ export default function HybridPlanningPage() {
             </Button>
             <Button onClick={createProduction}>
               Continue Anyway
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rollback Confirmation Dialog */}
+      <Dialog open={showRollbackDialog} onOpenChange={setShowRollbackDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RotateCcw className="h-5 w-5 text-amber-600" />
+              Rollback Plan
+            </DialogTitle>
+            <DialogDescription>
+              This will completely undo the hybrid plan execution.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Safety check result */}
+          {rollbackStatus && (
+            <div className={`p-3 rounded-md text-sm ${rollbackStatus.safety_check?.safe ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
+              {rollbackStatus.safety_check?.safe
+                ? '✅ Safe to rollback — no external changes detected.'
+                : `⚠️ ${rollbackStatus.safety_check?.reason}`}
+            </div>
+          )}
+
+          {/* Time remaining */}
+          {rollbackTimeRemaining > 0 && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Timer className="h-4 w-4" />
+              Window closes in{" "}
+              <span className={`font-bold ${rollbackTimeRemaining <= 3 ? "text-red-600" : ""}`}>
+                {RollbackApiService.formatTimeRemaining(rollbackTimeRemaining)}
+              </span>
+            </div>
+          )}
+
+          {/* Warning list */}
+          <div className="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-800">
+            <p className="font-semibold mb-1">This action will:</p>
+            <ul className="list-disc pl-4 space-y-0.5">
+              <li>Delete all inventory created by this plan</li>
+              <li>Restore original order statuses and quantities</li>
+              <li>Undo pending order modifications</li>
+              <li>Delete the plan record permanently</li>
+            </ul>
+            <p className="mt-2 font-semibold">This cannot be undone.</p>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRollbackDialog(false)} disabled={rollingBack}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmRollback}
+              disabled={rollingBack || rollbackTimeRemaining <= 0}
+            >
+              {rollingBack ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Rolling Back...
+                </>
+              ) : (
+                <>
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Confirm Rollback
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
