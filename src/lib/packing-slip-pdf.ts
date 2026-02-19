@@ -143,6 +143,10 @@ export const generatePackingSlipPDF = async (data: PackingSlipData, returnDoc: b
       const bfB = parseFloat(String(b.bf)) || 0;
       if (bfA !== bfB) return bfA - bfB;
 
+      const shadeA = a.natgold ? a.natgold.toString().toLowerCase() : '';
+      const shadeB = b.natgold ? b.natgold.toString().toLowerCase() : '';
+      if (shadeA !== shadeB) return shadeA.localeCompare(shadeB);
+
       const reelA = parseFloat(String(a.reel)) || 0;
       const reelB = parseFloat(String(b.reel)) || 0;
       return reelA - reelB;

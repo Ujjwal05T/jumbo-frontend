@@ -994,7 +994,7 @@ export default function PlansPage() {
         const productionInfo = { totalWeight, cutCount };
 
         checkPageBreak(30);
-        doc.setFillColor(240, 240, 240);
+        doc.setFillColor(255, 255, 255); // White background
         doc.rect(20, yPosition - 5, pageWidth - 40, 20, 'F');
         doc.setDrawColor(100, 100, 100);
         doc.setLineWidth(1);
@@ -1064,19 +1064,20 @@ export default function PlansPage() {
             const sectionWidth = Math.max(30, Math.min(55, calculatedWidth))
 
             if (roll.status === 'cutting') {
-              doc.setFillColor(189, 189, 189);
+              doc.setFillColor(255, 255, 255); // White background for cutting status
             } else {
-              doc.setFillColor(115, 114, 114);
+              doc.setFillColor(255, 255, 255); // White background for default
             }
 
             doc.rect(currentX, localY, sectionWidth, rectHeight, 'F');
-            
-            doc.setDrawColor(255, 255, 255);
-            doc.setLineWidth(0.5);
+
+            doc.setDrawColor(0, 0, 0); // Black border for clear separation
+            doc.setLineWidth(1);
             doc.rect(currentX, localY, sectionWidth, rectHeight, 'S');
 
             if (sectionWidth > 15) {
               doc.setTextColor(0, 0, 0);
+              doc.setFont('helvetica', 'bold');
               doc.setFontSize(6);
               const textX = currentX + sectionWidth/2;
 
@@ -1111,7 +1112,7 @@ export default function PlansPage() {
             
             doc.setFillColor(239, 68, 68);
             doc.rect(currentX, localY, wasteWidth, rectHeight, 'F');
-            doc.setDrawColor(255, 255, 255);
+            doc.setDrawColor(0, 0, 0); // Black border for clear separation
             doc.rect(currentX, localY, wasteWidth, rectHeight, 'S');
             
             if (wasteWidth > 20) {

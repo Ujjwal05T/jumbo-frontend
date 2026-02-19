@@ -172,91 +172,109 @@ export const generateCashChallanPDF = (data: ChallanData, printInsteadOfSave: bo
     let totalSGST = 0;
     let grandTotal = 0;
 
-    // Add items from all orders - Compact with GST calculations
+    // Group items by paper specifications
+    const groupedItems = new Map<string, { paperName: string; totalQty: number; totalAmount: number }>();
+
     data.orders.forEach(order => {
       order.order_items.forEach(item => {
-        if (yPosition + rowHeight > pageHeight - 60) {
-          // Start new page if needed
-          doc.addPage();
-          yPosition = 20;
-        }
-
-        // Calculate GST amounts
-        const taxableValue = item.amount;
-        const cgstRate = 9;
-        const sgstRate = 9;
-        const cgstAmount = (taxableValue * cgstRate) / 100;
-        const sgstAmount = (taxableValue * sgstRate) / 100;
-        const totalTaxAmount = cgstAmount + sgstAmount;
-        const totalItemAmount = taxableValue + cgstAmount + sgstAmount;
-
-        // Draw row
-        doc.rect(10, yPosition, pageWidth - 20, rowHeight);
-        currentX = 10;
-
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
-
-        // S. No.
-        doc.text(itemNumber.toString(), currentX + colWidths[0] / 2, yPosition + 6, { align: 'center' });
-        currentX += colWidths[0];
-        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
-
-        // Description - Compact
         const paperName = item.paper.name;
-        doc.setFont('helvetica', 'bold');
-        doc.text(paperName, currentX + colWidths[1] / 2, yPosition + 6, { align: 'center' });
-         currentX += colWidths[1];
-        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
-
-        // UOM
-        doc.text('KGS', currentX + colWidths[2] / 2, yPosition + 6, { align: 'center' });
-        currentX += colWidths[2];
-        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
-
-        // QTY
         const qty = item.quantity_kg || (item.quantity_rolls * 50);
-        doc.text(qty.toString(), currentX + colWidths[3] / 2, yPosition + 6, { align: 'center' });
-        currentX += colWidths[3];
-        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
-        // Rate
-        const rate = item.rate || (item.amount / qty);
-        doc.text(rate.toFixed(2), currentX + colWidths[4] / 2, yPosition + 6, { align: 'center' });
-        currentX += colWidths[4];
-        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
-
-        // Taxable Value (previously Amount)
-        doc.text(taxableValue.toFixed(2), currentX + colWidths[5] / 2, yPosition + 6, { align: 'center' });
-        currentX += colWidths[5];
-        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
-
-        // CGST (9%)
-        doc.text('9%', currentX + colWidths[6] / 2, yPosition + 6, { align: 'center' });
-        currentX += colWidths[6];
-        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
-
-        // SGST (9%)
-        doc.text('9%', currentX + colWidths[7] / 2, yPosition + 6, { align: 'center' });
-        currentX += colWidths[7];
-        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
-
-        // Tax Amount (CGST + SGST)
-        doc.text(totalTaxAmount.toFixed(2), currentX + colWidths[8] / 2, yPosition + 6, { align: 'center' });
-        currentX += colWidths[8];
-        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
-
-        // Total (Taxable + CGST + SGST)
-        doc.text(totalItemAmount.toFixed(2), currentX + colWidths[9] / 2, yPosition + 6, { align: 'center' });
-
-        // Update totals
-        totalTaxableAmount += taxableValue;
-        totalCGST += cgstAmount;
-        totalSGST += sgstAmount;
-        grandTotal += totalItemAmount;
-        itemNumber++;
-        yPosition += rowHeight;
+        if (groupedItems.has(paperName)) {
+          const existing = groupedItems.get(paperName)!;
+          existing.totalQty += qty;
+          existing.totalAmount += item.amount;
+        } else {
+          groupedItems.set(paperName, {
+            paperName,
+            totalQty: qty,
+            totalAmount: item.amount
+          });
+        }
       });
+    });
+
+    // Render grouped items - Compact with GST calculations
+    groupedItems.forEach(groupedItem => {
+      if (yPosition + rowHeight > pageHeight - 60) {
+        // Start new page if needed
+        doc.addPage();
+        yPosition = 20;
+      }
+
+      // Calculate GST amounts
+      const taxableValue = groupedItem.totalAmount;
+      const cgstRate = 9;
+      const sgstRate = 9;
+      const cgstAmount = (taxableValue * cgstRate) / 100;
+      const sgstAmount = (taxableValue * sgstRate) / 100;
+      const totalTaxAmount = cgstAmount + sgstAmount;
+      const totalItemAmount = taxableValue + cgstAmount + sgstAmount;
+
+      // Draw row
+      doc.rect(10, yPosition, pageWidth - 20, rowHeight);
+      currentX = 10;
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+
+      // S. No.
+      doc.text(itemNumber.toString(), currentX + colWidths[0] / 2, yPosition + 6, { align: 'center' });
+      currentX += colWidths[0];
+      doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
+
+      // Description - Compact
+      doc.setFont('helvetica', 'bold');
+      doc.text(groupedItem.paperName, currentX + colWidths[1] / 2, yPosition + 6, { align: 'center' });
+       currentX += colWidths[1];
+      doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
+
+      // UOM
+      doc.text('KGS', currentX + colWidths[2] / 2, yPosition + 6, { align: 'center' });
+      currentX += colWidths[2];
+      doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
+
+      // QTY
+      doc.text(groupedItem.totalQty.toString(), currentX + colWidths[3] / 2, yPosition + 6, { align: 'center' });
+      currentX += colWidths[3];
+      doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
+
+      // Rate
+      const rate = groupedItem.totalAmount / groupedItem.totalQty;
+      doc.text(rate.toFixed(2), currentX + colWidths[4] / 2, yPosition + 6, { align: 'center' });
+      currentX += colWidths[4];
+      doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
+
+      // Taxable Value (previously Amount)
+      doc.text(taxableValue.toFixed(2), currentX + colWidths[5] / 2, yPosition + 6, { align: 'center' });
+      currentX += colWidths[5];
+      doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
+
+      // CGST (9%)
+      doc.text('9%', currentX + colWidths[6] / 2, yPosition + 6, { align: 'center' });
+      currentX += colWidths[6];
+      doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
+
+      // SGST (9%)
+      doc.text('9%', currentX + colWidths[7] / 2, yPosition + 6, { align: 'center' });
+      currentX += colWidths[7];
+      doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
+
+      // Tax Amount (CGST + SGST)
+      doc.text(totalTaxAmount.toFixed(2), currentX + colWidths[8] / 2, yPosition + 6, { align: 'center' });
+      currentX += colWidths[8];
+      doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
+
+      // Total (Taxable + CGST + SGST)
+      doc.text(totalItemAmount.toFixed(2), currentX + colWidths[9] / 2, yPosition + 6, { align: 'center' });
+
+      // Update totals
+      totalTaxableAmount += taxableValue;
+      totalCGST += cgstAmount;
+      totalSGST += sgstAmount;
+      grandTotal += totalItemAmount;
+      itemNumber++;
+      yPosition += rowHeight;
     });
 
     // Totals Section - Compact with GST breakdown
@@ -457,91 +475,109 @@ export const generateBillInvoicePDF = (data: ChallanData, printInsteadOfSave: bo
     let totalSGST = 0;
     let grandTotal = 0;
 
-    // Add items from all orders - Exact same as Cash Challan
+    // Group items by paper specifications
+    const groupedItems = new Map<string, { paperName: string; totalQty: number; totalAmount: number }>();
+
     data.orders.forEach(order => {
       order.order_items.forEach(item => {
-        if (yPosition + rowHeight > pageHeight - 60) {
-          // Start new page if needed
-          doc.addPage();
-          yPosition = 20;
-        }
-
-        // Calculate GST amounts
-        const taxableValue = item.amount;
-        const cgstRate = 9;
-        const sgstRate = 9;
-        const cgstAmount = (taxableValue * cgstRate) / 100;
-        const sgstAmount = (taxableValue * sgstRate) / 100;
-        const totalTaxAmount = cgstAmount + sgstAmount;
-        const totalItemAmount = taxableValue + cgstAmount + sgstAmount;
-
-        // Draw row
-        doc.rect(10, yPosition, pageWidth - 20, rowHeight);
-        currentX = 10;
-
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
-
-        // S. No.
-        doc.text(itemNumber.toString(), currentX + colWidths[0] / 2, yPosition + 6, { align: 'center' });
-        currentX += colWidths[0];
-        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
-
-        // Description - Compact
         const paperName = item.paper.name;
-        doc.setFont('helvetica', 'bold');
-        doc.text(paperName, currentX + colWidths[1] / 2, yPosition + 6, { align: 'center' });
-        currentX += colWidths[1];
-        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
-
-        // UOM
-        doc.text('KGS', currentX + colWidths[2] / 2, yPosition + 6, { align: 'center' });
-        currentX += colWidths[2];
-        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
-
-        // QTY
         const qty = item.quantity_kg || (item.quantity_rolls * 50);
-        doc.text(qty.toString(), currentX + colWidths[3] / 2, yPosition + 6, { align: 'center' });
-        currentX += colWidths[3];
-        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
 
-        // Rate
-        const rate = item.rate || (item.amount / qty);
-        doc.text(rate.toFixed(2), currentX + colWidths[4] / 2, yPosition + 6, { align: 'center' });
-        currentX += colWidths[4];
-        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
-
-        // Taxable Value (previously Amount)
-        doc.text(taxableValue.toFixed(2), currentX + colWidths[5] / 2, yPosition + 6, { align: 'center' });
-        currentX += colWidths[5];
-        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
-
-        // CGST (9%)
-        doc.text('9%', currentX + colWidths[6] / 2, yPosition + 6, { align: 'center' });
-        currentX += colWidths[6];
-        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
-
-        // SGST (9%)
-        doc.text('9%', currentX + colWidths[7] / 2, yPosition + 6, { align: 'center' });
-        currentX += colWidths[7];
-        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
-
-        // Tax Amount (CGST + SGST)
-        doc.text(totalTaxAmount.toFixed(2), currentX + colWidths[8] / 2, yPosition + 6, { align: 'center' });
-        currentX += colWidths[8];
-        doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
-
-        // Total (Taxable + CGST + SGST)
-        doc.text(totalItemAmount.toFixed(2), currentX + colWidths[9] / 2, yPosition + 6, { align: 'center' });
-
-        // Update totals
-        totalTaxableAmount += taxableValue;
-        totalCGST += cgstAmount;
-        totalSGST += sgstAmount;
-        grandTotal += totalItemAmount;
-        itemNumber++;
-        yPosition += rowHeight;
+        if (groupedItems.has(paperName)) {
+          const existing = groupedItems.get(paperName)!;
+          existing.totalQty += qty;
+          existing.totalAmount += item.amount;
+        } else {
+          groupedItems.set(paperName, {
+            paperName,
+            totalQty: qty,
+            totalAmount: item.amount
+          });
+        }
       });
+    });
+
+    // Render grouped items - Compact with GST calculations
+    groupedItems.forEach(groupedItem => {
+      if (yPosition + rowHeight > pageHeight - 60) {
+        // Start new page if needed
+        doc.addPage();
+        yPosition = 20;
+      }
+
+      // Calculate GST amounts
+      const taxableValue = groupedItem.totalAmount;
+      const cgstRate = 9;
+      const sgstRate = 9;
+      const cgstAmount = (taxableValue * cgstRate) / 100;
+      const sgstAmount = (taxableValue * sgstRate) / 100;
+      const totalTaxAmount = cgstAmount + sgstAmount;
+      const totalItemAmount = taxableValue + cgstAmount + sgstAmount;
+
+      // Draw row
+      doc.rect(10, yPosition, pageWidth - 20, rowHeight);
+      currentX = 10;
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+
+      // S. No.
+      doc.text(itemNumber.toString(), currentX + colWidths[0] / 2, yPosition + 6, { align: 'center' });
+      currentX += colWidths[0];
+      doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
+
+      // Description - Compact
+      doc.setFont('helvetica', 'bold');
+      doc.text(groupedItem.paperName, currentX + colWidths[1] / 2, yPosition + 6, { align: 'center' });
+      currentX += colWidths[1];
+      doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
+
+      // UOM
+      doc.text('KGS', currentX + colWidths[2] / 2, yPosition + 6, { align: 'center' });
+      currentX += colWidths[2];
+      doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
+
+      // QTY
+      doc.text(groupedItem.totalQty.toString(), currentX + colWidths[3] / 2, yPosition + 6, { align: 'center' });
+      currentX += colWidths[3];
+      doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
+
+      // Rate
+      const rate = groupedItem.totalAmount / groupedItem.totalQty;
+      doc.text(rate.toFixed(2), currentX + colWidths[4] / 2, yPosition + 6, { align: 'center' });
+      currentX += colWidths[4];
+      doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
+
+      // Taxable Value (previously Amount)
+      doc.text(taxableValue.toFixed(2), currentX + colWidths[5] / 2, yPosition + 6, { align: 'center' });
+      currentX += colWidths[5];
+      doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
+
+      // CGST (9%)
+      doc.text('9%', currentX + colWidths[6] / 2, yPosition + 6, { align: 'center' });
+      currentX += colWidths[6];
+      doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
+
+      // SGST (9%)
+      doc.text('9%', currentX + colWidths[7] / 2, yPosition + 6, { align: 'center' });
+      currentX += colWidths[7];
+      doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
+
+      // Tax Amount (CGST + SGST)
+      doc.text(totalTaxAmount.toFixed(2), currentX + colWidths[8] / 2, yPosition + 6, { align: 'center' });
+      currentX += colWidths[8];
+      doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
+
+      // Total (Taxable + CGST + SGST)
+      doc.text(totalItemAmount.toFixed(2), currentX + colWidths[9] / 2, yPosition + 6, { align: 'center' });
+
+      // Update totals
+      totalTaxableAmount += taxableValue;
+      totalCGST += cgstAmount;
+      totalSGST += sgstAmount;
+      grandTotal += totalItemAmount;
+      itemNumber++;
+      yPosition += rowHeight;
     });
 
     // Totals Section - Exact same as Cash Challan

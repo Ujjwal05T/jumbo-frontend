@@ -1,0 +1,529 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1520 1360" width="1520" height="1360" font-family="'Segoe UI', system-ui, -apple-system, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#64748B"/>
+    </marker>
+    <marker id="arr-b" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#3B82F6"/>
+    </marker>
+    <marker id="arr-p" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#EC4899"/>
+    </marker>
+    <marker id="arr-o" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#F97316"/>
+    </marker>
+  </defs>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- BACKGROUND                              -->
+  <!-- ═══════════════════════════════════════ -->
+  <rect width="1520" height="1360" fill="#F1F5F9"/>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- TITLE BAR                               -->
+  <!-- ═══════════════════════════════════════ -->
+  <rect x="0" y="0" width="1520" height="68" fill="#1E293B"/>
+  <text x="760" y="38" text-anchor="middle" fill="white" font-size="22" font-weight="700">
+    JumboReelApp — System Flow Diagram
+  </text>
+  <text x="760" y="57" text-anchor="middle" fill="#94A3B8" font-size="12">
+    Paper Roll Manufacturing Management System
+  </text>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- LEGEND                                  -->
+  <!-- ═══════════════════════════════════════ -->
+  <rect x="0" y="68" width="1520" height="38" fill="white" opacity="0.85"/>
+  <rect x="20"   y="79" width="12" height="12" fill="#334155" rx="2"/>  <text x="37"   y="89" font-size="11" fill="#374151">Auth</text>
+  <rect x="85"   y="79" width="12" height="12" fill="#6D28D9" rx="2"/>  <text x="102"  y="89" font-size="11" fill="#374151">Orders</text>
+  <rect x="162"  y="79" width="12" height="12" fill="#047857" rx="2"/>  <text x="179"  y="89" font-size="11" fill="#374151">Planning</text>
+  <rect x="248"  y="79" width="12" height="12" fill="#92400E" rx="2"/>  <text x="265"  y="89" font-size="11" fill="#374151">Production</text>
+  <rect x="348"  y="79" width="12" height="12" fill="#C2410C" rx="2"/>  <text x="365"  y="89" font-size="11" fill="#374151">Weight</text>
+  <rect x="420"  y="79" width="12" height="12" fill="#0369A1" rx="2"/>  <text x="437"  y="89" font-size="11" fill="#374151">Inventory</text>
+  <rect x="505"  y="79" width="12" height="12" fill="#3730A3" rx="2"/>  <text x="522"  y="89" font-size="11" fill="#374151">Dispatch</text>
+  <rect x="592"  y="79" width="12" height="12" fill="#0F766E" rx="2"/>  <text x="609"  y="89" font-size="11" fill="#374151">Finance</text>
+  <rect x="665"  y="79" width="12" height="12" fill="#1D4ED8" rx="2"/>  <text x="682"  y="89" font-size="11" fill="#374151">Masters</text>
+  <rect x="746"  y="79" width="12" height="12" fill="#BE185D" rx="2"/>  <text x="763"  y="89" font-size="11" fill="#374151">Tools</text>
+  <rect x="808"  y="79" width="12" height="12" fill="#475569" rx="2"/>  <text x="825"  y="89" font-size="11" fill="#374151">Reports</text>
+  <rect x="892"  y="79" width="12" height="12" fill="#15803D" rx="2"/>  <text x="909"  y="89" font-size="11" fill="#374151">Quality</text>
+  <rect x="962"  y="79" width="12" height="12" fill="#57534E" rx="2"/>  <text x="979"  y="89" font-size="11" fill="#374151">Security</text>
+  <text x="1040" y="89" font-size="11" fill="#94A3B8">― ―  Optional / Reuse flow</text>
+  <line x1="1180" y1="85" x2="1220" y2="85" stroke="#64748B" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="1228" y="89" font-size="11" fill="#94A3B8">Main flow</text>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- ZONE BACKGROUNDS                        -->
+  <!-- ═══════════════════════════════════════ -->
+  <!-- Masters zone -->
+  <rect x="8" y="112" width="256" height="730" fill="#EFF6FF" rx="10" stroke="#BFDBFE" stroke-width="1.5"/>
+  <text x="136" y="131" text-anchor="middle" font-size="12" font-weight="700" fill="#1D4ED8">MASTERS</text>
+
+  <!-- Main flow zone -->
+  <rect x="272" y="112" width="980" height="1060" fill="white" rx="10" stroke="#E2E8F0" stroke-width="1.5" opacity="0.7"/>
+
+  <!-- Tools zone -->
+  <rect x="1260" y="112" width="252" height="730" fill="#FDF2F8" rx="10" stroke="#FCE7F3" stroke-width="1.5"/>
+  <text x="1386" y="131" text-anchor="middle" font-size="12" font-weight="700" fill="#BE185D">TOOLS &amp; SUPPORT</text>
+
+  <!-- Reports zone -->
+  <rect x="8" y="1188" width="1504" height="162" fill="white" rx="10" stroke="#E2E8F0" stroke-width="1.5" opacity="0.9"/>
+  <text x="760" y="1207" text-anchor="middle" font-size="12" font-weight="700" fill="#475569">REPORTS &amp; ANALYTICS</text>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- LEFT COLUMN — MASTERS                   -->
+  <!-- ═══════════════════════════════════════ -->
+
+  <!-- Client Master -->
+  <rect x="18" y="145" width="238" height="52" fill="#1D4ED8" rx="8"/>
+  <text x="137" y="166" text-anchor="middle" fill="white" font-size="13" font-weight="600">Client Master</text>
+  <text x="137" y="183" text-anchor="middle" fill="#BFDBFE" font-size="10">Company · Contact · Address</text>
+
+  <!-- Paper Master -->
+  <rect x="18" y="208" width="238" height="52" fill="#1D4ED8" rx="8"/>
+  <text x="137" y="229" text-anchor="middle" fill="white" font-size="13" font-weight="600">Paper Master</text>
+  <text x="137" y="246" text-anchor="middle" fill="#BFDBFE" font-size="10">GSM · BF · Shade · Type</text>
+
+  <!-- Material Master -->
+  <rect x="18" y="271" width="238" height="52" fill="#1D4ED8" rx="8"/>
+  <text x="137" y="292" text-anchor="middle" fill="white" font-size="13" font-weight="600">Material Master</text>
+  <text x="137" y="309" text-anchor="middle" fill="#BFDBFE" font-size="10">Raw materials · Quantity tracking</text>
+
+  <!-- User Master -->
+  <rect x="18" y="334" width="238" height="52" fill="#1D4ED8" rx="8"/>
+  <text x="137" y="355" text-anchor="middle" fill="white" font-size="13" font-weight="600">User Master</text>
+  <text x="137" y="372" text-anchor="middle" fill="#BFDBFE" font-size="10">Accounts · Roles · Permissions</text>
+
+  <!-- Plan Master -->
+  <rect x="18" y="397" width="238" height="52" fill="#1E40AF" rx="8"/>
+  <text x="137" y="418" text-anchor="middle" fill="white" font-size="13" font-weight="600">Plan Master</text>
+  <text x="137" y="435" text-anchor="middle" fill="#BFDBFE" font-size="10">View · Print Labels · PDF Reports</text>
+
+  <!-- Manual Cut Rolls -->
+  <rect x="18" y="460" width="238" height="52" fill="#1D4ED8" rx="8"/>
+  <text x="137" y="481" text-anchor="middle" fill="white" font-size="13" font-weight="600">Manual Cut Rolls</text>
+  <text x="137" y="498" text-anchor="middle" fill="#BFDBFE" font-size="10">Manually create cut roll records</text>
+
+  <!-- Deletion / Edit Logs -->
+  <rect x="18" y="523" width="238" height="52" fill="#64748B" rx="8"/>
+  <text x="137" y="544" text-anchor="middle" fill="white" font-size="13" font-weight="600">Deletion / Edit Logs</text>
+  <text x="137" y="561" text-anchor="middle" fill="#E2E8F0" font-size="10">Admin audit trail</text>
+
+  <!-- Past Inventory -->
+  <rect x="18" y="586" width="238" height="52" fill="#0369A1" rx="8"/>
+  <text x="137" y="607" text-anchor="middle" fill="white" font-size="13" font-weight="600">Past Inventory</text>
+  <text x="137" y="624" text-anchor="middle" fill="#BAE6FD" font-size="10">Historical inventory data</text>
+
+  <!-- Pending Orders (in Masters section) -->
+  <rect x="18" y="649" width="238" height="52" fill="#5B21B6" rx="8"/>
+  <text x="137" y="670" text-anchor="middle" fill="white" font-size="13" font-weight="600">Pending Orders</text>
+  <text x="137" y="687" text-anchor="middle" fill="#DDD6FE" font-size="10">Unplanned items · Allocation</text>
+
+  <!-- Order Edit Logs -->
+  <rect x="18" y="712" width="238" height="52" fill="#4C1D95" rx="8"/>
+  <text x="137" y="733" text-anchor="middle" fill="white" font-size="13" font-weight="600">Order Edit Logs</text>
+  <text x="137" y="750" text-anchor="middle" fill="#DDD6FE" font-size="10">Audit trail of order edits</text>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- CENTER COLUMN — MAIN FLOW               -->
+  <!-- ═══════════════════════════════════════ -->
+
+  <!-- ── AUTHENTICATION ── -->
+  <rect x="535" y="145" width="340" height="58" fill="#334155" rx="8"/>
+  <text x="705" y="168" text-anchor="middle" fill="white" font-size="15" font-weight="700">Authentication</text>
+  <text x="705" y="188" text-anchor="middle" fill="#CBD5E1" font-size="11">Login · Register · TOTP 2FA · Access Denied</text>
+
+  <!-- ── DASHBOARD ── -->
+  <rect x="535" y="240" width="340" height="58" fill="#475569" rx="8"/>
+  <text x="705" y="263" text-anchor="middle" fill="white" font-size="15" font-weight="700">Dashboard</text>
+  <text x="705" y="282" text-anchor="middle" fill="#CBD5E1" font-size="11">Role-based routing · Sidebar navigation</text>
+
+  <!-- ORDER MANAGEMENT section label -->
+  <line x1="290" y1="327" x2="520" y2="327" stroke="#C4B5FD" stroke-width="1"/>
+  <text x="660" y="323" text-anchor="middle" font-size="11" font-weight="700" fill="#6D28D9">ORDER MANAGEMENT</text>
+  <line x1="800" y1="327" x2="1070" y2="327" stroke="#C4B5FD" stroke-width="1"/>
+
+  <!-- Order Master -->
+  <rect x="290" y="334" width="295" height="58" fill="#6D28D9" rx="8"/>
+  <text x="437" y="357" text-anchor="middle" fill="white" font-size="13" font-weight="600">Order Master</text>
+  <text x="437" y="375" text-anchor="middle" fill="#DDD6FE" font-size="10">Create · Edit · Delete · View · Status tracking</text>
+  <text x="437" y="387" text-anchor="middle" fill="#C4B5FD" font-size="9">/masters/orders</text>
+
+  <!-- Order Detail -->
+  <rect x="615" y="334" width="250" height="58" fill="#7C3AED" rx="8"/>
+  <text x="740" y="357" text-anchor="middle" fill="white" font-size="13" font-weight="600">Order Detail</text>
+  <text x="740" y="375" text-anchor="middle" fill="#DDD6FE" font-size="10">Per-item progress · Priority · Payment</text>
+  <text x="740" y="387" text-anchor="middle" fill="#C4B5FD" font-size="9">/masters/orders/[id]</text>
+
+  <!-- New Order Button label in between -->
+  <rect x="885" y="334" width="180" height="58" fill="#5B21B6" rx="8"/>
+  <text x="975" y="357" text-anchor="middle" fill="white" font-size="13" font-weight="600">New Order</text>
+  <text x="975" y="375" text-anchor="middle" fill="#DDD6FE" font-size="10">Multi-item form · Papers</text>
+  <text x="975" y="387" text-anchor="middle" fill="#C4B5FD" font-size="9">Widths · Quantity · Priority</text>
+
+  <!-- PLANNING section label -->
+  <line x1="290" y1="424" x2="478" y2="424" stroke="#A7F3D0" stroke-width="1"/>
+  <text x="660" y="420" text-anchor="middle" font-size="11" font-weight="700" fill="#047857">PRODUCTION PLANNING</text>
+  <line x1="842" y1="424" x2="1070" y2="424" stroke="#A7F3D0" stroke-width="1"/>
+
+  <!-- Planning outer dashed box -->
+  <rect x="290" y="430" width="780" height="100" fill="#F0FDF4" rx="10" stroke="#6EE7B7" stroke-width="1.5" stroke-dasharray="5,3"/>
+
+  <!-- AI Planning -->
+  <rect x="305" y="442" width="230" height="72" fill="#047857" rx="8"/>
+  <text x="420" y="463" text-anchor="middle" fill="white" font-size="13" font-weight="600">AI Planning</text>
+  <text x="420" y="480" text-anchor="middle" fill="#D1FAE5" font-size="10">Automated width optimization</text>
+  <text x="420" y="495" text-anchor="middle" fill="#A7F3D0" font-size="9">Minimize waste · /planning</text>
+
+  <!-- Hybrid Plan -->
+  <rect x="555" y="442" width="230" height="72" fill="#047857" rx="8"/>
+  <text x="670" y="463" text-anchor="middle" fill="white" font-size="13" font-weight="600">Hybrid Plan</text>
+  <text x="670" y="480" text-anchor="middle" fill="#D1FAE5" font-size="10">AI-generated + manual overrides</text>
+  <text x="670" y="495" text-anchor="middle" fill="#A7F3D0" font-size="9">/planning/hybrid</text>
+
+  <!-- Manual Plan -->
+  <rect x="805" y="442" width="250" height="72" fill="#065F46" rx="8"/>
+  <text x="930" y="463" text-anchor="middle" fill="white" font-size="13" font-weight="600">Manual Plan</text>
+  <text x="930" y="480" text-anchor="middle" fill="#D1FAE5" font-size="10">Fully manual width specification</text>
+  <text x="930" y="495" text-anchor="middle" fill="#A7F3D0" font-size="9">/planning/manual</text>
+
+  <!-- Set Current Jumbo Roll -->
+  <rect x="535" y="568" width="340" height="58" fill="#B45309" rx="8"/>
+  <text x="705" y="591" text-anchor="middle" fill="white" font-size="14" font-weight="700">Set Current Jumbo Roll</text>
+  <text x="705" y="611" text-anchor="middle" fill="#FDE68A" font-size="11">Configure active JR roll · Partial completion · /current-jumbo</text>
+
+  <!-- PRODUCTION section label -->
+  <line x1="290" y1="653" x2="450" y2="653" stroke="#FCD34D" stroke-width="1"/>
+  <text x="680" y="649" text-anchor="middle" font-size="11" font-weight="700" fill="#92400E">PRODUCTION (CUTTING EXECUTION)</text>
+  <line x1="910" y1="653" x2="1070" y2="653" stroke="#FCD34D" stroke-width="1"/>
+
+  <!-- Production outer dashed box -->
+  <rect x="290" y="659" width="780" height="105" fill="#FFFBEB" rx="10" stroke="#FCD34D" stroke-width="1.5" stroke-dasharray="5,3"/>
+
+  <!-- JR Roll -->
+  <rect x="303" y="670" width="178" height="80" fill="#92400E" rx="8"/>
+  <text x="392" y="694" text-anchor="middle" fill="white" font-size="13" font-weight="700">JR_xxxxx</text>
+  <text x="392" y="712" text-anchor="middle" fill="#FDE68A" font-size="10">Jumbo Roll (123″)</text>
+  <text x="392" y="728" text-anchor="middle" fill="#FCD34D" font-size="9">Raw material input</text>
+  <text x="392" y="742" text-anchor="middle" fill="#FCD34D" font-size="8">Barcode: JR_XXXXX</text>
+
+  <!-- SET Roll -->
+  <rect x="501" y="670" width="178" height="80" fill="#92400E" rx="8"/>
+  <text x="590" y="694" text-anchor="middle" fill="white" font-size="13" font-weight="700">SET_xxxxx</text>
+  <text x="590" y="712" text-anchor="middle" fill="#FDE68A" font-size="10">SET Roll (~118″)</text>
+  <text x="590" y="728" text-anchor="middle" fill="#FCD34D" font-size="9">After 1st width cut</text>
+  <text x="590" y="742" text-anchor="middle" fill="#FCD34D" font-size="8">Barcode: SET_XXXXX</text>
+
+  <!-- CR Roll -->
+  <rect x="699" y="670" width="178" height="80" fill="#78350F" rx="8"/>
+  <text x="788" y="694" text-anchor="middle" fill="white" font-size="13" font-weight="700">CR_xxxxx</text>
+  <text x="788" y="712" text-anchor="middle" fill="#FDE68A" font-size="10">Cut Roll (ordered width)</text>
+  <text x="788" y="728" text-anchor="middle" fill="#FCD34D" font-size="9">Final product for client</text>
+  <text x="788" y="742" text-anchor="middle" fill="#FCD34D" font-size="8">Barcode: CR_XXXXX</text>
+
+  <!-- WCR Waste -->
+  <rect x="897" y="670" width="160" height="80" fill="#9A3412" rx="8"/>
+  <text x="977" y="694" text-anchor="middle" fill="white" font-size="13" font-weight="700">WCR_xxxxx</text>
+  <text x="977" y="712" text-anchor="middle" fill="#FED7AA" font-size="10">Waste Roll (offcuts)</text>
+  <text x="977" y="728" text-anchor="middle" fill="#FDBA74" font-size="9">→ reused as SCR_</text>
+  <text x="977" y="742" text-anchor="middle" fill="#FCD34D" font-size="8">Barcode: WCR_XXXXX</text>
+
+  <!-- WEIGHT UPDATE -->
+  <rect x="485" y="808" width="440" height="58" fill="#C2410C" rx="8"/>
+  <text x="705" y="831" text-anchor="middle" fill="white" font-size="14" font-weight="700">Weight Update Scanner</text>
+  <text x="705" y="851" text-anchor="middle" fill="#FED7AA" font-size="11">Scan barcode · Enter weight (kg) · Status → in_warehouse · /weight-update</text>
+
+  <!-- INVENTORY section label -->
+  <line x1="290" y1="895" x2="490" y2="895" stroke="#BAE6FD" stroke-width="1"/>
+  <text x="680" y="891" text-anchor="middle" font-size="11" font-weight="700" fill="#0369A1">INVENTORY</text>
+  <line x1="870" y1="895" x2="1070" y2="895" stroke="#BAE6FD" stroke-width="1"/>
+
+  <!-- In-Warehouse -->
+  <rect x="290" y="902" width="360" height="58" fill="#0369A1" rx="8"/>
+  <text x="470" y="925" text-anchor="middle" fill="white" font-size="13" font-weight="600">In-Warehouse</text>
+  <text x="470" y="944" text-anchor="middle" fill="#BAE6FD" font-size="10">Weighed rolls ready for dispatch · /dispatch</text>
+
+  <!-- Stock / Wastage -->
+  <rect x="670" y="902" width="400" height="58" fill="#075985" rx="8"/>
+  <text x="870" y="925" text-anchor="middle" fill="white" font-size="13" font-weight="600">Stock / Wastage (SCR_xxxxx)</text>
+  <text x="870" y="944" text-anchor="middle" fill="#BAE6FD" font-size="10">Reusable stock rolls · Available for planning · /wastage</text>
+
+  <!-- DISPATCH section label -->
+  <line x1="290" y1="990" x2="455" y2="990" stroke="#C7D2FE" stroke-width="1"/>
+  <text x="680" y="986" text-anchor="middle" font-size="11" font-weight="700" fill="#3730A3">DISPATCH</text>
+  <line x1="905" y1="990" x2="1070" y2="990" stroke="#C7D2FE" stroke-width="1"/>
+
+  <!-- Current Dispatch -->
+  <rect x="290" y="997" width="260" height="68" fill="#3730A3" rx="8"/>
+  <text x="420" y="1019" text-anchor="middle" fill="white" font-size="13" font-weight="600">Current Dispatch</text>
+  <text x="420" y="1037" text-anchor="middle" fill="#C7D2FE" font-size="10">Select rolls · OTP verify</text>
+  <text x="420" y="1052" text-anchor="middle" fill="#A5B4FC" font-size="9">Packing slip PDF · /dispatch/history</text>
+
+  <!-- Past Dispatch -->
+  <rect x="570" y="997" width="260" height="68" fill="#3730A3" rx="8"/>
+  <text x="700" y="1019" text-anchor="middle" fill="white" font-size="13" font-weight="600">Past Dispatch</text>
+  <text x="700" y="1037" text-anchor="middle" fill="#C7D2FE" font-size="10">History · Edit · PDF download</text>
+  <text x="700" y="1052" text-anchor="middle" fill="#A5B4FC" font-size="9">Create dispatch · /past-dispatch</text>
+
+  <!-- Outward Challan -->
+  <rect x="850" y="997" width="220" height="68" fill="#4338CA" rx="8"/>
+  <text x="960" y="1019" text-anchor="middle" fill="white" font-size="13" font-weight="600">Outward Challan</text>
+  <text x="960" y="1037" text-anchor="middle" fill="#C7D2FE" font-size="10">Gate pass documents</text>
+  <text x="960" y="1052" text-anchor="middle" fill="#A5B4FC" font-size="9">Dispatch role · /outward-challan</text>
+
+  <!-- FINANCE section label -->
+  <line x1="290" y1="1097" x2="490" y2="1097" stroke="#99F6E4" stroke-width="1"/>
+  <text x="680" y="1093" text-anchor="middle" font-size="11" font-weight="700" fill="#0F766E">BILLING &amp; FINANCE</text>
+  <line x1="870" y1="1097" x2="1070" y2="1097" stroke="#99F6E4" stroke-width="1"/>
+
+  <!-- Bills Finance -->
+  <rect x="290" y="1104" width="380" height="60" fill="#0F766E" rx="8"/>
+  <text x="480" y="1127" text-anchor="middle" fill="white" font-size="13" font-weight="600">Bills / Finance</text>
+  <text x="480" y="1147" text-anchor="middle" fill="#99F6E4" font-size="10">Bill Invoice (BI-xxxxx) · Cash Invoice (CI-xxxxx) · Print PDF · /bills · /challan</text>
+
+  <!-- MOU Module -->
+  <rect x="690" y="1104" width="380" height="60" fill="#0369A1" rx="8"/>
+  <text x="880" y="1127" text-anchor="middle" fill="white" font-size="13" font-weight="600">MOU Module</text>
+  <text x="880" y="1147" text-anchor="middle" fill="#BAE6FD" font-size="10">Wastage reports · Image upload · PDF export · /mou · /mou-reports</text>
+
+  <!-- In/Out Gate (center, lower) -->
+  <rect x="480" y="1120" width="0" height="0"/>
+  <!-- Moving InOut to a label below MOU -->
+  <rect x="416" y="1175" width="548" height="45" fill="#57534E" rx="8"/>
+  <text x="690" y="1195" text-anchor="middle" fill="white" font-size="13" font-weight="600">In/Out Gate</text>
+  <text x="690" y="1211" text-anchor="middle" fill="#E7E5E4" font-size="10">Security · Vehicle entry/exit logging · Party tracking · /in-out</text>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- RIGHT COLUMN — TOOLS &amp; SUPPORT      -->
+  <!-- ═══════════════════════════════════════ -->
+
+  <!-- QR Scanner -->
+  <rect x="1272" y="145" width="232" height="58" fill="#BE185D" rx="8"/>
+  <text x="1388" y="168" text-anchor="middle" fill="white" font-size="13" font-weight="600">QR Scanner</text>
+  <text x="1388" y="186" text-anchor="middle" fill="#FBCFE8" font-size="10">Camera scan · ZXing · /qr-scanner</text>
+
+  <!-- Barcode Lookup -->
+  <rect x="1272" y="218" width="232" height="58" fill="#BE185D" rx="8"/>
+  <text x="1388" y="241" text-anchor="middle" fill="white" font-size="13" font-weight="600">Barcode Lookup</text>
+  <text x="1388" y="259" text-anchor="middle" fill="#FBCFE8" font-size="10">JR→SET→CR hierarchy · /barcode-lookup</text>
+
+  <!-- Roll Tracking -->
+  <rect x="1272" y="291" width="232" height="58" fill="#9D174D" rx="8"/>
+  <text x="1388" y="314" text-anchor="middle" fill="white" font-size="13" font-weight="600">Roll Tracking</text>
+  <text x="1388" y="332" text-anchor="middle" fill="#FBCFE8" font-size="10">Full lifecycle view · /roll-tracking</text>
+
+  <!-- Hour Calculator -->
+  <rect x="1272" y="364" width="232" height="58" fill="#15803D" rx="8"/>
+  <text x="1388" y="387" text-anchor="middle" fill="white" font-size="13" font-weight="600">Hour Calculator</text>
+  <text x="1388" y="405" text-anchor="middle" fill="#BBF7D0" font-size="10">Working hours utility · /hour-calculator</text>
+
+  <!-- Quality Check -->
+  <rect x="1272" y="437" width="232" height="58" fill="#166534" rx="8"/>
+  <text x="1388" y="460" text-anchor="middle" fill="white" font-size="13" font-weight="600">Quality Check</text>
+  <text x="1388" y="478" text-anchor="middle" fill="#BBF7D0" font-size="10">QC inspections · /quality-check</text>
+
+  <!-- Plan Weights -->
+  <rect x="1272" y="510" width="232" height="58" fill="#0369A1" rx="8"/>
+  <text x="1388" y="533" text-anchor="middle" fill="white" font-size="13" font-weight="600">Plan Weights</text>
+  <text x="1388" y="551" text-anchor="middle" fill="#BAE6FD" font-size="10">Weight per plan · /plan-weights</text>
+
+  <!-- Filter Cut Rolls -->
+  <rect x="1272" y="583" width="232" height="58" fill="#475569" rx="8"/>
+  <text x="1388" y="606" text-anchor="middle" fill="white" font-size="13" font-weight="600">Filter Cut Rolls</text>
+  <text x="1388" y="624" text-anchor="middle" fill="#CBD5E1" font-size="10">Browse all cut rolls · Paginated</text>
+
+  <!-- Workflow / Settings -->
+  <rect x="1272" y="656" width="232" height="58" fill="#334155" rx="8"/>
+  <text x="1388" y="679" text-anchor="middle" fill="white" font-size="13" font-weight="600">Workflow / Settings</text>
+  <text x="1388" y="697" text-anchor="middle" fill="#CBD5E1" font-size="10">Flow diagram · TOTP setup</text>
+
+  <!-- New Data / Production Data -->
+  <rect x="1272" y="729" width="232" height="58" fill="#475569" rx="8"/>
+  <text x="1388" y="752" text-anchor="middle" fill="white" font-size="13" font-weight="600">New Data</text>
+  <text x="1388" y="770" text-anchor="middle" fill="#CBD5E1" font-size="10">Production data entry &amp; reports</text>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- BOTTOM ROW — REPORTS                    -->
+  <!-- ═══════════════════════════════════════ -->
+
+  <rect x="18"   y="1222" width="172" height="52" fill="#475569" rx="8"/>
+  <text x="104"  y="1243" text-anchor="middle" fill="white" font-size="12" font-weight="600">Analytics Dashboard</text>
+  <text x="104"  y="1261" text-anchor="middle" fill="#CBD5E1" font-size="9">Charts · KPIs · /reports</text>
+
+  <rect x="200"  y="1222" width="172" height="52" fill="#475569" rx="8"/>
+  <text x="286"  y="1243" text-anchor="middle" fill="white" font-size="12" font-weight="600">Client-Order</text>
+  <text x="286"  y="1261" text-anchor="middle" fill="#CBD5E1" font-size="9">Analysis report</text>
+
+  <rect x="382"  y="1222" width="172" height="52" fill="#475569" rx="8"/>
+  <text x="468"  y="1243" text-anchor="middle" fill="white" font-size="12" font-weight="600">Plan Report</text>
+  <text x="468"  y="1261" text-anchor="middle" fill="#CBD5E1" font-size="9">Client-Plan linking</text>
+
+  <rect x="564"  y="1222" width="172" height="52" fill="#475569" rx="8"/>
+  <text x="650"  y="1243" text-anchor="middle" fill="white" font-size="12" font-weight="600">Order-Plan Exec.</text>
+  <text x="650"  y="1261" text-anchor="middle" fill="#CBD5E1" font-size="9">Fulfillment tracking</text>
+
+  <rect x="746"  y="1222" width="172" height="52" fill="#475569" rx="8"/>
+  <text x="832"  y="1243" text-anchor="middle" fill="white" font-size="12" font-weight="600">Client Summary</text>
+  <text x="832"  y="1261" text-anchor="middle" fill="#CBD5E1" font-size="9">Per-client overview</text>
+
+  <rect x="928"  y="1222" width="172" height="52" fill="#475569" rx="8"/>
+  <text x="1014" y="1243" text-anchor="middle" fill="white" font-size="12" font-weight="600">Cut Rolls Report</text>
+  <text x="1014" y="1261" text-anchor="middle" fill="#CBD5E1" font-size="9">Weight analysis</text>
+
+  <rect x="1110" y="1222" width="172" height="52" fill="#475569" rx="8"/>
+  <text x="1196" y="1243" text-anchor="middle" fill="white" font-size="12" font-weight="600">Plan Weights</text>
+  <text x="1196" y="1261" text-anchor="middle" fill="#CBD5E1" font-size="9">Weight breakdown</text>
+
+  <rect x="1292" y="1222" width="212" height="52" fill="#475569" rx="8"/>
+  <text x="1398" y="1243" text-anchor="middle" fill="white" font-size="12" font-weight="600">Order Tracking</text>
+  <text x="1398" y="1261" text-anchor="middle" fill="#CBD5E1" font-size="9">Lifecycle tracking</text>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- MAIN FLOW ARROWS (vertical, center)     -->
+  <!-- ═══════════════════════════════════════ -->
+
+  <!-- Auth → Dashboard -->
+  <line x1="705" y1="203" x2="705" y2="240" stroke="#64748B" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- Dashboard → (fork) Order Master + Pending + New Order -->
+  <path d="M 705 298 L 705 320 L 437 320 L 437 334" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+  <path d="M 705 298 L 705 334" stroke="#64748B" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M 705 298 L 705 320 L 975 320 L 975 334" stroke="#64748B" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+
+  <!-- Order Master → Pending Orders (horizontal in planning step) -->
+  <!-- Order → Planning (bend down) -->
+  <path d="M 437 392 L 437 420 L 419 430" stroke="#94A3B8" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+
+  <!-- Pending Orders (from left/Masters) → AI Plan -->
+  <path d="M 256 665 Q 280 665 280 467 L 305 467" stroke="#A78BFA" stroke-width="1.5" fill="none" stroke-dasharray="5,3" marker-end="url(#arr-b)"/>
+
+  <!-- AI Plan → Set Jumbo -->
+  <path d="M 420 514 Q 420 545 705 568" stroke="#94A3B8" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+  <path d="M 670 514 L 670 548 L 705 568" stroke="#94A3B8" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M 930 514 Q 930 545 705 568" stroke="#94A3B8" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+
+  <!-- Set Jumbo Roll → JR Roll -->
+  <path d="M 640 626 L 500 640 L 392 670" stroke="#94A3B8" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+
+  <!-- JR → SET (production arrows) -->
+  <line x1="481" y1="710" x2="501" y2="710" stroke="#FCD34D" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- SET → CR -->
+  <line x1="679" y1="710" x2="699" y2="710" stroke="#FCD34D" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- SET → WCR (dashed waste branch) -->
+  <line x1="877" y1="710" x2="897" y2="710" stroke="#FCD34D" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+
+  <!-- CR → Weight Update -->
+  <path d="M 788 750 L 788 785 L 705 808" stroke="#94A3B8" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+
+  <!-- WCR → Stock (orange dashed, waste becomes stock) -->
+  <path d="M 977 750 Q 977 930 1070 931" stroke="#F97316" stroke-width="1.5" fill="none" stroke-dasharray="5,4" marker-end="url(#arr-o)"/>
+  <path d="M 1070 931 L 1070 931" stroke="#F97316" stroke-width="0" fill="none"/>
+
+  <!-- Weight Update → In-Warehouse -->
+  <path d="M 640 866 L 470 902" stroke="#94A3B8" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+
+  <!-- Weight Update → Stock (dashed) -->
+  <path d="M 780 866 L 870 902" stroke="#94A3B8" stroke-width="1.5" fill="none" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+
+  <!-- Stock → Planning (reuse back-loop, orange dashed) -->
+  <path d="M 670 902 Q 240 850 240 500 L 290 490" stroke="#F97316" stroke-width="1.5" fill="none" stroke-dasharray="5,4" marker-end="url(#arr-o)"/>
+
+  <!-- In-Warehouse → Current Dispatch -->
+  <path d="M 420 960 L 420 997" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+
+  <!-- Stock → Past Dispatch -->
+  <path d="M 870 960 L 700 997" stroke="#94A3B8" stroke-width="1.5" fill="none" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+
+  <!-- Current Dispatch → Bills -->
+  <path d="M 420 1065 L 420 1090 L 480 1104" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+
+  <!-- Past Dispatch → Bills -->
+  <path d="M 700 1065 L 700 1090 L 680 1104" stroke="#94A3B8" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+
+  <!-- MOU linked to dispatch -->
+  <path d="M 850 1065 L 850 1090 L 880 1104" stroke="#94A3B8" stroke-width="1.5" fill="none" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+
+  <!-- Finance → InOut -->
+  <path d="M 690 1164 L 690 1175" stroke="#94A3B8" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+
+  <!-- Dispatch → Reports bottom -->
+  <path d="M 420 1065 Q 420 1210 650 1222" stroke="#94A3B8" stroke-width="1" fill="none" stroke-dasharray="3,4" marker-end="url(#arr)"/>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- ARROWS — MASTERS → MAIN FLOW            -->
+  <!-- ═══════════════════════════════════════ -->
+
+  <!-- Client Master → Order Master -->
+  <path d="M 256 171 Q 290 171 290 363" stroke="#93C5FD" stroke-width="1.5" fill="none" stroke-dasharray="5,3" marker-end="url(#arr-b)"/>
+
+  <!-- Paper Master → Planning -->
+  <path d="M 256 234 Q 280 234 280 480" stroke="#93C5FD" stroke-width="1.5" fill="none" stroke-dasharray="5,3" marker-end="url(#arr-b)"/>
+
+  <!-- Material Master → Production -->
+  <path d="M 256 297 Q 278 297 278 700" stroke="#93C5FD" stroke-width="1.5" fill="none" stroke-dasharray="5,3" marker-end="url(#arr-b)"/>
+
+  <!-- Plan Master → Planning view -->
+  <path d="M 256 424 Q 272 424 272 465" stroke="#93C5FD" stroke-width="1.5" fill="none" stroke-dasharray="5,3" marker-end="url(#arr-b)"/>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- ARROWS — TOOLS → MAIN FLOW              -->
+  <!-- ═══════════════════════════════════════ -->
+
+  <!-- QR Scanner → Production -->
+  <path d="M 1272 174 Q 1250 174 1250 710 L 1070 710" stroke="#F9A8D4" stroke-width="1.5" fill="none" stroke-dasharray="5,3" marker-end="url(#arr-p)"/>
+
+  <!-- Barcode Lookup → Warehouse -->
+  <path d="M 1272 247 Q 1240 247 1240 931 L 1070 931" stroke="#F9A8D4" stroke-width="1.5" fill="none" stroke-dasharray="5,3" marker-end="url(#arr-p)"/>
+
+  <!-- Roll Tracking → Dispatch -->
+  <path d="M 1272 320 Q 1235 320 1235 1031 L 1070 1031" stroke="#F9A8D4" stroke-width="1.5" fill="none" stroke-dasharray="5,3" marker-end="url(#arr-p)"/>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- HORIZONTAL STEP-INDICATORS              -->
+  <!-- (short arrows between boxes same row)   -->
+  <!-- ═══════════════════════════════════════ -->
+
+  <!-- Order Master → Order Detail -->
+  <line x1="585" y1="363" x2="615" y2="363" stroke="#C4B5FD" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- Order Detail → New Order -->
+  <line x1="865" y1="363" x2="885" y2="363" stroke="#C4B5FD" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- In-Warehouse ↔ Stock (double headed indicator) -->
+  <line x1="650" y1="931" x2="670" y2="931" stroke="#BAE6FD" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Current Dispatch → Past Dispatch -->
+  <line x1="550" y1="1031" x2="570" y2="1031" stroke="#C7D2FE" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- Past Dispatch → Outward Challan -->
+  <line x1="830" y1="1031" x2="850" y2="1031" stroke="#C7D2FE" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Bills → MOU -->
+  <line x1="670" y1="1134" x2="690" y2="1134" stroke="#99F6E4" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- ANNOTATIONS / ROLE BADGES               -->
+  <!-- ═══════════════════════════════════════ -->
+
+  <!-- Role note on Dashboard -->
+  <rect x="875" y="245" width="150" height="22" fill="#F1F5F9" rx="4" stroke="#94A3B8" stroke-width="1"/>
+  <text x="950" y="260" text-anchor="middle" font-size="9" fill="#64748B">11 roles: admin→dispatch→qc…</text>
+
+  <!-- Waste→Stock annotation -->
+  <rect x="1065" y="820" width="180" height="22" fill="#FFF7ED" rx="4" stroke="#F97316" stroke-width="1"/>
+  <text x="1155" y="835" text-anchor="middle" font-size="9" fill="#C2410C">Waste rolls reused as SCR_ stock</text>
+
+  <!-- Stock→Planning annotation -->
+  <rect x="168" y="590" width="100" height="22" fill="#FFF7ED" rx="4" stroke="#F97316" stroke-width="1"/>
+  <text x="218" y="605" text-anchor="middle" font-size="9" fill="#EA580C">Stock reuse loop</text>
+
+  <!-- PDF generation badge -->
+  <rect x="290" y="779" width="115" height="22" fill="#FEF3C7" rx="4" stroke="#F59E0B" stroke-width="1"/>
+  <text x="347" y="793" text-anchor="middle" font-size="9" fill="#92400E">PDF: Cutting patterns</text>
+
+  <rect x="414" y="1186" width="115" height="22" fill="#FEF3C7" rx="4" stroke="#F59E0B" stroke-width="1"/>
+  <text x="471" y="1200" text-anchor="middle" font-size="9" fill="#92400E">PDF: Packing slip</text>
+
+  <rect x="290" y="1177" width="115" height="22" fill="#FEF3C7" rx="4" stroke="#0F766E" stroke-width="1"/>
+  <text x="347" y="1191" text-anchor="middle" font-size="9" fill="#0F766E">PDF: BI / CI Invoices</text>
+
+</svg>

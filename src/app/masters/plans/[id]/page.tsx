@@ -1790,7 +1790,7 @@ export default function PlanDetailsPage() {
 
           // LEVEL 1: JUMBO ROLL HEADER (Main header with border)
           checkPageBreak(35);
-          doc.setFillColor(240, 240, 240); // Light gray background
+          doc.setFillColor(255, 255, 255); // White background
           doc.rect(20, yPosition - 5, pageWidth - 40, 20, 'F'); // Background rectangle
           doc.setDrawColor(100, 100, 100);
           doc.setLineWidth(1);
@@ -1941,22 +1941,23 @@ export default function PlanDetailsPage() {
 
                 // Set color based on status
                 if (roll.status === 'cutting') {
-                  doc.setFillColor(189, 189, 189); // For cutting status
+                  doc.setFillColor(255, 255, 255); // White background for cutting status
                 } else {
-                  doc.setFillColor(115, 114, 114); // Default color
+                  doc.setFillColor(255, 255, 255); // White background for default
                 }
 
                 // Draw rectangle for this cut
                 doc.rect(currentX, yPosition, sectionWidth, rectHeight, 'F');
-                
+
                 // Add border
-                doc.setDrawColor(255, 255, 255);
-                doc.setLineWidth(0.5);
+                doc.setDrawColor(0, 0, 0); // Black border for clear separation
+                doc.setLineWidth(1);
                 doc.rect(currentX, yPosition, sectionWidth, rectHeight, 'S');
 
                 // Add width and client name text inside the rectangle
                 if (sectionWidth > 15) { // Only add text if section is wide enough
                   doc.setTextColor(0, 0, 0);
+                  doc.setFont('helvetica', 'bold');
                   doc.setFontSize(6);
                   const textX = currentX + sectionWidth/2;
                   
@@ -1995,7 +1996,7 @@ export default function PlanDetailsPage() {
                 
                 doc.setFillColor(239, 68, 68); // Red for waste
                 doc.rect(currentX, yPosition, wasteWidth, rectHeight, 'F');
-                doc.setDrawColor(255, 255, 255);
+                doc.setDrawColor(0, 0, 0); // Black border for clear separation
                 doc.rect(currentX, yPosition, wasteWidth, rectHeight, 'S');
                 
                 if (wasteWidth > 20) { // Only add text if waste section is wide enough
