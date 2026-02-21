@@ -503,6 +503,9 @@ export default function PendingOrderItemsPage() {
   // Collapse/expand state for suggestions
   const [expandedSuggestions, setExpandedSuggestions] = useState<Set<string>>(new Set());
 
+  // Collapse/expand state for paper specs (editable plan)
+  const [expandedSpecs, setExpandedSpecs] = useState<Set<string>>(new Set());
+
   // Toggle collapse/expand for a suggestion
   const toggleSuggestionExpand = (suggestionId: string) => {
     setExpandedSuggestions(prev => {
@@ -511,6 +514,59 @@ export default function PendingOrderItemsPage() {
         newSet.delete(suggestionId);
       } else {
         newSet.add(suggestionId);
+      }
+      return newSet;
+    });
+  };
+
+  // Toggle collapse/expand for a paper spec
+  const toggleSpecExpand = (specId: string) => {
+    setExpandedSpecs(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(specId)) {
+        newSet.delete(specId);
+      } else {
+        newSet.add(specId);
+      }
+      return newSet;
+    });
+  };
+
+  // Select/deselect all sets in a jumbo
+  const toggleJumboSelection = (jumbo: EditableJumbo) => {
+    const jumboSetIds = jumbo.sets.map(s => s.id);
+    const allSelected = jumboSetIds.every(id => selectedSets.has(id));
+
+    setSelectedSets(prev => {
+      const newSet = new Set(prev);
+      if (allSelected) {
+        // Deselect all sets in this jumbo
+        jumboSetIds.forEach(id => newSet.delete(id));
+      } else {
+        // Select all sets in this jumbo
+        jumboSetIds.forEach(id => newSet.add(id));
+      }
+      return newSet;
+    });
+  };
+
+  // Select/deselect all sets in a paper spec
+  const toggleSpecSelection = (spec: EditablePaperSpec) => {
+    const allSpecSetIds: string[] = [];
+    spec.jumbos.forEach(jumbo => {
+      jumbo.sets.forEach(set => allSpecSetIds.push(set.id));
+    });
+
+    const allSelected = allSpecSetIds.every(id => selectedSets.has(id));
+
+    setSelectedSets(prev => {
+      const newSet = new Set(prev);
+      if (allSelected) {
+        // Deselect all sets in this spec
+        allSpecSetIds.forEach(id => newSet.delete(id));
+      } else {
+        // Select all sets in this spec
+        allSpecSetIds.forEach(id => newSet.add(id));
       }
       return newSet;
     });
@@ -844,6 +900,10 @@ export default function PendingOrderItemsPage() {
           const allSetIds = new Set<string>();
           ep.paperSpecs.forEach(spec => spec.jumbos.forEach(j => j.sets.forEach(s => allSetIds.add(s.id))));
           setSelectedSets(allSetIds);
+
+          // Auto-expand all paper specs
+          const allSpecIds = new Set(ep.paperSpecs.map(spec => spec.id));
+          setExpandedSpecs(allSpecIds);
         }
 
         if (result.spec_suggestions) {
@@ -2258,6 +2318,11 @@ const handlePrintPDF = () => {
               if (cut.source === 'algorithm') {
                 // Pending order cut — needs source_pending_id
                 if (!cut.source_pending_id) continue;
+
+                // ✅ FIX: Look up the original_order_id from the pending item
+                const pendingItem = pendingItems.find(item => item.id === cut.source_pending_id);
+                const originalOrderId = pendingItem?.original_order_id || cut.order_id;
+
                 for (let i = 0; i < cut.quantity; i++) {
                   selectedCutRolls.push({
                     paper_id: '',
@@ -2270,7 +2335,7 @@ const handlePrintPDF = () => {
                     trim_left: null,
                     source_type: 'pending_order',
                     source_pending_id: cut.source_pending_id,
-                    order_id: cut.order_id,
+                    order_id: originalOrderId,  // ✅ Use looked-up order_id
                   });
                 }
               } else {
@@ -3173,25 +3238,88 @@ const handlePrintPDF = () => {
               <CardContent>
                 {/* ── Editable spec / jumbo / set hierarchy ── */}
                 <div className="space-y-6">
-                  {editablePlan.paperSpecs.map(spec => (
-                    <div key={spec.id} className="border-2 border-amber-200 rounded-lg p-4 bg-amber-50">
-                      {/* Spec header */}
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="font-semibold text-amber-900 flex items-center gap-2">
-                          <Package className="h-4 w-4" />
-                          {spec.shade} {spec.gsm}GSM (BF: {spec.bf})
-                          <Badge variant="outline" className="text-amber-700 border-amber-400">
-                            {spec.jumbos.reduce((s, j) => s + j.sets.reduce((ss, set) => ss + set.cuts.length, 0), 0)} cuts
-                          </Badge>
-                        </div>
-                        <Button size="sm" variant="outline" onClick={() => handleAddJumbo(spec.id)}>
-                          <Plus className="h-3 w-3 mr-1" />Add Jumbo
-                        </Button>
-                      </div>
+                  {editablePlan.paperSpecs.map(spec => {
+                    const isSpecExpanded = expandedSpecs.has(spec.id);
+                    const totalCuts = spec.jumbos.reduce((s, j) => s + j.sets.reduce((ss, set) => ss + set.cuts.length, 0), 0);
 
-                      {spec.jumbos.map(jumbo => (
-                        <div key={jumbo.id} className="mb-4 border border-purple-200 rounded-lg p-3 bg-purple-50">
-                          <div className="font-medium text-purple-800 mb-3">Jumbo #{jumbo.jumboNumber}</div>
+                    // Calculate selection state for the spec
+                    const allSpecSetIds: string[] = [];
+                    spec.jumbos.forEach(jumbo => {
+                      jumbo.sets.forEach(set => allSpecSetIds.push(set.id));
+                    });
+                    const allSpecSetsSelected = allSpecSetIds.length > 0 && allSpecSetIds.every(id => selectedSets.has(id));
+                    const someSpecSetsSelected = allSpecSetIds.some(id => selectedSets.has(id)) && !allSpecSetsSelected;
+
+                    return (
+                      <div key={spec.id} className="border-2 border-amber-200 rounded-lg bg-amber-50">
+                        {/* Spec header - clickable to collapse/expand */}
+                        <div
+                          className="flex items-center justify-between p-4 cursor-pointer hover:bg-amber-100 transition-colors"
+                          onClick={() => toggleSpecExpand(spec.id)}
+                        >
+                          <div className="font-semibold text-amber-900 flex items-center gap-2">
+                            <Checkbox
+                              checked={allSpecSetsSelected}
+                              ref={(el) => {
+                                if (el) {
+                                  (el as any).indeterminate = someSpecSetsSelected;
+                                }
+                              }}
+                              onCheckedChange={() => toggleSpecSelection(spec)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            {isSpecExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                            <Package className="h-4 w-4" />
+                            {spec.shade} {spec.gsm}GSM (BF: {spec.bf})
+                            <Badge variant="outline" className="text-amber-700 border-amber-400">
+                              {totalCuts} cuts
+                            </Badge>
+                            <Badge variant="outline" className="text-amber-700 border-amber-400">
+                              {spec.jumbos.length} jumbos
+                            </Badge>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAddJumbo(spec.id);
+                            }}
+                          >
+                            <Plus className="h-3 w-3 mr-1" />Add Jumbo
+                          </Button>
+                        </div>
+
+                        {/* Spec content - collapsible */}
+                        {isSpecExpanded && (
+                          <div className="p-4 pt-0">
+                            {spec.jumbos.map(jumbo => {
+                              const jumboSetIds = jumbo.sets.map(s => s.id);
+                              const allSetsSelected = jumboSetIds.every(id => selectedSets.has(id));
+                              const someSetsSelected = jumboSetIds.some(id => selectedSets.has(id)) && !allSetsSelected;
+
+                              return (
+                                <div key={jumbo.id} className="mb-4 border border-purple-200 rounded-lg p-3 bg-purple-50">
+                                  {/* Jumbo header with select all checkbox */}
+                                  <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-2">
+                                      <Checkbox
+                                        checked={allSetsSelected}
+                                        ref={(el) => {
+                                          if (el) {
+                                            (el as any).indeterminate = someSetsSelected;
+                                          }
+                                        }}
+                                        onCheckedChange={() => toggleJumboSelection(jumbo)}
+                                      />
+                                      <span className="font-medium text-purple-800">
+                                        Jumbo #{jumbo.jumboNumber}
+                                        <span className="text-sm font-normal text-purple-600 ml-2">
+                                          ({jumbo.sets.length} sets)
+                                        </span>
+                                      </span>
+                                    </div>
+                                  </div>
 
                           <div className="space-y-3">
                             {jumbo.sets.map(set => {
@@ -3269,10 +3397,14 @@ const handlePrintPDF = () => {
                               );
                             })}
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* ── Orphaned panel ── */}
