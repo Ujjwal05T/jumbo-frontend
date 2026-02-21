@@ -63,6 +63,7 @@ const getNavigationForRole = (role: string | null) => {
         { name: "Order Master", href: "/masters/orders", roles: ["admin", "order_puncher", "co_admin", "accountant","accountant2", "sales_person"] },
         { name: "Order Edit Logs", href: "/masters/orders/edit-logs", roles: ["admin", "co_admin"] },
         { name: "Pending Orders", href: "/masters/pending-orders", roles: ["admin", "production", "sales_person"] },
+        { name: "Pending Orders New", href: "/masters/pending-orders-new", roles: ["admin", "production", "sales_person"] },
         { name: "Plan Master", href: "/masters/plans", roles: ["admin"] },
         { name: "Deletion Logs", href: "/masters/deletion-logs", roles: ["admin"] },
         { name: "User Master", href: "/masters/users", roles: ["admin"] },
