@@ -2111,6 +2111,7 @@ const handlePrintPDF = () => {
     const width = parseFloat(cutRollForm.width);
     const quantity = parseInt(cutRollForm.quantity);
     if (isNaN(width) || width <= 0) { toast.error('Enter a valid width'); return; }
+    if (!cutRollForm.clientId) { toast.error('Please select a client'); return; }
     let targetSet: EditableRollSet | null = null;
     for (const spec of editablePlan.paperSpecs) {
       for (const jumbo of spec.jumbos) {
@@ -2175,6 +2176,7 @@ const handlePrintPDF = () => {
     const width = parseFloat(cutRollForm.width);
     const quantity = parseInt(cutRollForm.quantity);
     if (isNaN(width) || width <= 0) { toast.error('Enter a valid width'); return; }
+    if (!cutRollForm.clientId) { toast.error('Please select a client'); return; }
     let targetSet: EditableRollSet | null = null;
     for (const spec of editablePlan.paperSpecs) {
       for (const jumbo of spec.jumbos) {
@@ -2794,7 +2796,6 @@ const handlePrintPDF = () => {
                     id="add-width"
                     type="number"
                     step="0.5"
-                    placeholder="e.g. 40"
                     value={cutRollForm.width}
                     onChange={e => setCutRollForm(f => ({ ...f, width: e.target.value }))}
                   />
@@ -2811,10 +2812,10 @@ const handlePrintPDF = () => {
                 </div>
               </div>
               <div>
-                <Label htmlFor="add-client">Client (optional)</Label>
-                <Select value={cutRollForm.clientId} onValueChange={v => setCutRollForm(f => ({ ...f, clientId: v }))}>
+                <Label htmlFor="add-client">Client <span className="text-red-500">*</span></Label>
+                <Select value={cutRollForm.clientId} onValueChange={v => setCutRollForm(f => ({ ...f, clientId: v }))} required>
                   <SelectTrigger id="add-client">
-                    <SelectValue placeholder="Select client…" />
+                    <SelectValue placeholder="Select client (required)" />
                   </SelectTrigger>
                   <SelectContent>
                     {clients.sort((a, b) => a.company_name.localeCompare(b.company_name)).map(c => (
@@ -2862,10 +2863,10 @@ const handlePrintPDF = () => {
                 </div>
               </div>
               <div>
-                <Label htmlFor="edit-client">Client</Label>
-                <Select value={cutRollForm.clientId} onValueChange={v => setCutRollForm(f => ({ ...f, clientId: v }))}>
+                <Label htmlFor="edit-client">Client <span className="text-red-500">*</span></Label>
+                <Select value={cutRollForm.clientId} onValueChange={v => setCutRollForm(f => ({ ...f, clientId: v }))} required>
                   <SelectTrigger id="edit-client">
-                    <SelectValue placeholder="Select client…" />
+                    <SelectValue placeholder="Select client (required)" />
                   </SelectTrigger>
                   <SelectContent>
                     {clients.sort((a, b) => a.company_name.localeCompare(b.company_name)).map(c => (
@@ -2931,14 +2932,15 @@ const handlePrintPDF = () => {
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="client-select" className="text-right">
-                  Client
+                  Client <span className="text-red-500">*</span>
                 </Label>
-                <Select 
-                  value={manualRollData.selectedClient} 
+                <Select
+                  value={manualRollData.selectedClient}
                   onValueChange={(value) => setManualRollData(prev => ({ ...prev, selectedClient: value }))}
+                  required
                 >
                   <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Select a client" />
+                    <SelectValue placeholder="Select a client (required)" />
                   </SelectTrigger>
                   <SelectContent>
                     {/* Combine original clients with suggested clients */}
@@ -3140,14 +3142,15 @@ const handlePrintPDF = () => {
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="edit-client-select" className="text-right">
-                  Client
+                  Client <span className="text-red-500">*</span>
                 </Label>
-                <Select 
-                  value={manualRollData.selectedClient} 
+                <Select
+                  value={manualRollData.selectedClient}
                   onValueChange={(value) => setManualRollData(prev => ({ ...prev, selectedClient: value }))}
+                  required
                 >
                   <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Select a client" />
+                    <SelectValue placeholder="Select a client (required)" />
                   </SelectTrigger>
                   <SelectContent>
                     {clients?.sort((a, b) => a.company_name.localeCompare(b.company_name)).map((client) => (

@@ -57,6 +57,15 @@ export default function NewOrderPage() {
   const [clientSearch, setClientSearch] = useState("");
   const [paperSearches, setPaperSearches] = useState<Record<number, string>>({});
   const [isLargeScreen, setIsLargeScreen] = useState(true);
+  const [clientRateHistory, setClientRateHistory] = useState<Array<{
+    paperKey: string;
+    gsm: number;
+    bf: number;
+    shade: string;
+    rate: number;
+    orderDate: string;
+  }>>([]);
+  const [loadingRates, setLoadingRates] = useState(false);
   const [alert, setAlert] = useState<{
     type: "success" | "error" | null;
     message: string;
@@ -117,6 +126,65 @@ export default function NewOrderPage() {
 
     return () => window.removeEventListener("resize", checkScreenSize);
   }, []);
+
+  const loadClientRateHistory = async (clientId: string) => {
+    if (!clientId) {
+      setClientRateHistory([]);
+      return;
+    }
+    setLoadingRates(true);
+    try {
+      const response = await fetch(
+        `${MASTER_ENDPOINTS.ORDERS}?client_id=${clientId}`,
+        createRequestOptions("GET")
+      );
+      if (response.ok) {
+        const orders: Order[] = await response.json();
+        const sortedOrders = orders
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, 10);
+
+        const rateMap = new Map<string, { gsm: number; bf: number; shade: string; rate: number; orderDate: string }>();
+        for (const order of sortedOrders) {
+          for (const item of order.order_items) {
+            if (item.paper) {
+              const key = `${item.paper.gsm}-${item.paper.bf}-${item.paper.shade}`;
+              const existing = rateMap.get(key);
+              const isSystemRate = item.rate === 100;
+              if (!existing) {
+                rateMap.set(key, {
+                  gsm: item.paper.gsm,
+                  bf: item.paper.bf,
+                  shade: item.paper.shade,
+                  rate: item.rate,
+                  orderDate: order.created_at,
+                });
+              } else if (existing.rate === 100 && !isSystemRate) {
+                // Replace auto-generated rate with a real one
+                rateMap.set(key, {
+                  gsm: item.paper.gsm,
+                  bf: item.paper.bf,
+                  shade: item.paper.shade,
+                  rate: item.rate,
+                  orderDate: order.created_at,
+                });
+              }
+            }
+          }
+        }
+
+        setClientRateHistory(
+          Array.from(rateMap.entries())
+            .map(([key, val]) => ({ paperKey: key, ...val }))
+            .sort((a, b) => a.gsm - b.gsm || a.bf - b.bf)
+        );
+      }
+    } catch (error) {
+      console.error("Failed to load client rate history:", error);
+    } finally {
+      setLoadingRates(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -261,7 +329,7 @@ export default function NewOrderPage() {
           const pdfData:any = {
             ...createdOrder,
             client: clients.find(c => c.id === formData.client_id),
-            order_items: cleanOrderItems.map((item, index) => ({
+            order_items: cleanOrderItems.map((item) => ({
               ...item,
               paper: papers.find(p => p.id === item.paper_id)
             }))
@@ -318,6 +386,9 @@ export default function NewOrderPage() {
       ...prev,
       [name]: value,
     }));
+    if (name === "client_id") {
+      loadClientRateHistory(value);
+    }
   };
 
   const addOrderItem = () => {
@@ -487,6 +558,40 @@ export default function NewOrderPage() {
           </AlertTitle>
           <AlertDescription>{alert.message}</AlertDescription>
         </Alert>
+      )}
+
+      {/* Client Rate History Summary */}
+      {formData.client_id && (
+        <div className="border rounded-lg p-3 bg-muted/30">
+          <p className="text-sm font-semibold mb-2 text-muted-foreground">
+            Last 10 Orders — Rate by Paper Spec
+          </p>
+          {loadingRates ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Loading rate history...
+            </div>
+          ) : clientRateHistory.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No previous orders found for this client.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {clientRateHistory.map((item) => (
+                <div
+                  key={item.paperKey}
+                  className="flex items-center gap-1.5 bg-background border rounded px-2.5 py-1.5 text-sm"
+                >
+                  <span className="font-medium text-foreground">
+                    {item.gsm}gsm, {item.bf}bf, {item.shade}
+                  </span>
+                  <span className="text-muted-foreground">—</span>
+                  <span className="font-semibold text-primary">
+                    ₹{item.rate}/kg
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       <Card>

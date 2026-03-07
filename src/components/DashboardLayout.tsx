@@ -55,6 +55,12 @@ const getNavigationForRole = (role: string | null) => {
       roles: ["admin", "co_admin", "production"],
     },
     {
+      name: "Plan Dashboard",
+      href: "/masters/plans/dashboard",
+      icon: BarChart3,
+      roles: ["admin"],
+    },
+    {
       name: "Masters",
       icon: FileText,
       roles: ["admin", "order_puncher", "co_admin", "accountant","accountant2","security", "sales_person"],
