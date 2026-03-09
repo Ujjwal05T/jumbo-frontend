@@ -109,6 +109,9 @@ const roleBasedRoutes = {
     '/barcode-lookup',
     '/weight-update',
     '/outward-challan',
+    '/masters/plans/dashboard',
+    '/masters/plans',
+    '/dashboard'
   ],
   sales_person: [
     '/masters/orders',

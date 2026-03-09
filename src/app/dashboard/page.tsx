@@ -11,7 +11,8 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DASHBOARD_ENDPOINTS, createRequestOptions, PRODUCTION_DATA_ENDPOINTS } from "@/lib/api-config";
+import { DASHBOARD_ENDPOINTS, MASTER_ENDPOINTS, createRequestOptions, PRODUCTION_DATA_ENDPOINTS } from "@/lib/api-config";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { trackRollHierarchy, type JumboHierarchy } from "@/lib/roll-tracking";
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -35,7 +36,12 @@ import {
   FileText,
   Weight,
   Download,
-  Printer
+  Printer,
+  Loader2,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle2,
 } from "lucide-react";
 
 interface DashboardSummary {
@@ -180,6 +186,19 @@ interface CutRoll {
 }
 
 
+interface PlanSummary {
+  id: string;
+  frontend_id: string | null;
+  name: string | null;
+  status: string;
+  created_at: string;
+  total_rolls: number;
+  weight_updated_rolls: number;
+  is_complete: boolean;
+}
+
+const PLAN_PAGE_SIZE = 30;
+
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -206,6 +225,12 @@ export default function DashboardPage() {
   const [productionSummary, setProductionSummary] = useState<ProductionSummary | null>(null);
   const [loadingProductionSummary, setLoadingProductionSummary] = useState(false);
   const [productionSummaryLastUpdated, setProductionSummaryLastUpdated] = useState<string>("");
+
+  // Plan dashboard states
+  const [planSummaries, setPlanSummaries] = useState<PlanSummary[]>([]);
+  const [loadingPlanSummaries, setLoadingPlanSummaries] = useState(false);
+  const [planView, setPlanView] = useState<"grid" | "table">("grid");
+  const [planPage, setPlanPage] = useState(0);
 
   const router = useRouter();
 
@@ -446,6 +471,26 @@ export default function DashboardPage() {
       console.error("Error fetching production summary:", error);
     } finally {
       setLoadingProductionSummary(false);
+    }
+  };
+
+  // Fetch plan summaries for plan dashboard section
+  const fetchPlanSummaries = async () => {
+    setLoadingPlanSummaries(true);
+    try {
+      const res = await fetch(
+        `${MASTER_ENDPOINTS.PLANS}/summary-list`,
+        createRequestOptions("GET")
+      );
+      if (res.ok) {
+        const data: PlanSummary[] = await res.json();
+        setPlanSummaries(data);
+        setPlanPage(0);
+      }
+    } catch (e) {
+      console.error("Failed to fetch plan summaries", e);
+    } finally {
+      setLoadingPlanSummaries(false);
     }
   };
 
@@ -770,6 +815,10 @@ export default function DashboardPage() {
   }, []);
 
   // Fetch production summary on mount and auto-refresh every 15 minutes
+  useEffect(() => {
+    fetchPlanSummaries();
+  }, []);
+
   useEffect(() => {
     const checkAuth = async () => {
       const authenticated = await isAuthenticated();
@@ -1404,8 +1453,161 @@ export default function DashboardPage() {
           </CardContent>
         </div>
 
+        
+
+        {/* Plan Dashboard Section */}
+        {(() => {
+          const totalPlanPages = Math.ceil(planSummaries.length / PLAN_PAGE_SIZE);
+          const pagePlans = planSummaries.slice(planPage * PLAN_PAGE_SIZE, (planPage + 1) * PLAN_PAGE_SIZE);
+          const navigateToPlan = (plan: PlanSummary) =>
+            router.push(`/masters/plans/${plan.id}/cut-report`);
+
+          const PlanPagination = () =>
+            totalPlanPages <= 1 ? null : (
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-xs text-muted-foreground">
+                  {planPage * PLAN_PAGE_SIZE + 1}–{Math.min((planPage + 1) * PLAN_PAGE_SIZE, planSummaries.length)} of {planSummaries.length}
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="sm" className="h-7 px-2" disabled={planPage === 0} onClick={() => setPlanPage(p => p - 1)}>
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </Button>
+                  {Array.from({ length: totalPlanPages }, (_, i) => (
+                    <button key={i} onClick={() => setPlanPage(i)}
+                      className={`h-7 min-w-[28px] rounded text-xs font-medium px-2 transition-colors ${i === planPage ? "bg-primary text-primary-foreground" : "border hover:bg-muted"}`}>
+                      {i + 1}
+                    </button>
+                  ))}
+                  <Button variant="outline" size="sm" className="h-7 px-2" disabled={planPage === totalPlanPages - 1} onClick={() => setPlanPage(p => p + 1)}>
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            );
+
+          return (
+            <div className="border-blue-200 p-3 space-y-3 shadow-lg rounded-lg border bg-gradient-to-r from-blue-50 to-indigo-50">
+              {/* Header */}
+              <div className="flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <BarChart3 className="w-5 h-5 text-blue-600" />
+                  Plan Dashboard
+                </CardTitle>
+                <div className="ml-auto flex items-center gap-2">
+                  <div className="flex border rounded-md overflow-hidden text-xs font-medium">
+                    <button onClick={() => setPlanView("grid")}
+                      className={`px-3 py-1.5 transition-colors ${planView === "grid" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+                      Grid
+                    </button>
+                    <button onClick={() => setPlanView("table")}
+                      className={`px-3 py-1.5 transition-colors ${planView === "table" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+                      Table
+                    </button>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={fetchPlanSummaries} disabled={loadingPlanSummaries} className="h-8">
+                    <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loadingPlanSummaries ? "animate-spin" : ""}`} />
+                    Refresh
+                  </Button>
+                </div>
+              </div>
+
+              {/* Loading */}
+              {loadingPlanSummaries && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground py-1">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading plans…
+                </div>
+              )}
+
+              {/* Grid view */}
+              {!loadingPlanSummaries && planView === "grid" && (
+                <>
+                  <div className="grid gap-2 grid-cols-3 md:grid-cols-5 lg:grid-cols-7">
+                    {pagePlans.map((plan) => {
+                      const pct = plan.total_rolls > 0 ? Math.round((plan.weight_updated_rolls / plan.total_rolls) * 100) : 0;
+                      return (
+                        <div key={plan.id} onClick={() => navigateToPlan(plan)}
+                          className={`cursor-pointer p-2 border-2 rounded-lg transition-all duration-200 hover:shadow-md ${plan.is_complete ? "border-green-200 bg-green-50 hover:bg-green-100" : "border-red-200 bg-red-50 hover:bg-red-100"}`}>
+                          <div className="flex items-center gap-1 mb-0.5">
+                            {plan.is_complete
+                              ? <CheckCircle2 className="h-3 w-3 text-green-600 flex-shrink-0" />
+                              : <AlertCircle className="h-3 w-3 text-red-500 flex-shrink-0" />}
+                            <span className="text-[11px] font-medium truncate">{plan.frontend_id || plan.id}</span>
+                          </div>
+                          <div className="text-lg font-bold leading-tight">
+                            {plan.weight_updated_rolls}/{plan.total_rolls}
+                          </div>
+                          <div className="w-full h-1 rounded-full bg-gray-200 overflow-hidden my-1">
+                            <div className={`h-full rounded-full ${plan.is_complete ? "bg-green-500" : "bg-red-400"}`} style={{ width: `${pct}%` }} />
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">{new Date(plan.created_at).toLocaleDateString("en-IN")}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <PlanPagination />
+                </>
+              )}
+
+              {/* Table view */}
+              {!loadingPlanSummaries && planView === "table" && (
+                <>
+                  <div className="rounded-lg border overflow-hidden bg-white">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/50">
+                          <TableHead className="w-10 text-center">#</TableHead>
+                          <TableHead>Plan ID</TableHead>
+                          <TableHead className="min-w-[140px]">Progress</TableHead>
+                          <TableHead className="text-center">Rolls</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Created</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {pagePlans.map((plan, idx) => {
+                          const pct = plan.total_rolls > 0 ? Math.round((plan.weight_updated_rolls / plan.total_rolls) * 100) : 0;
+                          return (
+                            <TableRow key={plan.id} className={`cursor-pointer hover:bg-muted/40 ${plan.is_complete ? "bg-green-50/40" : "bg-red-50/30"}`}
+                              onClick={() => navigateToPlan(plan)}>
+                              <TableCell className="text-center text-xs text-muted-foreground">{planPage * PLAN_PAGE_SIZE + idx + 1}</TableCell>
+                              <TableCell><span className="font-bold font-mono">{plan.frontend_id || plan.id}</span></TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden">
+                                    <div className={`h-full rounded-full ${plan.is_complete ? "bg-green-500" : "bg-red-400"}`} style={{ width: `${pct}%` }} />
+                                  </div>
+                                  <span className={`text-sm font-semibold w-9 text-right ${plan.is_complete ? "text-green-700" : "text-red-600"}`}>{pct}%</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <span className="font-semibold">{plan.weight_updated_rolls}<span className="text-muted-foreground font-normal">/{plan.total_rolls}</span></span>
+                              </TableCell>
+                              <TableCell>
+                                <div className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${plan.is_complete ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                                  {plan.is_complete ? <CheckCircle2 className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
+                                  {plan.is_complete ? "Complete" : "Pending"}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-xs text-muted-foreground">{new Date(plan.created_at).toLocaleDateString("en-IN")}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <PlanPagination />
+                </>
+              )}
+
+              {!loadingPlanSummaries && planSummaries.length === 0 && (
+                <p className="text-sm text-muted-foreground py-2">No plans found.</p>
+              )}
+            </div>
+          );
+        })()}
+
         {/* Cut Rolls Report Card */}
-        <Card className="border-green-200 bg-gradient-to-r from-green-50 to-emerald-50">
+        {/* <Card className="border-green-200 bg-gradient-to-r from-green-50 to-emerald-50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-xl">
               <FileText className="w-6 h-6 text-green-600" />
@@ -1415,7 +1617,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {/* Date Filters */}
+              
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium flex items-center gap-2">
@@ -1462,10 +1664,10 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Stats Display */}
+             
               {cutRollsStats && (
                 <div className="space-y-4">
-                  {/* Export and Print Buttons */}
+                  
                   <div className="flex justify-end gap-3">
                     <Button
                       onClick={downloadPDF}
@@ -1485,9 +1687,9 @@ export default function DashboardPage() {
                     </Button>
                   </div>
 
-                  {/* Stats Cards */}
+                  
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                    {/* Total Rolls */}
+                    
                     <Card className="border-blue-200 bg-blue-50">
                       <CardContent className="pt-6">
                         <div className="flex flex-col items-center text-center">
@@ -1498,7 +1700,6 @@ export default function DashboardPage() {
                       </CardContent>
                     </Card>
 
-                    {/* Total Weight */}
                     <Card className="border-purple-200 bg-purple-50">
                       <CardContent className="pt-6">
                         <div className="flex flex-col items-center text-center">
@@ -1509,7 +1710,6 @@ export default function DashboardPage() {
                       </CardContent>
                     </Card>
 
-                    {/* Dynamic Status Cards */}
                     {Object.entries(cutRollsStats.status_breakdown).map(([status, count]) => {
                       const displayInfo = getStatusDisplayInfo(status);
                       return (
@@ -1528,7 +1728,7 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {/* Empty State */}
+             
               {!cutRollsStats && (
                 <div className="text-center py-8 border-2 border-dashed border-green-200 rounded-lg bg-white">
                   <FileText className="w-12 h-12 mx-auto text-green-600 mb-2" />
@@ -1537,102 +1737,7 @@ export default function DashboardPage() {
               )}
             </div>
           </CardContent>
-        </Card>
-
-        {/* Main Content Grid */}
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Recent Activity */}
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Activity className="w-5 h-5" />
-                    Recent Activity
-                  </CardTitle>
-                  <CardDescription>Latest system activities and events</CardDescription>
-                </div>
-                <Button variant="outline" size="sm" onClick={() => fetchDashboardData()}>
-                  <ArrowRight className="w-4 h-4" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {activities.length > 0 ? activities.map((activity) => {
-                  const IconComponent = getActivityIcon(activity.icon);
-                  return (
-                    <div key={activity.id} className="flex items-center gap-4 p-3 border rounded-lg hover:bg-muted/50 transition-colors">
-                      <div className="p-2 rounded-full bg-primary/10">
-                        <IconComponent className="w-4 h-4 text-primary" />
-                      </div>
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm">{activity.title}</span>
-                          {getStatusBadge(activity.status)}
-                        </div>
-                        <p className="text-xs text-muted-foreground">{activity.description}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(activity.timestamp).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                }) : (
-                  <div className="text-center py-8">
-                    <Activity className="w-12 h-12 mx-auto text-muted-foreground mb-2" />
-                    <p className="text-muted-foreground">No recent activity</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Quick Actions */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Zap className="w-5 h-5" />
-                Quick Actions
-              </CardTitle>
-              <CardDescription>Common tasks and shortcuts</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Button 
-                className="w-full justify-start" 
-                variant="outline"
-                onClick={() => router.push('/masters/orders/new')}
-              >
-                <ShoppingCart className="w-4 h-4 mr-2" />
-                New Order
-              </Button>
-              <Button 
-                className="w-full justify-start" 
-                variant="outline"
-                onClick={() => router.push('/masters/pending-orders')}
-              >
-                <Clock className="w-4 h-4 mr-2" />
-                Pending Orders
-              </Button>
-              <Button 
-                className="w-full justify-start" 
-                variant="outline"
-                onClick={() => router.push('/masters/plans')}
-              >
-                <Scissors className="w-4 h-4 mr-2" />
-                Production Plans
-              </Button>
-              <Button 
-                className="w-full justify-start" 
-                variant="outline"
-                onClick={() => router.push('/masters/clients')}
-              >
-                <Users className="w-4 h-4 mr-2" />
-                Manage Clients
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+        </Card> */}
 
       </div>
     </DashboardLayout>

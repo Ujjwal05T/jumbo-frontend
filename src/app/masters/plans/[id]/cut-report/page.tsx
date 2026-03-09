@@ -359,7 +359,7 @@ export default function PlanCutReportPage() {
                             </div>
                             <div className="flex h-14 rounded overflow-hidden border border-gray-200">
                               {setRolls.map((roll) => {
-                                const isGreen = roll.weight_kg > 0;
+                                const isGreen = roll.weight_kg > 1;
                                 const widthPct = (roll.width_inches / JUMBO_WIDTH) * 100;
                                 return (
                                   <div

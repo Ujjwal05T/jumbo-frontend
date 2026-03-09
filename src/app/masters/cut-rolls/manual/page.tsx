@@ -27,6 +27,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Package,
+  Target,
 } from "lucide-react";
 import { toast } from "sonner";
 import { MASTER_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
@@ -66,6 +67,11 @@ export default function ManualCutRollEntryPage() {
   const [reelNumber, setReelNumber] = useState<string>("");
   const [widthInches, setWidthInches] = useState<string>("");
   const [weightKg, setWeightKg] = useState<string>("");
+
+  // AI suggestions state
+  const [clientSuggestions, setClientSuggestions] = useState<any[]>([]);
+  const [clientSuggestionsLoading, setClientSuggestionsLoading] = useState(false);
+  const [selectedPaperSpecs, setSelectedPaperSpecs] = useState<{ gsm: number; bf: number; shade: string } | null>(null);
 
   // Search state for selects
   const [clientSearch, setClientSearch] = useState("");
