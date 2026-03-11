@@ -2597,12 +2597,8 @@ const handlePrintPDF = () => {
                           variant="outline"
                           className="h-7 text-xs"
                           onClick={() => {
-                            console.log('🔍 Selecting client:', suggestion.client_id, suggestion.client_name);
-                            setManualRollData(prev => {
-                              const newData = { ...prev, selectedClient: suggestion.client_id.toLowerCase() };
-                              console.log('🔍 Updated manualRollData:', newData);
-                              return newData;
-                            });
+                            const matched = clients.find(c => c.id.toLowerCase() === suggestion.client_id.toLowerCase());
+                            if (matched) setManualRollData(prev => ({ ...prev, selectedClient: matched.id }));
                           }}
                         >
                           Select
@@ -2628,11 +2624,10 @@ const handlePrintPDF = () => {
                               size="sm"
                               variant="ghost"
                               className="h-6 px-2 text-xs"
-                              onClick={() => setManualRollData(prev => ({
-                                ...prev,
-                                width: widthSuggestion.width.toString(),
-                                selectedClient: suggestion.client_id
-                              }))}
+                              onClick={() => {
+                                const matched = clients.find(c => c.id.toLowerCase() === suggestion.client_id.toLowerCase());
+                                if (matched) setManualRollData(prev => ({ ...prev, width: widthSuggestion.width.toString(), selectedClient: matched.id }));
+                              }}
                             >
                               Use
                             </Button>

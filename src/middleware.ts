@@ -125,6 +125,26 @@ const roleBasedRoutes = {
     '/quality-check',
     '/hour-calculator',
   ],
+  gm: [
+    '/dashboard',
+    '/masters',
+    '/reports',
+    '/inventory',
+    '/wastage',
+    '/dispatch',
+    '/past-dispatch',
+    '/bills',
+    '/challan',
+    '/mou',
+    '/mou-reports',
+    '/production-data',
+    '/production-data-reports',
+    '/barcode-lookup',
+    '/plan-weights',
+    '/in-out',
+    '/weight-update',
+    '/outward-challan',
+  ],
 };
 
 // Define public routes that don't require authentication

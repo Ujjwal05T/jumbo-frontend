@@ -272,6 +272,11 @@ export default function UserMasterPage() {
           <ClipboardCheck className="w-3 h-3 mr-1" />
           QC
         </Badge>;
+      case "gm":
+        return <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+          <Crown className="w-3 h-3 mr-1" />
+          GM
+        </Badge>;
       default:
         return <Badge variant="secondary">{role}</Badge>;
     }

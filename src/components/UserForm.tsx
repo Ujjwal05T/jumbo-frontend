@@ -212,6 +212,7 @@ export default function UserForm({ onSuccess, onCancel, isOpen = true, editingUs
                   {[
                     { value: "admin", label: "Admin", color: "purple" },
                     { value: "accountant", label: "Accountant", color: "indigo" },
+                    { value: "gm", label: "GM", color: "emerald" },
                     { value: "accountant2", label: "Accountant 2", color: "violet" },
                     { value: "co_admin", label: "Co Admin", color: "purple" },
                     { value: "dispatch", label: "Dispatch", color: "teal" },

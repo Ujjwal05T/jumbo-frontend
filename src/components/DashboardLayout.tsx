@@ -52,7 +52,7 @@ const getNavigationForRole = (role: string | null) => {
       name: "Dashboard",
       href: "/dashboard",
       icon: LayoutDashboard,
-      roles: ["admin", "co_admin", "production","dispatch"],
+      roles: ["admin", "co_admin", "production", "dispatch", "gm"],
     },
     {
       name: "Plan Dashboard",
@@ -63,19 +63,19 @@ const getNavigationForRole = (role: string | null) => {
     {
       name: "Masters",
       icon: FileText,
-      roles: ["admin", "order_puncher", "co_admin", "accountant","accountant2","security", "sales_person"],
+      roles: ["admin", "order_puncher", "co_admin", "accountant", "accountant2", "security", "sales_person", "gm"],
       children: [
-        { name: "Client Master", href: "/masters/clients", roles: ["admin", "order_puncher", "co_admin", "accountant","accountant2","security", "sales_person"] },
-        { name: "Order Master", href: "/masters/orders", roles: ["admin", "order_puncher", "co_admin", "accountant","accountant2", "sales_person"] },
-        { name: "Order Edit Logs", href: "/masters/orders/edit-logs", roles: ["admin", "co_admin"] },
-        { name: "Pending Orders", href: "/masters/pending-orders", roles: ["admin", "production", "sales_person"] },
-        { name: "Pending Orders New", href: "/masters/pending-orders-new", roles: ["admin", "production", "sales_person"] },
-        { name: "Plan Master", href: "/masters/plans", roles: ["admin"] },
-        { name: "Deletion Logs", href: "/masters/deletion-logs", roles: ["admin"] },
+        { name: "Client Master", href: "/masters/clients", roles: ["admin", "order_puncher", "co_admin", "accountant", "accountant2", "security", "sales_person", "gm"] },
+        { name: "Order Master", href: "/masters/orders", roles: ["admin", "order_puncher", "co_admin", "accountant", "accountant2", "sales_person", "gm"] },
+        { name: "Order Edit Logs", href: "/masters/orders/edit-logs", roles: ["admin", "co_admin", "gm"] },
+        { name: "Pending Orders", href: "/masters/pending-orders", roles: ["admin", "production", "sales_person", "gm"] },
+        { name: "Pending Orders New", href: "/masters/pending-orders-new", roles: ["admin", "production", "sales_person", "gm"] },
+        { name: "Plan Master", href: "/masters/plans", roles: ["admin", "gm"] },
+        { name: "Deletion Logs", href: "/masters/deletion-logs", roles: ["admin", "gm"] },
         { name: "User Master", href: "/masters/users", roles: ["admin"] },
-        { name: "Paper Master", href: "/masters/papers", roles: ["admin", "order_puncher", "accountant","accountant2"] },
-        { name: "Material Master", href: "/masters/materials", roles: ["admin", "accountant","accountant2","security"] },
-        { name: "Manual Cut Rolls", href: "/masters/cut-rolls", roles: ["admin", "production", "accountant","accountant2"] },
+        { name: "Paper Master", href: "/masters/papers", roles: ["admin", "order_puncher", "accountant", "accountant2", "gm"] },
+        { name: "Material Master", href: "/masters/materials", roles: ["admin", "accountant", "accountant2", "security", "gm"] },
+        { name: "Manual Cut Rolls", href: "/masters/cut-rolls", roles: ["admin", "production", "accountant", "accountant2", "gm"] },
       ],
     },
     
@@ -83,9 +83,9 @@ const getNavigationForRole = (role: string | null) => {
       name: "Inventory",
       href: "/inventory/past-inventory",
       icon: Package,
-      roles: ["admin"],
+      roles: ["admin", "gm"],
     },
-    
+
     {
       name: "Planning",
       href: "/planning",
@@ -108,19 +108,19 @@ const getNavigationForRole = (role: string | null) => {
       name: "Stock",
       href: "/wastage",
       icon: Recycle,
-      roles: ["admin", "accountant","accountant2"],
+      roles: ["admin", "accountant", "accountant2", "gm"],
     },
     {
       name: "Weight Update",
       href: "/weight-update",
       icon: Database,
-      roles: ["admin", "weight_update", "accountant","accountant2",'dispatch'],
+      roles: ["admin", "weight_update", "accountant", "accountant2", "dispatch", "gm"],
     },
     {
       name: "In/Out",
       href: "/in-out",
       icon: Database,
-      roles: ["admin", "security", "accountant","accountant2"],
+      roles: ["admin", "security", "accountant", "accountant2", "gm"],
     },
     {
       name: "Outward Challan",
@@ -132,20 +132,20 @@ const getNavigationForRole = (role: string | null) => {
     {
       name: "MOU",
       icon: Clock,
-      roles: ["admin", "accountant","accountant2", "mou"],
+      roles: ["admin", "accountant", "accountant2", "mou", "gm"],
       children: [
-        { name: "MOU Entry", href: "/mou", roles: ["admin", "accountant","accountant2", "mou"] },
-        { name: "MOU Reports", href: "/mou-reports", roles: ["admin", "accountant","accountant2", "mou"] },
+        { name: "MOU Entry", href: "/mou", roles: ["admin", "accountant", "accountant2", "mou", "gm"] },
+        { name: "MOU Reports", href: "/mou-reports", roles: ["admin", "accountant", "accountant2", "mou", "gm"] },
       ],
     },
 
     {
       name: "Dispatch",
       icon: Truck,
-      roles: ["admin", "co_admin", "accountant","accountant2", "dispatch"],
+      roles: ["admin", "co_admin", "accountant", "accountant2", "dispatch", "gm"],
       children: [
-        { name: "Current Dispatch", href: "/dispatch/history", roles: ["admin", "co_admin", "accountant","accountant2", "sales_person"] },
-        { name: "Past Dispatch", href: "/past-dispatch", roles: ["admin", "co_admin", "accountant","accountant2"] },
+        { name: "Current Dispatch", href: "/dispatch/history", roles: ["admin", "co_admin", "accountant", "accountant2", "sales_person", "gm"] },
+        { name: "Past Dispatch", href: "/past-dispatch", roles: ["admin", "co_admin", "accountant", "accountant2", "gm"] },
       ],
     },
     { name: "Current Dispatch",icon: Truck, href: "/dispatch/history", roles: ["dispatch", "sales_person"] },
@@ -156,10 +156,10 @@ const getNavigationForRole = (role: string | null) => {
     {
       name: "Bills",
       icon: Receipt,
-      roles: ["admin", "accountant","accountant2"],
+      roles: ["admin", "accountant", "accountant2", "gm"],
       children: [
-        { name: "Bill Management", href: "/challan", roles: ["admin", "accountant","accountant2"] },
-        { name: "Added Bills", href: "/bills", roles: ["admin", "accountant"] },
+        { name: "Bill Management", href: "/challan", roles: ["admin", "accountant", "accountant2", "gm"] },
+        { name: "Added Bills", href: "/bills", roles: ["admin", "accountant", "gm"] },
       ],
     },
     {
@@ -184,28 +184,28 @@ const getNavigationForRole = (role: string | null) => {
       name: "New Data",
       href: "/production-data",
       icon: Barcode,
-      roles: ["admin", "accountant"],
+      roles: ["admin", "accountant", "gm"],
     },
     {
       name: "New Data Report",
       href: "/production-data-reports",
       icon: Barcode,
-      roles: ["admin", "accountant"],
+      roles: ["admin", "accountant", "gm"],
     },
     {
       name: "Reports",
       icon: BarChart3,
-      roles: ["admin", "production", "accountant","accountant2", "dispatch"],
+      roles: ["admin", "production", "accountant", "accountant2", "dispatch", "gm"],
       children: [
-        { name: "Analytics Dashboard", href: "/reports", roles: ["admin", "production", "accountant","accountant2"] },
-        { name: "Client-Order Analysis", href: "/reports/client-orders", roles: ["admin", "production", "accountant","accountant2"] },
-        { name: "Plan Report", href: "/reports/client-orders-plans", roles: ["admin"] },
-        { name: "Order-Plan Execution", href: "/reports/order-plan-execution", roles: ["admin", "production", "accountant","accountant2"] },
-        { name: "Client Order Summary", href: "/reports/client-order-summary", roles: ["admin", "production", "accountant","accountant2"] },
-        { name: "Cut Rolls Report", href: "/reports/cut-rolls-weight", roles: ["admin", "production"] },
+        { name: "Analytics Dashboard", href: "/reports", roles: ["admin", "production", "accountant", "accountant2", "gm"] },
+        { name: "Client-Order Analysis", href: "/reports/client-orders", roles: ["admin", "production", "accountant", "accountant2", "gm"] },
+        { name: "Plan Report", href: "/reports/client-orders-plans", roles: ["admin", "gm"] },
+        { name: "Order-Plan Execution", href: "/reports/order-plan-execution", roles: ["admin", "production", "accountant", "accountant2", "gm"] },
+        { name: "Client Order Summary", href: "/reports/client-order-summary", roles: ["admin", "production", "accountant", "accountant2", "gm"] },
+        { name: "Cut Rolls Report", href: "/reports/cut-rolls-weight", roles: ["admin", "production", "gm"] },
         // { name: "All Cut Rolls", href: "/reports/all-cut-rolls", roles: ["admin", "production", "accountant","accountant2"] },
-        { name: "Filter Cut Rolls", href: "/reports/all-cut-rolls-filtered", roles: ["admin", "production", "accountant","accountant2"] },
-        { name: "Plan Weights", href: "/plan-weights", roles: ["admin"] },
+        { name: "Filter Cut Rolls", href: "/reports/all-cut-rolls-filtered", roles: ["admin", "production", "accountant", "accountant2", "gm"] },
+        { name: "Plan Weights", href: "/plan-weights", roles: ["admin", "gm"] },
       ],
     },
     {
@@ -243,7 +243,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>(["Masters"]);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
-  const [barcodeQuery, setBarcodeQuery] = useState("");
   const pathname = usePathname();
   const router = useRouter();
   const user = getCurrentUser();
@@ -255,8 +254,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     setShowLogoutDialog(true);
   };
 
-  const confirmLogout = async () => {
-    await logout();
+  const confirmLogout = () => {
+    logout();
     router.push("/auth/login");
   };
 

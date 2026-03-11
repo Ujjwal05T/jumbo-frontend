@@ -901,9 +901,8 @@ export default function PendingOrderItemsPage() {
           ep.paperSpecs.forEach(spec => spec.jumbos.forEach(j => j.sets.forEach(s => allSetIds.add(s.id))));
           setSelectedSets(allSetIds);
 
-          // Auto-expand all paper specs
-          const allSpecIds = new Set(ep.paperSpecs.map(spec => spec.id));
-          setExpandedSpecs(allSpecIds);
+          // Start all paper specs collapsed
+          setExpandedSpecs(new Set());
         }
 
         if (result.spec_suggestions) {
@@ -1258,64 +1257,6 @@ const handlePrintPDF = () => {
     } finally {
       setClientSuggestionsLoading(false);
     }
-  };
-
-  const handleAddManualCut = (suggestionId: string, jumboId: string, setId: string) => {
-    // Find the available waste for this set - handle both spec-based and order-based structures
-    let suggestion, paperSpecs;
-
-    if (suggestionResult?.spec_suggestions) {
-      // New spec-based structure - handle case where suggestionId might be spec_id
-      const specSuggestion = suggestionResult.spec_suggestions.find(s => s.spec_id === suggestionId);
-      if (specSuggestion) {
-        // This is a spec-based suggestion
-        paperSpecs = specSuggestion.paper_spec;
-        suggestion = specSuggestion; // Use the spec suggestion directly
-      } else {
-        // Try to find it in nested order_suggestions
-        for (const specSuggestion of suggestionResult.spec_suggestions) {
-          suggestion = specSuggestion.order_suggestions?.find(s => s.suggestion_id === suggestionId);
-          if (suggestion) {
-            paperSpecs = specSuggestion.paper_spec;
-            break;
-          }
-        }
-      }
-    } else if (suggestionResult?.order_suggestions) {
-      // Legacy order-based structure
-      suggestion = suggestionResult.order_suggestions?.find(s => s.suggestion_id === suggestionId);
-      paperSpecs = suggestion?.paper_spec;
-    } else if (suggestionResult?.jumbo_suggestions) {
-      // Jumbo-based structure
-      suggestion = suggestionResult.jumbo_suggestions?.find(s => s.suggestion_id === suggestionId);
-      paperSpecs = suggestion?.paper_specs;
-    }
-
-    const jumboRoll = suggestion?.jumbo_rolls?.find((jr:any) => jr.jumbo_id === jumboId);
-    const rollSet = jumboRoll?.sets?.find((s:any) => s.set_id === setId);
-    const availableWaste = rollSet?.summary?.total_waste || 0;
-
-    // Capture paper specs from the suggestion
-    paperSpecs = paperSpecs || {
-      gsm: 0,
-      bf: 0,
-      shade: ''
-    };
-    
-    setManualRollData({
-      suggestionId,
-      jumboId,
-      setId,
-      width: '',
-      description: 'Manual Cut',
-      availableWaste,
-      selectedClient: '',
-      paperSpecs
-    });
-    setShowManualRollDialog(true);
-
-    // Fetch client suggestions for this waste space
-    fetchClientSuggestions(availableWaste, paperSpecs);
   };
 
   const handleManualRollSubmit = () => {
@@ -2053,10 +1994,12 @@ const handlePrintPDF = () => {
     if (!editablePlan) return;
     setCurrentSetId(setId);
     setCutRollForm({ width: '', quantity: '1', clientId: '' });
+    setClientSuggestions([]);
     for (const spec of editablePlan.paperSpecs) {
       for (const jumbo of spec.jumbos) {
         if (jumbo.sets.some(s => s.id === setId)) {
           setCurrentPaperSpec({ gsm: spec.gsm, bf: spec.bf, shade: spec.shade });
+          fetchClientSuggestions(editablePlan.targetWidth || 118, { gsm: spec.gsm, bf: spec.bf, shade: spec.shade });
           break;
         }
       }
@@ -2825,9 +2768,78 @@ const handlePrintPDF = () => {
                 </Select>
               </div>
             </div>
+
+            {/* AI Client Suggestions */}
+            {clientSuggestionsLoading ? (
+              <div className="flex items-center justify-center p-4">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-sm text-muted-foreground">Finding client suggestions...</span>
+              </div>
+            ) : clientSuggestions.length > 0 ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-green-700">
+                  <Target className="h-4 w-4" />
+                  Suggested Clients (based on AI)
+                </div>
+                <div className="max-h-40 overflow-y-auto space-y-2 border rounded-lg p-2">
+                  {clientSuggestions.map((suggestion) => (
+                    <div key={suggestion.client_id} className="space-y-2">
+                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <span className="font-medium text-sm">{suggestion.client_name}</span>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={() => {
+                            const matched = clients.find(c => c.id.toLowerCase() === suggestion.client_id.toLowerCase());
+                            if (matched) setCutRollForm(f => ({ ...f, clientId: matched.id }));
+                          }}
+                        >
+                          Select
+                        </Button>
+                      </div>
+                      <div className="ml-4 space-y-1">
+                        {suggestion.suggested_widths.map((widthSuggestion: any, index: number) => (
+                          <div key={index} className="flex items-center justify-between p-1 hover:bg-gray-50 rounded">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground">• {widthSuggestion.width}"</span>
+                              <span className="text-xs text-gray-500">
+                                ({widthSuggestion.frequency} order{widthSuggestion.frequency > 1 ? 's' : ''})
+                              </span>
+                              {widthSuggestion.days_ago !== null && (
+                                <span className="text-xs text-blue-600">
+                                  Last: {widthSuggestion.days_ago === 0 ? 'Today' :
+                                         widthSuggestion.days_ago === 1 ? 'Yesterday' :
+                                         `${widthSuggestion.days_ago} days ago`}
+                                </span>
+                              )}
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-xs"
+                              onClick={() => {
+                                const matched = clients.find(c => c.id.toLowerCase() === suggestion.client_id.toLowerCase());
+                                if (matched) setCutRollForm(f => ({ ...f, clientId: matched.id, width: widthSuggestion.width.toString() }));
+                              }}
+                            >
+                              Use
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowAddCutDialog(false)}>Cancel</Button>
-              <Button onClick={handleSaveNewCut}>Add Roll</Button>
+              <Button onClick={handleSaveNewCut} disabled={!cutRollForm.clientId || !cutRollForm.width}>Add Roll</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

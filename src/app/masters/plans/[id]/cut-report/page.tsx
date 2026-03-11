@@ -3,13 +3,22 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
-import { MASTER_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
+import { MASTER_ENDPOINTS, API_BASE_URL, createRequestOptions } from "@/lib/api-config";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Loader2,
   CheckCircle2,
@@ -21,8 +30,10 @@ import {
   Layers,
   ArrowLeft,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface CutRoll {
@@ -62,6 +73,7 @@ interface PlanDashboard {
     billed: number;
     allocated: number;
     damaged: number;
+    removed: number;
     total_weight_kg: number;
     weight_updated_kg: number;
     dispatched_kg: number;
@@ -86,7 +98,13 @@ export default function PlanCutReportPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [dashboard, setDashboard] = useState<PlanDashboard | null>(null);
+  const isAdmin = typeof window !== "undefined" && localStorage.getItem("username") === "admin";
   const [loading, setLoading] = useState(true);
+
+  // ── Remove modal state ────────────────────────────────────────────────────
+  const [showRemoveModal, setShowRemoveModal] = useState(false);
+  const [selectedBarcodes, setSelectedBarcodes] = useState<Set<string>>(new Set());
+  const [removeLoading, setRemoveLoading] = useState(false);
 
   const fetchDashboard = async () => {
     setLoading(true);
@@ -106,6 +124,57 @@ export default function PlanCutReportPage() {
   useEffect(() => {
     if (id) fetchDashboard();
   }, [id]);
+
+  // All pending (red) barcode IDs across all jumbo groups
+  const pendingBarcodes = dashboard
+    ? dashboard.jumbo_groups.flatMap(g =>
+        g.rolls.filter(r => r.weight_kg <= 1).map(r => r.barcode_id)
+      ).filter(Boolean)
+    : [];
+
+  const allSelected = pendingBarcodes.length > 0 && pendingBarcodes.every(b => selectedBarcodes.has(b));
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedBarcodes(new Set());
+    } else {
+      setSelectedBarcodes(new Set(pendingBarcodes));
+    }
+  };
+
+  const toggleBarcode = (barcode: string) => {
+    setSelectedBarcodes(prev => {
+      const next = new Set(prev);
+      if (next.has(barcode)) next.delete(barcode);
+      else next.add(barcode);
+      return next;
+    });
+  };
+
+  const handleOpenRemoveModal = () => {
+    setSelectedBarcodes(new Set());
+    setShowRemoveModal(true);
+  };
+
+  const handleBulkRemove = async () => {
+    if (selectedBarcodes.size === 0) return;
+    setRemoveLoading(true);
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/cut-rolls/bulk-mark-removed`,
+        createRequestOptions("POST", { barcode_ids: Array.from(selectedBarcodes) })
+      );
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.detail || "Failed");
+      toast.success(result.message || `${result.updated_count} roll(s) marked as removed`);
+      setShowRemoveModal(false);
+      fetchDashboard();
+    } catch (e: any) {
+      toast.error(e.message || "Failed to mark rolls as removed");
+    } finally {
+      setRemoveLoading(false);
+    }
+  };
 
   const metrics = dashboard
     ? [
@@ -181,6 +250,18 @@ export default function PlanCutReportPage() {
               },
             ]
           : []),
+        ...((dashboard.summary.removed ?? 0) > 0
+          ? [
+              {
+                label: "Manually Completed",
+                value: dashboard.summary.removed,
+                sub: "",
+                icon: Trash2,
+                border: "border-l-orange-400",
+                text: "text-orange-700",
+              },
+            ]
+          : []),
       ]
     : [];
 
@@ -206,16 +287,29 @@ export default function PlanCutReportPage() {
               </span>
             )}
           </h1>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchDashboard}
-            disabled={loading}
-            className="ml-auto h-8"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
+          <div className="ml-auto flex items-center gap-2">
+            {isAdmin && dashboard && pendingBarcodes.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleOpenRemoveModal}
+                className="h-8 border-red-300 text-red-600 hover:bg-red-50"
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                Mark Manually Completed ({pendingBarcodes.length})
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchDashboard}
+              disabled={loading}
+              className="h-8"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         {/* ── Loading ──────────────────────────────────────────────────────── */}
@@ -278,7 +372,7 @@ export default function PlanCutReportPage() {
 
             {/* Jumbo groups */}
             <div className="space-y-3">
-              {dashboard.jumbo_groups.map((group) => {
+              {[...dashboard.jumbo_groups].sort((a, b) => Number(a.summary.is_complete) - Number(b.summary.is_complete)).map((group) => {
                 const JUMBO_WIDTH = 123;
                 const setMap = new Map<string, CutRoll[]>();
                 for (const roll of group.rolls) {
@@ -431,6 +525,70 @@ export default function PlanCutReportPage() {
           </>
         )}
       </div>
+
+      {/* ── Mark Manually Completed Modal ───────────────────────────────────── */}
+      <Dialog open={showRemoveModal} onOpenChange={setShowRemoveModal}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-4 w-4 text-orange-500" />
+              Mark Rolls as Manually Completed
+            </DialogTitle>
+            <DialogDescription>
+              Select pending (red) barcode IDs to mark as manually completed. Their weight will be set to 2kg and they will count toward plan completion.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {/* Select All */}
+            <div className="flex items-center justify-between border-b pb-2">
+              <label className="flex items-center gap-2 cursor-pointer text-sm font-medium">
+                <Checkbox
+                  checked={allSelected}
+                  onCheckedChange={toggleSelectAll}
+                />
+                Select All ({pendingBarcodes.length})
+              </label>
+              <span className="text-xs text-muted-foreground">{selectedBarcodes.size} selected</span>
+            </div>
+
+            {/* Barcode list */}
+            <div className="max-h-72 overflow-y-auto space-y-1">
+              {pendingBarcodes.length === 0 ? (
+                <p className="text-center text-sm text-muted-foreground py-6">No pending rolls found.</p>
+              ) : (
+                pendingBarcodes.map(barcode => (
+                  <label
+                    key={barcode}
+                    className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer"
+                  >
+                    <Checkbox
+                      checked={selectedBarcodes.has(barcode)}
+                      onCheckedChange={() => toggleBarcode(barcode)}
+                    />
+                    <span className="font-mono text-sm">{barcode}</span>
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRemoveModal(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={handleBulkRemove}
+              disabled={selectedBarcodes.size === 0 || removeLoading}
+            >
+              {removeLoading ? (
+                <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Marking...</>
+              ) : (
+                `Mark ${selectedBarcodes.size} Roll${selectedBarcodes.size !== 1 ? "s" : ""} as Manually Completed`
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
