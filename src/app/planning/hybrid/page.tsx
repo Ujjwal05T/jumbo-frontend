@@ -136,6 +136,18 @@ function transformToNestedStructure(
 ): HybridPlanState {
   const paperSpecMap = new Map<string, PaperSpecGroup>();
 
+  // Build ordered unique roll numbers per spec in the order they appear in
+  // cut_rolls_generated (backend already sorts by wastage ascending).
+  // We use this position-based index to assign jumbos, NOT the raw roll number.
+  const specRollOrder = new Map<string, number[]>();
+  result.cut_rolls_generated.forEach((roll) => {
+    const specKey = `${roll.gsm}-${roll.bf}-${roll.shade}`;
+    if (!specRollOrder.has(specKey)) specRollOrder.set(specKey, []);
+    const rollNum = roll.individual_roll_number || 1;
+    const ordered = specRollOrder.get(specKey)!;
+    if (!ordered.includes(rollNum)) ordered.push(rollNum);
+  });
+
   result.cut_rolls_generated.forEach((roll, index) => {
     const specKey = `${roll.gsm}-${roll.bf}-${roll.shade}`;
 
@@ -152,8 +164,10 @@ function transformToNestedStructure(
     const spec = paperSpecMap.get(specKey)!;
 
     const rollNum = roll.individual_roll_number || 1;
-    const jumboNumber = Math.ceil(rollNum / 3);
-    const setNumber = ((rollNum - 1) % 3) + 1;
+    const orderedRollNums = specRollOrder.get(specKey)!;
+    const rollPosition = orderedRollNums.indexOf(rollNum); // position in wastage-sorted order
+    const jumboNumber = Math.floor(rollPosition / 3) + 1;
+    const setNumber = (rollPosition % 3) + 1;
 
     let jumbo = spec.jumbos.find(j => j.jumboNumber === jumboNumber);
     if (!jumbo) {
@@ -365,6 +379,7 @@ function RollSet({
   onEditCut,
   onDeleteCut,
   onAddCut,
+  paperSpec,
 }: {
   set: RollSetGroup;
   planningWidth: number;
@@ -373,6 +388,7 @@ function RollSet({
   onEditCut: (cutId: string) => void;
   onDeleteCut: (cutId: string) => void;
   onAddCut: (setId: string) => void;
+  paperSpec?: { gsm: number; bf: number; shade: string };
 }) {
   const totalWidth = getTotalWidthForSet(set);
   const remainingWidth = getRemainingWidthForSet(set, planningWidth);
@@ -389,6 +405,11 @@ function RollSet({
             {set.setNumber}
           </div>
           <span className="font-medium">Set #{set.setNumber}</span>
+          {paperSpec && (
+            <Badge className="text-xs bg-blue-100 text-blue-800 border border-blue-300 font-semibold">
+              {paperSpec.gsm}gsm / {paperSpec.bf}bf / {paperSpec.shade}
+            </Badge>
+          )}
           {!isSelected && (
             <Badge variant="secondary" className="text-xs">
               Excluded
@@ -405,6 +426,7 @@ function RollSet({
           <span className="text-sm text-gray-500">
             {totalWidth}" / {planningWidth}" ({remainingWidth}" free)
           </span>
+
           <Button
             variant="outline"
             size="sm"
@@ -747,17 +769,9 @@ export default function HybridPlanningPage() {
 
       setPlanState(nestedState);
 
-      // Expand all specs by default
-      const allSpecIds = new Set(nestedState.paperSpecs.map(s => s.id));
-      setExpandedSpecs(allSpecIds);
-
-      // Expand all jumbos by default
+      setExpandedSpecs(new Set());
       const allJumboIds = new Set<string>();
-      nestedState.paperSpecs.forEach(spec => {
-        spec.jumbos.forEach(jumbo => {
-          allJumboIds.add(jumbo.id);
-        });
-      });
+      nestedState.paperSpecs.forEach(spec => spec.jumbos.forEach(jumbo => allJumboIds.add(jumbo.id)));
       setExpandedJumbos(allJumboIds);
 
       // Select all sets by default
@@ -780,6 +794,20 @@ export default function HybridPlanningPage() {
     } finally {
       setGenerating(false);
     }
+  };
+
+  const handleToggleJumbo = (jumbo: { sets: { id: string }[] }) => {
+    const setIds = jumbo.sets.map(s => s.id);
+    const allSelected = setIds.every(id => selectedSets.has(id));
+    setSelectedSets(prev => {
+      const newSet = new Set(prev);
+      if (allSelected) {
+        setIds.forEach(id => newSet.delete(id));
+      } else {
+        setIds.forEach(id => newSet.add(id));
+      }
+      return newSet;
+    });
   };
 
   const handleToggleSet = (setId: string) => {
@@ -1352,7 +1380,7 @@ export default function HybridPlanningPage() {
                   trim_left: cut.trimLeft || 0,
                 }))
               }))
-          }))
+          })).filter(jumbo => jumbo.sets.length > 0)
         })),
         orphaned_rolls: planState.orphanedRolls.map(orphan => ({
           width_inches: orphan.width,
@@ -1884,7 +1912,11 @@ export default function HybridPlanningPage() {
               )}
 
               {/* Main Editor - Full Width */}
-              {planState.paperSpecs.map((spec) => (
+              {planState.paperSpecs.map((spec) => {
+                const specPending = (planState.pendingOrders || []).filter(
+                  p => p.gsm === spec.gsm && p.bf === spec.bf && p.shade === spec.shade
+                );
+                return (
                 <Card key={spec.id}>
                   <CardHeader
                     className="cursor-pointer"
@@ -1901,10 +1933,27 @@ export default function HybridPlanningPage() {
                           {spec.gsm}gsm, {spec.bf}bf, {spec.shade}
                         </CardTitle>
                       </div>
-                      <Badge variant="outline">
-                        {spec.jumbos.length} jumbos
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        {specPending.length > 0 && (
+                          <Badge className="bg-orange-100 text-orange-800 border border-orange-300 font-semibold">
+                            {specPending.length} pending
+                          </Badge>
+                        )}
+                        <Badge variant="outline">
+                          {spec.jumbos.length} jumbos
+                        </Badge>
+                      </div>
                     </div>
+                    {specPending.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2" onClick={e => e.stopPropagation()}>
+                        {specPending.map((p, i) => (
+                          <div key={i} className="text-xs bg-orange-50 border border-orange-200 rounded px-2 py-1 text-orange-800 flex items-center gap-1">
+                            <span className="bg-orange-500 text-white rounded-full w-4 h-4 flex items-center justify-center font-bold text-[10px]">P</span>
+                            <span className="font-semibold">{p.width}"</span> × {p.quantity} — {p.client_name || 'N/A'}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </CardHeader>
 
                   {expandedSpecs.has(spec.id) && (
@@ -1916,6 +1965,17 @@ export default function HybridPlanningPage() {
                             onClick={() => toggleJumboExpand(jumbo.id)}
                           >
                             <div className="flex items-center gap-2">
+                              <Checkbox
+                                checked={
+                                  jumbo.sets.length > 0 && jumbo.sets.every(s => selectedSets.has(s.id))
+                                    ? true
+                                    : jumbo.sets.some(s => selectedSets.has(s.id))
+                                    ? 'indeterminate'
+                                    : false
+                                }
+                                onCheckedChange={() => handleToggleJumbo(jumbo)}
+                                onClick={e => e.stopPropagation()}
+                              />
                               {expandedJumbos.has(jumbo.id) ? (
                                 <ChevronDown className="h-4 w-4" />
                               ) : (
@@ -1930,7 +1990,7 @@ export default function HybridPlanningPage() {
 
                           {expandedJumbos.has(jumbo.id) && (
                             <div className="space-y-4">
-                              {jumbo.sets.map((set) => (
+                              {[...jumbo.sets].sort((a, b) => getRemainingWidthForSet(a, planningWidth) - getRemainingWidthForSet(b, planningWidth)).map((set) => (
                                 <RollSet
                                   key={set.id}
                                   set={set}
@@ -1940,6 +2000,7 @@ export default function HybridPlanningPage() {
                                   onEditCut={handleEditCut}
                                   onDeleteCut={handleDeleteCut}
                                   onAddCut={handleAddCut}
+                                  paperSpec={{ gsm: spec.gsm, bf: spec.bf, shade: spec.shade }}
                                 />
                               ))}
                             </div>
@@ -1958,7 +2019,8 @@ export default function HybridPlanningPage() {
                     </CardContent>
                   )}
                 </Card>
-              ))}
+              );
+              })}
             </div>
           )}
         </TabsContent>

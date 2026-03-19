@@ -50,6 +50,7 @@ import {
   ChevronDown,
   ChevronRight,
   Pencil,
+  Copy,
 } from "lucide-react";
 
 // Types
@@ -310,6 +311,36 @@ export default function ManualPlanningPage() {
     setRollSets(rollSets.filter(s => s.id !== setId));
     setCutRolls(cutRolls.filter(c => c.rollSetId !== setId));
     toast.success("Roll set deleted");
+  };
+
+  // Copy dialog state
+  const [showCopyDialog, setShowCopyDialog] = useState(false);
+  const [copySourceSetId, setCopySourceSetId] = useState<string>("");
+  const [copyTargetSetId, setCopyTargetSetId] = useState<string>("");
+
+  const handleCopyRollSet = (setId: string) => {
+    const sourceSet = rollSets.find(s => s.id === setId);
+    if (!sourceSet) return;
+    const cutsForSet = cutRolls.filter(c => c.rollSetId === setId);
+    if (cutsForSet.length === 0) { toast.error("No cuts to copy"); return; }
+    const otherSets = rollSets.filter(s => s.jumboRollId === sourceSet.jumboRollId && s.id !== setId && rollSets.filter(r => r.jumboRollId === sourceSet.jumboRollId).length <= 3);
+    if (otherSets.length === 0) { toast.error("No other sets to copy into"); return; }
+    setCopySourceSetId(setId);
+    setCopyTargetSetId(otherSets[0].id);
+    setShowCopyDialog(true);
+  };
+
+  const handleConfirmCopy = () => {
+    const cutsForSet = cutRolls.filter(c => c.rollSetId === copySourceSetId);
+    const newCuts: CutRoll[] = cutsForSet.map((c, i) => ({
+      ...c,
+      id: `cut-${Date.now()}-${i}-copy`,
+      rollSetId: copyTargetSetId,
+    }));
+    // Replace cuts in target set
+    setCutRolls(prev => [...prev.filter(c => c.rollSetId !== copyTargetSetId), ...newCuts]);
+    setShowCopyDialog(false);
+    toast.success("Cuts copied to set");
   };
 
   // Delete Paper Spec
@@ -987,6 +1018,16 @@ export default function ManualPlanningPage() {
                                               </div>
                                             </div>
                                             <div className="flex gap-1">
+                                              {cutsForSet.length > 0 && (
+                                                <Button
+                                                  variant="outline"
+                                                  size="sm"
+                                                  onClick={() => handleCopyRollSet(rollSet.id)}
+                                                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-9 shrink-0">
+                                                    Copy
+                                                  <Copy className="h-3 w-3" />
+                                                </Button>
+                                              )}
                                               <Button
                                                 variant="ghost"
                                                 size="sm"
@@ -1074,6 +1115,27 @@ export default function ManualPlanningPage() {
                                         </div>
                                       );
                                     })}
+                                  {setsForJumbo.length < 3 && (
+                                    <div className="flex justify-center pt-1">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                          const maxSetNum = Math.max(...setsForJumbo.map(s => s.setNumber), 0);
+                                          setRollSets(prev => [...prev, {
+                                            id: `rollset-${Date.now()}-new`,
+                                            jumboRollId: jumbo.id,
+                                            setNumber: maxSetNum + 1,
+                                            createdAt: new Date(),
+                                          }]);
+                                          toast.success("Empty set added");
+                                        }}
+                                        className="border-dashed text-muted-foreground hover:text-foreground text-xs">
+                                        <Plus className="h-3 w-3 mr-1" />
+                                        Add Empty Set
+                                      </Button>
+                                    </div>
+                                  )}
                                   </div>
                               </div>
                             );
@@ -1312,6 +1374,45 @@ export default function ManualPlanningPage() {
               className="bg-green-600 hover:bg-green-700 w-full sm:w-auto">
               {creatingPlan ? "Creating..." : "Confirm & Create"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Copy Set Dialog */}
+      <Dialog open={showCopyDialog} onOpenChange={setShowCopyDialog}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Copy Cuts To Set</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Select which set to copy the cuts into. Existing cuts in the target set will be replaced.
+            </p>
+            <div>
+              <Label>Target Set</Label>
+              <Select value={copyTargetSetId} onValueChange={setCopyTargetSetId}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Select a set" />
+                </SelectTrigger>
+                <SelectContent>
+                  {copySourceSetId && (() => {
+                    const sourceSet = rollSets.find(s => s.id === copySourceSetId);
+                    if (!sourceSet) return null;
+                    return rollSets
+                      .filter(s => s.jumboRollId === sourceSet.jumboRollId && s.id !== copySourceSetId)
+                      .map(s => (
+                        <SelectItem key={s.id} value={s.id}>
+                          Set #{s.setNumber} ({cutRolls.filter(c => c.rollSetId === s.id).length} cuts)
+                        </SelectItem>
+                      ));
+                  })()}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCopyDialog(false)}>Cancel</Button>
+            <Button onClick={handleConfirmCopy} disabled={!copyTargetSetId}>Copy</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

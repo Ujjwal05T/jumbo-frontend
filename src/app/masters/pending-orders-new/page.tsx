@@ -3,7 +3,7 @@
  */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import jsPDF from "jspdf";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -237,8 +237,9 @@ interface EditableCutRoll {
   quantity: number;
   clientName: string;
   clientId?: string;
-  source: 'algorithm' | 'manual';
+  source: 'algorithm' | 'manual' | 'manual_order';
   order_id?: string;
+  order_item_id?: string;
   order_frontend_id?: string;
   source_pending_id?: string;
   gsm?: number;
@@ -484,7 +485,11 @@ export default function PendingOrderItemsPage() {
   const [editablePlan, setEditablePlan] = useState<EditablePlanState | null>(null);
   const [showAddCutDialog, setShowAddCutDialog] = useState(false);
   const [showEditCutDialog, setShowEditCutDialog] = useState(false);
-  const [cutRollForm, setCutRollForm] = useState({ width: '', quantity: '1', clientId: '' });
+  const [cutRollForm, setCutRollForm] = useState({ width: '', quantity: '1', clientId: '', orderId: '', orderItemId: '' });
+  const [activeOrders, setActiveOrders] = useState<any[]>([]);
+  const [activeOrdersLoading, setActiveOrdersLoading] = useState(false);
+  const [addCutTab, setAddCutTab] = useState<'manual' | 'order'>('manual');
+  const [suggestionQuantities, setSuggestionQuantities] = useState<Record<string, string>>({});
   const [editingCut, setEditingCut] = useState<EditableCutRoll | null>(null);
   const [currentSetId, setCurrentSetId] = useState<string | null>(null);
   const [currentPaperSpec, setCurrentPaperSpec] = useState<{ gsm: number; bf: number; shade: string } | null>(null);
@@ -1259,6 +1264,30 @@ const handlePrintPDF = () => {
     }
   };
 
+  const fetchActiveOrders = async (paperSpec: { gsm: number; bf: number; shade: string }) => {
+    setActiveOrdersLoading(true);
+    try {
+      const resp = await fetch(`${MASTER_ENDPOINTS.ORDERS}?limit=100`, createRequestOptions('GET'));
+      if (resp.ok) {
+        const data = await resp.json();
+        const orders = Array.isArray(data) ? data.filter((o: any) => o.status === "created") : data.orders || [];
+        setActiveOrders(
+          orders.filter((o: any) =>
+            o.order_items?.some((item: any) =>
+              item.paper?.gsm === paperSpec.gsm &&
+              item.paper?.bf === paperSpec.bf &&
+              item.paper?.shade === paperSpec.shade &&
+              (item.quantity_fulfilled || 0) < item.quantity_rolls
+            )
+          )
+        );
+      }
+    } catch (e) {
+      console.error('Failed to fetch active orders:', e);
+    }
+    setActiveOrdersLoading(false);
+  };
+
   const handleManualRollSubmit = () => {
     const width = parseFloat(manualRollData.width);
     if (isNaN(width) || width <= 0) {
@@ -1990,16 +2019,90 @@ const handlePrintPDF = () => {
     toast.info(isAlgo ? 'Roll moved to orphaned panel' : 'Manual roll deleted');
   };
 
+  // Count manual_order cuts already added per order_item_id to track remaining quantity
+  const manualOrderCutCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    if (!editablePlan) return counts;
+    for (const spec of editablePlan.paperSpecs) {
+      for (const jumbo of spec.jumbos) {
+        for (const set of jumbo.sets) {
+          for (const cut of set.cuts) {
+            if (cut.source === 'manual_order' && cut.order_item_id) {
+              counts[cut.order_item_id] = (counts[cut.order_item_id] || 0) + cut.quantity;
+            }
+          }
+        }
+      }
+    }
+    return counts;
+  }, [editablePlan]);
+
+  const handleAddFromOrderSuggestion = (orderId: string, orderItemId: string, width: number, quantity: number) => {
+    if (!editablePlan || !currentSetId) return;
+
+    let targetSet: EditableRollSet | null = null;
+    for (const spec of editablePlan.paperSpecs) {
+      for (const jumbo of spec.jumbos) {
+        const s = jumbo.sets.find(s => s.id === currentSetId);
+        if (s) { targetSet = s; break; }
+      }
+    }
+    if (!targetSet) return;
+
+    if (_setTotalWidth(targetSet) + width * quantity > editablePlan.targetWidth) {
+      toast.error(`Cannot add: would exceed ${editablePlan.targetWidth}"`);
+      return;
+    }
+
+    const order = activeOrders.find((o: any) => o.id === orderId);
+    const newCuts: EditableCutRoll[] = Array.from({ length: quantity }, (_, i) => ({
+      id: `cut-${_genId()}-${i}`,
+      width,
+      quantity: 1,
+      clientName: order?.client?.company_name || '',
+      clientId: order?.client_id,
+      source: 'manual_order' as const,
+      order_id: orderId,
+      order_item_id: orderItemId,
+      order_frontend_id: order?.frontend_id,
+      gsm: currentPaperSpec?.gsm,
+      bf: currentPaperSpec?.bf,
+      shade: currentPaperSpec?.shade,
+    }));
+
+    setEditablePlan(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        paperSpecs: prev.paperSpecs.map(spec => ({
+          ...spec,
+          jumbos: spec.jumbos.map(j => ({
+            ...j,
+            sets: j.sets.map(s => s.id === currentSetId ? { ...s, cuts: [...s.cuts, ...newCuts] } : s),
+          })),
+        })),
+        isModified: true,
+      };
+    });
+
+    setShowAddCutDialog(false);
+    toast.success(`Added ${quantity} roll${quantity > 1 ? 's' : ''} from order ${order?.frontend_id || ''}`);
+  };
+
   const handleAddCut = (setId: string) => {
     if (!editablePlan) return;
     setCurrentSetId(setId);
-    setCutRollForm({ width: '', quantity: '1', clientId: '' });
+    setCutRollForm({ width: '', quantity: '1', clientId: '', orderId: '', orderItemId: '' });
     setClientSuggestions([]);
+    setActiveOrders([]);
+    setAddCutTab('manual');
+    setSuggestionQuantities({});
     for (const spec of editablePlan.paperSpecs) {
       for (const jumbo of spec.jumbos) {
         if (jumbo.sets.some(s => s.id === setId)) {
           setCurrentPaperSpec({ gsm: spec.gsm, bf: spec.bf, shade: spec.shade });
           fetchClientSuggestions(editablePlan.targetWidth || 118, { gsm: spec.gsm, bf: spec.bf, shade: spec.shade });
+          fetchActiveOrders({ gsm: spec.gsm, bf: spec.bf, shade: spec.shade });
           break;
         }
       }
@@ -2067,13 +2170,18 @@ const handlePrintPDF = () => {
       toast.error(`Exceeds ${editablePlan.targetWidth}" limit`); return;
     }
     const client = clients.find(c => c.id === cutRollForm.clientId);
+    const isOrderLinked = !!(cutRollForm.orderId && cutRollForm.orderItemId);
+    const linkedOrder = isOrderLinked ? activeOrders.find((o: any) => o.id === cutRollForm.orderId) : null;
     const newCuts: EditableCutRoll[] = Array.from({ length: quantity }, (_, i) => ({
       id: `cut-${_genId()}-${i}`,
       width,
       quantity: 1,
       clientName: client?.company_name || '',
       clientId: cutRollForm.clientId || undefined,
-      source: 'manual' as const,
+      source: isOrderLinked ? ('manual_order' as const) : ('manual' as const),
+      order_id: isOrderLinked ? cutRollForm.orderId : undefined,
+      order_item_id: isOrderLinked ? cutRollForm.orderItemId : undefined,
+      order_frontend_id: linkedOrder?.frontend_id,
       gsm: currentPaperSpec?.gsm,
       bf: currentPaperSpec?.bf,
       shade: currentPaperSpec?.shade,
@@ -2105,7 +2213,7 @@ const handlePrintPDF = () => {
           if (c) {
             if (c.source === 'algorithm') { toast.error('Algorithm rolls cannot be edited — only deleted.'); return; }
             setEditingCut(c);
-            setCutRollForm({ width: c.width.toString(), quantity: c.quantity.toString(), clientId: c.clientId || '' });
+            setCutRollForm({ width: c.width.toString(), quantity: c.quantity.toString(), clientId: c.clientId || '', orderId: '', orderItemId: '' });
             setShowEditCutDialog(true);
             return;
           }
@@ -2281,6 +2389,23 @@ const handlePrintPDF = () => {
                     source_type: 'pending_order',
                     source_pending_id: cut.source_pending_id,
                     order_id: originalOrderId,  // ✅ Use looked-up order_id
+                  });
+                }
+              } else if (cut.source === 'manual_order' && cut.order_id && cut.order_item_id) {
+                // Manual roll linked to an existing active order
+                for (let i = 0; i < cut.quantity; i++) {
+                  selectedCutRolls.push({
+                    paper_id: '',
+                    width_inches: cut.width,
+                    qr_code: `ORDER_CUT_${Date.now()}_${Math.random().toString(36).substr(2, 4)}_${selectedCutRolls.length}`,
+                    gsm: spec.gsm,
+                    bf: spec.bf,
+                    shade: spec.shade,
+                    individual_roll_number: rollNumber,
+                    trim_left: null,
+                    source_type: 'regular_order',
+                    order_id: cut.order_id,
+                    order_item_id: cut.order_item_id,
                   });
                 }
               } else {
@@ -2730,6 +2855,23 @@ const handlePrintPDF = () => {
               );
             })()}
 
+            {/* ── Tabs: Manual / From Active Order ── */}
+            <div className="flex gap-1 border-b mb-3">
+              <button
+                className={`px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${addCutTab === 'manual' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+                onClick={() => setAddCutTab('manual')}
+              >
+                Manual
+              </button>
+              <button
+                className={`px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${addCutTab === 'order' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+                onClick={() => setAddCutTab('order')}
+              >
+                From Active Order
+              </button>
+            </div>
+
+            {addCutTab === 'manual' ? (<>
             {/* ── Manual roll form ── */}
             <div className="space-y-4 py-2">
               <div className="grid grid-cols-2 gap-4">
@@ -2756,7 +2898,7 @@ const handlePrintPDF = () => {
               </div>
               <div>
                 <Label htmlFor="add-client">Client <span className="text-red-500">*</span></Label>
-                <Select value={cutRollForm.clientId} onValueChange={v => setCutRollForm(f => ({ ...f, clientId: v }))} required>
+                <Select value={cutRollForm.clientId} onValueChange={v => setCutRollForm(f => ({ ...f, clientId: v, orderId: '', orderItemId: '' }))} required>
                   <SelectTrigger id="add-client">
                     <SelectValue placeholder="Select client (required)" />
                   </SelectTrigger>
@@ -2836,10 +2978,88 @@ const handlePrintPDF = () => {
                 </div>
               </div>
             ) : null}
+            </>) : (
+            /* ── From Active Order tab ── */
+            <div className="py-2">
+              {activeOrdersLoading ? (
+                <div className="flex items-center justify-center p-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-sm text-muted-foreground">Loading active orders...</span>
+                </div>
+              ) : (() => {
+                const suggestions = activeOrders.flatMap((order: any) =>
+                  (order.order_items || [])
+                    .filter((item: any) => {
+                      const alreadyAdded = manualOrderCutCounts[item.id] || 0;
+                      const remaining = item.quantity_rolls - (item.quantity_fulfilled || 0) - alreadyAdded;
+                      return (
+                        item.paper?.gsm === currentPaperSpec?.gsm &&
+                        item.paper?.bf === currentPaperSpec?.bf &&
+                        item.paper?.shade === currentPaperSpec?.shade &&
+                        remaining > 0
+                      );
+                    })
+                    .map((item: any) => ({
+                      order,
+                      item,
+                      remaining: item.quantity_rolls - (item.quantity_fulfilled || 0) - (manualOrderCutCounts[item.id] || 0),
+                    }))
+                ).sort((a: any, b: any) => b.item.width_inches - a.item.width_inches);
+
+                if (suggestions.length === 0) {
+                  return (
+                    <p className="text-sm text-muted-foreground text-center py-6">
+                      No active orders matching this paper spec
+                    </p>
+                  );
+                }
+
+                return (
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    {suggestions.map(({ order, item, remaining }: any) => {
+                      const qtyValue = suggestionQuantities[item.id] ?? '1';
+                      const parsedQty = Math.min(Math.max(parseInt(qtyValue) || 1, 1), remaining);
+                      return (
+                        <div key={item.id} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm gap-3">
+                          <div className="flex-1 min-w-0">
+                            <span className="font-medium">{item.width_inches}"</span>
+                            <span className="text-muted-foreground ml-2">
+                              {remaining} remaining · {order.frontend_id || order.id.slice(0, 8)}
+                            </span>
+                            <div className="text-xs text-muted-foreground mt-0.5 truncate">{order.client?.company_name}</div>
+                          </div>
+                          <input
+                            type="number"
+                            min={1}
+                            max={remaining}
+                            value={qtyValue}
+                            onChange={e => setSuggestionQuantities(prev => ({ ...prev, [item.id]: e.target.value }))}
+                            onClick={e => e.stopPropagation()}
+                            className="w-14 h-7 rounded border px-2 text-sm text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleAddFromOrderSuggestion(order.id, item.id, item.width_inches, parsedQty)}
+                            className="text-xs text-green-600 font-medium shrink-0 hover:text-green-700"
+                          >
+                            + Add
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+            )}
 
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowAddCutDialog(false)}>Cancel</Button>
-              <Button onClick={handleSaveNewCut} disabled={!cutRollForm.clientId || !cutRollForm.width}>Add Roll</Button>
+              {addCutTab === 'manual' && (
+                <Button onClick={handleSaveNewCut} disabled={!cutRollForm.clientId || !cutRollForm.width}>
+                  Add Roll
+                </Button>
+              )}
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -3378,8 +3598,12 @@ const handlePrintPDF = () => {
                                       {set.cuts.map(cut => (
                                         <div key={cut.id} className="flex items-center justify-between text-sm bg-white border rounded px-2 py-1">
                                           <div className="flex items-center gap-2 min-w-0">
-                                            <Badge variant="outline" className={cut.source === 'manual' ? 'border-blue-400 text-blue-700 shrink-0' : 'border-gray-300 text-gray-600 shrink-0'}>
-                                              {cut.source === 'manual' ? 'Manual' : 'Pending'}
+                                            <Badge variant="outline" className={
+                                              cut.source === 'manual' ? 'border-blue-400 text-blue-700 shrink-0' :
+                                              cut.source === 'manual_order' ? 'border-green-400 text-green-700 shrink-0' :
+                                              'border-gray-300 text-gray-600 shrink-0'
+                                            }>
+                                              {cut.source === 'manual' ? 'Manual' : cut.source === 'manual_order' ? 'Linked' : 'Pending'}
                                             </Badge>
                                             <span className="font-medium shrink-0">{cut.width}"</span>
                                             {cut.quantity > 1 && <span className="text-muted-foreground shrink-0">×{cut.quantity}</span>}
