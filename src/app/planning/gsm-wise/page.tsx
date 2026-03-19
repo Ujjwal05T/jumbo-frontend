@@ -1,15 +1,29 @@
+/**
+ * GSM-WISE PLANNING PAGE
+ *
+ * NOTE: This page was copied from the Hybrid Plan page (/planning/hybrid/page.tsx).
+ * As a result, variable names, method names, and internal references still use "hybrid"
+ * terminology (e.g. HybridPlanState, handleGeneratePlan, hybridRequest, etc.).
+ * However, the workflow is fundamentally different from hybrid:
+ *
+ * - INPUT: User selects paper specifications (not orders). Orders are resolved
+ *   automatically by the backend from the selected paper specs.
+ * - GENERATE PLAN: Calls POST /workflow/gsm-wise-process (not /workflow/process-orders).
+ *   Only order items matching the selected paper specs are included in the plan.
+ * - START PRODUCTION: Calls POST /plans/gsm-wise/start-production (not /plans/hybrid/start-production).
+ *   Algorithm cuts get weight_kg=2, quantity_fulfilled is always incremented,
+ *   and order status only changes to 'completed' when all items are fulfilled (never 'in_process').
+ */
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { fetchOrders, Order } from "@/lib/orders";
 import { fetchClients, Client } from "@/lib/clients";
+import { fetchPapers, Paper } from "@/lib/papers";
 import {
-  processMultipleOrders,
   OptimizationResult,
-  WorkflowProcessRequest,
   PendingOrder,
 } from "@/lib/new-flow";
 import { API_BASE_URL, MASTER_ENDPOINTS, createRequestOptions } from "@/lib/api-config";
@@ -62,6 +76,7 @@ import {
   Timer,
 } from "lucide-react";
 import { RollbackApiService, RollbackStatus } from "@/lib/rollback-api";
+import { Order } from "@/lib/orders";
 
 // ============================================
 // TYPES
@@ -560,10 +575,14 @@ function PendingOrdersTable({ pendingOrders }: { pendingOrders: PendingOrder[] }
 export default function HybridPlanningPage() {
   const router = useRouter();
 
-  // Order selection state
+  // Paper spec selection state
+  const [papers, setPapers] = useState<Paper[]>([]);
+  const [selectedPaperSpecIds, setSelectedPaperSpecIds] = useState<string[]>([]);
+  const [loadingPapers, setLoadingPapers] = useState(true);
+
+  // Keep orders/selectedOrders for internal use (post-generation linking)
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
-  const [loadingOrders, setLoadingOrders] = useState(true);
 
   // Clients for manual roll assignment
   const [clients, setClients] = useState<Client[]>([]);
@@ -653,44 +672,28 @@ export default function HybridPlanningPage() {
     return counts;
   }, [planState]);
 
-  // Load orders on mount
+  // Load papers and clients on mount
   useEffect(() => {
     const loadData = async () => {
       try {
-        setLoadingOrders(true);
-        const [ordersData, clientsData] = await Promise.all([
-          fetchOrders(),
+        setLoadingPapers(true);
+        const [papersData, clientsData] = await Promise.all([
+          fetchPapers(),
           fetchClients(0, 'active'),
         ]);
-        setOrders(ordersData);
+        setPapers(papersData.filter((p: Paper) => p.status === 'active'));
         setClients(clientsData.sort((a: Client, b: Client) =>
           a.company_name.localeCompare(b.company_name)
         ));
       } catch (error) {
         console.error('Failed to load data:', error);
-        toast.error('Failed to load orders');
+        toast.error('Failed to load paper specs');
       } finally {
-        setLoadingOrders(false);
+        setLoadingPapers(false);
       }
     };
     loadData();
   }, []);
-
-  // Filter orders to show only 'created' status
-  const filteredOrders = useMemo(() => {
-    return orders.filter(order => order.status === 'created');
-  }, [orders]);
-
-  // Calculate total selected quantity
-  const totalSelectedQuantity = useMemo(() => {
-    return selectedOrders.reduce((total, orderId) => {
-      const order = orders.find(o => o.id === orderId);
-      if (!order) return total;
-      return total + (order.order_items?.reduce(
-        (itemTotal, item) => itemTotal + item.quantity_rolls, 0
-      ) || 0);
-    }, 0);
-  }, [selectedOrders, orders]);
 
   // Count pending rolls in plan
   const pendingRollsCount = useMemo(() => {
@@ -720,6 +723,20 @@ export default function HybridPlanningPage() {
     toast.success(`Wastage applied: Planning width is now ${124 - wastageInput}"`);
   };
 
+  const handlePaperSpecSelect = (paperId: string) => {
+    setSelectedPaperSpecIds(prev =>
+      prev.includes(paperId) ? prev.filter(id => id !== paperId) : [...prev, paperId]
+    );
+  };
+
+  const handleSelectAllPapers = () => {
+    if (selectedPaperSpecIds.length === papers.length) {
+      setSelectedPaperSpecIds([]);
+    } else {
+      setSelectedPaperSpecIds(papers.map(p => p.id));
+    }
+  };
+
   const handleOrderSelect = (orderId: string) => {
     setSelectedOrders(prev => {
       if (prev.includes(orderId)) {
@@ -730,16 +747,12 @@ export default function HybridPlanningPage() {
   };
 
   const handleSelectAllOrders = () => {
-    if (selectedOrders.length === filteredOrders.length) {
-      setSelectedOrders([]);
-    } else {
-      setSelectedOrders(filteredOrders.map(o => o.id));
-    }
+    setSelectedOrders([]);
   };
 
   const handleGeneratePlan = async () => {
-    if (selectedOrders.length === 0) {
-      toast.error('Please select at least one order');
+    if (selectedPaperSpecIds.length === 0) {
+      toast.error('Please select at least one paper specification');
       return;
     }
 
@@ -756,16 +769,22 @@ export default function HybridPlanningPage() {
         throw new Error('User not authenticated');
       }
 
-      const request: WorkflowProcessRequest = {
-        order_ids: selectedOrders,
-        user_id: userId,
-        include_pending_orders: includePendingOrders,
-        include_available_inventory: true,
-        include_wastage_allocation: includeWastageAllocation,
-        jumbo_roll_width: planningWidth,
-      };
-
-      const result = await processMultipleOrders(request);
+      const response = await fetch(`${API_BASE_URL}/workflow/gsm-wise-process`,
+        createRequestOptions('POST', {
+          paper_spec_ids: selectedPaperSpecIds,
+          user_id: userId,
+          include_pending_orders: includePendingOrders,
+          include_wastage_allocation: includeWastageAllocation,
+          jumbo_roll_width: planningWidth,
+        })
+      );
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || 'Failed to generate plan');
+      }
+      const result: OptimizationResult = await response.json();
+      // Store resolved order IDs returned by backend for production payload
+      setSelectedOrders((result as any).order_ids || []);
 
       // Transform flat result to nested structure
       const nestedState = transformToNestedStructure(result, planningWidth);
@@ -1423,8 +1442,8 @@ export default function HybridPlanningPage() {
         wastage_allocations: planState.wastageAllocations || [],
       };
 
-      // Call new hybrid endpoint
-      const productionResponse = await fetch(`${API_BASE_URL}/plans/hybrid/start-production`, {
+      // Call gsm-wise production endpoint
+      const productionResponse = await fetch(`${API_BASE_URL}/plans/gsm-wise/start-production`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1606,7 +1625,7 @@ export default function HybridPlanningPage() {
     <div className="space-y-6 m-4 md:m-8">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h1 className="text-2xl md:text-3xl font-bold">Hybrid Planning</h1>
+        <h1 className="text-2xl md:text-3xl font-bold">GSM-Wise Planning</h1>
         <div className="flex flex-col sm:flex-row gap-2">
           <Button variant="outline" onClick={() => router.push("/masters/plans")}>
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -1772,7 +1791,7 @@ export default function HybridPlanningPage() {
                 <div className="flex items-end">
                   <Button
                     onClick={handleGeneratePlan}
-                    disabled={generating || selectedOrders.length === 0 || isEditingWastage}
+                    disabled={generating || selectedPaperSpecIds.length === 0 || isEditingWastage}
                     className="w-full"
                   >
                     {generating ? (
@@ -1806,89 +1825,59 @@ export default function HybridPlanningPage() {
             </CardContent>
           </Card>
 
-          {/* Order Selection */}
+          {/* Paper Spec Selection */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Select Orders</CardTitle>
+                  <CardTitle>Select Paper Specifications</CardTitle>
                   <CardDescription>
-                    Choose orders to include in the plan ({selectedOrders.length} selected, {totalSelectedQuantity} rolls)
+                    Choose paper specs to plan ({selectedPaperSpecIds.length} selected) — orders with matching items will be included automatically
                   </CardDescription>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSelectAllOrders}
-                >
-                  {selectedOrders.length === filteredOrders.length ? 'Deselect All' : 'Select All'}
+                <Button variant="outline" size="sm" onClick={handleSelectAllPapers}>
+                  {selectedPaperSpecIds.length === papers.length ? 'Deselect All' : 'Select All'}
                 </Button>
               </div>
             </CardHeader>
             <CardContent>
-              {loadingOrders ? (
+              {loadingPapers ? (
                 <div className="text-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
-                  <p>Loading orders...</p>
+                  <p>Loading paper specs...</p>
                 </div>
-              ) : filteredOrders.length === 0 ? (
+              ) : papers.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
-                  No orders with 'created' status found.
+                  No active paper specifications found.
                 </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-12"></TableHead>
-                      <TableHead>Order ID</TableHead>
-                      <TableHead>Client</TableHead>
-                      <TableHead>Paper Spec</TableHead>
-                      <TableHead>Total Qty</TableHead>
-                      <TableHead>Priority</TableHead>
+                      <TableHead>GSM</TableHead>
+                      <TableHead>BF</TableHead>
+                      <TableHead>Shade</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredOrders.map((order) => {
-                      const firstItem = order.order_items?.[0];
-                      const paper = firstItem?.paper;
-                      const paperSpec = paper
-                        ? `${paper.gsm}gsm, ${paper.bf}bf, ${paper.shade}`
-                        : 'N/A';
-                      const totalQty = order.order_items?.reduce(
-                        (sum, item) => sum + item.quantity_rolls, 0
-                      ) || 0;
-
-                      return (
-                        <TableRow
-                          key={order.id}
-                          className={`cursor-pointer ${
-                            selectedOrders.includes(order.id) ? 'bg-primary/5' : ''
-                          }`}
-                          onClick={() => handleOrderSelect(order.id)}
-                        >
-                          <TableCell>
-                            <Checkbox
-                              checked={selectedOrders.includes(order.id)}
-                              onCheckedChange={() => handleOrderSelect(order.id)}
-                            />
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {order.frontend_id || order.id.slice(0, 8)}
-                          </TableCell>
-                          <TableCell>{order.client?.company_name || 'N/A'}</TableCell>
-                          <TableCell>{paperSpec}</TableCell>
-                          <TableCell>{totalQty} rolls</TableCell>
-                          <TableCell>
-                            <Badge variant={
-                              order.priority === 'urgent' ? 'destructive' :
-                              order.priority === 'high' ? 'default' : 'secondary'
-                            }>
-                              {order.priority}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                    {papers.map((paper) => (
+                      <TableRow
+                        key={paper.id}
+                        className={`cursor-pointer ${selectedPaperSpecIds.includes(paper.id) ? 'bg-primary/5' : ''}`}
+                        onClick={() => handlePaperSpecSelect(paper.id)}
+                      >
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedPaperSpecIds.includes(paper.id)}
+                            onCheckedChange={() => handlePaperSpecSelect(paper.id)}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">{paper.gsm}</TableCell>
+                        <TableCell>{paper.bf}</TableCell>
+                        <TableCell>{paper.shade}</TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               )}

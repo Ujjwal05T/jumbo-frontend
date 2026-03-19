@@ -51,7 +51,10 @@ import {
   ChevronRight,
   Pencil,
   Copy,
+  Loader2,
+  Target,
 } from "lucide-react";
+import { createRequestOptions } from "@/lib/api-config";
 
 // Types
 interface PaperSpec {
@@ -111,6 +114,10 @@ export default function ManualPlanningPage() {
   const [availableClients, setAvailableClients] = useState<Client[]>([]);
   const [loadingClients, setLoadingClients] = useState(false);
   const [clientSearchTerm, setClientSearchTerm] = useState("");
+
+  // AI client suggestions
+  const [clientSuggestions, setClientSuggestions] = useState<any[]>([]);
+  const [clientSuggestionsLoading, setClientSuggestionsLoading] = useState(false);
 
   // Plan creation
   const [creatingPlan, setCreatingPlan] = useState(false);
@@ -354,6 +361,23 @@ export default function ManualPlanningPage() {
     toast.success("Paper specification deleted");
   };
 
+  const fetchClientSuggestions = async (availableWaste: number, paperSpec: { gsm: number; bf: number; shade: string }) => {
+    if (!availableWaste || availableWaste < 10) { setClientSuggestions([]); return; }
+    setClientSuggestionsLoading(true);
+    try {
+      const response = await fetch(`${MASTER_ENDPOINTS.PENDING_ORDERS}/client-suggestions`,
+        createRequestOptions('POST', { available_waste: availableWaste, paper_specs: paperSpec })
+      );
+      if (response.ok) {
+        const result = await response.json();
+        setClientSuggestions(result.status === 'success' ? (result.suggestions || []) : []);
+      } else {
+        setClientSuggestions([]);
+      }
+    } catch { setClientSuggestions([]); }
+    setClientSuggestionsLoading(false);
+  };
+
   // Open add cut roll dialog
   const handleAddCutToRollSet = (rollSetId: string) => {
     setSelectedRollSetForCut(rollSetId);
@@ -364,6 +388,15 @@ export default function ManualPlanningPage() {
       clientId: "",
       // orderSource: "",
     });
+    setClientSuggestions([]);
+    // Fetch AI suggestions based on paper spec of the roll set's jumbo
+    const rollSet = rollSets.find(s => s.id === rollSetId);
+    const jumbo = rollSet ? jumboRolls.find(j => j.id === rollSet.jumboRollId) : null;
+    const paper = jumbo ? paperSpecs.find(p => p.id === jumbo.paperSpecId) : null;
+    if (paper) {
+      const available = planningWidth - getTotalWidthForRollSet(rollSetId);
+      fetchClientSuggestions(available, { gsm: paper.gsm, bf: paper.bf, shade: paper.shade });
+    }
     setShowAddCutRollDialog(true);
   };
 

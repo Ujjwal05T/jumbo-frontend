@@ -99,6 +99,12 @@ const getNavigationForRole = (role: string | null) => {
       roles: ["admin"],
     },
     {
+      name: "GSM Wise Plan",
+      href: "/planning/gsm-wise",
+      icon: Scissors,
+      roles: ["admin"],
+    },
+    {
       name: "Manual Plan",
       href: "/planning/manual",
       icon: Database,
