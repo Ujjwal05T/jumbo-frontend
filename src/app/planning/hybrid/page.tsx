@@ -80,6 +80,7 @@ interface EditableCutRoll {
   source_type?: 'regular_order' | 'pending_order';
   paper_id?: string;
   selected: boolean;
+  isPendingOrphan?: boolean;
   trimLeft?: number;
   originalWidth?: number;
   originalQuantity?: number;
@@ -218,10 +219,29 @@ function transformToNestedStructure(
     planningWidth,
     selectedOrderIds: [],
     paperSpecs: Array.from(paperSpecMap.values()),
-    orphanedRolls: [],
+    orphanedRolls: (result.pending_orders || []).flatMap((p: any, i: number) =>
+      Array.from({ length: p.quantity || 1 }, (_, j) => ({
+        id: `pending-orphan-${i}-${j}-${generateId()}`,
+        width: p.width,
+        quantity: 1,
+        clientName: p.client_name || '',
+        clientId: p.client_id,
+        source: 'algorithm' as const,
+        order_id: p.order_id,
+        order_item_id: p.order_item_id,
+        source_pending_id: p.source_pending_id,
+        source_type: p.source_type,
+        paper_id: p.paper_id,
+        gsm: p.gsm,
+        bf: p.bf,
+        shade: p.shade,
+        selected: true,
+        isPendingOrphan: true,
+      }))
+    ),
     isGenerated: true,
     isModified: false,
-    pendingOrders: result.pending_orders || [],
+    pendingOrders: [],
     wastageAllocations: result.wastage_allocations || [],
   };
 }
@@ -1647,7 +1667,7 @@ export default function HybridPlanningPage() {
           <CardContent className="py-2">
             <div className="flex gap-3 overflow-x-auto pb-2">
               {planState.orphanedRolls.map((cut) => {
-                const isPending = cut.source_type === 'pending_order' || !!cut.source_pending_id;
+                const isPending = cut.source_type === 'pending_order' || !!cut.source_pending_id || !!cut.isPendingOrphan;
                 return (
                   <div
                     key={cut.id}
@@ -1725,7 +1745,7 @@ export default function HybridPlanningPage() {
             Stock ({planState?.wastageAllocations?.length || 0})
           </TabsTrigger>
           <TabsTrigger value="pending" disabled={!planState}>
-            Pending ({planState?.pendingOrders?.length || 0})
+            Pending
           </TabsTrigger>
           <TabsTrigger value="production" disabled={!productionCreated}>
             Production
@@ -2094,7 +2114,7 @@ export default function HybridPlanningPage() {
                     <>
                         <div className="text-sm flex items-center gap-2 text-orange-700">
                           <AlertTriangle className="h-4 w-4 text-orange-500" />
-                          Orphaned Rolls — Will be moved to pending ({planState.orphanedRolls.length})
+                          Orphaned Rolls — Will be moved to pending
                         </div>
                         <Table>
                           <TableHeader>
@@ -2106,9 +2126,24 @@ export default function HybridPlanningPage() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {planState.orphanedRolls.map((orphan) => (
+                            {Object.values(
+                              planState.orphanedRolls.reduce((acc, orphan) => {
+                                const key = `${orphan.order_item_id || ''}-${orphan.width}-${orphan.clientId || ''}`;
+                                if (acc[key]) {
+                                  acc[key].quantity += orphan.quantity;
+                                } else {
+                                  acc[key] = { ...orphan };
+                                }
+                                return acc;
+                              }, {} as Record<string, any>)
+                            ).map((orphan: any) => (
                               <TableRow key={orphan.id}>
-                                <TableCell className="font-medium">{orphan.width}"</TableCell>
+                                <TableCell className="font-medium flex items-center gap-2">
+                                  {orphan.isPendingOrphan && (
+                                    <span className="bg-orange-500 text-white rounded-full w-4 h-4 flex items-center justify-center font-bold text-[10px]">P</span>
+                                  )}
+                                  {orphan.width}"
+                                </TableCell>
                                 <TableCell>{orphan.quantity}</TableCell>
                                 <TableCell>{orphan.gsm}gsm, {orphan.bf}bf, {orphan.shade}</TableCell>
                                 <TableCell>{orphan.clientName || 'N/A'}</TableCell>
