@@ -2667,17 +2667,17 @@ const handlePrintPDF = () => {
     <DashboardLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="space-y-1">
-            <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-              <Clock className="w-8 h-8 text-primary" />
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
+              <Clock className="w-7 h-7 sm:w-8 sm:h-8 text-primary" />
               Pending Order Items
             </h1>
             <p className="text-muted-foreground">
               Manage order items that couldn&apos;t be fulfilled immediately
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button 
               variant="outline" 
               className="gap-2"
@@ -2710,7 +2710,7 @@ const handlePrintPDF = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Pending Items</CardTitle>
@@ -2804,13 +2804,15 @@ const handlePrintPDF = () => {
 
         {/* ── Add Roll to Set Dialog ── */}
         <Dialog open={showAddCutDialog} onOpenChange={setShowAddCutDialog}>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
+          <DialogContent className="sm:max-w-lg flex flex-col max-h-[90dvh]">
+            <DialogHeader className="shrink-0">
               <DialogTitle>Add Roll to Set</DialogTitle>
               <DialogDescription>
                 {currentPaperSpec && `${currentPaperSpec.shade} ${currentPaperSpec.gsm}GSM — target width ${editablePlan?.targetWidth}"`}
               </DialogDescription>
             </DialogHeader>
+
+            <div className="overflow-y-auto flex-1 min-h-0 space-y-4 pr-1">
 
             {/* ── Orphaned rolls section (same paper spec only) ── */}
             {editablePlan && currentPaperSpec && (() => {
@@ -3053,7 +3055,9 @@ const handlePrintPDF = () => {
             </div>
             )}
 
-            <DialogFooter>
+            </div>
+
+            <DialogFooter className="shrink-0 pt-2 border-t">
               <Button variant="outline" onClick={() => setShowAddCutDialog(false)}>Cancel</Button>
               {addCutTab === 'manual' && (
                 <Button onClick={handleSaveNewCut} disabled={!cutRollForm.clientId || !cutRollForm.width}>
@@ -3445,7 +3449,7 @@ const handlePrintPDF = () => {
             {/* ── Header card ── */}
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div>
                     <CardTitle className="flex items-center gap-2">
                       <Settings className="w-5 h-5" />
@@ -3456,7 +3460,7 @@ const handlePrintPDF = () => {
                       {editablePlan.targetWidth}" target width — delete algorithm rolls to orphan them, add manual rolls, or reassign orphans
                     </CardDescription>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button variant="outline" size="sm" onClick={() => { setShowSuggestions(false); setEditablePlan(null); setSuggestionResult(null); }}>Close</Button>
                     <Button variant="outline" size="sm" onClick={handleGetSuggestions}>Regenerate</Button>
                     <Button
@@ -3489,7 +3493,7 @@ const handlePrintPDF = () => {
                       <div key={spec.id} className="border-2 border-amber-200 rounded-lg bg-amber-50">
                         {/* Spec header - clickable to collapse/expand */}
                         <div
-                          className="flex items-center justify-between p-4 cursor-pointer hover:bg-amber-100 transition-colors"
+                          className="flex flex-wrap items-center justify-between gap-2 p-4 cursor-pointer hover:bg-amber-100 transition-colors"
                           onClick={() => toggleSpecExpand(spec.id)}
                         >
                           <div className="font-semibold text-amber-900 flex items-center gap-2">
@@ -3536,7 +3540,7 @@ const handlePrintPDF = () => {
                               return (
                                 <div key={jumbo.id} className="mb-4 border border-purple-200 rounded-lg p-3 bg-purple-50">
                                   {/* Jumbo header with select all checkbox */}
-                                  <div className="flex items-center justify-between mb-3">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                                     <div className="flex items-center gap-2">
                                       <Checkbox
                                         checked={allSetsSelected}
@@ -3566,7 +3570,7 @@ const handlePrintPDF = () => {
                               return (
                                 <div key={set.id} className={`rounded-lg border p-3 transition-all ${isSelected ? 'border-green-400 bg-white' : 'border-gray-200 bg-gray-50 opacity-60'}`}>
                                   {/* Set header */}
-                                  <div className="flex items-center justify-between mb-2">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                                     <div className="flex items-center gap-2">
                                       <Checkbox
                                         checked={isSelected}
@@ -3703,7 +3707,7 @@ const handlePrintPDF = () => {
         {/* Search and Filters */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <CardTitle>Pending Order Items Queue</CardTitle>
                 <CardDescription>
@@ -3870,7 +3874,7 @@ const handlePrintPDF = () => {
 
                 {/* Filter Summary */}
                 <div className="mt-4 pt-4 border-t border-gray-200">
-                  <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
                     <span>
                       Showing {filteredItems.length} of {displayItems.length} pending items
                     </span>
@@ -3883,7 +3887,7 @@ const handlePrintPDF = () => {
             )}
 
             {/* Pending Orders Table */}
-            <div className="rounded-md border">
+            <div className="rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>

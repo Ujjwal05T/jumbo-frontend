@@ -219,6 +219,7 @@ function transformToNestedStructure(
     planningWidth,
     selectedOrderIds: [],
     paperSpecs: Array.from(paperSpecMap.values()),
+    // orphanedRolls: [],
     orphanedRolls: (result.pending_orders || []).flatMap((p: any, i: number) =>
       Array.from({ length: p.quantity || 1 }, (_, j) => ({
         id: `pending-orphan-${i}-${j}-${generateId()}`,
@@ -227,7 +228,7 @@ function transformToNestedStructure(
         clientName: p.client_name || '',
         clientId: p.client_id,
         source: 'algorithm' as const,
-        order_id: p.order_id,
+        order_id: p.order_id || p.source_order_id,
         order_item_id: p.order_item_id,
         source_pending_id: p.source_pending_id,
         source_type: p.source_type,
@@ -241,6 +242,7 @@ function transformToNestedStructure(
     ),
     isGenerated: true,
     isModified: false,
+    // pendingOrders: result.pending_orders || [],
     pendingOrders: [],
     wastageAllocations: result.wastage_allocations || [],
   };
@@ -2301,13 +2303,15 @@ export default function HybridPlanningPage() {
 
       {/* Add Cut Roll Dialog */}
       <Dialog open={showAddCutDialog} onOpenChange={setShowAddCutDialog}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
+        <DialogContent className="max-w-lg flex flex-col max-h-[90dvh]">
+          <DialogHeader className="shrink-0">
             <DialogTitle>Add Cut Roll</DialogTitle>
             <DialogDescription>
               Add from orphaned rolls or create a new manual roll
             </DialogDescription>
           </DialogHeader>
+
+          <div className="overflow-y-auto flex-1 min-h-0 space-y-4 pr-1">
 
           {/* Orphaned Rolls Section - Only show orphans matching the paper spec */}
           {planState && currentPaperSpec && (() => {
@@ -2543,7 +2547,10 @@ export default function HybridPlanningPage() {
               )}
             </div>
           )}
-          <DialogFooter>
+
+          </div>
+
+          <DialogFooter className="shrink-0 pt-2 border-t">
             <Button variant="outline" onClick={() => setShowAddCutDialog(false)}>
               Cancel
             </Button>

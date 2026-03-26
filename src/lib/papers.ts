@@ -22,6 +22,18 @@ export interface CreatePaperData {
   created_by_id: string;
 }
 
+export interface PaperWithRollsNeeded extends Paper {
+  rolls_needed: number;
+}
+
+export const fetchPapersFromCreatedOrders = async (): Promise<PaperWithRollsNeeded[]> => {
+  const response = await fetch(`${MASTER_ENDPOINTS.PAPERS}/from-created-orders`, createRequestOptions('GET'));
+  if (!response.ok) {
+    throw new Error('Failed to fetch papers from created orders');
+  }
+  return response.json();
+};
+
 export const fetchPapers = async (): Promise<Paper[]> => {
   const response = await fetch(MASTER_ENDPOINTS.PAPERS, createRequestOptions('GET'));
   if (!response.ok) {

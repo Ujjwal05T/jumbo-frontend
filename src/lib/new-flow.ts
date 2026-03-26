@@ -55,6 +55,7 @@ export interface CutRoll {
   trim_left?: number;
   inventory_id?: string;
   order_id?: string;
+  order_item_id?: string;
   client_id?: string;
   paper_id?: string;
   source_type?: string;

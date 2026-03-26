@@ -21,7 +21,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { fetchClients, Client } from "@/lib/clients";
-import { fetchPapers, Paper } from "@/lib/papers";
+import { fetchPapersFromCreatedOrders, PaperWithRollsNeeded } from "@/lib/papers";
 import {
   OptimizationResult,
   PendingOrder,
@@ -210,6 +210,7 @@ function transformToNestedStructure(
       clientId: roll.client_id,
       source: 'algorithm',
       order_id: roll.order_id,
+      order_item_id: roll.order_item_id,
       source_pending_id: roll.source_pending_id,
       source_type: roll.source_type as 'regular_order' | 'pending_order',
       paper_id: roll.paper_id,
@@ -233,10 +234,31 @@ function transformToNestedStructure(
     planningWidth,
     selectedOrderIds: [],
     paperSpecs: Array.from(paperSpecMap.values()),
-    orphanedRolls: [],
+     // orphanedRolls: [],
+    orphanedRolls: (result.pending_orders || []).flatMap((p: any, i: number) =>
+      Array.from({ length: p.quantity || 1 }, (_, j) => ({
+        id: `pending-orphan-${i}-${j}-${generateId()}`,
+        width: p.width,
+        quantity: 1,
+        clientName: p.client_name || '',
+        clientId: p.client_id,
+        source: 'algorithm' as const,
+        order_id: p.order_id || p.source_order_id,
+        order_item_id: p.order_item_id,
+        source_pending_id: p.source_pending_id,
+        source_type: p.source_type,
+        paper_id: p.paper_id,
+        gsm: p.gsm,
+        bf: p.bf,
+        shade: p.shade,
+        selected: true,
+        isPendingOrphan: true,
+      }))
+    ),
     isGenerated: true,
     isModified: false,
-    pendingOrders: result.pending_orders || [],
+    // pendingOrders: result.pending_orders || [],
+    pendingOrders: [],
     wastageAllocations: result.wastage_allocations || [],
   };
 }
@@ -576,7 +598,7 @@ export default function HybridPlanningPage() {
   const router = useRouter();
 
   // Paper spec selection state
-  const [papers, setPapers] = useState<Paper[]>([]);
+  const [papers, setPapers] = useState<PaperWithRollsNeeded[]>([]);
   const [selectedPaperSpecIds, setSelectedPaperSpecIds] = useState<string[]>([]);
   const [loadingPapers, setLoadingPapers] = useState(true);
 
@@ -678,10 +700,10 @@ export default function HybridPlanningPage() {
       try {
         setLoadingPapers(true);
         const [papersData, clientsData] = await Promise.all([
-          fetchPapers(),
+          fetchPapersFromCreatedOrders(),
           fetchClients(0, 'active'),
         ]);
-        setPapers(papersData.filter((p: Paper) => p.status === 'active'));
+        setPapers(papersData);
         setClients(clientsData.sort((a: Client, b: Client) =>
           a.company_name.localeCompare(b.company_name)
         ));
@@ -1848,7 +1870,7 @@ export default function HybridPlanningPage() {
                 </div>
               ) : papers.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
-                  No active paper specifications found.
+                  No paper specifications with unfulfilled orders found.
                 </div>
               ) : (
                 <Table>
@@ -1858,6 +1880,7 @@ export default function HybridPlanningPage() {
                       <TableHead>GSM</TableHead>
                       <TableHead>BF</TableHead>
                       <TableHead>Shade</TableHead>
+                      <TableHead className="text-right">Rolls Needed</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1876,6 +1899,9 @@ export default function HybridPlanningPage() {
                         <TableCell className="font-medium">{paper.gsm}</TableCell>
                         <TableCell>{paper.bf}</TableCell>
                         <TableCell>{paper.shade}</TableCell>
+                        <TableCell className="text-right">
+                          <Badge variant="secondary">{paper.rolls_needed}</Badge>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
@@ -38,7 +39,8 @@ import {
   BarChart3,
   Printer,
   RefreshCw,
-  AlertTriangle
+  AlertTriangle,
+  Trash2
 } from "lucide-react";
 import QRCodeDisplay from "@/components/QRCodeDisplay";
 import BarcodeDisplay from "@/components/BarcodeDisplay";
@@ -293,6 +295,8 @@ export default function PlanDetailsPage() {
   // New hierarchical state
   const [productionHierarchy, setProductionHierarchy] = useState<any[]>([]);
   const [wastageItems, setWastageItems] = useState<any[]>([]);
+
+  const [deleteManualPlanDialogOpen, setDeleteManualPlanDialogOpen] = useState(false);
 
   // Rollback state
   const [rollbackDialogOpen, setRollbackDialogOpen] = useState(false);
@@ -684,6 +688,21 @@ export default function PlanDetailsPage() {
       setTimeRemaining(0);
     }
   }, [plan?.status, checkRollbackStatus]);
+
+  const isManualPlan = plan?.name?.startsWith('Manual Plan -');
+
+  const handleDeleteManualPlan = async () => {
+    try {
+      const response = await fetch(`${MASTER_ENDPOINTS.PLANS}/manual/${planId}`, createRequestOptions('DELETE'));
+      if (!response.ok) throw new Error('Failed to delete plan');
+      toast.success('Manual plan deleted successfully');
+      router.push('/masters/plans');
+    } catch (error) {
+      toast.error('Failed to delete manual plan');
+    } finally {
+      setDeleteManualPlanDialogOpen(false);
+    }
+  };
 
   const handleRollbackSuccess = () => {
     setRollbackAvailable(false);
@@ -2138,6 +2157,18 @@ export default function PlanDetailsPage() {
               </>
             )}
 
+            {/* Delete Button — manual plans only */}
+            {isManualPlan && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setDeleteManualPlanDialogOpen(true)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Plan
+              </Button>
+            )}
+
             {/* Rollback Button */}
             {rollbackAvailable && (
               <Button
@@ -2574,6 +2605,24 @@ export default function PlanDetailsPage() {
             </div>
           </div>
         )}
+
+        {/* Delete Manual Plan Dialog */}
+        <AlertDialog open={deleteManualPlanDialogOpen} onOpenChange={setDeleteManualPlanDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Manual Plan</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete <strong>{plan?.frontend_id}</strong>? This will permanently remove all inventory records (jumbo rolls, 118&quot; rolls, cut rolls) created by this plan. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteManualPlan} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Rollback Dialog */}
         <RollbackPlanDialog
