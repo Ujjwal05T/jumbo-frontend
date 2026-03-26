@@ -76,7 +76,7 @@ import {
   Timer,
 } from "lucide-react";
 import { RollbackApiService, RollbackStatus } from "@/lib/rollback-api";
-import { Order } from "@/lib/orders";
+import { Order, updateOrderStatus } from "@/lib/orders";
 
 // ============================================
 // TYPES
@@ -606,6 +606,11 @@ export default function HybridPlanningPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
 
+  // Stale orders (created status, >20 days old)
+  const [staleOrders, setStaleOrders] = useState<any[]>([]);
+  const [loadingStaleOrders, setLoadingStaleOrders] = useState(true);
+  const [completingOrderId, setCompletingOrderId] = useState<string | null>(null);
+
   // Clients for manual roll assignment
   const [clients, setClients] = useState<Client[]>([]);
 
@@ -694,28 +699,52 @@ export default function HybridPlanningPage() {
     return counts;
   }, [planState]);
 
-  // Load papers and clients on mount
+  // Load papers, clients, and stale orders on mount
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoadingPapers(true);
-        const [papersData, clientsData] = await Promise.all([
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 20);
+        const endDate = cutoff.toISOString();
+        const [papersData, clientsData, staleRes] = await Promise.all([
           fetchPapersFromCreatedOrders(),
           fetchClients(0, 'active'),
+          fetch(`${MASTER_ENDPOINTS.ORDERS}/with-summary?status=created&end_date=${encodeURIComponent(endDate)}&limit=200`, createRequestOptions('GET')),
         ]);
         setPapers(papersData);
         setClients(clientsData.sort((a: Client, b: Client) =>
           a.company_name.localeCompare(b.company_name)
         ));
+        if (staleRes.ok) {
+          const staleData = await staleRes.json();
+          setStaleOrders(staleData);
+        }
       } catch (error) {
         console.error('Failed to load data:', error);
         toast.error('Failed to load paper specs');
       } finally {
         setLoadingPapers(false);
+        setLoadingStaleOrders(false);
       }
     };
     loadData();
   }, []);
+
+  const handleCompleteOrder = async (orderId: string) => {
+    setCompletingOrderId(orderId);
+    try {
+      await updateOrderStatus(orderId, 'completed');
+      setStaleOrders(prev => prev.filter(o => o.order_id !== orderId));
+      const refreshed = await fetchPapersFromCreatedOrders();
+      setPapers(refreshed);
+      toast.success('Order marked as completed');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to complete order');
+    } finally {
+      setCompletingOrderId(null);
+    }
+  };
 
   // Count pending rolls in plan
   const pendingRollsCount = useMemo(() => {
@@ -1909,6 +1938,81 @@ export default function HybridPlanningPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Stale Orders (created > 20 days ago) */}
+          {(loadingStaleOrders || staleOrders.length > 0) && (
+            <Card className="border-yellow-300 mt-5">
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-yellow-600" />
+                  <div>
+                    <CardTitle className="text-yellow-700">
+                      Stale Orders — Created Over 20 Days Ago ({staleOrders.length})
+                    </CardTitle>
+                    <CardDescription>
+                      These orders are still in &quot;created&quot; status. You can mark them as completed if they are no longer needed.
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {loadingStaleOrders ? (
+                  <div className="flex items-center gap-2 py-4 text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading stale orders...
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Order ID</TableHead>
+                        <TableHead>Client</TableHead>
+                        <TableHead>Created</TableHead>
+                        <TableHead className="text-right">Items</TableHead>
+                        <TableHead className="text-right">Rolls Remaining</TableHead>
+                        <TableHead></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {staleOrders.map((order: any) => {
+                        const daysOld = Math.floor((Date.now() - new Date(order.created_at).getTime()) / 86400000);
+                        return (
+                          <TableRow key={order.order_id}>
+                            <TableCell className="font-medium">{order.frontend_id || order.order_id.slice(0, 8)}</TableCell>
+                            <TableCell>{order.client_name || order.client?.company_name || '—'}</TableCell>
+                            <TableCell>
+                              <span className="text-yellow-700 font-medium">{daysOld}d ago</span>
+                            </TableCell>
+                            <TableCell className="text-right">{order.total_items ?? order.order_items?.length ?? '—'}</TableCell>
+                            <TableCell className="text-right">
+                              {order.total_quantity_ordered != null
+                                ? order.total_quantity_ordered - (order.total_quantity_fulfilled ?? 0)
+                                : '—'}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-green-700 border-green-400 hover:bg-green-50"
+                                disabled={completingOrderId === order.order_id}
+                                onClick={() => handleCompleteOrder(order.order_id)}
+                              >
+                                {completingOrderId === order.order_id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  'Complete'
+                                )}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Edit Plan Tab */}
