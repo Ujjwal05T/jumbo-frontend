@@ -214,35 +214,74 @@ function transformToNestedStructure(
     spec.jumbos.sort((a, b) => a.jumboNumber - b.jumboNumber);
   });
 
+  const paperSpecs = Array.from(paperSpecMap.values());
+
+  // Build all pending orphan rolls first
+  const allPendingOrphans: EditableCutRoll[] = (result.pending_orders || []).flatMap((p: any, i: number) =>
+    Array.from({ length: p.quantity || 1 }, (_, j) => ({
+      id: `pending-orphan-${i}-${j}-${generateId()}`,
+      width: p.width,
+      quantity: 1,
+      clientName: p.client_name || '',
+      clientId: p.client_id,
+      source: 'algorithm' as const,
+      order_id: p.order_id || p.source_order_id,
+      order_item_id: p.order_item_id,
+      source_pending_id: p.source_pending_id,
+      source_type: p.source_type,
+      paper_id: p.paper_id,
+      gsm: p.gsm,
+      bf: p.bf,
+      shade: p.shade,
+      selected: true,
+      isPendingOrphan: true,
+    }))
+  );
+
+  // Auto-assign pending orphans into new jumbos at the bottom of each matching paper spec
+  const unassignedOrphans: EditableCutRoll[] = [];
+  const orphansBySpec = new Map<string, EditableCutRoll[]>();
+  for (const orphan of allPendingOrphans) {
+    const key = `${orphan.gsm}-${orphan.bf}-${orphan.shade}`;
+    if (!orphansBySpec.has(key)) orphansBySpec.set(key, []);
+    orphansBySpec.get(key)!.push(orphan);
+  }
+
+  orphansBySpec.forEach((orphans, specKey) => {
+    const spec = paperSpecs.find(s => `${s.gsm}-${s.bf}-${s.shade}` === specKey);
+    if (!spec) {
+      unassignedOrphans.push(...orphans);
+      return;
+    }
+    const nextJumboNumber = (spec.jumbos[spec.jumbos.length - 1]?.jumboNumber ?? 0) + 1;
+    const newJumbo: JumboRollGroup = {
+      id: `jumbo-pending-${generateId()}`,
+      jumboNumber: nextJumboNumber,
+      sets: [],
+    };
+    let currentSet: RollSetGroup = { id: `set-pending-${generateId()}`, setNumber: 1, cuts: [] };
+    let currentWidth = 0;
+    for (const orphan of orphans) {
+      if (currentWidth + orphan.width > planningWidth && currentSet.cuts.length > 0) {
+        newJumbo.sets.push(currentSet);
+        currentSet = { id: `set-pending-${generateId()}`, setNumber: newJumbo.sets.length + 1, cuts: [] };
+        currentWidth = 0;
+      }
+      currentSet.cuts.push(orphan);
+      currentWidth += orphan.width;
+    }
+    if (currentSet.cuts.length > 0) newJumbo.sets.push(currentSet);
+    spec.jumbos.push(newJumbo);
+  });
+
   return {
     wastage: 124 - planningWidth,
     planningWidth,
     selectedOrderIds: [],
-    paperSpecs: Array.from(paperSpecMap.values()),
-    // orphanedRolls: [],
-    orphanedRolls: (result.pending_orders || []).flatMap((p: any, i: number) =>
-      Array.from({ length: p.quantity || 1 }, (_, j) => ({
-        id: `pending-orphan-${i}-${j}-${generateId()}`,
-        width: p.width,
-        quantity: 1,
-        clientName: p.client_name || '',
-        clientId: p.client_id,
-        source: 'algorithm' as const,
-        order_id: p.order_id || p.source_order_id,
-        order_item_id: p.order_item_id,
-        source_pending_id: p.source_pending_id,
-        source_type: p.source_type,
-        paper_id: p.paper_id,
-        gsm: p.gsm,
-        bf: p.bf,
-        shade: p.shade,
-        selected: true,
-        isPendingOrphan: true,
-      }))
-    ),
+    paperSpecs,
+    orphanedRolls: unassignedOrphans,
     isGenerated: true,
     isModified: false,
-    // pendingOrders: result.pending_orders || [],
     pendingOrders: [],
     wastageAllocations: result.wastage_allocations || [],
   };
@@ -1962,6 +2001,7 @@ export default function HybridPlanningPage() {
                 const specPending = (planState.pendingOrders || []).filter(
                   p => p.gsm === spec.gsm && p.bf === spec.bf && p.shade === spec.shade
                 );
+                const pendingOrphanCount = spec.jumbos.flatMap(j => j.sets).flatMap(s => s.cuts).filter(c => c.isPendingOrphan).length;
                 return (
                 <Card key={spec.id}>
                   <CardHeader
@@ -1983,6 +2023,11 @@ export default function HybridPlanningPage() {
                         {specPending.length > 0 && (
                           <Badge className="bg-orange-100 text-orange-800 border border-orange-300 font-semibold">
                             {specPending.length} pending
+                          </Badge>
+                        )}
+                        {pendingOrphanCount > 0 && (
+                          <Badge className="bg-yellow-100 text-yellow-800 border border-yellow-300 font-semibold">
+                            {pendingOrphanCount} from pending
                           </Badge>
                         )}
                         <Badge variant="outline">
