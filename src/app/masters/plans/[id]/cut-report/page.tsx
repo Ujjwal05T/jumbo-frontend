@@ -52,8 +52,9 @@ interface CutRoll {
 interface JumboGroup {
   jumbo_id: string;
   jumbo_barcode: string;
+  jumbo_weight_kg: number | null;
   rolls: CutRoll[];
-  summary: { total: number; weight_updated: number; is_complete: boolean };
+  summary: { total: number; weight_updated: number; is_complete: boolean; total_cut_weight_kg: number };
 }
 
 interface PlanDashboard {
@@ -93,6 +94,11 @@ function fmtKg(n: number) {
   return `${n.toFixed(1)} kg`;
 }
 
+// Sentinel weight of 1 means pre-allocated but not yet physically weighed — display as 0
+function displayWeight(w: number): number {
+  return w === 1 ? 0 : w;
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 export default function PlanCutReportPage() {
   const { id } = useParams<{ id: string }>();
@@ -105,6 +111,34 @@ export default function PlanCutReportPage() {
   const [showRemoveModal, setShowRemoveModal] = useState(false);
   const [selectedBarcodes, setSelectedBarcodes] = useState<Set<string>>(new Set());
   const [removeLoading, setRemoveLoading] = useState(false);
+
+  // ── Roll detail modal ─────────────────────────────────────────────────────
+  const [rollDetail, setRollDetail] = useState<{
+    barcode_id: string;
+    roll_status: string;
+    dispatch_info: { dispatch_number: string; dispatch_date: string | null; client_name: string | null; dispatch_frontend_id: string } | null;
+    bill_info: { bill_frontend_id: string | null; payment_type: string; bill_no: string | null; slip_date: string | null } | null;
+  } | null>(null);
+  const [rollDetailLoading, setRollDetailLoading] = useState(false);
+
+  const handleRollClick = async (roll: CutRoll) => {
+    if (roll.status !== "billed" && roll.status !== "dispatched") return;
+    setRollDetail(null);
+    setRollDetailLoading(true);
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/reports/barcode-details/${roll.barcode_id}`,
+        createRequestOptions("GET")
+      );
+      const json = await res.json();
+      if (res.ok) setRollDetail(json.data);
+      else toast.error("Failed to fetch roll details");
+    } catch {
+      toast.error("Failed to fetch roll details");
+    } finally {
+      setRollDetailLoading(false);
+    }
+  };
 
   const fetchDashboard = async () => {
     setLoading(true);
@@ -417,6 +451,12 @@ export default function PlanCutReportPage() {
                           <span className="text-muted-foreground">
                             {group.rolls.length} roll{group.rolls.length !== 1 ? "s" : ""}
                           </span>
+                          <span className="text-blue-700 font-semibold">
+                            JR: {group.jumbo_weight_kg != null ? group.jumbo_weight_kg.toFixed(1) : "0"} kg
+                          </span>
+                          <span className="text-purple-700 font-semibold">
+                            Cut: {(group.summary.total_cut_weight_kg ?? 0).toFixed(1)} kg
+                          </span>
                           <span
                             className={`font-semibold ${
                               group.summary.is_complete ? "text-green-700" : "text-red-600"
@@ -453,21 +493,23 @@ export default function PlanCutReportPage() {
                             </div>
                             <div className="flex h-14 rounded overflow-hidden border border-gray-200">
                               {setRolls.map((roll) => {
-                                const isGreen = roll.weight_kg > 1;
+                                const isGrey = roll.status === "billed" || roll.status === "dispatched";
+                                const isGreen = !isGrey && roll.weight_kg > 1;
                                 const widthPct = (roll.width_inches / JUMBO_WIDTH) * 100;
                                 return (
                                   <div
                                     key={roll.id}
                                     title={`${roll.barcode_id} | ${roll.width_inches}" | ${
-                                      isGreen ? fmtKg(roll.weight_kg) : "Pending"
+                                      isGrey ? roll.status : isGreen ? fmtKg(displayWeight(roll.weight_kg)) : "Pending"
                                     } | ${roll.client_name}${
                                       roll.paper_specs
                                         ? ` | ${roll.paper_specs.gsm}gsm ${roll.paper_specs.bf}bf ${roll.paper_specs.shade}`
                                         : ""
                                     }`}
                                     style={{ width: `${widthPct}%` }}
-                                    className={`flex flex-col items-center justify-center text-white border-r border-white/30 overflow-hidden hover:opacity-80 transition-opacity cursor-default ${
-                                      isGreen ? "bg-green-500" : "bg-red-400"
+                                    onClick={() => isGrey && handleRollClick(roll)}
+                                    className={`flex flex-col items-center justify-center text-white border-r border-white/30 overflow-hidden hover:opacity-80 transition-opacity ${
+                                      isGrey ? "bg-gray-400 cursor-pointer" : isGreen ? "bg-green-500 cursor-default" : "bg-red-400 cursor-default"
                                     }`}
                                   >
                                     {roll.width_inches >= 8 && (
@@ -476,6 +518,11 @@ export default function PlanCutReportPage() {
                                     {widthPct >= 6 && (
                                       <span className="text-[9px] font-bold leading-tight truncate w-full text-center px-0.5">
                                         {roll.barcode_id}
+                                      </span>
+                                    )}
+                                    {widthPct >= 6 && roll.client_name && (
+                                      <span className="text-[9px] font-bold leading-tight truncate w-full text-center px-0.5 opacity-90">
+                                        {roll.client_name}
                                       </span>
                                     )}
                                   </div>
@@ -498,7 +545,11 @@ export default function PlanCutReportPage() {
                       <div className="flex gap-4 text-[10px] text-muted-foreground pt-1">
                         <span className="flex items-center gap-1">
                           <span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500" />
-                          Updated / Billed
+                          Updated
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="inline-block w-2.5 h-2.5 rounded-sm bg-gray-400" />
+                          Billed / Dispatched
                         </span>
                         <span className="flex items-center gap-1">
                           <span className="inline-block w-2.5 h-2.5 rounded-sm bg-red-400" />
@@ -587,6 +638,53 @@ export default function PlanCutReportPage() {
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Roll Detail Modal ────────────────────────────────────────────── */}
+      <Dialog open={!!rollDetail || rollDetailLoading} onOpenChange={(open) => { if (!open) setRollDetail(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-semibold">
+              {rollDetailLoading ? "Loading..." : rollDetail?.barcode_id}
+            </DialogTitle>
+          </DialogHeader>
+          {rollDetailLoading && (
+            <div className="flex justify-center py-6">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
+          {rollDetail && !rollDetailLoading && (
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground w-20">Status</span>
+                <span className="font-medium capitalize">{rollDetail.roll_status}</span>
+              </div>
+              {rollDetail.dispatch_info && (
+                <div className="space-y-1 border rounded p-2.5 bg-gray-50">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium mb-1.5">Dispatch</p>
+                  <div className="flex gap-2"><span className="text-muted-foreground w-20">Challan</span><span className="font-medium">{rollDetail.dispatch_info.dispatch_frontend_id || rollDetail.dispatch_info.dispatch_number}</span></div>
+                  <div className="flex gap-2"><span className="text-muted-foreground w-20">Client</span><span className="font-medium">{rollDetail.dispatch_info.client_name || "—"}</span></div>
+                  {rollDetail.dispatch_info.dispatch_date && (
+                    <div className="flex gap-2"><span className="text-muted-foreground w-20">Date</span><span className="font-medium">{new Date(rollDetail.dispatch_info.dispatch_date).toLocaleDateString("en-IN")}</span></div>
+                  )}
+                </div>
+              )}
+              {rollDetail.bill_info && (
+                <div className="space-y-1 border rounded p-2.5 bg-blue-50">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium mb-1.5">Bill</p>
+                  <div className="flex gap-2"><span className="text-muted-foreground w-20">Bill No</span><span className="font-medium">{rollDetail.bill_info.bill_frontend_id || rollDetail.bill_info.bill_no || "—"}</span></div>
+                  <div className="flex gap-2"><span className="text-muted-foreground w-20">Type</span><span className="font-medium capitalize">{rollDetail.bill_info.payment_type}</span></div>
+                  {rollDetail.bill_info.slip_date && (
+                    <div className="flex gap-2"><span className="text-muted-foreground w-20">Date</span><span className="font-medium">{new Date(rollDetail.bill_info.slip_date).toLocaleDateString("en-IN")}</span></div>
+                  )}
+                </div>
+              )}
+              {!rollDetail.dispatch_info && !rollDetail.bill_info && (
+                <p className="text-muted-foreground text-center py-2">No dispatch or bill info found.</p>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </DashboardLayout>

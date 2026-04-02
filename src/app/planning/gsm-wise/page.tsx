@@ -98,6 +98,7 @@ interface EditableCutRoll {
   trimLeft?: number;
   originalWidth?: number;
   originalQuantity?: number;
+  isPendingOrphan?: boolean;
   // Paper spec for filtering orphaned rolls
   gsm?: number;
   bf?: number;
@@ -229,35 +230,79 @@ function transformToNestedStructure(
     spec.jumbos.sort((a, b) => a.jumboNumber - b.jumboNumber);
   });
 
+  // Build pending orphan rolls
+  const allPendingOrphans: EditableCutRoll[] = (result.pending_orders || []).flatMap((p: any, i: number) =>
+    Array.from({ length: p.quantity || 1 }, (_, j) => ({
+      id: `pending-orphan-${i}-${j}-${generateId()}`,
+      width: p.width,
+      quantity: 1,
+      clientName: p.client_name || '',
+      clientId: p.client_id,
+      source: 'algorithm' as const,
+      order_id: p.order_id || p.source_order_id,
+      order_item_id: p.order_item_id,
+      source_pending_id: p.source_pending_id,
+      source_type: p.source_type,
+      paper_id: p.paper_id,
+      gsm: p.gsm,
+      bf: p.bf,
+      shade: p.shade,
+      selected: true,
+      isPendingOrphan: true,
+    }))
+  );
+
+  // Auto-assign pending orphans into new jumbos at the bottom of each matching paper spec
+  const unassignedOrphans: EditableCutRoll[] = [];
+  const orphansBySpec = new Map<string, EditableCutRoll[]>();
+  for (const orphan of allPendingOrphans) {
+    const key = `${orphan.gsm}-${orphan.bf}-${orphan.shade}`;
+    if (!orphansBySpec.has(key)) orphansBySpec.set(key, []);
+    orphansBySpec.get(key)!.push(orphan);
+  }
+
+  orphansBySpec.forEach((orphans, specKey) => {
+    const spec = Array.from(paperSpecMap.values()).find(s => `${s.gsm}-${s.bf}-${s.shade}` === specKey);
+    if (!spec) {
+      unassignedOrphans.push(...orphans);
+      return;
+    }
+
+    const createNewJumbo = (): JumboRollGroup => {
+      const nextNum = (spec.jumbos[spec.jumbos.length - 1]?.jumboNumber ?? 0) + 1;
+      const j: JumboRollGroup = { id: `jumbo-pending-${generateId()}`, jumboNumber: nextNum, sets: [] };
+      spec.jumbos.push(j);
+      return j;
+    };
+
+    let currentJumbo = createNewJumbo();
+    let currentSet: RollSetGroup = { id: `set-pending-${generateId()}`, setNumber: 1, cuts: [] };
+    let currentWidth = 0;
+
+    for (const orphan of orphans) {
+      const setFull = currentWidth + orphan.width > planningWidth && currentSet.cuts.length > 0;
+      if (setFull) {
+        currentJumbo.sets.push(currentSet);
+        if (currentJumbo.sets.length >= 3) {
+          currentJumbo = createNewJumbo();
+        }
+        currentSet = { id: `set-pending-${generateId()}`, setNumber: currentJumbo.sets.length + 1, cuts: [] };
+        currentWidth = 0;
+      }
+      currentSet.cuts.push(orphan);
+      currentWidth += orphan.width;
+    }
+    if (currentSet.cuts.length > 0) currentJumbo.sets.push(currentSet);
+  });
+
   return {
     wastage: 124 - planningWidth,
     planningWidth,
     selectedOrderIds: [],
     paperSpecs: Array.from(paperSpecMap.values()),
-     // orphanedRolls: [],
-    orphanedRolls: (result.pending_orders || []).flatMap((p: any, i: number) =>
-      Array.from({ length: p.quantity || 1 }, (_, j) => ({
-        id: `pending-orphan-${i}-${j}-${generateId()}`,
-        width: p.width,
-        quantity: 1,
-        clientName: p.client_name || '',
-        clientId: p.client_id,
-        source: 'algorithm' as const,
-        order_id: p.order_id || p.source_order_id,
-        order_item_id: p.order_item_id,
-        source_pending_id: p.source_pending_id,
-        source_type: p.source_type,
-        paper_id: p.paper_id,
-        gsm: p.gsm,
-        bf: p.bf,
-        shade: p.shade,
-        selected: true,
-        isPendingOrphan: true,
-      }))
-    ),
+    orphanedRolls: unassignedOrphans,
     isGenerated: true,
     isModified: false,
-    // pendingOrders: result.pending_orders || [],
     pendingOrders: [],
     wastageAllocations: result.wastage_allocations || [],
   };
@@ -2059,6 +2104,7 @@ export default function HybridPlanningPage() {
                 const specPending = (planState.pendingOrders || []).filter(
                   p => p.gsm === spec.gsm && p.bf === spec.bf && p.shade === spec.shade
                 );
+                const pendingOrphanCount = spec.jumbos.flatMap(j => j.sets).flatMap(s => s.cuts).filter(c => c.isPendingOrphan).length;
                 return (
                 <Card key={spec.id}>
                   <CardHeader
@@ -2080,6 +2126,11 @@ export default function HybridPlanningPage() {
                         {specPending.length > 0 && (
                           <Badge className="bg-orange-100 text-orange-800 border border-orange-300 font-semibold">
                             {specPending.length} pending
+                          </Badge>
+                        )}
+                        {pendingOrphanCount > 0 && (
+                          <Badge className="bg-yellow-100 text-yellow-800 border border-yellow-300 font-semibold">
+                            {pendingOrphanCount} from pending
                           </Badge>
                         )}
                         <Badge variant="outline">
@@ -2579,18 +2630,30 @@ export default function HybridPlanningPage() {
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Finding suggestions...
                 </div>
-              ) : clientSuggestions.length > 0 && (
+              ) : clientSuggestions.length > 0 && (() => {
+                const planClientIds = new Set(
+                  (planState?.paperSpecs.flatMap(s => s.jumbos.flatMap(j => j.sets.flatMap(st => st.cuts.filter(c => c.source_type === 'regular_order').map(c => c.clientId).filter(Boolean)))) || []).map(id => id!.toLowerCase())
+                );
+                const sorted = [...clientSuggestions].sort((a, b) => {
+                  const aIn = planClientIds.has(a.client_id?.toLowerCase()) ? 0 : 1;
+                  const bIn = planClientIds.has(b.client_id?.toLowerCase()) ? 0 : 1;
+                  return aIn - bIn;
+                });
+                return (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-sm font-medium text-green-700">
                     <span>Suggested Clients (based on past orders)</span>
                   </div>
                   <div className="max-h-40 overflow-y-auto space-y-2 border rounded-lg p-2">
-                    {clientSuggestions.map((suggestion) => (
+                    {sorted.map((suggestion) => {
+                      const inPlan = planClientIds.has(suggestion.client_id?.toLowerCase());
+                      return (
                       <div key={suggestion.client_id} className="space-y-1">
-                        <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                        <div className={`flex items-center justify-between p-2 rounded ${inPlan ? 'bg-blue-50' : 'bg-gray-50'}`}>
                           <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-green-500 rounded-full" />
+                            <div className={`w-2 h-2 rounded-full ${inPlan ? 'bg-blue-500' : 'bg-green-500'}`} />
                             <span className="font-medium text-sm">{suggestion.client_name}</span>
+                            {inPlan && <span className="text-[10px] text-blue-600 font-semibold bg-blue-100 px-1.5 py-0.5 rounded">In Plan</span>}
                           </div>
                           <Button size="sm" variant="outline" className="h-7 text-xs"
                             onClick={() => {
@@ -2621,10 +2684,12 @@ export default function HybridPlanningPage() {
                           ))}
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
-              )}
+                );
+              })()}
             </div>
           )}
           <DialogFooter>

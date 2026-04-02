@@ -123,6 +123,12 @@ const getNavigationForRole = (role: string | null) => {
       roles: ["admin", "weight_update", "accountant", "accountant2", "dispatch", "gm"],
     },
     {
+      name: "Jumbo Weight Update",
+      href: "/jumbo-weight-update",
+      icon: Database,
+      roles: ["admin", "weight_update", "accountant", "accountant2", "dispatch", "gm"],
+    },
+    {
       name: "In/Out",
       href: "/in-out",
       icon: Database,

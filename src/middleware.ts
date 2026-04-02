@@ -7,6 +7,7 @@ import type { NextRequest } from 'next/server';
 // Define role-based route permissions
 const roleBasedRoutes = {
   admin: [
+    '/jumbo-weight-update',
     '/masters/pending-orders-new',
     '/production-data-reports',
     '/production-data',
@@ -61,6 +62,7 @@ const roleBasedRoutes = {
   ],
   weight_update: [
     '/weight-update',
+    '/jumbo-weight-update',
     '/masters/cut-rolls/manual'
   ],
   mou: [
@@ -81,6 +83,7 @@ const roleBasedRoutes = {
     '/production-data',
     '/masters',
     '/weight-update',
+    '/jumbo-weight-update',
     '/dispatch',
     '/reports',
     '/challan',
@@ -93,6 +96,7 @@ const roleBasedRoutes = {
   accountant2: [
     '/masters',
     '/weight-update',
+    '/jumbo-weight-update',
     '/dispatch',
     '/reports',
     '/challan',
@@ -108,6 +112,7 @@ const roleBasedRoutes = {
     '/reports/all-cut-rolls-filtered',
     '/barcode-lookup',
     '/weight-update',
+    '/jumbo-weight-update',
     '/outward-challan',
     '/masters/plans/dashboard',
     '/masters/plans',
@@ -143,6 +148,7 @@ const roleBasedRoutes = {
     '/plan-weights',
     '/in-out',
     '/weight-update',
+    '/jumbo-weight-update',
     '/outward-challan',
   ],
 };
