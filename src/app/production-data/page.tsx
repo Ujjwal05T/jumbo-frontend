@@ -44,6 +44,7 @@ export default function ProductionDataPage() {
     poParty: "",
     wastageParty: "",
     dispatchParty: "",
+    boundingChemical: "",
     isShutdown: "No",
     shutdownHours: "",
   });
@@ -136,6 +137,7 @@ export default function ProductionDataPage() {
         poParty: data.po_party?.toString() || "",
         wastageParty: data.wastage_party?.toString() || "",
         dispatchParty: data.dispatch_party?.toString() || "",
+        boundingChemical: data.bounding_chemical?.toString() || "",
         isShutdown: data.is_shutdown?.toString() || "No",
         shutdownHours: data.shutdown_hours?.toString() || "",
       });
@@ -176,6 +178,7 @@ export default function ProductionDataPage() {
       poParty: "",
       wastageParty: "",
       dispatchParty: "",
+      boundingChemical: "",
       isShutdown: "No",
       shutdownHours: "",
     }));
@@ -254,6 +257,7 @@ export default function ProductionDataPage() {
         po_party: formData.poParty || "0",
         wastage_party: formData.wastageParty || "0",
         dispatch_party: formData.dispatchParty || "0",
+        bounding_chemical: formData.boundingChemical || "0",
         is_shutdown: formData.isShutdown || null,
         shutdown_hours: formData.shutdownHours || null,
       };
@@ -311,6 +315,7 @@ export default function ProductionDataPage() {
       poParty: "",
       wastageParty: "",
       dispatchParty: "",
+      boundingChemical: "",
       isShutdown: "No",
       shutdownHours: "",
     });
@@ -721,6 +726,17 @@ export default function ProductionDataPage() {
                       type="text"
                       value={formData.colourDye}
                       onChange={(e) => handleInputChange('colourDye', e.target.value)}
+                      disabled={isOtherFieldDisabled}
+                    />
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="boundingChemical">Bounding Chemical</Label>
+                    <Input
+                      id="boundingChemical"
+                      type="text"
+                      value={formData.boundingChemical}
+                      onChange={(e) => handleInputChange('boundingChemical', e.target.value)}
                       disabled={isOtherFieldDisabled}
                     />
                   </div>

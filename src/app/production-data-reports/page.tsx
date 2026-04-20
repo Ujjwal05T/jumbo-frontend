@@ -58,6 +58,7 @@ const COLUMN_LABELS: Record<string, string> = {
   dsr: "D.S.R.",
   ret_aid: "Ret.Aid",
   colour_dye: "Colour Dye",
+  bounding_chemical: "Bounding Chemical",
   shutdown_hours: "Shutdown Hours",
 };
 

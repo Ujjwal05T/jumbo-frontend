@@ -129,6 +129,7 @@ interface ProductionSummary {
   poParty: number;
   wastageParty: number;
   dispatchParty: number;
+  boundingChemical: number;
   shutdownHours: number;
   monthName: string;
   year: number;
@@ -399,6 +400,7 @@ export default function DashboardPage() {
       let poParty = 0;
       let wastageParty = 0;
       let dispatchParty = 0;
+      let boundingChemical = 0;
       let shutdownHours = 0;
 
       // Process all data rows
@@ -430,6 +432,7 @@ export default function DashboardPage() {
         poParty += parseNumericValue(row.po_party);
         wastageParty += parseNumericValue(row.wastage_party);
         dispatchParty += parseNumericValue(row.dispatch_party);
+        boundingChemical += parseNumericValue(row.bounding_chemical);
         shutdownHours += parseNumericValue(row.shutdown_hours);
       });
 
@@ -461,6 +464,7 @@ export default function DashboardPage() {
         poParty,
         wastageParty,
         dispatchParty,
+        boundingChemical,
         shutdownHours,
         monthName: monthNames[month],
         year
@@ -1441,6 +1445,10 @@ export default function DashboardPage() {
                   <div className="border rounded-lg p-2 bg-gray-50">
                     <span className="text-[10px] font-semibold text-muted-foreground">COLOUR DYE</span>
                     <p className="text-sm font-bold">{productionSummary.colourDye.toLocaleString()}</p>
+                  </div>
+                  <div className="border rounded-lg p-2 bg-gray-50">
+                    <span className="text-[10px] font-semibold text-muted-foreground">BOUNDING CHEMICAL</span>
+                    <p className="text-sm font-bold">{productionSummary.boundingChemical.toLocaleString()}</p>
                   </div>
                 </div>
               </div>
