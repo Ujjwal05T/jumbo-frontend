@@ -61,6 +61,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSearch,
 } from "@/components/ui/select";
 import {
   Plus,
@@ -262,10 +263,19 @@ function transformToNestedStructure(
   }
 
   orphansBySpec.forEach((orphans, specKey) => {
-    const spec = Array.from(paperSpecMap.values()).find(s => `${s.gsm}-${s.bf}-${s.shade}` === specKey);
+    let spec = Array.from(paperSpecMap.values()).find(s => `${s.gsm}-${s.bf}-${s.shade}` === specKey);
     if (!spec) {
-      unassignedOrphans.push(...orphans);
-      return;
+      // No algo-generated spec exists — create one from orphan data
+      const sample = orphans[0];
+      spec = {
+        id: `spec-pending-${generateId()}`,
+        gsm: sample.gsm!,
+        bf: sample.bf!,
+        shade: sample.shade!,
+        jumbos: [],
+        isExpanded: true,
+      };
+      paperSpecMap.set(specKey, spec);
     }
 
     const createNewJumbo = (): JumboRollGroup => {
@@ -704,6 +714,7 @@ export default function HybridPlanningPage() {
   });
 
   const [suggestionQuantities, setSuggestionQuantities] = useState<Record<string, string>>({});
+  const [clientSelectSearch, setClientSelectSearch] = useState('');
 
   // AI client suggestions
   const [clientSuggestions, setClientSuggestions] = useState<any[]>([]);
@@ -1067,6 +1078,7 @@ export default function HybridPlanningPage() {
     setCutRollForm({ width: '', quantity: '1', clientId: '', orderId: '', orderItemId: '', assignFromOrder: false });
     setSuggestionQuantities({});
     setClientSuggestions([]);
+    setClientSelectSearch('');
 
     // Find the paper spec for the set's parent jumbo
     if (planState) {
@@ -2436,13 +2448,15 @@ export default function HybridPlanningPage() {
 
       {/* Add Cut Roll Dialog */}
       <Dialog open={showAddCutDialog} onOpenChange={setShowAddCutDialog}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
+        <DialogContent className="flex flex-col max-h-[90dvh] sm:max-w-4xl max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:w-full max-sm:max-w-full max-sm:max-h-[85dvh]">
+          <DialogHeader className="shrink-0">
             <DialogTitle>Add Cut Roll</DialogTitle>
             <DialogDescription>
               Add from orphaned rolls or create a new manual roll
             </DialogDescription>
           </DialogHeader>
+
+          <div className="overflow-y-auto flex-1 min-h-0 space-y-4 pr-1">
 
           {/* Orphaned Rolls Section - Only show orphans matching the paper spec */}
           {planState && currentPaperSpec && (() => {
@@ -2587,41 +2601,50 @@ export default function HybridPlanningPage() {
           ) : (
             /* Manual Roll Form */
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Width (inches)</Label>
-                <Input
-                  type="number"
-                  value={cutRollForm.width}
-                  onChange={(e) => setCutRollForm(prev => ({ ...prev, width: e.target.value }))}
-                  placeholder="e.g., 24"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Quantity</Label>
-                <Input
-                  type="number"
-                  value={cutRollForm.quantity}
-                  onChange={(e) => setCutRollForm(prev => ({ ...prev, quantity: e.target.value }))}
-                  min={1}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Client (optional)</Label>
-                <Select
-                  value={cutRollForm.clientId}
-                  onValueChange={(value) => setCutRollForm(prev => ({ ...prev, clientId: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select client..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.company_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-3 gap-2 items-end">
+                <div className="space-y-2">
+                  <Label>Width (in)</Label>
+                  <Input
+                    type="number"
+                    value={cutRollForm.width}
+                    onChange={(e) => setCutRollForm(prev => ({ ...prev, width: e.target.value }))}
+                    placeholder="e.g., 24"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Qty</Label>
+                  <Input
+                    type="number"
+                    value={cutRollForm.quantity}
+                    onChange={(e) => setCutRollForm(prev => ({ ...prev, quantity: e.target.value }))}
+                    min={1}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Client (optional)</Label>
+                  <Select
+                    value={cutRollForm.clientId}
+                    onValueChange={(value) => setCutRollForm(prev => ({ ...prev, clientId: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select client..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectSearch
+                        value={clientSelectSearch}
+                        onChange={(e) => setClientSelectSearch(e.target.value)}
+                        placeholder="Search client..."
+                      />
+                      {clients
+                        .filter(c => c.company_name.toLowerCase().includes(clientSelectSearch.toLowerCase()))
+                        .map((client) => (
+                          <SelectItem key={client.id} value={client.id}>
+                            {client.company_name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               {/* AI Client Suggestions */}
@@ -2634,65 +2657,62 @@ export default function HybridPlanningPage() {
                 const planClientIds = new Set(
                   (planState?.paperSpecs.flatMap(s => s.jumbos.flatMap(j => j.sets.flatMap(st => st.cuts.filter(c => c.source_type === 'regular_order').map(c => c.clientId).filter(Boolean)))) || []).map(id => id!.toLowerCase())
                 );
-                const sorted = [...clientSuggestions].sort((a, b) => {
-                  const aIn = planClientIds.has(a.client_id?.toLowerCase()) ? 0 : 1;
-                  const bIn = planClientIds.has(b.client_id?.toLowerCase()) ? 0 : 1;
-                  return aIn - bIn;
-                });
+                const flatRows = clientSuggestions
+                  .flatMap(suggestion =>
+                    suggestion.suggested_widths.map((w: any) => ({
+                      client_id: suggestion.client_id,
+                      client_name: suggestion.client_name,
+                      inPlan: planClientIds.has(suggestion.client_id?.toLowerCase()),
+                      width: w.width,
+                      frequency: w.frequency,
+                      days_ago: w.days_ago,
+                    }))
+                  )
+                  .sort((a, b) => b.width - a.width);
                 return (
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-medium text-green-700">
-                    <span>Suggested Clients (based on past orders)</span>
+                  <div className="text-sm font-medium text-green-700">
+                    Suggested Rolls (based on past orders)
                   </div>
-                  <div className="max-h-40 overflow-y-auto space-y-2 border rounded-lg p-2">
-                    {sorted.map((suggestion) => {
-                      const inPlan = planClientIds.has(suggestion.client_id?.toLowerCase());
-                      return (
-                      <div key={suggestion.client_id} className="space-y-1">
-                        <div className={`flex items-center justify-between p-2 rounded ${inPlan ? 'bg-blue-50' : 'bg-gray-50'}`}>
-                          <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full ${inPlan ? 'bg-blue-500' : 'bg-green-500'}`} />
-                            <span className="font-medium text-sm">{suggestion.client_name}</span>
-                            {inPlan && <span className="text-[10px] text-blue-600 font-semibold bg-blue-100 px-1.5 py-0.5 rounded">In Plan</span>}
-                          </div>
-                          <Button size="sm" variant="outline" className="h-7 text-xs"
-                            onClick={() => {
-                              const matched = clients.find(c => c.id.toLowerCase() === suggestion.client_id.toLowerCase());
-                              if (matched) setCutRollForm(prev => ({ ...prev, clientId: matched.id }));
-                            }}
-                          >Select</Button>
-                        </div>
-                        <div className="ml-4 space-y-1">
-                          {suggestion.suggested_widths.map((w: any, i: number) => (
-                            <div key={i} className="flex items-center justify-between p-1 hover:bg-gray-50 rounded">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-muted-foreground">• {w.width}"</span>
-                                <span className="text-xs text-gray-500">({w.frequency} order{w.frequency > 1 ? 's' : ''})</span>
-                                {w.days_ago !== null && (
-                                  <span className="text-xs text-blue-600">
-                                    Last: {w.days_ago === 0 ? 'Today' : w.days_ago === 1 ? 'Yesterday' : `${w.days_ago}d ago`}
-                                  </span>
-                                )}
-                              </div>
-                              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs"
-                                onClick={() => {
-                                  const matched = clients.find(c => c.id.toLowerCase() === suggestion.client_id.toLowerCase());
-                                  if (matched) setCutRollForm(prev => ({ ...prev, clientId: matched.id, width: w.width.toString() }));
-                                }}
-                              >Use</Button>
+                  <div className="max-h-96 overflow-y-auto border rounded-lg divide-y">
+                    {flatRows.map((row, i) => (
+                      <div key={i} className="flex items-center justify-between px-3 py-2 hover:bg-muted/40">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="font-semibold text-sm w-12 shrink-0">{row.width}"</span>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm truncate">{row.client_name}</span>
+                              {row.inPlan && (
+                                <span className="text-[10px] text-blue-600 font-semibold bg-blue-100 px-1.5 py-0.5 rounded shrink-0">In Plan</span>
+                              )}
                             </div>
-                          ))}
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span>{row.frequency} order{row.frequency > 1 ? 's' : ''}</span>
+                              {row.days_ago !== null && (
+                                <span className="text-blue-600">
+                                  Last: {row.days_ago === 0 ? 'Today' : row.days_ago === 1 ? 'Yesterday' : `${row.days_ago}d ago`}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
+                        <Button size="sm" variant="ghost" className="h-7 px-3 text-xs shrink-0"
+                          onClick={() => {
+                            const matched = clients.find(c => c.id.toLowerCase() === row.client_id.toLowerCase());
+                            if (matched) setCutRollForm(prev => ({ ...prev, clientId: matched.id, width: row.width.toString() }));
+                          }}
+                        >Use</Button>
                       </div>
-                      );
-                    })}
+                    ))}
                   </div>
                 </div>
                 );
               })()}
             </div>
           )}
-          <DialogFooter>
+          </div>
+
+          <DialogFooter className="shrink-0 pt-2 border-t">
             <Button variant="outline" onClick={() => setShowAddCutDialog(false)}>
               Cancel
             </Button>

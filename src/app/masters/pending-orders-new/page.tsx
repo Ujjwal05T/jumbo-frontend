@@ -490,6 +490,7 @@ export default function PendingOrderItemsPage() {
   const [activeOrdersLoading, setActiveOrdersLoading] = useState(false);
   const [addCutTab, setAddCutTab] = useState<'manual' | 'order'>('manual');
   const [suggestionQuantities, setSuggestionQuantities] = useState<Record<string, string>>({});
+  const [clientSelectSearch, setClientSelectSearch] = useState('');
   const [editingCut, setEditingCut] = useState<EditableCutRoll | null>(null);
   const [currentSetId, setCurrentSetId] = useState<string | null>(null);
   const [currentPaperSpec, setCurrentPaperSpec] = useState<{ gsm: number; bf: number; shade: string } | null>(null);
@@ -2804,7 +2805,7 @@ const handlePrintPDF = () => {
 
         {/* ── Add Roll to Set Dialog ── */}
         <Dialog open={showAddCutDialog} onOpenChange={setShowAddCutDialog}>
-          <DialogContent className="sm:max-w-lg flex flex-col max-h-[90dvh]">
+          <DialogContent className="flex flex-col max-h-[90dvh] sm:max-w-6xl max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:w-full max-sm:max-w-full max-sm:max-h-[85dvh]">
             <DialogHeader className="shrink-0">
               <DialogTitle>Add Roll to Set</DialogTitle>
               <DialogDescription>
@@ -2876,9 +2877,9 @@ const handlePrintPDF = () => {
             {addCutTab === 'manual' ? (<>
             {/* ── Manual roll form ── */}
             <div className="space-y-4 py-2">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="add-width">Width (inches)</Label>
+              <div className="grid grid-cols-3 gap-3 items-end">
+                <div className="space-y-1 flex-1">
+                  <Label htmlFor="add-width">Width (in)</Label>
                   <Input
                     id="add-width"
                     type="number"
@@ -2887,8 +2888,8 @@ const handlePrintPDF = () => {
                     onChange={e => setCutRollForm(f => ({ ...f, width: e.target.value }))}
                   />
                 </div>
-                <div>
-                  <Label htmlFor="add-qty">Quantity</Label>
+                <div className="space-y-1 flex-1">
+                  <Label htmlFor="add-qty">Qty</Label>
                   <Input
                     id="add-qty"
                     type="number"
@@ -2897,19 +2898,27 @@ const handlePrintPDF = () => {
                     onChange={e => setCutRollForm(f => ({ ...f, quantity: e.target.value }))}
                   />
                 </div>
-              </div>
-              <div>
-                <Label htmlFor="add-client">Client <span className="text-red-500">*</span></Label>
-                <Select value={cutRollForm.clientId} onValueChange={v => setCutRollForm(f => ({ ...f, clientId: v, orderId: '', orderItemId: '' }))} required>
-                  <SelectTrigger id="add-client">
-                    <SelectValue placeholder="Select client (required)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.sort((a, b) => a.company_name.localeCompare(b.company_name)).map(c => (
-                      <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="space-y-1 flex-1">
+                  <Label htmlFor="add-client">Client <span className="text-red-500">*</span></Label>
+                  <Select value={cutRollForm.clientId} onValueChange={v => setCutRollForm(f => ({ ...f, clientId: v, orderId: '', orderItemId: '' }))} required>
+                    <SelectTrigger id="add-client">
+                      <SelectValue placeholder="Select client (required)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectSearch
+                        value={clientSelectSearch}
+                        onChange={(e) => setClientSelectSearch(e.target.value)}
+                        placeholder="Search client..."
+                      />
+                      {clients
+                        .filter(c => c.company_name.toLowerCase().includes(clientSelectSearch.toLowerCase()))
+                        .sort((a, b) => a.company_name.localeCompare(b.company_name))
+                        .map(c => (
+                          <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
@@ -2920,63 +2929,52 @@ const handlePrintPDF = () => {
                 <span className="ml-2 text-sm text-muted-foreground">Finding client suggestions...</span>
               </div>
             ) : clientSuggestions.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm font-medium text-green-700">
                   <Target className="h-4 w-4" />
-                  Suggested Clients (based on AI)
+                  Suggested Rolls (based on past orders)
                 </div>
-                <div className="max-h-40 overflow-y-auto space-y-2 border rounded-lg p-2">
-                  {clientSuggestions.map((suggestion) => (
-                    <div key={suggestion.client_id} className="space-y-2">
-                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                          <span className="font-medium text-sm">{suggestion.client_name}</span>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs"
-                          onClick={() => {
-                            const matched = clients.find(c => c.id.toLowerCase() === suggestion.client_id.toLowerCase());
-                            if (matched) setCutRollForm(f => ({ ...f, clientId: matched.id }));
-                          }}
-                        >
-                          Select
-                        </Button>
-                      </div>
-                      <div className="ml-4 space-y-1">
-                        {suggestion.suggested_widths.map((widthSuggestion: any, index: number) => (
-                          <div key={index} className="flex items-center justify-between p-1 hover:bg-gray-50 rounded">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-muted-foreground">• {widthSuggestion.width}"</span>
-                              <span className="text-xs text-gray-500">
-                                ({widthSuggestion.frequency} order{widthSuggestion.frequency > 1 ? 's' : ''})
-                              </span>
-                              {widthSuggestion.days_ago !== null && (
-                                <span className="text-xs text-blue-600">
-                                  Last: {widthSuggestion.days_ago === 0 ? 'Today' :
-                                         widthSuggestion.days_ago === 1 ? 'Yesterday' :
-                                         `${widthSuggestion.days_ago} days ago`}
+                <div className="max-h-96 overflow-y-auto border rounded-lg divide-y">
+                  {clientSuggestions
+                    .flatMap((suggestion: any) =>
+                      suggestion.suggested_widths.map((w: any) => ({
+                        client_id: suggestion.client_id,
+                        client_name: suggestion.client_name,
+                        width: w.width,
+                        frequency: w.frequency,
+                        days_ago: w.days_ago,
+                      }))
+                    )
+                    .sort((a: any, b: any) => b.width - a.width)
+                    .map((row: any, i: number) => (
+                      <div key={i} className="flex items-center justify-between px-3 py-2 hover:bg-muted/40">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="font-semibold text-sm w-12 shrink-0">{row.width}"</span>
+                          <div className="min-w-0">
+                            <div className="text-sm truncate">{row.client_name}</div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span>{row.frequency} order{row.frequency > 1 ? 's' : ''}</span>
+                              {row.days_ago !== null && (
+                                <span className="text-blue-600">
+                                  Last: {row.days_ago === 0 ? 'Today' : row.days_ago === 1 ? 'Yesterday' : `${row.days_ago}d ago`}
                                 </span>
                               )}
                             </div>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 px-2 text-xs"
-                              onClick={() => {
-                                const matched = clients.find(c => c.id.toLowerCase() === suggestion.client_id.toLowerCase());
-                                if (matched) setCutRollForm(f => ({ ...f, clientId: matched.id, width: widthSuggestion.width.toString() }));
-                              }}
-                            >
-                              Use
-                            </Button>
                           </div>
-                        ))}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-3 text-xs shrink-0"
+                          onClick={() => {
+                            const matched = clients.find(c => c.id.toLowerCase() === row.client_id.toLowerCase());
+                            if (matched) setCutRollForm(f => ({ ...f, clientId: matched.id, width: row.width.toString() }));
+                          }}
+                        >
+                          Use
+                        </Button>
                       </div>
-                    </div>
-                  ))}
+                    ))}
                 </div>
               </div>
             ) : null}
@@ -3142,7 +3140,7 @@ const handlePrintPDF = () => {
 
         {/* Manual Cut Addition Dialog */}
         <Dialog open={showManualRollDialog} onOpenChange={setShowManualRollDialog}>
-          <DialogContent className="sm:max-w-3xl w-full">
+          <DialogContent className="sm:max-w-5xl w-full">
             <DialogHeader>
               <DialogTitle>Add Manual Cut</DialogTitle>
               <DialogDescription>
@@ -3250,68 +3248,53 @@ const handlePrintPDF = () => {
                 <span className="ml-2 text-sm text-muted-foreground">Finding client suggestions...</span>
               </div>
             ) : clientSuggestions.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm font-medium text-green-700">
                   <Target className="h-4 w-4" />
-                  Suggested Clients (based on AI)
+                  Suggested Rolls (based on past orders)
                 </div>
-                <div className="max-h-40 overflow-y-auto space-y-2 border rounded-lg p-2">
-                  {clientSuggestions.map((suggestion) => (
-                    <div key={suggestion.client_id} className="space-y-2">
-                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                          <span className="font-medium text-sm">{suggestion.client_name}</span>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs"
-                          onClick={() => {
-                            console.log('🔍 Selecting client:', suggestion.client_id, suggestion.client_name);
-                            setManualRollData(prev => {
-                              const newData = { ...prev, selectedClient: suggestion.client_id.toLowerCase() };
-                              console.log('🔍 Updated manualRollData:', newData);
-                              return newData;
-                            });
-                          }}
-                        >
-                          Select
-                        </Button>
-                      </div>
-                      <div className="ml-4 space-y-1">
-                        {suggestion.suggested_widths.map((widthSuggestion: any, index: number) => (
-                          <div key={index} className="flex items-center justify-between p-1 hover:bg-gray-50 rounded">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-muted-foreground">• {widthSuggestion.width}"</span>
-                              <span className="text-xs text-gray-500">
-                                ({widthSuggestion.frequency} order{widthSuggestion.frequency > 1 ? 's' : ''})
-                              </span>
-                              {widthSuggestion.days_ago !== null && (
-                                <span className="text-xs text-blue-600">
-                                  Last: {widthSuggestion.days_ago === 0 ? 'Today' :
-                                         widthSuggestion.days_ago === 1 ? 'Yesterday' :
-                                         `${widthSuggestion.days_ago} days ago`}
+                <div className="max-h-96 overflow-y-auto border rounded-lg divide-y">
+                  {clientSuggestions
+                    .flatMap((suggestion) =>
+                      suggestion.suggested_widths.map((w: any) => ({
+                        client_id: suggestion.client_id,
+                        client_name: suggestion.client_name,
+                        width: w.width,
+                        frequency: w.frequency,
+                        days_ago: w.days_ago,
+                      }))
+                    )
+                    .sort((a: any, b: any) => b.width - a.width)
+                    .map((row: any, i: number) => (
+                      <div key={i} className="flex items-center justify-between px-3 py-2 hover:bg-muted/40">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="font-semibold text-sm w-12 shrink-0">{row.width}"</span>
+                          <div className="min-w-0">
+                            <div className="text-sm truncate">{row.client_name}</div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span>{row.frequency} order{row.frequency > 1 ? 's' : ''}</span>
+                              {row.days_ago !== null && (
+                                <span className="text-blue-600">
+                                  Last: {row.days_ago === 0 ? 'Today' : row.days_ago === 1 ? 'Yesterday' : `${row.days_ago}d ago`}
                                 </span>
                               )}
                             </div>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 px-2 text-xs"
-                              onClick={() => setManualRollData(prev => ({
-                                ...prev,
-                                width: widthSuggestion.width.toString(),
-                                selectedClient: suggestion.client_id
-                              }))}
-                            >
-                              Use
-                            </Button>
                           </div>
-                        ))}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-3 text-xs shrink-0"
+                          onClick={() => setManualRollData(prev => ({
+                            ...prev,
+                            width: row.width.toString(),
+                            selectedClient: row.client_id,
+                          }))}
+                        >
+                          Use
+                        </Button>
                       </div>
-                    </div>
-                  ))}
+                    ))}
                 </div>
               </div>
             ) : (
