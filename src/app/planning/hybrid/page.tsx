@@ -2592,10 +2592,16 @@ export default function HybridPlanningPage() {
                     client_name: suggestion.client_name,
                     inPlan: planClientIds.has(suggestion.client_id?.toLowerCase()),
                     width: w.width,
+                    bf: w.bf,
                     frequency: w.frequency,
                     days_ago: w.days_ago,
                   }))
-                ).sort((a, b) => b.width - a.width);
+                ).sort((a, b) => {
+                  const aBfMatch = a.bf === currentPaperSpec?.bf ? 0 : 1;
+                  const bBfMatch = b.bf === currentPaperSpec?.bf ? 0 : 1;
+                  if (aBfMatch !== bBfMatch) return aBfMatch - bBfMatch;
+                  return b.width - a.width;
+                });
 
                 return (
                 <div className="space-y-2">
@@ -2603,15 +2609,22 @@ export default function HybridPlanningPage() {
                     Suggested Rolls (based on past orders)
                   </div>
                   <div className="max-h-96 overflow-y-auto border rounded-lg divide-y">
-                    {flatRows.map((row, i) => (
-                      <div key={i} className="flex items-center justify-between px-3 py-2 hover:bg-muted/40">
+                    {flatRows.map((row, i) => {
+                      const bfMismatch = row.bf != null && currentPaperSpec && row.bf !== currentPaperSpec.bf;
+                      return (
+                      <div key={i} className={`flex items-center justify-between px-3 py-2 hover:bg-muted/40 ${bfMismatch ? 'bg-orange-50' : ''}`}>
                         <div className="flex items-center gap-3 min-w-0">
                           <span className="font-semibold text-sm w-12 shrink-0">{row.width}"</span>
                           <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="text-sm truncate">{row.client_name}</span>
                               {row.inPlan && (
                                 <span className="text-[10px] text-blue-600 font-semibold bg-blue-100 px-1.5 py-0.5 rounded shrink-0">In Plan</span>
+                              )}
+                              {bfMismatch && (
+                                <span className="text-[10px] text-orange-700 font-semibold bg-orange-100 px-1.5 py-0.5 rounded shrink-0" title={`Originally ordered at ${row.bf}bf — will be added to ${currentPaperSpec!.bf}bf set`}>
+                                  {row.bf}bf ≠ {currentPaperSpec!.bf}bf
+                                </span>
                               )}
                             </div>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -2627,11 +2640,15 @@ export default function HybridPlanningPage() {
                         <Button size="sm" variant="ghost" className="h-7 px-3 text-xs shrink-0"
                           onClick={() => {
                             const matched = clients.find(c => c.id.toLowerCase() === row.client_id.toLowerCase());
-                            if (matched) setCutRollForm(prev => ({ ...prev, clientId: matched.id, width: row.width.toString() }));
+                            if (matched) {
+                              setCutRollForm(prev => ({ ...prev, clientId: matched.id, width: row.width.toString() }));
+                              if (bfMismatch) toast.info(`BF adjusted to ${currentPaperSpec!.bf}bf to match this set`);
+                            }
                           }}
                         >Use</Button>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
                 );

@@ -2100,9 +2100,11 @@ const handlePrintPDF = () => {
     setSuggestionQuantities({});
     for (const spec of editablePlan.paperSpecs) {
       for (const jumbo of spec.jumbos) {
-        if (jumbo.sets.some(s => s.id === setId)) {
+        const targetSet = jumbo.sets.find(s => s.id === setId);
+        if (targetSet) {
+          const remainingWaste = editablePlan.targetWidth - _setTotalWidth(targetSet);
           setCurrentPaperSpec({ gsm: spec.gsm, bf: spec.bf, shade: spec.shade });
-          fetchClientSuggestions(editablePlan.targetWidth || 118, { gsm: spec.gsm, bf: spec.bf, shade: spec.shade });
+          fetchClientSuggestions(remainingWaste, { gsm: spec.gsm, bf: spec.bf, shade: spec.shade });
           fetchActiveOrders({ gsm: spec.gsm, bf: spec.bf, shade: spec.shade });
           break;
         }
@@ -2941,17 +2943,32 @@ const handlePrintPDF = () => {
                         client_id: suggestion.client_id,
                         client_name: suggestion.client_name,
                         width: w.width,
+                        bf: w.bf,
                         frequency: w.frequency,
                         days_ago: w.days_ago,
                       }))
                     )
-                    .sort((a: any, b: any) => b.width - a.width)
-                    .map((row: any, i: number) => (
-                      <div key={i} className="flex items-center justify-between px-3 py-2 hover:bg-muted/40">
+                    .sort((a: any, b: any) => {
+                      const aBfMatch = a.bf === currentPaperSpec?.bf ? 0 : 1;
+                      const bBfMatch = b.bf === currentPaperSpec?.bf ? 0 : 1;
+                      if (aBfMatch !== bBfMatch) return aBfMatch - bBfMatch;
+                      return b.width - a.width;
+                    })
+                    .map((row: any, i: number) => {
+                      const bfMismatch = row.bf != null && currentPaperSpec && row.bf !== currentPaperSpec.bf;
+                      return (
+                      <div key={i} className={`flex items-center justify-between px-3 py-2 hover:bg-muted/40 ${bfMismatch ? 'bg-orange-50' : ''}`}>
                         <div className="flex items-center gap-3 min-w-0">
                           <span className="font-semibold text-sm w-12 shrink-0">{row.width}"</span>
                           <div className="min-w-0">
-                            <div className="text-sm truncate">{row.client_name}</div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-sm truncate">{row.client_name}</span>
+                              {bfMismatch && (
+                                <span className="text-[10px] text-orange-700 font-semibold bg-orange-100 px-1.5 py-0.5 rounded shrink-0" title={`Originally ordered at ${row.bf}bf — will be added to ${currentPaperSpec!.bf}bf set`}>
+                                  {row.bf}bf ≠ {currentPaperSpec!.bf}bf
+                                </span>
+                              )}
+                            </div>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
                               <span>{row.frequency} order{row.frequency > 1 ? 's' : ''}</span>
                               {row.days_ago !== null && (
@@ -2968,13 +2985,17 @@ const handlePrintPDF = () => {
                           className="h-7 px-3 text-xs shrink-0"
                           onClick={() => {
                             const matched = clients.find(c => c.id.toLowerCase() === row.client_id.toLowerCase());
-                            if (matched) setCutRollForm(f => ({ ...f, clientId: matched.id, width: row.width.toString() }));
+                            if (matched) {
+                              setCutRollForm(f => ({ ...f, clientId: matched.id, width: row.width.toString() }));
+                              if (bfMismatch) toast.info(`BF adjusted to ${currentPaperSpec!.bf}bf to match this set`);
+                            }
                           }}
                         >
                           Use
                         </Button>
                       </div>
-                    ))}
+                      );
+                    })}
                 </div>
               </div>
             ) : null}
@@ -3260,17 +3281,32 @@ const handlePrintPDF = () => {
                         client_id: suggestion.client_id,
                         client_name: suggestion.client_name,
                         width: w.width,
+                        bf: w.bf,
                         frequency: w.frequency,
                         days_ago: w.days_ago,
                       }))
                     )
-                    .sort((a: any, b: any) => b.width - a.width)
-                    .map((row: any, i: number) => (
-                      <div key={i} className="flex items-center justify-between px-3 py-2 hover:bg-muted/40">
+                    .sort((a: any, b: any) => {
+                      const aBfMatch = a.bf === manualRollData.paperSpecs?.bf ? 0 : 1;
+                      const bBfMatch = b.bf === manualRollData.paperSpecs?.bf ? 0 : 1;
+                      if (aBfMatch !== bBfMatch) return aBfMatch - bBfMatch;
+                      return b.width - a.width;
+                    })
+                    .map((row: any, i: number) => {
+                      const bfMismatch = row.bf != null && manualRollData.paperSpecs?.bf != null && row.bf !== manualRollData.paperSpecs.bf;
+                      return (
+                      <div key={i} className={`flex items-center justify-between px-3 py-2 hover:bg-muted/40 ${bfMismatch ? 'bg-orange-50' : ''}`}>
                         <div className="flex items-center gap-3 min-w-0">
                           <span className="font-semibold text-sm w-12 shrink-0">{row.width}"</span>
                           <div className="min-w-0">
-                            <div className="text-sm truncate">{row.client_name}</div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-sm truncate">{row.client_name}</span>
+                              {bfMismatch && (
+                                <span className="text-[10px] text-orange-700 font-semibold bg-orange-100 px-1.5 py-0.5 rounded shrink-0" title={`Originally ordered at ${row.bf}bf — will be added to ${manualRollData.paperSpecs.bf}bf set`}>
+                                  {row.bf}bf ≠ {manualRollData.paperSpecs.bf}bf
+                                </span>
+                              )}
+                            </div>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
                               <span>{row.frequency} order{row.frequency > 1 ? 's' : ''}</span>
                               {row.days_ago !== null && (
@@ -3285,16 +3321,20 @@ const handlePrintPDF = () => {
                           size="sm"
                           variant="ghost"
                           className="h-7 px-3 text-xs shrink-0"
-                          onClick={() => setManualRollData(prev => ({
-                            ...prev,
-                            width: row.width.toString(),
-                            selectedClient: row.client_id,
-                          }))}
+                          onClick={() => {
+                            setManualRollData(prev => ({
+                              ...prev,
+                              width: row.width.toString(),
+                              selectedClient: row.client_id,
+                            }));
+                            if (bfMismatch) toast.info(`BF adjusted to ${manualRollData.paperSpecs.bf}bf to match this set`);
+                          }}
                         >
                           Use
                         </Button>
                       </div>
-                    ))}
+                      );
+                    })}
                 </div>
               </div>
             ) : (
