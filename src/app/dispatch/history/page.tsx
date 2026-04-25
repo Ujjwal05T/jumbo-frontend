@@ -57,6 +57,8 @@ import {
   XCircle,
   Filter,
   TrendingUp,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/api-config";
 import { generatePackingSlipPDF, convertDispatchToPackingSlip } from "@/lib/packing-slip-pdf";
@@ -225,6 +227,10 @@ export default function DispatchHistoryPage() {
 
   // Selected row for actions
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
+
+  // Delete dispatch state
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const loadDispatches = async () => {
     try {
@@ -415,6 +421,31 @@ export default function DispatchHistoryPage() {
     }
   };
 
+  const handleDeleteDispatch = async () => {
+    if (!selectedRowId) return;
+    try {
+      setDeleteLoading(true);
+      const response = await fetch(`${API_BASE_URL}/dispatch/${selectedRowId}`, {
+        method: 'DELETE',
+        headers: { 'ngrok-skip-browser-warning': 'true' },
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to delete dispatch');
+      }
+      const data = await response.json();
+      toast.success(data.message || 'Dispatch deleted successfully');
+      setDeleteConfirmOpen(false);
+      setSelectedRowId(null);
+      loadDispatches();
+      loadStats();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete dispatch');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadClients();
     loadStats();
@@ -436,6 +467,8 @@ export default function DispatchHistoryPage() {
         return <Badge className="bg-green-100 text-green-800"><CheckCircle className="w-3 h-3 mr-1" />Delivered</Badge>;
       case 'returned':
         return <Badge className="bg-red-100 text-red-800"><XCircle className="w-3 h-3 mr-1" />Returned</Badge>;
+      case 'billed':
+        return <Badge className="bg-purple-100 text-purple-800"><FileText className="w-3 h-3 mr-1" />Billed</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -494,6 +527,27 @@ export default function DispatchHistoryPage() {
               className="flex-1 md:flex-none text-base md:text-xl"
             >
               Print
+            </Button>
+            <Button
+              onClick={() => {
+                if (selectedRowId) {
+                  const dispatch = dispatches.find(d => d.id === selectedRowId);
+                  if (dispatch?.status === 'dispatched') {
+                    setDeleteConfirmOpen(true);
+                  } else if (dispatch?.status === 'billed') {
+                    toast.error('Delete the bill first before deleting the dispatch');
+                  } else {
+                    toast.error('Only dispatched records can be deleted');
+                  }
+                }
+              }}
+              disabled={!selectedRowId || dispatches.find(d => d.id === selectedRowId)?.status !== 'dispatched'}
+              variant="outline"
+              size="lg"
+              className="flex-1 md:flex-none text-base md:text-xl text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 disabled:opacity-40"
+            >
+              <Trash2 className="w-4 h-4 mr-1" />
+              Delete
             </Button>
             <Button onClick={() => setCreateModalOpen(true)} variant="default" size="lg" className="flex-1 md:flex-none text-base md:text-xl">
               Create
@@ -1043,6 +1097,64 @@ export default function DispatchHistoryPage() {
           setEditDispatchId(null);
         }}
       />
+
+      {/* Delete Dispatch Confirmation Dialog */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="w-5 h-5" />
+              Delete Dispatch
+            </DialogTitle>
+            <DialogDescription>
+              {(() => {
+                const dispatch = dispatches.find(d => d.id === selectedRowId);
+                return dispatch ? (
+                  <span>
+                    You are about to delete dispatch <strong>{dispatch.dispatch_number}</strong> for{' '}
+                    <strong>{dispatch.client?.company_name}</strong>.
+                  </span>
+                ) : null;
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">This will permanently:</p>
+            <ul className="text-sm space-y-1 list-disc list-inside text-muted-foreground">
+              <li>Delete the dispatch record</li>
+              <li>Return all rolls to available in warehouse</li>
+              <li>Revert any completed order items back to in-warehouse</li>
+            </ul>
+            <p className="text-sm font-medium text-red-600">This action cannot be undone.</p>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteConfirmOpen(false)}
+              disabled={deleteLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteDispatch}
+              disabled={deleteLoading}
+            >
+              {deleteLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Dispatch
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
